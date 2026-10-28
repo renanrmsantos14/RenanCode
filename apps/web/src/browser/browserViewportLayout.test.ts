@@ -2,10 +2,27 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   resizeBrowserViewportFromRail,
+  resolveBrowserViewportLayout,
   resolveFittedBrowserViewport,
 } from "./browserViewportLayout";
 
 describe("resolveBrowserViewportLayout", () => {
+  it("keeps an inset clear around the viewport without changing its aspect ratio", () => {
+    const setting = { _tag: "preset", presetId: "iphone-12-pro", width: 390, height: 844 } as const;
+    const inset = 28;
+    const container = { width: 600, height: 700 };
+    const layout = resolveBrowserViewportLayout(container, setting, 1.25, inset);
+    const scaledInset = inset * 1.25 * layout.viewportScale;
+
+    expect(layout.viewportWidth / layout.viewportHeight).toBeCloseTo(390 / 844, 5);
+    expect(layout.viewportWidth / layout.viewportScale).toBeCloseTo(390 * 1.25, 5);
+    expect(Number.isInteger(layout.viewportX) && Number.isInteger(layout.viewportY)).toBe(true);
+    expect(layout.viewportY).toBeGreaterThanOrEqual(scaledInset);
+    expect(layout.viewportY + layout.viewportHeight + scaledInset).toBeLessThanOrEqual(
+      container.height + 1,
+    );
+  });
+
   it("preserves the last logical viewport when fitting a fill-mode surface", () => {
     expect(
       resolveFittedBrowserViewport({ _tag: "fill" }, { width: 320, height: 200, scale: 0.25 }),

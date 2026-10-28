@@ -33,8 +33,10 @@ export function useBrowserViewportResize(options: {
   readonly containerSize: PreviewViewportSize;
   readonly deviceToolbarVisible: boolean;
   readonly aspectRatio: number | null;
+  /** Device CSS pixels kept clear around a device viewport, such as for a device frame. */
+  readonly inset: number;
 }) {
-  const { target, viewport, zoomFactor, containerSize, deviceToolbarVisible, aspectRatio } =
+  const { target, viewport, zoomFactor, containerSize, deviceToolbarVisible, aspectRatio, inset } =
     options;
   const dragCleanupRef = useRef<(() => void) | null>(null);
   const dragVersionRef = useRef(0);
@@ -57,7 +59,7 @@ export function useBrowserViewportResize(options: {
     : containerSize;
   const layout =
     deviceToolbarVisible && effectiveViewport._tag !== "fill"
-      ? resolveBrowserDeviceViewportLayout(containerSize, effectiveViewport, zoomFactor)
+      ? resolveBrowserDeviceViewportLayout(containerSize, effectiveViewport, zoomFactor, inset)
       : resolveBrowserViewportLayout(containerSize, effectiveViewport, zoomFactor);
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- cancels the drag and the keyboard commit timer when the component unmounts

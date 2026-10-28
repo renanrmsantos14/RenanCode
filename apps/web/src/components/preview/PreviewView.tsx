@@ -66,8 +66,17 @@ import { PreviewEmptyState } from "./PreviewEmptyState";
 import { PreviewMoreMenu, type PreviewMoreMenuActions } from "./PreviewMoreMenu";
 import { commitBrowserViewportChange } from "~/browser/browserViewportActions";
 import { browserResponsiveViewportForToggle, useBrowserDefaults } from "~/browser/browserDefaults";
+import { BrowserDeviceFrame } from "~/browser/BrowserDeviceFrame";
+import {
+  browserDeviceFrameInset,
+  resolveBrowserDeviceFrame,
+  useBrowserDeviceFrameEnabled,
+} from "~/browser/browserDeviceFrameLayout";
 import { BrowserDeviceToolbar } from "~/browser/BrowserDeviceToolbar";
-import { BROWSER_DEVICE_TOOLBAR_HEIGHT } from "~/browser/browserViewportLayout";
+import {
+  BROWSER_DEVICE_TOOLBAR_HEIGHT,
+  resolveBrowserViewportLayout,
+} from "~/browser/browserViewportLayout";
 import { useBrowserLayoutZoomFactor } from "~/browser/useBrowserLayoutZoomFactor";
 import { previewRuntimeTabId } from "~/browser/previewRuntimeTabId";
 import { BrowserSettingsReadError } from "~/browser/openFileInPreview";
@@ -188,18 +197,23 @@ export function PreviewView({
   const serverOwnsRendering = snapshot?.runtime === "server";
   const serverSurfaceRef = useRef<ServerBrowserHandle | null>(null);
   const [serverAspectRatioLocked, setServerAspectRatioLocked] = useState(false);
-  const [serverToolbarWidth, setServerToolbarWidth] = useState(0);
+  const [serverBodySize, setServerBodySize] = useState({ width: 0, height: 0 });
   const serverToolbarShown =
     snapshot?.runtime === "server" && (snapshot.viewport ?? FILL_PREVIEW_VIEWPORT)._tag !== "fill";
   const serverBodyRef = useRef<HTMLDivElement | null>(null);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- ResizeObserver on the server preview body sizes the viewport toolbar
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- ResizeObserver on the server preview body sizes the viewport toolbar and device frame
   useEffect(() => {
     const element = serverBodyRef.current;
     if (!element || !serverToolbarShown) return;
-    return observeResize(element, ([entry]) =>
-      setServerToolbarWidth(Math.max(1, Math.round(entry?.contentRect.width ?? 0))),
-    );
+    return observeResize(element, ([entry]) => {
+      const width = Math.max(1, Math.round(entry?.contentRect.width ?? 0));
+      const height = Math.max(1, Math.round(entry?.contentRect.height ?? 0));
+      setServerBodySize((current) =>
+        current.width === width && current.height === height ? current : { width, height },
+      );
+    });
   }, [serverToolbarShown]);
+  const [deviceFrameEnabled] = useBrowserDeviceFrameEnabled();
   const [serverControlledTabId, setServerControlledTabId] = useState<string | null>(null);
   const serverInputDisabled = isServerTab && serverControlledTabId !== runtimeTabId;
   const [serverFrameTabId, setServerFrameTabId] = useState<string | null>(null);
@@ -219,6 +233,19 @@ export function PreviewView({
     isServerTab && !showEmptyState && !isUnreachable && serverFrameTabId !== runtimeTabId;
   const controller = desktopOverlay?.controller ?? "none";
   const viewport = snapshot?.viewport ?? FILL_PREVIEW_VIEWPORT;
+  const serverDeviceFrame =
+    isServerTab && deviceFrameEnabled ? resolveBrowserDeviceFrame(viewport) : null;
+  const serverFrameLayout = serverDeviceFrame
+    ? resolveBrowserViewportLayout(
+        {
+          width: serverBodySize.width,
+          height: serverBodySize.height - BROWSER_DEVICE_TOOLBAR_HEIGHT,
+        },
+        viewport,
+        1,
+        browserDeviceFrameInset(serverDeviceFrame),
+      )
+    : null;
   const browserDefaults = useBrowserDefaults();
   // IPC interprets undefined profile ids as all profiles.
   const activeProfileId = snapshot?.profileId ?? DEFAULT_BROWSER_PROFILE_ID;
@@ -921,7 +948,7 @@ export function PreviewView({
               <div className="absolute inset-x-0 top-0 z-10">
                 <BrowserDeviceToolbar
                   setting={viewport}
-                  width={serverToolbarWidth}
+                  width={serverBodySize.width}
                   aspectRatio={serverAspectRatioLocked ? viewport.width / viewport.height : null}
                   onAspectRatioChange={(ratio) => setServerAspectRatioLocked(ratio !== null)}
                   onChange={(setting) =>
@@ -937,29 +964,56 @@ export function PreviewView({
               className="absolute inset-x-0 bottom-0"
               style={{ top: viewport._tag !== "fill" ? BROWSER_DEVICE_TOOLBAR_HEIGHT : 0 }}
             >
-              <ServerBrowserSurface
-                key={runtimeTabId}
-                ref={serverSurfaceRef}
-                environmentId={threadRef.environmentId}
-                threadId={threadRef.threadId}
-                tabId={snapshot.tabId}
-                pdfUrl={
-                  navStatus._tag === "Success"
-                    ? previewPdfAssetUrl(url, environmentHttpBaseUrl)
-                    : null
+              {serverDeviceFrame && serverFrameLayout && !showEmptyState && !isUnreachable ? (
+                <BrowserDeviceFrame
+                  frame={serverDeviceFrame}
+                  x={serverFrameLayout.viewportX}
+                  y={serverFrameLayout.viewportY}
+                  width={serverFrameLayout.viewportWidth}
+                  height={serverFrameLayout.viewportHeight}
+                  scale={serverFrameLayout.viewportScale}
+                />
+              ) : null}
+              {/* Same element framed or not, so toggling the frame keeps the stream connected. */}
+              <div
+                className="absolute overflow-hidden"
+                style={
+                  serverDeviceFrame && serverFrameLayout
+                    ? {
+                        left: serverFrameLayout.viewportX,
+                        top: serverFrameLayout.viewportY,
+                        width: serverFrameLayout.viewportWidth,
+                        height: serverFrameLayout.viewportHeight,
+                        borderRadius:
+                          serverDeviceFrame.screenRadius * serverFrameLayout.viewportScale,
+                      }
+                    : { inset: 0 }
                 }
-                visible={visible}
-                onFirstFrame={() => setServerFrameTabId(runtimeTabId)}
-                onControl={(control) =>
-                  setServerControlledTabId(control?.controller === "you" ? runtimeTabId : null)
-                }
-                onPopup={(popupTabId) => showPreviewPopup(threadRef, popupTabId, "panel")}
-                // Stays connected under the empty state so a URL picked there reaches the page.
-                className={cn(
-                  "absolute inset-0 h-full w-full",
-                  (showEmptyState || isUnreachable) && "invisible",
-                )}
-              />
+              >
+                <ServerBrowserSurface
+                  key={runtimeTabId}
+                  ref={serverSurfaceRef}
+                  environmentId={threadRef.environmentId}
+                  threadId={threadRef.threadId}
+                  tabId={snapshot.tabId}
+                  pdfUrl={
+                    navStatus._tag === "Success"
+                      ? previewPdfAssetUrl(url, environmentHttpBaseUrl)
+                      : null
+                  }
+                  visible={visible}
+                  onFirstFrame={() => setServerFrameTabId(runtimeTabId)}
+                  onControl={(control) =>
+                    setServerControlledTabId(control?.controller === "you" ? runtimeTabId : null)
+                  }
+                  onPopup={(popupTabId) => showPreviewPopup(threadRef, popupTabId, "panel")}
+                  // Stays connected under the empty state so a URL picked there reaches the page.
+                  className={cn(
+                    "absolute inset-0 h-full w-full",
+                    (showEmptyState || isUnreachable) && "invisible",
+                  )}
+                />
+              </div>
             </div>
           </>
         ) : runtimeTabId && snapshot && !showEmptyState ? (
