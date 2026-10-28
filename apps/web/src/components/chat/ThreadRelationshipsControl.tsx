@@ -49,7 +49,6 @@ import {
   ChevronDownIcon,
   CornerLeftUpIcon,
   GitForkIcon,
-  LoaderCircleIcon,
   MoreHorizontalIcon,
   PlusIcon,
   SquareIcon,
@@ -74,6 +73,7 @@ import { ThreadRelationshipIcon, threadRelationshipStatusLabel } from "./ThreadR
 import { ThreadLineageWorkflowRow } from "./ThreadLineageWorkflowRow";
 
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
+import { Spinner } from "../ui/spinner";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
 import { cn } from "~/lib/utils";
@@ -802,7 +802,7 @@ export function ThreadRelationshipsPanel(props: {
                               onClick={() => void merge()}
                             >
                               {busyAction === "merge" ? (
-                                <LoaderCircleIcon className="size-3 animate-spin" />
+                                <Spinner size="xs" />
                               ) : (
                                 <PullRequestGlyph.merged className="size-3" />
                               )}
@@ -841,7 +841,7 @@ export function ThreadRelationshipsPanel(props: {
                           }
                         >
                           {stoppingId === threadId ? (
-                            <LoaderCircleIcon aria-hidden className="size-3 animate-spin" />
+                            <Spinner size="xs" />
                           ) : (
                             <SquareIcon aria-hidden className="size-3 fill-current" />
                           )}
