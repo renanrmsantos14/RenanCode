@@ -18,6 +18,12 @@ import {
   resolveBrowserViewportLayout,
   resolveFittedBrowserViewport,
 } from "./browserViewportLayout";
+import { BrowserDeviceFrame } from "./BrowserDeviceFrame";
+import {
+  browserDeviceFrameInset,
+  resolveBrowserDeviceFrame,
+  useBrowserDeviceFrameEnabled,
+} from "./browserDeviceFrameLayout";
 import { BrowserDeviceToolbar } from "./BrowserDeviceToolbar";
 import { BrowserViewportResizeHandles } from "./BrowserViewportResizeHandles";
 import { acquireDesktopTab, type AcquiredDesktopTab, withDesktopTab } from "./desktopTabLifetime";
@@ -232,6 +238,10 @@ export function HostedBrowserWebview(props: {
   const containerSize =
     active && lastRect ? lastRect : { width: hiddenWidth, height: hiddenHeight };
   const deviceToolbarVisible = active && viewport._tag !== "fill" && !presentation.fitSourceContent;
+  const [deviceFrameEnabled] = useBrowserDeviceFrameEnabled();
+  // Framed viewports hide the resize rails, so a drag never turns the preset freeform under the frame.
+  const deviceFrame =
+    deviceToolbarVisible && deviceFrameEnabled ? resolveBrowserDeviceFrame(viewport) : null;
   const {
     activeDrag,
     commitViewportChange,
@@ -246,6 +256,7 @@ export function HostedBrowserWebview(props: {
     containerSize,
     deviceToolbarVisible,
     aspectRatio: lockedAspectRatio,
+    inset: browserDeviceFrameInset(deviceFrame),
   });
   const fittedSourceViewport =
     presentation.fitSourceContent && lastRect
@@ -322,6 +333,16 @@ export function HostedBrowserWebview(props: {
             onChange={commitViewportChange}
           />
         ) : null}
+        {deviceFrame ? (
+          <BrowserDeviceFrame
+            frame={deviceFrame}
+            x={layout.viewportX}
+            y={layout.viewportY}
+            width={layout.viewportWidth}
+            height={layout.viewportHeight}
+            scale={layoutZoomFactor * layout.viewportScale}
+          />
+        ) : null}
         <webview
           key={webviewGeneration}
           ref={setWebviewRef}
@@ -352,7 +373,7 @@ export function HostedBrowserWebview(props: {
           aria-hidden={active ? undefined : true}
           className={cn(
             "absolute flex overflow-hidden bg-white",
-            active && !layout.fillsPanel && "ring-1 ring-border/70 shadow-sm",
+            active && !layout.fillsPanel && !deviceFrame && "ring-1 ring-border/70 shadow-sm",
           )}
           style={{
             left: layout.viewportX,
@@ -361,9 +382,10 @@ export function HostedBrowserWebview(props: {
             height: layout.viewportHeight / layout.viewportScale,
             transform: layout.viewportScale < 1 ? `scale(${layout.viewportScale})` : undefined,
             transformOrigin: "top left",
+            borderRadius: deviceFrame ? deviceFrame.screenRadius * layoutZoomFactor : undefined,
           }}
         />
-        {active && effectiveViewport._tag !== "fill" && !fittedSourceViewport ? (
+        {active && effectiveViewport._tag !== "fill" && !fittedSourceViewport && !deviceFrame ? (
           <>
             <BrowserViewportResizeHandles
               layout={layout}

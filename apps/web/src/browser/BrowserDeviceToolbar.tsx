@@ -5,7 +5,7 @@ import {
   type PreviewViewportSetting,
 } from "@t3tools/contracts";
 import { PREVIEW_VIEWPORT_PRESETS, resolvePreviewViewport } from "@t3tools/shared/previewViewport";
-import { Link2, Unlink2, X } from "lucide-react";
+import { Link2, Smartphone, Unlink2, X } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "~/components/ui/button";
@@ -23,6 +23,10 @@ import {
 import { cn } from "~/lib/utils";
 
 import { BROWSER_DEVICE_TOOLBAR_HEIGHT, resizeFreeformViewport } from "./browserViewportLayout";
+import {
+  resolveBrowserDeviceFrame,
+  useBrowserDeviceFrameEnabled,
+} from "./browserDeviceFrameLayout";
 import { commitViewportAndAspectRatio } from "./browserDeviceToolbarState";
 import { ScreenRotationIcon } from "./ScreenRotationIcon";
 
@@ -48,6 +52,9 @@ export function BrowserDeviceToolbar({
   onChange,
 }: Props) {
   const [pending, setPending] = useState(false);
+  const [deviceFrameEnabled, setDeviceFrameEnabled] = useBrowserDeviceFrameEnabled();
+  const deviceFrameAvailable = resolveBrowserDeviceFrame(setting) !== null;
+  const deviceFrameLabel = deviceFrameEnabled ? "Hide device frame" : "Show device frame";
   const [customSize, setCustomSize] = useState<{
     readonly width: string;
     readonly height: string;
@@ -306,6 +313,25 @@ export function BrowserDeviceToolbar({
       >
         <ScreenRotationIcon />
       </Button>
+      {deviceFrameAvailable ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant={deviceFrameEnabled ? "secondary" : "ghost"}
+                size="icon-xs"
+                type="button"
+                aria-label={deviceFrameLabel}
+                aria-pressed={deviceFrameEnabled}
+                onClick={() => setDeviceFrameEnabled(!deviceFrameEnabled)}
+              />
+            }
+          >
+            <Smartphone />
+          </TooltipTrigger>
+          <TooltipPopup side="top">{deviceFrameLabel}</TooltipPopup>
+        </Tooltip>
+      ) : null}
       <span className="sticky right-0 ml-auto flex bg-background/95">
         <Button
           variant="ghost"
