@@ -26,8 +26,10 @@ import {
 } from "@t3tools/shared/model";
 import { memo, type ReactNode, useRef } from "react";
 import { GaugeIcon, ZapIcon } from "lucide-react";
+import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import {
   Menu,
+  MenuCheckboxItem,
   MenuGroup,
   MenuPopup,
   MenuRadioGroup,
@@ -109,6 +111,93 @@ function DefaultBadge() {
     <Badge variant="outline" size="sm" className="min-w-0">
       Default
     </Badge>
+  );
+}
+
+// Ultrathink and Ultracode are modes, not effort levels, so the bar leaves them out.
+const REASONING_BAR_HIDDEN_CHOICES: ReadonlySet<string> = new Set(["ultrathink", "ultracode"]);
+
+/** Effort levels as one stepped track. Only the selected level is named, above its stop. */
+function ReasoningBar(props: {
+  descriptor: Extract<ProviderOptionDescriptor, { type: "select" }>;
+  value: string;
+  disabled: boolean;
+  onValueChange: (value: string) => void;
+}) {
+  const choices = selectableProviderOptionChoices(props.descriptor).filter(
+    (choice) => !REASONING_BAR_HIDDEN_CHOICES.has(choice.id),
+  );
+  const index = choices.findIndex((choice) => choice.id === props.value);
+  const position = (stop: number) =>
+    choices.length > 1 ? (stop / (choices.length - 1)) * 100 : 50;
+  const label =
+    props.descriptor.options.find((option) => option.id === props.value)?.label ?? props.value;
+  const labelAlign =
+    index <= 0 && index !== -1
+      ? "translate-x-0"
+      : index === choices.length - 1
+        ? "-translate-x-full"
+        : "-translate-x-1/2";
+  return (
+    <MenuPrimitive.RadioGroup
+      aria-label={props.descriptor.label}
+      value={props.value}
+      onValueChange={(value: string) => {
+        if (value !== props.value) props.onValueChange(value);
+      }}
+      // Menus navigate with Up/Down only; the bar reads horizontally, so Left/Right move too.
+      onKeyDown={(event) => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        const items = Array.from(
+          event.currentTarget.querySelectorAll<HTMLElement>('[role="menuitemradio"]'),
+        );
+        const current = items.findIndex((item) => item === document.activeElement);
+        const next = items[current + (event.key === "ArrowRight" ? 1 : -1)];
+        if (current < 0 || !next) return;
+        event.preventDefault();
+        event.stopPropagation();
+        next.focus();
+      }}
+      className="relative mx-4 mt-1 mb-3.5 pt-7"
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          "absolute top-0 whitespace-nowrap font-semibold text-foreground text-sm",
+          index === -1 ? "-translate-x-1/2" : labelAlign,
+        )}
+        style={{ left: `${index === -1 ? 50 : position(index)}%` }}
+      >
+        {label}
+      </span>
+      <div className="relative h-1.5 rounded-full bg-muted">
+        {index > 0 ? (
+          <div
+            className="absolute inset-y-0 left-0 rounded-full bg-foreground"
+            style={{ width: `${position(index)}%` }}
+          />
+        ) : null}
+        {choices.map((choice, stop) => (
+          <MenuPrimitive.RadioItem
+            key={choice.id}
+            value={choice.id}
+            label={choice.label}
+            aria-label={choice.label}
+            closeOnClick
+            disabled={props.disabled}
+            className="group absolute top-1/2 flex size-5 -translate-1/2 cursor-pointer items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset data-disabled:cursor-not-allowed data-disabled:opacity-64"
+            style={{ left: `${position(stop)}%` }}
+          >
+            <span
+              className={cn(
+                "block size-1.5 rounded-full group-data-highlighted:bg-foreground/50 group-data-checked:size-4 group-data-checked:border-2 group-data-checked:border-foreground group-data-checked:bg-background group-data-checked:shadow-sm",
+                stop < index ? "bg-background/60" : "bg-foreground/25",
+              )}
+            />
+          </MenuPrimitive.RadioItem>
+        ))}
+      </div>
+    </MenuPrimitive.RadioGroup>
   );
 }
 
@@ -438,7 +527,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
           <div key={descriptor.id}>
             {index > 0 ? <MenuDivider /> : null}
             <MenuGroup>
-              <div className="px-2 pt-1.5 pb-1 font-medium text-muted-foreground text-xs">
+              <div className="px-2 pt-1.5 pb-1 font-semibold text-muted-foreground text-xs">
                 {descriptor.label}
               </div>
               {ultrathinkInBodyText && descriptor.id === primarySelectDescriptor?.id ? (
@@ -447,62 +536,63 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
                   option.
                 </div>
               ) : null}
-              <MenuRadioGroup
-                value={selectedValue}
-                onValueChange={(value) => handleSelectChange(descriptor, value)}
-              >
-                {selectableProviderOptionChoices(descriptor).map((option) => (
-                  <MenuRadioItem
-                    key={option.id}
-                    value={option.id}
-                    hideIndicator
-                    closeOnClick
-                    disabled={ultrathinkInBodyText && descriptor.id === primarySelectDescriptor?.id}
-                  >
-                    <span className="flex w-full min-w-0 flex-col">
-                      <span className="flex min-w-0 items-center gap-1">
-                        <span className="min-w-0 truncate">{option.label}</span>
-                        {option.isDefault ? <DefaultBadge /> : null}
-                      </span>
-                      {option.description ? (
-                        <span className="max-w-56 text-pretty text-muted-foreground/80 text-xs">
-                          {option.description}
+              {REASONING_SELECT_DESCRIPTOR_IDS.has(descriptor.id) ? (
+                <ReasoningBar
+                  descriptor={descriptor}
+                  value={selectedValue}
+                  disabled={ultrathinkInBodyText && descriptor.id === primarySelectDescriptor?.id}
+                  onValueChange={(value) => handleSelectChange(descriptor, value)}
+                />
+              ) : (
+                <MenuRadioGroup
+                  value={selectedValue}
+                  onValueChange={(value) => handleSelectChange(descriptor, value)}
+                >
+                  {selectableProviderOptionChoices(descriptor).map((option) => (
+                    <MenuRadioItem
+                      key={option.id}
+                      value={option.id}
+                      hideIndicator
+                      closeOnClick
+                      disabled={
+                        ultrathinkInBodyText && descriptor.id === primarySelectDescriptor?.id
+                      }
+                    >
+                      <span className="flex w-full min-w-0 flex-col">
+                        <span className="flex min-w-0 items-center gap-1">
+                          <span className="min-w-0 truncate">{option.label}</span>
+                          {option.isDefault ? <DefaultBadge /> : null}
                         </span>
-                      ) : null}
-                    </span>
-                  </MenuRadioItem>
-                ))}
-              </MenuRadioGroup>
+                        {option.description ? (
+                          <span className="max-w-56 text-pretty text-muted-foreground/80 text-xs">
+                            {option.description}
+                          </span>
+                        ) : null}
+                      </span>
+                    </MenuRadioItem>
+                  ))}
+                </MenuRadioGroup>
+              )}
             </MenuGroup>
           </div>
         );
       })}
       {booleanDescriptors.map((descriptor, index) => {
-        const selectedValue = descriptor.currentValue === true ? "on" : "off";
-
         return (
           <div key={descriptor.id}>
             {index > 0 || selectDescriptors.length > 0 ? <MenuDivider /> : null}
             <MenuGroup>
-              <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">
-                {descriptor.label}
-              </div>
-              <MenuRadioGroup
-                value={selectedValue}
-                onValueChange={(value) => {
+              <MenuCheckboxItem
+                variant="switch"
+                checked={descriptor.currentValue === true}
+                onCheckedChange={(checked) => {
                   updateDescriptors(
-                    replaceDescriptorCurrentValue(descriptors, descriptor.id, value === "on"),
+                    replaceDescriptorCurrentValue(descriptors, descriptor.id, checked),
                   );
                 }}
               >
-                {(["on", "off"] as const).map((value) => (
-                  <MenuRadioItem key={value} value={value} hideIndicator closeOnClick>
-                    <span className="flex w-full min-w-0 items-center justify-between gap-3">
-                      <span>{value === "on" ? "On" : "Off"}</span>
-                    </span>
-                  </MenuRadioItem>
-                ))}
-              </MenuRadioGroup>
+                {descriptor.label}
+              </MenuCheckboxItem>
             </MenuGroup>
           </div>
         );
