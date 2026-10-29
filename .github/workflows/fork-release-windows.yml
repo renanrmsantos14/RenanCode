@@ -42,25 +42,13 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      # setup-vp's own cache restores a Linux-shaped store on Windows (see windows-tests.yml).
+      # No package cache: restoring the ~1 GB store took longer than a cold install.
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@v1
         with:
           node-version-file: package.json
           cache: false
           run-install: false
-
-      - name: Resolve package cache path
-        id: package_cache_path
-        shell: pwsh
-        run: '"path=$(vp pm cache dir)" >> $env:GITHUB_OUTPUT'
-
-      - name: Cache packages
-        uses: actions/cache@v6
-        with:
-          path: ${{ steps.package_cache_path.outputs.path }}
-          key: fork-release-win-packages-v1-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: fork-release-win-packages-v1-
 
       - name: Cache Electron and electron-builder downloads
         uses: actions/cache@v6
