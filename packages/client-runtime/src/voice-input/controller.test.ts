@@ -9,6 +9,7 @@ import {
   type VoiceInputControllerDependencies,
   type VoiceRecorder,
 } from "./controller.ts";
+import { VoiceTranscriptionError } from "./transcription.ts";
 import type { PreparedVoiceTranscription, VoiceTranscriber } from "./transcription.ts";
 
 function deferred<T>() {
@@ -158,6 +159,23 @@ describe("VoiceInputController", () => {
       expect(harness.commits).toEqual([]);
     },
   );
+
+  it.each([
+    ["rate-limited", "free limit"],
+    ["not-configured", "not configured"],
+  ] as const)("explains %s transcription failures", async (code, text) => {
+    const harness = createHarness({
+      getTranscriber: () => ({
+        prepare: async () =>
+          preparedTranscription(async () => {
+            throw new VoiceTranscriptionError(code, code);
+          }),
+      }),
+    });
+    await harness.controller.start();
+    await harness.controller.stop();
+    expect(harness.controller.currentState.error).toContain(text);
+  });
 
   it.each(["permission", "preparation", "recording"] as const)(
     "keeps the selected transcriber when preferences change during %s",
