@@ -24,7 +24,7 @@ import {
   isClaudeUltrathinkPrompt,
   normalizeModelSlug,
 } from "@t3tools/shared/model";
-import { memo, type ReactNode, useRef } from "react";
+import { memo, type ReactNode, useRef, useState } from "react";
 import { GaugeIcon, ZapIcon } from "lucide-react";
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import {
@@ -124,20 +124,24 @@ function ReasoningBar(props: {
   disabled: boolean;
   onValueChange: (value: string) => void;
 }) {
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
   const choices = selectableProviderOptionChoices(props.descriptor).filter(
     (choice) => !REASONING_BAR_HIDDEN_CHOICES.has(choice.id),
   );
-  const index = choices.findIndex((choice) => choice.id === props.value);
-  const position = (stop: number) =>
-    choices.length > 1 ? (stop / (choices.length - 1)) * 100 : 50;
+  const selectedIndex = choices.findIndex((choice) => choice.id === props.value);
+  const index = dragIndex ?? selectedIndex;
+  const last = Math.max(choices.length - 1, 1);
+  const percent = index === -1 ? 50 : (index / last) * 100;
   const label =
-    props.descriptor.options.find((option) => option.id === props.value)?.label ?? props.value;
-  const labelAlign =
-    index <= 0 && index !== -1
-      ? "translate-x-0"
-      : index === choices.length - 1
-        ? "-translate-x-full"
-        : "-translate-x-1/2";
+    index === -1
+      ? (props.descriptor.options.find((option) => option.id === props.value)?.label ?? props.value)
+      : choices[index]?.label;
+  const stopAt = (event: React.PointerEvent<HTMLElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const ratio = Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1);
+    return Math.round(ratio * last);
+  };
+  const motion = "transition-transform duration-200 ease-out motion-reduce:transition-none";
   return (
     <MenuPrimitive.RadioGroup
       aria-label={props.descriptor.label}
@@ -158,46 +162,103 @@ function ReasoningBar(props: {
         event.stopPropagation();
         next.focus();
       }}
-      className="relative mx-4 mt-1 mb-3.5 pt-7"
+      className="mx-4 mt-1 mb-2 select-none pt-6"
     >
-      <span
-        aria-hidden="true"
+      <div
         className={cn(
-          "absolute top-0 whitespace-nowrap font-semibold text-foreground text-sm",
-          index === -1 ? "-translate-x-1/2" : labelAlign,
+          "relative touch-none py-2",
+          props.disabled ? "cursor-not-allowed" : "cursor-pointer",
         )}
-        style={{ left: `${index === -1 ? 50 : position(index)}%` }}
+        onPointerDown={(event) => {
+          if (props.disabled || event.button !== 0) return;
+          event.preventDefault();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          setDragIndex(stopAt(event));
+        }}
+        onPointerMove={(event) => {
+          if (dragIndex === null) return;
+          const stop = stopAt(event);
+          if (stop !== dragIndex) setDragIndex(stop);
+        }}
+        onPointerUp={(event) => {
+          if (dragIndex === null) return;
+          const choice = choices[stopAt(event)];
+          setDragIndex(null);
+          if (choice && choice.id !== props.value) props.onValueChange(choice.id);
+        }}
+        onPointerCancel={() => setDragIndex(null)}
       >
-        {label}
-      </span>
-      <div className="relative h-1.5 rounded-full bg-muted">
-        {index > 0 ? (
+        <div
+          aria-hidden="true"
+          className={cn("pointer-events-none absolute inset-x-0 -top-6", motion)}
+          style={{ transform: `translateX(${percent}%)` }}
+        >
+          <span
+            className={cn(
+              "absolute left-0 whitespace-nowrap font-semibold text-foreground text-sm",
+              motion,
+            )}
+            style={{ transform: `translateX(-${percent}%)` }}
+          >
+            {label}
+          </span>
+        </div>
+        <div className="relative h-1.5 overflow-hidden rounded-full bg-muted">
           <div
-            className="absolute inset-y-0 left-0 rounded-full bg-foreground"
-            style={{ width: `${position(index)}%` }}
+            className={cn("absolute inset-0 rounded-full bg-foreground", motion)}
+            style={{ transform: `translateX(${(index === -1 ? 0 : percent) - 100}%)` }}
           />
-        ) : null}
+        </div>
         {choices.map((choice, stop) => (
           <MenuPrimitive.RadioItem
             key={choice.id}
             value={choice.id}
             label={choice.label}
             aria-label={choice.label}
-            closeOnClick
             disabled={props.disabled}
-            className="group absolute top-1/2 flex size-5 -translate-1/2 cursor-pointer items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset data-disabled:cursor-not-allowed data-disabled:opacity-64"
-            style={{ left: `${position(stop)}%` }}
+            className="group absolute top-1/2 flex size-5 -translate-1/2 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset data-disabled:opacity-64"
+            style={{ left: `${(stop / last) * 100}%` }}
           >
             <span
               className={cn(
-                "block size-1.5 rounded-full group-data-highlighted:bg-foreground/50 group-data-checked:size-4 group-data-checked:border-2 group-data-checked:border-foreground group-data-checked:bg-background group-data-checked:shadow-sm",
-                stop < index ? "bg-background/60" : "bg-foreground/25",
+                "block size-1.5 rounded-full transition-colors duration-200 group-data-highlighted:bg-foreground/50",
+                index !== -1 && stop <= index ? "bg-background/60" : "bg-foreground/25",
               )}
             />
           </MenuPrimitive.RadioItem>
         ))}
+        {index === -1 ? null : (
+          <div
+            aria-hidden="true"
+            className={cn("pointer-events-none absolute inset-x-0 top-1/2", motion)}
+            style={{ transform: `translateX(${percent}%)` }}
+          >
+            <span
+              className={cn(
+                "absolute left-0 block size-4 -translate-1/2 rounded-full border-2 border-foreground bg-background shadow-sm transition-[scale] duration-150",
+                dragIndex !== null && "scale-110",
+              )}
+            />
+          </div>
+        )}
       </div>
     </MenuPrimitive.RadioGroup>
+  );
+}
+
+/** Fast mode as a bolt beside the Reasoning heading. Stays open so it reads as a toggle. */
+function FastModeToggle(props: { checked: boolean; onCheckedChange: (checked: boolean) => void }) {
+  return (
+    <MenuPrimitive.CheckboxItem
+      checked={props.checked}
+      onCheckedChange={props.onCheckedChange}
+      closeOnClick={false}
+      aria-label="Fast mode"
+      title={props.checked ? "Fast mode on" : "Fast mode off"}
+      className="-my-1 flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-none transition-colors duration-150 data-checked:text-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+    >
+      <ZapIcon aria-hidden="true" className={cn("size-4", props.checked && "fill-current")} />
+    </MenuPrimitive.CheckboxItem>
   );
 }
 
@@ -463,11 +524,15 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
     selectDescriptors,
     booleanDescriptors,
     primarySelectDescriptor,
+    fastModeDescriptor,
     ultrathinkPromptControlled,
     ultrathinkInBodyText,
     hasAnyControls,
     modelIsUnavailable,
   } = selected;
+  const fastModeHostId =
+    selectDescriptors.find((descriptor) => REASONING_SELECT_DESCRIPTOR_IDS.has(descriptor.id))
+      ?.id ?? null;
   const updateDescriptors = (nextDescriptors: ReadonlyArray<ProviderOptionDescriptor>) => {
     updateModelOptions(buildProviderOptionSelectionsFromDescriptors(nextDescriptors));
   };
@@ -527,8 +592,18 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
           <div key={descriptor.id}>
             {index > 0 ? <MenuDivider /> : null}
             <MenuGroup>
-              <div className="px-2 pt-1.5 pb-1 font-semibold text-muted-foreground text-xs">
+              <div className="flex items-center justify-between px-2 pt-1.5 pb-1 font-semibold text-muted-foreground text-xs">
                 {descriptor.label}
+                {fastModeDescriptor && descriptor.id === fastModeHostId ? (
+                  <FastModeToggle
+                    checked={fastModeDescriptor.currentValue === true}
+                    onCheckedChange={(checked) => {
+                      updateDescriptors(
+                        replaceDescriptorCurrentValue(descriptors, fastModeDescriptor.id, checked),
+                      );
+                    }}
+                  />
+                ) : null}
               </div>
               {ultrathinkInBodyText && descriptor.id === primarySelectDescriptor?.id ? (
                 <div className="px-2 pb-1.5 text-muted-foreground/80 text-xs">
@@ -578,6 +653,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
         );
       })}
       {booleanDescriptors.map((descriptor, index) => {
+        if (descriptor.id === fastModeDescriptor?.id && fastModeHostId) return null;
         return (
           <div key={descriptor.id}>
             {index > 0 || selectDescriptors.length > 0 ? <MenuDivider /> : null}
