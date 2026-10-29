@@ -1,4 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
+import { VoiceTranscriptionSettings } from "./VoiceTranscriptionSettings";
 import { NotificationSettings } from "./NotificationSettings";
 import { PRIVACY_POLICY_URL } from "../../legalLinks";
 import { CheckIcon } from "lucide-react";
@@ -1211,6 +1212,7 @@ export function ChatSettingsPanel() {
           }
         />
       </SettingsSection>
+      <VoiceTranscriptionSettings />
     </SettingsPageContainer>
   );
 }
