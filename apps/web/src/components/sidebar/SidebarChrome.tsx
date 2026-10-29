@@ -111,7 +111,7 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
       to="/"
     >
       <SidebarBrandMark onBackdrop={onBackdrop} />
-      <T3AppIcon className="ml-1.5 size-5 shrink-0 rounded-[5px]" />
+      <T3AppIcon className="ml-1.5 size-7 shrink-0" />
     </Link>
   );
 }
