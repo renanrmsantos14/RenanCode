@@ -8,6 +8,17 @@ name: Fork release (Windows)
 on:
   push:
     branches: [main]
+    # Changes that never reach the Windows desktop app do not cut a release.
+    # Later patterns win, so this workflow itself still triggers one.
+    paths:
+      - "**"
+      - "!**/*.md"
+      - "!docs/**"
+      - "!apps/mobile/**"
+      - "!apps/marketing/**"
+      - "!evals/**"
+      - "!.github/**"
+      - ".github/workflows/fork-release-windows.yml"
   workflow_dispatch:
 
 permissions:
