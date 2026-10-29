@@ -2545,3 +2545,17 @@ code {
   outline: 2px solid var(--ring);
   outline-offset: -2px;
 }
+
+@keyframes composer-menu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.99);
+  }
+}
+
+@utility composer-menu-enter {
+  transform-origin: bottom center;
+  @media (prefers-reduced-motion: no-preference) {
+    animation: composer-menu-enter 140ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+}
