@@ -79,6 +79,7 @@ export function composerCommandKeyHandler(input: {
     dispatchMode: ComposerDispatchMode,
     submissionIntent: ComposerSubmissionIntent,
   ) => void;
+  readonly steerQueuedMessage: (repeat: boolean) => boolean;
 }) {
   const {
     keybindings,
@@ -116,6 +117,7 @@ export function composerCommandKeyHandler(input: {
     readComposerSnapshot,
     applyPromptReplacement,
     submitComposer,
+    steerQueuedMessage,
   } = input;
 
   // The composer persists across threads. A recall from thread A must not
@@ -123,7 +125,14 @@ export function composerCommandKeyHandler(input: {
   // otherwise turn B's own draft into a browsing position.
   const promptHistoryTargetKey = composerTargetKey(composerDraftTarget);
 
-  const replacePromptFromHistory = (nextPrompt: string) => {
+  const hasComposerAttachments = () =>
+    composerImagesRef.current.length > 0 ||
+    composerFilesRef.current.length > 0 ||
+    composerTerminalContextsRef.current.length > 0 ||
+    composerPreviewAnnotations.length > 0 ||
+    composerReviewComments.length > 0;
+
+  const replacePromptFromHistory =(nextPrompt: string) => {
     promptRef.current = nextPrompt;
     setComposerDraftPrompt(composerDraftTarget, nextPrompt);
     setComposerCursor(collapseExpandedComposerCursor(nextPrompt, nextPrompt.length));
@@ -139,15 +148,7 @@ export function composerCommandKeyHandler(input: {
       return false;
     }
     if (pendingUserInputs.length > 0) return false;
-    if (
-      composerImagesRef.current.length > 0 ||
-      composerFilesRef.current.length > 0 ||
-      composerTerminalContextsRef.current.length > 0 ||
-      composerPreviewAnnotations.length > 0 ||
-      composerReviewComments.length > 0
-    ) {
-      return false;
-    }
+    if (hasComposerAttachments()) return false;
     const recalled = promptHistoryPositionRef.current;
     const position = recalled?.targetKey === promptHistoryTargetKey ? recalled.position : null;
     if (position === null && promptRef.current.length > 0) {
@@ -214,6 +215,14 @@ export function composerCommandKeyHandler(input: {
     }
     if ((key === "ArrowUp" || key === "ArrowDown") && submissionIntent === null) {
       return navigatePromptHistory(key === "ArrowUp" ? "backward" : "forward", event);
+    }
+    if (
+      submissionIntent === "alternate" &&
+      promptRef.current.trim().length === 0 &&
+      !hasComposerAttachments() &&
+      steerQueuedMessage(event.repeat)
+    ) {
+      return true;
     }
     if (submissionIntent) {
       submitComposer(
