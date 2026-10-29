@@ -26,6 +26,7 @@ import * as Schema from "effect/Schema";
 import { APP_VERSION, HOSTED_APP_CHANNEL, HOSTED_APP_CHANNEL_LABEL } from "../../branding";
 import { CliCommandSettingsRow } from "./CliCommandSettingsRow";
 import { MobileAppSettingsRow } from "./MobileAppSettingsRow";
+import { ReleaseHistorySettingsRow } from "./ReleaseHistorySettingsRow";
 import {
   canCheckForUpdate,
   getDesktopUpdateButtonTooltip,
@@ -366,6 +367,7 @@ function AboutVersionSection() {
           }
         />
       ) : null}
+      <ReleaseHistorySettingsRow />
       {hasDesktopBridge ? <CliCommandSettingsRow /> : null}
     </>
   );
@@ -1973,7 +1975,7 @@ export function AboutSettingsPanel() {
       <SettingsSection id="legal" title="Legal">
         <SettingsRow
           {...searchableSetting("privacy-policy")}
-          description="How we handle your data, including the anonymous usage data T3 Code collects."
+          description="How we handle your data, including the anonymous usage data RenanCode collects."
           control={
             <Button
               render={<a href={PRIVACY_POLICY_URL} target="_blank" rel="noreferrer noopener" />}
@@ -1986,7 +1988,7 @@ export function AboutSettingsPanel() {
         />
         <SettingsRow
           {...searchableSetting("open-source-licenses")}
-          description="Notices for dependencies, assets, and optional tools used by T3 Code."
+          description="Notices for dependencies, assets, and optional tools used by RenanCode."
           control={
             <Button
               render={<Link to="/settings/open-source-licenses" />}
