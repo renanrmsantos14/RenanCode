@@ -1,0 +1,96 @@
+# Fork-only: every push to main builds the unsigned Windows NSIS installer and
+# publishes it as a GitHub Release. The build points electron-updater at this
+# repository (GITHUB_REPOSITORY), so installed apps pick up each new release.
+# The version is <major>.<minor>.<run_number> of apps/desktop, so nothing is
+# committed back and upstream syncs never conflict on version bumps.
+name: Fork release (Windows)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fork-release-windows
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    if: github.repository == 'renanrmsantos14/RenanCode'
+    runs-on: windows-2025
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      # setup-vp's own cache restores a Linux-shaped store on Windows (see windows-tests.yml).
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: false
+          run-install: false
+
+      - name: Resolve package cache path
+        id: package_cache_path
+        shell: pwsh
+        run: '"path=$(vp pm cache dir)" >> $env:GITHUB_OUTPUT'
+
+      - name: Cache packages
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.package_cache_path.outputs.path }}
+          key: fork-release-win-packages-v1-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: fork-release-win-packages-v1-
+
+      - name: Cache Electron and electron-builder downloads
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: fork-release-win-electron-v1-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: fork-release-win-electron-v1-
+
+      - name: Rust target
+        run: rustup target add x86_64-pc-windows-msvc
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native/resource-monitor
+          key: x86_64-pc-windows-msvc
+
+      - name: Install
+        run: vp install
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          $parts = (node -p "require('./apps/desktop/package.json').version").Split('-')[0].Split('.')
+          "version=$($parts[0]).$($parts[1]).${{ github.run_number }}" >> $env:GITHUB_OUTPUT
+
+      - name: Build installer
+        env:
+          T3CODE_DESKTOP_VERSION: ${{ steps.version.outputs.version }}
+        run: vp run dist:desktop:win:x64
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $files = @(Get-ChildItem release -File | Where-Object { $_.Name -like '*.exe' -or $_.Name -like '*.exe.blockmap' -or $_.Name -like 'latest*.yml' } | ForEach-Object FullName)
+          if (-not ($files | Where-Object { $_ -like '*.exe' })) { throw "No installer found in release/" }
+          if (-not ($files | Where-Object { $_ -like '*latest.yml' })) { throw "No latest.yml update manifest in release/" }
+          gh release create "v$env:VERSION" @files --target "${{ github.sha }}" --title "RenanCode $env:VERSION" --notes "Instalador Windows não assinado, gerado de ${{ github.sha }}."
