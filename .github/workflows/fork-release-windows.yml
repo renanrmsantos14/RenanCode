@@ -148,5 +148,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.build.outputs.version }}
         run: |
+          prev=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName 2>/dev/null || true)
+          {
+            echo "## O que há de novo"
+            echo
+            if [ -n "$prev" ]; then
+              changes=$(gh api "repos/$GITHUB_REPOSITORY/compare/$prev...$GITHUB_SHA" \
+                -q '.commits[] | select(.parents | length == 1) | .commit.message | split("\n")[0]' |
+                grep -v '^chore(release)' | sed 's/^/- /' || true)
+              echo "${changes:-- Sem mudanças de código desde $prev.}"
+              echo
+              echo "Comparação completa: https://github.com/$GITHUB_REPOSITORY/compare/$prev...v$VERSION"
+            else
+              echo "- Primeira versão publicada."
+            fi
+            echo
+            echo "Instaladores Windows x64 (não assinado) e Linux x64 (AppImage), gerados de $GITHUB_SHA."
+          } > notes.md
           gh release create "v$VERSION" release/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "RenanCode $VERSION" --notes "Instaladores Windows x64 (não assinado) e Linux x64 (AppImage), gerados de $GITHUB_SHA."
+            --title "RenanCode $VERSION" --notes-file notes.md
