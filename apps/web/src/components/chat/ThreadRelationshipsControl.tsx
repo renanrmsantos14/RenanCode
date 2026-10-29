@@ -841,7 +841,7 @@ export function ThreadRelationshipsPanel(props: {
                           }
                         >
                           {stoppingId === threadId ? (
-                            <Spinner size="xs" />
+                            <Spinner aria-hidden size="xs" />
                           ) : (
                             <SquareIcon aria-hidden className="size-3 fill-current" />
                           )}

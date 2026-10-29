@@ -17,7 +17,10 @@ import {
   preferredMicrophoneInput,
   rememberMicrophones,
 } from "../../lib/microphonePriority";
-import { getLocalVoiceTranscriber } from "../../native/voiceTranscription";
+import {
+  getLocalVoiceTranscriber,
+  REMOTE_VOICE_TRANSCRIPTION,
+} from "../../native/voiceTranscription";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
 import { getNativeShowcaseScene } from "../showcase/nativeShowcaseScene";
 import { voiceInputBlocksSubmission } from "@t3tools/client-runtime/voice-input";
@@ -139,7 +142,11 @@ export function useGlobalVoiceInput() {
   const snapshot = useSyncExternalStore(session.subscribe, session.getSnapshot);
   return {
     ...snapshot,
-    isAvailable: getLocalVoiceTranscriber() !== null || getNativeShowcaseScene() !== null,
+    isAvailable:
+      REMOTE_VOICE_TRANSCRIPTION ||
+      getLocalVoiceTranscriber(null) !== null ||
+      getNativeShowcaseScene() !== null,
+    requiresEnvironment: REMOTE_VOICE_TRANSCRIPTION && getNativeShowcaseScene() === null,
     audioLevels,
     isBusy: voiceInputBlocksSubmission(snapshot.state),
     session,

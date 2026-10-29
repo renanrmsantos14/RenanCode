@@ -9,6 +9,7 @@ export {
   type VoiceRecorder,
   type VoiceRecorderStatus,
 } from "./controller.ts";
+export { createRemoteVoiceTranscriber, voiceFailureReason } from "./remoteTranscriber.ts";
 export {
   VoiceTranscriptionError,
   throwIfVoiceTranscriptionAborted,

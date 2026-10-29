@@ -50,6 +50,12 @@ also send files to T3 Code through another app's system share sheet.
 
 See [images and videos](#images-and-videos-in-messages) for previewing and saving media.
 
+## Dictate a prompt
+
+Click the microphone in the composer (or press `mod+shift+u`), speak, then press the check to put the text in your draft. Nothing is sent until you send it. The X discards the recording.
+
+Dictation is transcribed by the server you are connected to, so it needs an API key there first: open **Settings → Chat → Voice dictation** and add a key. By default it uses Groq's Whisper, which has a free tier (create a key at console.groq.com). Any OpenAI-compatible transcription API works if you change the base URL and model. On iPhone, dictation keeps working on the device without a key.
+
 ## Send while the agent is working
 
 On web and desktop, choose **Settings → Chat → Follow-up behavior** to queue

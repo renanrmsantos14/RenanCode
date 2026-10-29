@@ -198,6 +198,9 @@ import {
   ComposerRestingImagePreviews,
 } from "./ComposerAttachmentStrip";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
+import { ComposerVoiceControl } from "./voice/ComposerVoiceControl";
+import { useComposerVoiceInput } from "./voice/useComposerVoiceInput";
+import { voiceInputBlocksSubmission } from "@t3tools/client-runtime/voice-input";
 import { ComposerFooterPrimaryActions } from "./ComposerFooterControls";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
@@ -241,7 +244,7 @@ import {
   type ThreadShell,
 } from "../../types";
 import { type ComposerPromptHistoryPosition } from "./composerPromptHistory";
-import type { PendingUserInputDraftAnswer } from "../../pendingUserInput";
+import type { PendingUserInputDraftAnswer } from "@t3tools/client-runtime/state/pending-user-input";
 import type {
   LatestProposedPlanState,
   PendingApproval,
@@ -308,6 +311,7 @@ export interface ChatComposerHandle {
   isModelPickerOpen: () => boolean;
   isCaretAtStart: () => boolean;
   compactContext: () => void;
+  toggleDictation: () => void;
   readSnapshot: () => {
     value: string;
     cursor: number;
@@ -1820,6 +1824,23 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   };
   const readComposerSnapshotStable = useStableCallback(readComposerSnapshot);
 
+  const voice = useComposerVoiceInput({
+    environmentId,
+    ownerKey: composerDraftTargetKey,
+    enabled:
+      settings.voiceTranscription.apiKey !== "" &&
+      !isLiteralPendingAnswer &&
+      readEnvironmentScope(environmentId, AuthOrchestrationOperateScope),
+    prompt,
+    readCursor: () => readComposerSnapshotStable().cursor,
+    commit: (text, cursor) => {
+      promptRef.current = text;
+      setPrompt(text);
+      setComposerCursor(clampCollapsedComposerCursor(text, cursor, isLiteralPendingAnswer));
+    },
+  });
+  const isVoiceBusy = voiceInputBlocksSubmission(voice.state);
+
   const resolveActiveComposerTrigger = (): {
     snapshot: { value: string; cursor: number; expandedCursor: number };
     trigger: ComposerTrigger | null;
@@ -2050,6 +2071,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     if (
       noProviderAvailable ||
       isSendDisabled ||
+      isVoiceBusy ||
       !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)
     ) {
       event?.preventDefault();
@@ -2876,6 +2898,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         trigger.click();
       },
       compactContext: compactThreadContextStable,
+      toggleDictation: () => {
+        if (voice.available) voice.toggle();
+      },
       isModelPickerOpen: () => isComposerModelPickerOpen,
       isCaretAtStart: () => {
         const range = composerEditorRef.current?.readSelectionRange();
@@ -3449,6 +3474,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   >
                     {composerControls}
                   </div>
+                  {voice.available ? <ComposerVoiceControl voice={voice} /> : null}
                   <ComposerFooterPrimaryActions
                     compact={isComposerPrimaryActionsCompact}
                     canOperateThread={canOperateThread}
