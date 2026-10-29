@@ -1763,6 +1763,10 @@ export default function ChatView(props: ChatViewProps) {
     }
   };
   const onInterruptStable = useStableCallback(onInterrupt);
+  const steerQueuedMessageStable = useStableCallback(
+    (repeat: boolean) =>
+      routeKind !== "draft" && queuedRunsControlRef.current?.steerNext(repeat) === true,
+  );
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- window listener for the desktop snapshot event that focuses the composer
   useEffect(() => subscribeSnapShotComposerFocus(focusComposerStable), [focusComposerStable]);
   const scheduleComposerFocus = () => {
@@ -2587,8 +2591,7 @@ export default function ChatView(props: ChatViewProps) {
         const next = logicalProjectEnvironments[(index + 1) % logicalProjectEnvironments.length];
         if (next) onEnvironmentChangeStable(next.environmentId);
       },
-      "thread.steerQueuedMessage": ({ event }) =>
-        routeKind !== "draft" && queuedRunsControlRef.current?.steerNext(event.repeat) === true,
+      "thread.steerQueuedMessage": ({ event }) => steerQueuedMessageStable(event.repeat),
       "thread.editQueuedMessage": ({ event }) =>
         routeKind !== "draft" &&
         composerRef.current?.isCaretAtStart() === true &&
@@ -3499,6 +3502,7 @@ export default function ChatView(props: ChatViewProps) {
                               onSend={onComposerSendStable}
                               onResume={onComposerResumeStable}
                               onInterrupt={onInterruptStable}
+                              onSteerQueuedMessage={steerQueuedMessageStable}
                               onImplementPlanInNewThread={onImplementPlanInNewThreadStable}
                               onSelectActivePendingUserInputOption={
                                 onSelectActivePendingUserInputOptionStable

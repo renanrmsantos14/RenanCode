@@ -465,6 +465,7 @@ export interface ChatComposerProps {
   ) => void;
   onResume: () => void;
   onInterrupt: () => void;
+  onSteerQueuedMessage: (repeat: boolean) => boolean;
   onImplementPlanInNewThread: () => void;
   onSelectActivePendingUserInputOption: (questionId: string, optionValue: string) => void;
   onAdvanceActivePendingUserInput: () => void;
@@ -574,6 +575,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     onSend,
     onResume,
     onInterrupt,
+    onSteerQueuedMessage,
     onImplementPlanInNewThread,
     onSelectActivePendingUserInputOption,
     onAdvanceActivePendingUserInput,
@@ -2212,6 +2214,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       readComposerSnapshot,
       applyPromptReplacement,
       submitComposer,
+      steerQueuedMessage: onSteerQueuedMessage,
     })(key, event, isTaskItem);
 
   const {
