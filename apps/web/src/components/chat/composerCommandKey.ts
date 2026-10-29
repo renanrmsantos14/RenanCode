@@ -132,7 +132,7 @@ export function composerCommandKeyHandler(input: {
     composerPreviewAnnotations.length > 0 ||
     composerReviewComments.length > 0;
 
-  const replacePromptFromHistory =(nextPrompt: string) => {
+  const replacePromptFromHistory = (nextPrompt: string) => {
     promptRef.current = nextPrompt;
     setComposerDraftPrompt(composerDraftTarget, nextPrompt);
     setComposerCursor(collapseExpandedComposerCursor(nextPrompt, nextPrompt.length));
