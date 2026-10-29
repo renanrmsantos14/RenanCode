@@ -20,17 +20,21 @@ type ReleaseHistoryState =
 
 const releaseDateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 
+async function fetchReleases() {
+  const response = await fetch(getDesktopReleaseListApiUrl(), {
+    headers: { Accept: "application/vnd.github+json" },
+  });
+  if (!response.ok) throw new Error(`GitHub responded ${response.status}`);
+  return parseDesktopReleaseList(await response.json());
+}
+
 export function ReleaseHistorySettingsRow() {
   const [state, setState] = useState<ReleaseHistoryState>({ status: "idle" });
 
   const load = async () => {
     setState({ status: "loading" });
     try {
-      const response = await fetch(getDesktopReleaseListApiUrl(), {
-        headers: { Accept: "application/vnd.github+json" },
-      });
-      if (!response.ok) throw new Error(`GitHub responded ${response.status}`);
-      setState({ status: "loaded", releases: parseDesktopReleaseList(await response.json()) });
+      setState({ status: "loaded", releases: await fetchReleases() });
     } catch (error) {
       setState({
         status: "error",
