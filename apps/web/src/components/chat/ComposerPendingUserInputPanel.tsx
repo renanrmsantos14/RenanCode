@@ -2,10 +2,8 @@ import { type RuntimeRequestId, type ScopedThreadRef } from "@t3tools/contracts"
 import { memo, use, useEffect, useEffectEvent, useState } from "react";
 import { BackgroundThreadContext } from "./backgroundThread";
 import { type PendingUserInput } from "../../session-logic";
-import {
-  derivePendingUserInputProgress,
-  type PendingUserInputDraftAnswer,
-} from "../../pendingUserInput";
+import type { PendingUserInputDraftAnswer } from "@t3tools/client-runtime/state/pending-user-input";
+import { derivePendingUserInputProgress } from "../../pendingUserInput";
 import { CheckboxMark } from "../ui/checkbox";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import { Kbd } from "../ui/kbd";
@@ -119,7 +117,9 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   };
 
   const selectOptionFromShortcut = useEffectEvent(handleOptionSelection);
-  const advanceFromShortcut = useEffectEvent(onAdvance);
+  const advanceFromShortcut = useEffectEvent(() => {
+    if (progress.canAdvance) onAdvance();
+  });
   const backgroundThread = use(BackgroundThreadContext);
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes a document keydown listener for digit and Enter shortcuts while a question is answerable
@@ -138,15 +138,12 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
         return;
       }
       if (event.key === "Enter") {
-        // Enter confirms the selection; on an unselected option or another button it keeps its native click.
-        if (
+        // Confirm only from the selected option or an unfocused page; links and other controls keep native Enter.
+        const onSelectedOption =
           target instanceof HTMLElement &&
-          target.closest("button, [role='button']") &&
-          target.closest("[data-pending-user-input-option]")?.getAttribute("aria-pressed") !==
-            "true"
-        ) {
-          return;
-        }
+          target.closest("[data-pending-user-input-option]")?.getAttribute("aria-pressed") ===
+            "true";
+        if (!onSelectedOption && target !== document.body) return;
         event.preventDefault();
         advanceFromShortcut();
         return;
