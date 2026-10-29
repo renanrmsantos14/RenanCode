@@ -163,7 +163,7 @@ function ReasoningBar(props: {
       <span
         aria-hidden="true"
         className={cn(
-          "absolute top-0 whitespace-nowrap font-semibold text-[13px] text-foreground",
+          "absolute top-0 whitespace-nowrap font-semibold text-foreground text-sm",
           index === -1 ? "-translate-x-1/2" : labelAlign,
         )}
         style={{ left: `${index === -1 ? 50 : position(index)}%` }}
@@ -185,12 +185,12 @@ function ReasoningBar(props: {
             aria-label={choice.label}
             closeOnClick
             disabled={props.disabled}
-            className="group absolute top-1/2 flex size-5 -translate-1/2 cursor-pointer items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring data-disabled:cursor-not-allowed data-disabled:opacity-64"
+            className="group absolute top-1/2 flex size-5 -translate-1/2 cursor-pointer items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset data-disabled:cursor-not-allowed data-disabled:opacity-64"
             style={{ left: `${position(stop)}%` }}
           >
             <span
               className={cn(
-                "block size-1.5 rounded-full group-data-highlighted:bg-foreground/50 group-data-checked:size-4 group-data-checked:border-[1.5px] group-data-checked:border-foreground group-data-checked:bg-background group-data-checked:shadow-sm",
+                "block size-1.5 rounded-full group-data-highlighted:bg-foreground/50 group-data-checked:size-4 group-data-checked:border-2 group-data-checked:border-foreground group-data-checked:bg-background group-data-checked:shadow-sm",
                 stop < index ? "bg-background/60" : "bg-foreground/25",
               )}
             />
@@ -554,7 +554,9 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
                       value={option.id}
                       hideIndicator
                       closeOnClick
-                      disabled={ultrathinkInBodyText && descriptor.id === primarySelectDescriptor?.id}
+                      disabled={
+                        ultrathinkInBodyText && descriptor.id === primarySelectDescriptor?.id
+                      }
                     >
                       <span className="flex w-full min-w-0 flex-col">
                         <span className="flex min-w-0 items-center gap-1">
@@ -582,10 +584,11 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
             <MenuGroup>
               <MenuCheckboxItem
                 variant="switch"
-                className="font-medium"
                 checked={descriptor.currentValue === true}
                 onCheckedChange={(checked) => {
-                  updateDescriptors(replaceDescriptorCurrentValue(descriptors, descriptor.id, checked));
+                  updateDescriptors(
+                    replaceDescriptorCurrentValue(descriptors, descriptor.id, checked),
+                  );
                 }}
               >
                 {descriptor.label}
