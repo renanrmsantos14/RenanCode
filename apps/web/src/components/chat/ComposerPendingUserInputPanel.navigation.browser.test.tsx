@@ -17,6 +17,7 @@ vi.mock(import("../ChatMarkdown"), async (importOriginal) => ({
 
 import { act, fakeTimers, render } from "../../../test/render";
 import { makeThreadProjectionFixture } from "../../test-fixtures";
+import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import { usePendingThreadRequests } from "./usePendingThreadRequests";
 
 const threadRef = { environmentId: EnvironmentId.make("env"), threadId: ThreadId.make("thread") };
@@ -187,4 +188,32 @@ it("isolates drafts by environment, thread and request and discards only resolve
       index === 0 ? undefined : `Answer ${index}`,
     );
   }
+});
+
+it("selecting an option waits for Enter or the composer submit before advancing", async () => {
+  const onAdvance = vi.fn();
+  const onToggleOption = vi.fn();
+  const pending = { ...prompt, questions: [prompt.questions[0]!] };
+  const panel = (answers: ComponentProps<typeof ComposerPendingUserInputPanel>["answers"]) => (
+    <ComposerPendingUserInputPanel
+      pendingUserInputs={[pending]}
+      cwd={undefined}
+      threadRef={threadRef}
+      respondingRequestIds={[]}
+      answers={answers}
+      questionIndex={0}
+      onToggleOption={onToggleOption}
+      onAdvance={onAdvance}
+      onDismiss={() => {}}
+    />
+  );
+  await using screen = await render(panel({}));
+  const option = screen.getByRole("button", { name: /Incremental/ });
+  await userEvent.click(option);
+  expect(onToggleOption).toHaveBeenCalledWith("question-0", "Incremental");
+  expect(onAdvance).not.toHaveBeenCalled();
+
+  await screen.rerender(panel({ "question-0": { selectedOptionValues: ["Incremental"] } }));
+  await userEvent.keyboard("{Enter}");
+  expect(onAdvance).toHaveBeenCalledOnce();
 });
