@@ -748,7 +748,8 @@ export const make = Effect.gen(function* () {
             { concurrency: "unbounded" },
           );
           yield* electronUpdater.quitAndInstall({
-            isSilent: true,
+            // A silent NSIS install leaves nothing on screen for a minute or more; show its progress.
+            isSilent: environment.platform !== "win32",
             isForceRunAfter: true,
           });
           return { accepted: true, completed: false, failed: false };
