@@ -850,6 +850,58 @@ export const AntigravitySettings = makeProviderSettingsSchema(
 );
 export type AntigravitySettings = typeof AntigravitySettings.Type;
 
+const VOICE_TRANSCRIPTION_DEFAULT_BASE_URL = "https://api.groq.com/openai/v1";
+const VOICE_TRANSCRIPTION_DEFAULT_MODEL = "whisper-large-v3-turbo";
+
+export const VoiceTranscriptionSettings = makeProviderSettingsSchema(
+  {
+    apiKey: TrimmedString.pipe(
+      secretSetting,
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "API key",
+        description: "Free key at console.groq.com. Stored separately on the host.",
+        providerSettingsForm: {
+          control: "password",
+          placeholder: "Not configured",
+          clearWhenEmpty: "persist",
+        },
+      }),
+    ),
+    baseUrl: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed(VOICE_TRANSCRIPTION_DEFAULT_BASE_URL)),
+      Schema.annotateKey({
+        title: "Base URL",
+        description: "Any OpenAI-compatible /audio/transcriptions API.",
+        providerSettingsForm: {
+          placeholder: VOICE_TRANSCRIPTION_DEFAULT_BASE_URL,
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    model: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed(VOICE_TRANSCRIPTION_DEFAULT_MODEL)),
+      Schema.annotateKey({
+        title: "Model",
+        providerSettingsForm: {
+          placeholder: VOICE_TRANSCRIPTION_DEFAULT_MODEL,
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    language: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "Language",
+        description: "ISO-639-1 code such as pt or en. Empty detects it.",
+        providerSettingsForm: { placeholder: "Automatic", clearWhenEmpty: "persist" },
+      }),
+    ),
+  },
+  { order: ["apiKey", "baseUrl", "model", "language"] },
+);
+export type VoiceTranscriptionSettings = typeof VoiceTranscriptionSettings.Type;
+
 export const UsageLimitSourceConfig = Schema.Struct({
   kind: Schema.Literal("cliproxy"),
   label: Schema.optional(TrimmedNonEmptyString),
@@ -1387,6 +1439,9 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
   observability: ObservabilitySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  voiceTranscription: VoiceTranscriptionSettings.pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
   sourceControlHosts: Schema.Record(Schema.String, SourceControlHostSettings).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
@@ -1702,6 +1757,15 @@ export const ServerSettingsPatch = Schema.Struct({
       otlpTracesUrl: Schema.optionalKey(TrimmedString),
       otlpMetricsUrl: Schema.optionalKey(TrimmedString),
       otlpLogsUrl: Schema.optionalKey(TrimmedString),
+    }),
+  ),
+  /** Redaction markers retain the key; an empty key removes it. */
+  voiceTranscription: Schema.optionalKey(
+    Schema.Struct({
+      apiKey: Schema.optionalKey(TrimmedString),
+      baseUrl: Schema.optionalKey(TrimmedString),
+      model: Schema.optionalKey(TrimmedString),
+      language: Schema.optionalKey(TrimmedString),
     }),
   ),
   /** Merges per host, replacing patched fields whole; redaction markers retain secrets, empty or omitted secrets remove them. */

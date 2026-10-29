@@ -1230,6 +1230,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
               enabled: true,
             },
           },
+          voiceTranscription: { apiKey: "gsk_test" },
           easDeviceHosts: [
             {
               kind: "eas",
@@ -1249,6 +1250,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
           "bitbucket-secret",
           "gitcafe-secret",
           "quota-secret",
+          "gsk_test",
           "expo-secret",
         ];
         const client = ServerSettingsModule.redactServerSettingsForClient(saved);
@@ -1258,12 +1260,15 @@ it.layer(NodeServices.layer)("server settings", (it) => {
           assert.notInclude(JSON.stringify(client), value);
           assert.notInclude(disk, value);
         }
+        assert.equal(saved.voiceTranscription.apiKey, "gsk_test");
+        assert.equal(client.voiceTranscription.apiKey, "••••••");
         assert.include(JSON.stringify(client), "https://example.test");
         assert.include(JSON.stringify(client), "me@example.test");
         const echoed = yield* service.updateSettings({
           providerInstances: client.providerInstances,
           sourceControlHosts: client.sourceControlHosts,
           usageLimitSources: client.usageLimitSources,
+          voiceTranscription: client.voiceTranscription,
           easDeviceHosts: client.easDeviceHosts,
         });
         for (const value of values) assert.include(JSON.stringify(echoed), value);
@@ -1314,6 +1319,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
           }),
           sourceControlHostSecretName({ kind: "gitcafe", field: "token", serverHost: null }),
           "usage-limit-source-aHVi",
+          "voice-transcription-YXBpS2V5",
         ];
         for (const name of secretNames) {
           assert.isTrue(Option.isSome(yield* store.get(name)), name);
@@ -1326,7 +1332,9 @@ it.layer(NodeServices.layer)("server settings", (it) => {
             gitcafe: { token: "" },
           },
           usageLimitSources: { [UsageLimitSourceId.make("hub")]: null },
+          voiceTranscription: { apiKey: "" },
         });
+        assert.equal((yield* service.getSettings).voiceTranscription.apiKey, "");
         for (const name of secretNames) {
           assert.isTrue(Option.isNone(yield* store.get(name)));
         }

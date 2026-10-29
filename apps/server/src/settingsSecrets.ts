@@ -6,6 +6,7 @@ import {
   type ServerSettings,
   SimlockDeviceHostConfig,
   UsageLimitSourceConfig,
+  VoiceTranscriptionSettings,
   secretSettingsFields,
 } from "@t3tools/contracts";
 import { acpRegistryClient } from "@t3tools/provider-acp-registry/client";
@@ -35,6 +36,7 @@ const providerSecretFields = new Map([
 const usageLimitSecretFields = secretSettingsFields(UsageLimitSourceConfig);
 const easDeviceHostSecretFields = secretSettingsFields(EasDeviceHostConfig);
 const simlockDeviceHostSecretFields = secretSettingsFields(SimlockDeviceHostConfig);
+const voiceTranscriptionSecretFields = secretSettingsFields(VoiceTranscriptionSettings);
 const encode = (value: string) => Buffer.from(value, "utf8").toString("base64url");
 
 export interface SettingsSecret {
@@ -169,8 +171,17 @@ export function mapSettingsSecrets(
       ) as SimlockDeviceHostConfig,
   );
 
+  const voiceTranscription = mapFields(
+    settings.voiceTranscription,
+    voiceTranscriptionSecretFields,
+    (field, serverHost) =>
+      `voice-transcription-${encode(field)}` +
+      (serverHost === null ? "" : `-${encode(serverHost)}`),
+  ) as ServerSettings["voiceTranscription"];
+
   return {
     ...settings,
+    voiceTranscription,
     providerInstances,
     sourceControlHosts,
     usageLimitSources,
