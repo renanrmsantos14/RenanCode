@@ -245,7 +245,7 @@ describe("DesktopLinuxUrlHandler", () => {
         environment: { desktopLauncherPath: Option.some("/opt/RenanCode/t3code") },
       });
 
-      assert.include(recorded.files[0]?.content, 'Exec=/opt/RenanCode/t3code %U');
+      assert.include(recorded.files[0]?.content, "Exec=/opt/RenanCode/t3code %U");
     });
   });
 
