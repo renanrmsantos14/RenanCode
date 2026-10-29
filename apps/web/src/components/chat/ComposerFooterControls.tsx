@@ -175,7 +175,15 @@ export function ComposerPermissionsSection(props: {
   const descriptionId = useId();
   return (
     <div data-composer-permissions className="grid w-72 gap-1.5 px-2 py-1.5">
-      <div className="font-medium text-muted-foreground text-xs">Permissions</div>
+      <div className="flex justify-between font-semibold text-muted-foreground text-xs">
+        Permissions
+        <span
+          aria-hidden="true"
+          className={shownMode === props.runtimeMode ? "text-foreground" : undefined}
+        >
+          {shown.label}
+        </span>
+      </div>
       <MenuPrimitive.RadioGroup
         aria-label="Permissions"
         value={props.runtimeMode}
@@ -224,19 +232,6 @@ export function ComposerPermissionsSection(props: {
           {option.description}
         </span>
       ))}
-      <div className="grid gap-0.5" aria-hidden="true">
-        <span
-          className={
-            shownMode === props.runtimeMode
-              ? "text-foreground text-sm"
-              : "text-muted-foreground text-sm"
-          }
-        >
-          {shown.label}
-        </span>
-        {/* Two lines reserved so the menu does not shift while you preview modes. */}
-        <span className="min-h-8 text-muted-foreground text-xs leading-4">{shown.description}</span>
-      </div>
     </div>
   );
 }
