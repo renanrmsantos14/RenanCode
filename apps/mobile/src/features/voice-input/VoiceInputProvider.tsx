@@ -146,6 +146,7 @@ export function useGlobalVoiceInput() {
       REMOTE_VOICE_TRANSCRIPTION ||
       getLocalVoiceTranscriber(null) !== null ||
       getNativeShowcaseScene() !== null,
+    requiresEnvironment: REMOTE_VOICE_TRANSCRIPTION && getNativeShowcaseScene() === null,
     audioLevels,
     isBusy: voiceInputBlocksSubmission(snapshot.state),
     session,

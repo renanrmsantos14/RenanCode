@@ -69,7 +69,10 @@ export function useVoiceInputController(input: {
   const state = global.ownerKey === input.ownerKey ? global.state : IDLE_STATE;
   const isBusy = voiceInputBlocksSubmission(state);
   return {
-    isAvailable: global.isAvailable && (!global.isBusy || global.ownerKey === input.ownerKey),
+    isAvailable:
+      global.isAvailable &&
+      (!global.requiresEnvironment || input.environmentId !== undefined) &&
+      (!global.isBusy || global.ownerKey === input.ownerKey),
     state,
     audioLevels: global.audioLevels,
     elapsedSeconds: global.elapsedSeconds,
