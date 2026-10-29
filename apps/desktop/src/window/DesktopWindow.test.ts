@@ -193,17 +193,19 @@ const layerElectronTheme = Layer.succeed(ElectronTheme.ElectronTheme, {
   onUpdated: () => Effect.void,
 } satisfies ElectronTheme.ElectronTheme["Service"]);
 
-const layerDesktopEnvironment = DesktopEnvironment.layer(environmentInput).pipe(
-  Layer.provide(
-    Layer.mergeAll(
-      NodeServices.layer,
-      DesktopConfig.layerTest({
-        T3CODE_PORT: "3773",
-        VITE_DEV_SERVER_URL: "http://127.0.0.1:5733",
-      }),
+const makeLayerDesktopEnvironment = (platform: NodeJS.Platform = environmentInput.platform) =>
+  DesktopEnvironment.layer({ ...environmentInput, platform }).pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        NodeServices.layer,
+        DesktopConfig.layerTest({
+          T3CODE_PORT: "3773",
+          VITE_DEV_SERVER_URL: "http://127.0.0.1:5733",
+        }),
+      ),
     ),
-  ),
-);
+  );
+const layerDesktopEnvironment = makeLayerDesktopEnvironment();
 
 const desktopWindowBoundsEquivalence = Schema.toEquivalence(
   DesktopAppSettings.DesktopWindowBoundsSchema,
@@ -229,6 +231,7 @@ function layerTest(input: {
   readonly previewZoomReapplies?: number[];
   readonly onReveal?: (window: Electron.BrowserWindow) => void;
   readonly focusedWindow?: Electron.BrowserWindow;
+  readonly platform?: NodeJS.Platform;
 }) {
   let desktopSettings = input.desktopSettings ?? DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS;
   const layerDesktopAppSettings = Layer.succeed(DesktopAppSettings.DesktopAppSettings, {
@@ -298,7 +301,7 @@ function layerTest(input: {
           recordMetrics: () => Effect.void,
           shutdown: Effect.void,
         }),
-        layerDesktopEnvironment,
+        makeLayerDesktopEnvironment(input.platform),
         layerDesktopAppSettings,
         layerDesktopClientSettings,
         layerDesktopServerExposure,
@@ -782,6 +785,63 @@ describe("DesktopWindow", () => {
       }),
   );
 
+  it.effect("shows the connecting splash when activated while the backend starts", () =>
+    Effect.gen(function* () {
+      const fake = makeFakeBrowserWindow();
+      const createCount = yield* Ref.make(0);
+      const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+      const createdWindowOptions: Electron.BrowserWindowConstructorOptions[] = [];
+      yield* Effect.gen(function* () {
+        const windows = yield* DesktopWindow.DesktopWindow;
+        yield* windows.activate;
+        assert.equal(yield* Ref.get(createCount), 1);
+        assert.equal(createdWindowOptions[0]?.width, 360);
+        assert.isTrue(Option.isNone(yield* Ref.get(mainWindow)));
+        const splashUrl = decodeURIComponent(
+          String((fake.loadURL.mock.calls[0] as unknown[] | undefined)?.[0]),
+        );
+        assert.include(splashUrl, "Starting ");
+      }).pipe(
+        Effect.provide(
+          layerTest({ window: fake.window, createCount, mainWindow, createdWindowOptions }),
+        ),
+      );
+    }),
+  );
+
+  it.effect.each(["win32", "linux"] as const)(
+    "closing the main window on %s keeps it only on Windows until quit",
+    (platform) =>
+      Effect.gen(function* () {
+        const fake = makeFakeBrowserWindow();
+        const createCount = yield* Ref.make(0);
+        const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+        const hide = vi.fn();
+        (fake.window as unknown as { hide: () => void }).hide = hide;
+        yield* Effect.gen(function* () {
+          const windows = yield* DesktopWindow.DesktopWindow;
+          const state = yield* DesktopState.DesktopState;
+          yield* windows.handleBackendReady(new URL("http://127.0.0.1:3773"));
+          const close = fake.windowListeners.get("close");
+          if (!close) return yield* Effect.die("window close listener was not registered");
+
+          const userClose = { preventDefault: vi.fn() };
+          close(userClose);
+          const hidesToTray = platform === "win32";
+          assert.equal(userClose.preventDefault.mock.calls.length, hidesToTray ? 1 : 0);
+          assert.equal(hide.mock.calls.length, hidesToTray ? 1 : 0);
+
+          yield* Ref.set(state.quitting, true);
+          const quitClose = { preventDefault: vi.fn() };
+          close(quitClose);
+          assert.equal(quitClose.preventDefault.mock.calls.length, 0);
+          assert.equal(hide.mock.calls.length, hidesToTray ? 1 : 0);
+        }).pipe(
+          Effect.provide(layerTest({ window: fake.window, createCount, mainWindow, platform })),
+        );
+      }),
+  );
+
   it.effect("persists normal bounds and state for a maximized window", () =>
     Effect.gen(function* () {
       const fakeWindow = makeFakeBrowserWindow();
@@ -1035,7 +1095,7 @@ describe("DesktopWindow", () => {
         createCount,
         mainWindow,
         onReveal: () => {
-          foreground = "T3 Code";
+          foreground = "RenanCode";
           operations.push("reveal");
         },
       });
@@ -1044,7 +1104,7 @@ describe("DesktopWindow", () => {
         const desktopWindow = yield* DesktopWindow.DesktopWindow;
         yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
         yield* desktopWindow.dispatchSnapShotEvent({ type: "started", id: captureOne });
-        assert.equal(foreground, "T3 Code");
+        assert.equal(foreground, "RenanCode");
         foreground = "Explorer";
         yield* desktopWindow.dispatchSnapShotEvent({ type: "ready", id: captureOne });
         yield* desktopWindow.dispatchSnapShotEvent({ type: "failed", id: captureTwo });

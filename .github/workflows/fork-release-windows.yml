@@ -1,0 +1,152 @@
+# Fork-only: every push to main builds the unsigned Windows NSIS installer and
+# the Linux x64 AppImage in parallel and publishes both as one GitHub Release.
+# The build points electron-updater at this repository (GITHUB_REPOSITORY), so
+# installed apps pick up each new release.
+# The version is <major>.<minor>.<run_number> of apps/desktop, so nothing is
+# committed back and upstream syncs never conflict on version bumps.
+name: Fork release (Windows)
+
+on:
+  push:
+    branches: [main]
+    # Changes that never reach the desktop app do not cut a release.
+    # Later patterns win, so this workflow itself still triggers one.
+    paths:
+      - "**"
+      - "!**/*.md"
+      - "!docs/**"
+      - "!apps/mobile/**"
+      - "!apps/marketing/**"
+      - "!evals/**"
+      - "!.github/**"
+      - ".github/workflows/fork-release-windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fork-release-windows
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.repository == 'renanrmsantos14/RenanCode'
+    name: Build ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - label: Windows x64
+            runner: windows-2025
+            rust_target: x86_64-pc-windows-msvc
+            script: dist:desktop:win:x64
+            cache_paths: |
+              ~\AppData\Local\electron\Cache
+              ~\AppData\Local\electron-builder\Cache
+            files: "*.exe *.exe.blockmap latest.yml"
+          - label: Linux x64
+            runner: ubuntu-24.04
+            rust_target: x86_64-unknown-linux-gnu
+            script: dist:desktop:linux
+            cache_paths: |
+              ~/.cache/electron
+              ~/.cache/electron-builder
+            files: "*.AppImage latest-linux.yml"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      # No package cache: restoring the ~1 GB store took longer than a cold install.
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: false
+          run-install: false
+
+      - name: Install Linux desktop build libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsecret-1-dev pkg-config imagemagick
+
+      - name: Cache Electron and electron-builder downloads
+        uses: actions/cache@v6
+        with:
+          path: ${{ matrix.cache_paths }}
+          key: fork-release-${{ runner.os }}-electron-v1-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: fork-release-${{ runner.os }}-electron-v1-
+
+      - name: Rust target
+        run: rustup target add ${{ matrix.rust_target }}
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native/resource-monitor
+          key: ${{ matrix.rust_target }}
+
+      - name: Install
+        run: vp install
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          $parts = (node -p "require('./apps/desktop/package.json').version").Split('-')[0].Split('.')
+          "version=$($parts[0]).$($parts[1]).${{ github.run_number }}" >> $env:GITHUB_OUTPUT
+
+      - name: Build installer
+        env:
+          T3CODE_DESKTOP_VERSION: ${{ steps.version.outputs.version }}
+        run: vp run ${{ matrix.script }}
+
+      - name: Collect release files
+        shell: pwsh
+        env:
+          PATTERNS: ${{ matrix.files }}
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          foreach ($pattern in $env:PATTERNS.Split(' ')) {
+            $found = @(Get-ChildItem release -File -Filter $pattern)
+            if ($found.Count -eq 0) { throw "No $pattern in release/" }
+            $found | Copy-Item -Destination out
+          }
+
+      - name: Upload release files
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ runner.os }}
+          path: out/*
+          if-no-files-found: error
+          retention-days: 1
+
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Download release files
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          gh release create "v$VERSION" release/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "RenanCode $VERSION" --notes "Instaladores Windows x64 (não assinado) e Linux x64 (AppImage), gerados de $GITHUB_SHA."

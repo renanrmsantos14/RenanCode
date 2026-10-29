@@ -193,10 +193,18 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --inset-shadow-control-highlight: 0 1px rgb(255 255 255 / 16%);
   --inset-shadow-control-pressed: 0 1px rgb(0 0 0 / 8%);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  /* Strong ease-out for overlays entering or leaving; the native ease-out
+     starts too slowly to read as immediate. */
+  --ease-out-quint: cubic-bezier(0.23, 1, 0.32, 1);
   /* The composer's elevation: a soft drop pulled in under the surface, shared
      by the composer, its context strip and attached banners. */
   --shadow-composer: 0 1px 2px rgb(0 0 0 / 5%);
   --shadow-composer-dark: 0 14px 32px -18px rgb(0 0 0 / 75%);
+  /* Preview device frames stay dark hardware in both themes. */
+  --shadow-device-frame: 0 16px 32px -12px rgb(0 0 0 / 40%);
+  --color-device-frame: #0b0b0c;
+  --color-device-frame-edge: #3f3f46;
+  --color-device-button: #27272a;
   /* Overlap the lower toolbar backdrop by one pixel to cover the composer seam. */
   --spacing-composer-seam: calc(var(--spacing) * 4 - 1px);
   /* Dark-mode shade where an attached surface meets the composer: 10px of
@@ -677,7 +685,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     background-color: color-mix(in oklab, var(--primary) 45%, transparent);
   }
   :root {
-    /* Keep the original T3 Code artwork palettes as the defaults. Built-in
+    /* Keep the original RenanCode artwork palettes as the defaults. Built-in
        themes override them with their own pigments in the components layer. */
     --stage-art-top: oklch(0.782169 0.123386 240.226);
     --stage-art-mid: oklch(0.616111 0.195824 259.735);
@@ -2544,4 +2552,18 @@ code {
 [data-workspace-area]:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: -2px;
+}
+
+@keyframes composer-menu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.99);
+  }
+}
+
+@utility composer-menu-enter {
+  transform-origin: bottom center;
+  @media (prefers-reduced-motion: no-preference) {
+    animation: composer-menu-enter 140ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
 }

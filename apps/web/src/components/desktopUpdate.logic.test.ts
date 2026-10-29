@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import type { DesktopUpdateState } from "@t3tools/contracts";
 
 import {
+  parseDesktopReleaseList,
   canCheckForUpdate,
   getDesktopUpdateButtonTooltip,
   getDesktopUpdateReleaseHistoryUrl,
@@ -69,10 +70,10 @@ describe("desktop update UI helpers", () => {
     "falls back to upstream for an invalid configured repository: %s",
     (repository) => {
       expect(getDesktopUpdateReleaseHistoryUrl(repository)).toBe(
-        "https://github.com/pingdotgg/t3code/releases",
+        "https://github.com/renanrmsantos14/RenanCode/releases",
       );
       expect(getDesktopUpdateReleaseUrl("1.2.3", repository)).toBe(
-        "https://github.com/pingdotgg/t3code/releases/tag/v1.2.3",
+        "https://github.com/renanrmsantos14/RenanCode/releases/tag/v1.2.3",
       );
     },
   );
@@ -88,5 +89,36 @@ describe("canCheckForUpdate", () => {
         downloadedVersion: "1.1.0",
       }),
     ).toBe(true);
+  });
+});
+
+describe("parseDesktopReleaseList", () => {
+  it("keeps published releases and drops drafts or malformed entries", () => {
+    expect(
+      parseDesktopReleaseList([
+        {
+          tag_name: "v0.0.30",
+          html_url: "https://github.com/o/r/releases/tag/v0.0.30",
+          published_at: "2026-10-29T12:00:00Z",
+          prerelease: false,
+        },
+        {
+          tag_name: "v0.0.31",
+          html_url: "https://github.com/o/r/releases/tag/v0.0.31",
+          draft: true,
+        },
+        { tag_name: "v0.0.29", html_url: "javascript:alert(1)" },
+        { html_url: "https://github.com/o/r/releases/tag/x" },
+        null,
+      ]),
+    ).toEqual([
+      {
+        version: "0.0.30",
+        publishedAt: "2026-10-29T12:00:00Z",
+        url: "https://github.com/o/r/releases/tag/v0.0.30",
+        prerelease: false,
+      },
+    ]);
+    expect(parseDesktopReleaseList({ message: "rate limited" })).toEqual([]);
   });
 });

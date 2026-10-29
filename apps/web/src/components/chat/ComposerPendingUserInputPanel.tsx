@@ -1,7 +1,6 @@
 import { type RuntimeRequestId, type ScopedThreadRef } from "@t3tools/contracts";
-import { memo, use, useEffect, useEffectEvent, useRef, useState } from "react";
+import { memo, use, useEffect, useEffectEvent, useState } from "react";
 import { BackgroundThreadContext } from "./backgroundThread";
-import { useStableCallback } from "~/hooks/useStableCallback";
 import { type PendingUserInput } from "../../session-logic";
 import type { PendingUserInputDraftAnswer } from "@t3tools/client-runtime/state/pending-user-input";
 import { derivePendingUserInputProgress } from "../../pendingUserInput";
@@ -84,8 +83,6 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   // Message-mode requests remain answerable after their provider turn ends.
   const canRespond = prompt.responseCapability !== "not_resumable";
   const responseDisabled = disabled || isResponding || !canRespond;
-  const autoAdvanceTimerRef = useRef<number | null>(null);
-  const advance = useStableCallback(onAdvance);
   const [optimisticSingleSelect, setOptimisticSingleSelect] = useState<{
     questionId: string;
     optionValue: string;
@@ -113,39 +110,19 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
     setOptimisticSingleSelect(null);
   }
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- clears the auto-advance timer when the question changes, input is disabled, or the panel unmounts
-  useEffect(() => {
-    const clearAutoAdvance = () => {
-      if (autoAdvanceTimerRef.current !== null) {
-        window.clearTimeout(autoAdvanceTimerRef.current);
-        autoAdvanceTimerRef.current = null;
-      }
-    };
-    if (disabled || activeQuestion?.id === undefined) clearAutoAdvance();
-    return clearAutoAdvance;
-  }, [activeQuestion?.id, disabled]);
-
   const handleOptionSelection = (questionId: string, optionValue: string) => {
     if (disabled || isResponding) return;
-    if (activeQuestion?.multiSelect) {
-      onToggleOption(questionId, optionValue);
-      return;
-    }
-    setOptimisticSingleSelect({ questionId, optionValue });
+    if (!activeQuestion?.multiSelect) setOptimisticSingleSelect({ questionId, optionValue });
     onToggleOption(questionId, optionValue);
-    if (autoAdvanceTimerRef.current !== null) {
-      window.clearTimeout(autoAdvanceTimerRef.current);
-    }
-    autoAdvanceTimerRef.current = window.setTimeout(() => {
-      autoAdvanceTimerRef.current = null;
-      advance();
-    }, 200);
   };
 
   const selectOptionFromShortcut = useEffectEvent(handleOptionSelection);
+  const advanceFromShortcut = useEffectEvent(() => {
+    if (progress.canAdvance) onAdvance();
+  });
   const backgroundThread = use(BackgroundThreadContext);
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes a document keydown listener for digit shortcuts while a question is answerable
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes a document keydown listener for digit and Enter shortcuts while a question is answerable
   useEffect(() => {
     if (!activeQuestion || responseDisabled || isCollapsed || backgroundThread) return;
     const handler = (event: globalThis.KeyboardEvent) => {
@@ -158,6 +135,17 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
         target instanceof HTMLElement &&
         target.closest('[contenteditable]:not([contenteditable="false"])')
       ) {
+        return;
+      }
+      if (event.key === "Enter") {
+        // Confirm only from the selected option or an unfocused page; links and other controls keep native Enter.
+        const onSelectedOption =
+          target instanceof HTMLElement &&
+          target.closest("[data-pending-user-input-option]")?.getAttribute("aria-pressed") ===
+            "true";
+        if (!onSelectedOption && target !== document.body) return;
+        event.preventDefault();
+        advanceFromShortcut();
         return;
       }
       const digit = Number.parseInt(event.key, 10);
@@ -284,6 +272,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
                     key={`${activeQuestion.id}:${optionValue}`}
                     type="button"
                     aria-pressed={isSelected}
+                    data-pending-user-input-option
                     disabled={disabled || isResponding}
                     onClick={() => {
                       handleOptionSelection(activeQuestion.id, optionValue);
@@ -303,7 +292,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
 });
 
 // Drawn with ui/radio-group's look instead of using its Radio: Radio only checks inside a
-// RadioGroup, whose arrow keys select options and would trip the single-select auto-advance.
+// RadioGroup, whose roving arrow-key selection doesn't fit these plain option buttons.
 function OptionRadio({ checked }: { checked: boolean }) {
   return (
     <span

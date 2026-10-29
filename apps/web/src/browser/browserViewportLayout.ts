@@ -88,6 +88,8 @@ export function resolveBrowserViewportLayout(
   container: { readonly width: number; readonly height: number },
   setting: PreviewViewportSetting,
   zoomFactor = 1,
+  /** Device CSS pixels kept clear around the viewport, scaled with it. */
+  inset = 0,
 ): BrowserViewportLayout {
   const containerWidth = Math.max(1, Math.round(container.width));
   const containerHeight = Math.max(1, Math.round(container.height));
@@ -106,18 +108,23 @@ export function resolveBrowserViewportLayout(
   const normalizedZoomFactor = normalizeZoomFactor(zoomFactor);
   const renderedWidth = setting.width * normalizedZoomFactor;
   const renderedHeight = setting.height * normalizedZoomFactor;
+  const renderedInset = inset * normalizedZoomFactor;
   const viewportScale = Math.min(
     1,
-    containerWidth / renderedWidth,
-    containerHeight / renderedHeight,
+    containerWidth / (renderedWidth + renderedInset * 2),
+    containerHeight / (renderedHeight + renderedInset * 2),
   );
   const viewportWidth = renderedWidth * viewportScale;
   const viewportHeight = renderedHeight * viewportScale;
+  // Whole pixels keep the viewport offset integral, so the page does not render blurry.
+  const scaledInset = Math.ceil(renderedInset * viewportScale);
   return {
     canvasWidth: containerWidth,
     canvasHeight: containerHeight,
-    viewportX: Math.max(0, Math.round((containerWidth - viewportWidth) / 2)),
-    viewportY: Math.max(0, Math.round((containerHeight - viewportHeight) / 2)),
+    viewportX:
+      Math.max(0, Math.round((containerWidth - viewportWidth) / 2 - scaledInset)) + scaledInset,
+    viewportY:
+      Math.max(0, Math.round((containerHeight - viewportHeight) / 2 - scaledInset)) + scaledInset,
     viewportWidth,
     viewportHeight,
     viewportScale,
@@ -129,11 +136,13 @@ export function resolveBrowserDeviceViewportLayout(
   container: { readonly width: number; readonly height: number },
   setting: Exclude<PreviewViewportSetting, { readonly _tag: "fill" }>,
   zoomFactor = 1,
+  inset = 0,
 ): BrowserViewportLayout {
   const layout = resolveBrowserViewportLayout(
     resolveBrowserDeviceViewportArea(container),
     setting,
     zoomFactor,
+    inset,
   );
   return {
     ...layout,

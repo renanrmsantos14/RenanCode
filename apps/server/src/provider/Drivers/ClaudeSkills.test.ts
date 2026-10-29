@@ -3,6 +3,7 @@ import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+import * as TestClock from "effect/testing/TestClock";
 
 import { discoverClaudeSkills } from "./ClaudeSkills.ts";
 import { planClaudeSkillDispatch } from "./ClaudeSkillDispatch.ts";
@@ -868,6 +869,130 @@ it.layer(NodeServices.layer)("discoverClaudeSkills", (it) => {
           ["user-only-yes", true, false],
         ],
       );
+    }),
+  );
+
+  // Numeric utimes arguments are seconds since the epoch.
+  const seconds = (milliseconds: number) => milliseconds / 1_000;
+
+  const countingFileSystem = Effect.fn(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const counts = { scans: 0 };
+    const counting: FileSystem.FileSystem = {
+      ...fs,
+      readDirectory: (directory, options) => {
+        counts.scans += 1;
+        return fs.readDirectory(directory, options);
+      },
+    };
+    return {
+      counts,
+      provide: <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+        Effect.provideService(effect, FileSystem.FileSystem, counting),
+    };
+  });
+
+  it.effect("reuses the last scan until a settings file, skill folder or SKILL.md changes", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const { counts, provide } = yield* countingFileSystem();
+      // Fixture files carry real timestamps; a clock far past them keeps every scan cacheable.
+      yield* TestClock.setTime(Date.UTC(2200, 0, 1));
+      const configDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-claude-skills-" });
+      const skillsDir = path.join(configDir, "skills");
+      yield* writeSkill(skillsDir, "alpha", "---\ndescription: First.\n---\n");
+      const discover = provide(discoverClaudeSkills({ homePath: configDir }));
+
+      const first = yield* discover;
+      assert.deepEqual(
+        first.map((skill) => [skill.name, skill.description]),
+        [["alpha", "First."]],
+      );
+      const scansPerDiscovery = counts.scans;
+      assert.isAbove(scansPerDiscovery, 0);
+      assert.deepEqual(yield* discover, first);
+      assert.equal(counts.scans, scansPerDiscovery);
+
+      // Timestamps are stamped explicitly so coarse filesystem clocks cannot hide the edits.
+      yield* writeSkill(skillsDir, "beta", "# Beta");
+      yield* fs.utimes(skillsDir, seconds(Date.UTC(2100, 0, 2)), seconds(Date.UTC(2100, 0, 2)));
+      assert.deepEqual(
+        (yield* discover).map((skill) => skill.name),
+        ["alpha", "beta"],
+      );
+      assert.equal(counts.scans, scansPerDiscovery * 2);
+
+      const alphaPath = path.join(skillsDir, "alpha", "SKILL.md");
+      yield* fs.writeFileString(alphaPath, "---\ndescription: Edited.\n---\n");
+      yield* fs.utimes(alphaPath, seconds(Date.UTC(2100, 0, 1)), seconds(Date.UTC(2100, 0, 1)));
+      assert.equal((yield* discover)[0]?.description, "Edited.");
+      assert.equal(counts.scans, scansPerDiscovery * 3);
+
+      yield* fs.writeFileString(
+        path.join(configDir, "settings.json"),
+        '{"skillOverrides":{"beta":"off"}}',
+      );
+      const overridden = yield* discover;
+      assert.deepEqual(
+        overridden.map((skill) => [skill.name, skill.enabled]),
+        [
+          ["alpha", true],
+          ["beta", false],
+        ],
+      );
+      assert.equal(counts.scans, scansPerDiscovery * 4);
+      assert.deepEqual(yield* discover, overridden);
+      assert.equal(counts.scans, scansPerDiscovery * 4);
+
+      yield* fs.remove(path.join(skillsDir, "beta"), { recursive: true });
+      assert.deepEqual(
+        (yield* discover).map((skill) => skill.name),
+        ["alpha"],
+      );
+      assert.equal(counts.scans, scansPerDiscovery * 5);
+    }),
+  );
+
+  it.effect("keeps scanning while a watched file changed within the racy window", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const { counts, provide } = yield* countingFileSystem();
+      const edited = Date.UTC(2100, 0, 1);
+      yield* TestClock.setTime(edited + 1_000);
+      const configDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-claude-skills-" });
+      const skillsDir = path.join(configDir, "skills");
+      yield* writeSkill(skillsDir, "alpha", "# Alpha");
+      yield* fs.utimes(path.join(skillsDir, "alpha", "SKILL.md"), seconds(edited), seconds(edited));
+      const discover = provide(discoverClaudeSkills({ homePath: configDir }));
+
+      yield* discover;
+      const scansPerDiscovery = counts.scans;
+      yield* discover;
+      assert.equal(counts.scans, scansPerDiscovery * 2);
+
+      yield* TestClock.adjust("2 seconds");
+      yield* discover;
+      assert.equal(counts.scans, scansPerDiscovery * 3);
+      yield* discover;
+      assert.equal(counts.scans, scansPerDiscovery * 3);
+    }),
+  );
+
+  it.effect("serializes concurrent discoveries so a turn scans the disk once", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const { counts, provide } = yield* countingFileSystem();
+      yield* TestClock.setTime(Date.UTC(2200, 0, 1));
+      const configDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-claude-skills-" });
+      yield* writeSkill(path.join(configDir, "skills"), "alpha", "# Alpha");
+      const discover = provide(discoverClaudeSkills({ homePath: configDir }));
+
+      const [left, right] = yield* Effect.all([discover, discover], { concurrency: "unbounded" });
+      assert.deepEqual(left, right);
+      assert.equal(counts.scans, 1);
     }),
   );
 });

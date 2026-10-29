@@ -1,9 +1,11 @@
 import type { ClaudeSettings, ServerProviderSkill } from "@t3tools/contracts";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { tokenizeCliArgs } from "@t3tools/shared/cliArgs";
 import { fromLenientJson } from "@t3tools/shared/schemaJson";
@@ -448,35 +450,30 @@ export function claudeLaunchArgDirectories(launchArgs?: string): ReadonlyArray<s
 }
 
 /** First name wins, matching Claude Code's precedence of user skills over project skills. */
-export const discoverClaudeSkills = Effect.fn("discoverClaudeSkills")(function* (
-  config: Pick<ClaudeSettings, "homePath"> & Partial<Pick<ClaudeSettings, "launchArgs">>,
-  cwd?: string,
-  environment?: NodeJS.ProcessEnv,
+const scanClaudeSkills = Effect.fn("scanClaudeSkills")(function* (
+  configDirPath: string,
+  cwd: string | undefined,
+  additionalDirectories: ReadonlyArray<string>,
+  environment: NodeJS.ProcessEnv,
 ): Effect.fn.Return<ReadonlyArray<ServerProviderSkill>, never, FileSystem.FileSystem | Path.Path> {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const configDirPath = yield* resolveClaudeConfigDirPath(config, environment ?? process.env, cwd);
   const { skillOverrides, enabledPlugins } = yield* readSkillSettings(
     configDirPath,
     cwd,
-    environment ?? process.env,
+    environment,
   );
 
   const roots: ReadonlyArray<ClaudeSkillRoot> = [
     { directory: path.join(configDirPath, "skills"), scope: "user" },
     ...(cwd ? [{ directory: path.join(cwd, ".claude", "skills"), scope: "project" as const }] : []),
-    ...claudeLaunchArgDirectories(config.launchArgs)
+    ...additionalDirectories
       .filter((directory) => directory && (cwd || path.isAbsolute(directory)))
       .map((directory) => ({
         directory: path.join(path.resolve(cwd ?? ".", directory), ".claude", "skills"),
         scope: "project" as const,
       })),
-    ...(yield* discoverPluginSkillRoots(
-      configDirPath,
-      cwd,
-      enabledPlugins,
-      environment ?? process.env,
-    )),
+    ...(yield* discoverPluginSkillRoots(configDirPath, cwd, enabledPlugins, environment)),
   ];
 
   const skillsByName = new Map<string, ServerProviderSkill>();
@@ -548,4 +545,136 @@ export const discoverClaudeSkills = Effect.fn("discoverClaudeSkills")(function* 
   }
 
   return [...skillsByName.values()].sort((left, right) => left.name.localeCompare(right.name));
+});
+
+type SkillCacheEntry = {
+  readonly skills: ReadonlyArray<ServerProviderSkill>;
+  readonly watched: ReadonlyArray<string>;
+  readonly signatures: ReadonlyArray<string>;
+};
+
+const SKILL_CACHE_CAPACITY = 64;
+const SIGNATURE_CONCURRENCY = 32;
+/** Coarse filesystem clocks (FAT: 2 s) could hide an edit made right around a scan. */
+const RACY_WINDOW_MS = 2_000;
+
+const skillCache = new Map<string, SkillCacheEntry>();
+const skillCacheLocks = new Map<string, Semaphore.Semaphore>();
+
+const skillCacheLock = (key: string): Effect.Effect<Semaphore.Semaphore> =>
+  Effect.suspend(() => {
+    const existing = skillCacheLocks.get(key);
+    if (existing) return Effect.succeed(existing);
+    return Semaphore.make(1).pipe(
+      Effect.map((created) => {
+        const raced = skillCacheLocks.get(key);
+        if (raced) return raced;
+        skillCacheLocks.set(key, created);
+        return created;
+      }),
+    );
+  });
+
+/** Records every path the scan consults so the cache can be validated with stats alone. */
+function recordingFileSystem(
+  fileSystem: FileSystem.FileSystem,
+  watched: Set<string>,
+): FileSystem.FileSystem {
+  return {
+    ...fileSystem,
+    exists: (filePath) => {
+      watched.add(filePath);
+      return fileSystem.exists(filePath);
+    },
+    readDirectory: (directory, options) => {
+      watched.add(directory);
+      return fileSystem.readDirectory(directory, options);
+    },
+    readFileString: (filePath, encoding) => {
+      watched.add(filePath);
+      return fileSystem.readFileString(filePath, encoding);
+    },
+    realPath: (filePath) => {
+      watched.add(filePath);
+      return fileSystem.realPath(filePath);
+    },
+  };
+}
+
+const pathSignature = (fileSystem: FileSystem.FileSystem, filePath: string) =>
+  fileSystem.stat(filePath).pipe(
+    Effect.map((info) => {
+      const mtimeMs = Option.getOrUndefined(Option.map(info.mtime, (date) => date.getTime()));
+      return { signature: `${info.type}:${mtimeMs ?? ""}:${info.size}`, mtimeMs };
+    }),
+    Effect.orElseSucceed(() => ({ signature: "absent", mtimeMs: undefined })),
+  );
+
+const pathSignatures = (fileSystem: FileSystem.FileSystem, paths: ReadonlyArray<string>) =>
+  Effect.forEach(paths, (filePath) => pathSignature(fileSystem, filePath), {
+    concurrency: SIGNATURE_CONCURRENCY,
+  });
+
+/**
+ * Reads the disk only when something it read last time changed: every settings file,
+ * skill directory and SKILL.md the scan consulted is re-validated by mtime and size.
+ */
+export const discoverClaudeSkills = Effect.fn("discoverClaudeSkills")(function* (
+  config: Pick<ClaudeSettings, "homePath"> & Partial<Pick<ClaudeSettings, "launchArgs">>,
+  cwd?: string,
+  environment?: NodeJS.ProcessEnv,
+): Effect.fn.Return<ReadonlyArray<ServerProviderSkill>, never, FileSystem.FileSystem | Path.Path> {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const resolvedEnvironment = environment ?? process.env;
+  const configDirPath = yield* resolveClaudeConfigDirPath(config, resolvedEnvironment, cwd);
+  const additionalDirectories = claudeLaunchArgDirectories(config.launchArgs);
+  const key = [
+    configDirPath,
+    cwd ?? "",
+    additionalDirectories.join("\u0001"),
+    resolvedEnvironment.CLAUDE_CODE_PLUGIN_CACHE_DIR ?? "",
+  ].join("\u0000");
+  const lock = yield* skillCacheLock(key);
+
+  return yield* lock.withPermits(1)(
+    Effect.gen(function* () {
+      const cached = skillCache.get(key);
+      if (cached) {
+        const current = yield* pathSignatures(fileSystem, cached.watched);
+        if (current.every((entry, index) => entry.signature === cached.signatures[index])) {
+          return cached.skills;
+        }
+      }
+
+      const scanStartedAt = yield* Clock.currentTimeMillis;
+      const watched = new Set<string>();
+      const skills = yield* scanClaudeSkills(
+        configDirPath,
+        cwd,
+        additionalDirectories,
+        resolvedEnvironment,
+      ).pipe(
+        Effect.provideService(FileSystem.FileSystem, recordingFileSystem(fileSystem, watched)),
+      );
+      const paths = [...watched];
+      const signatures = yield* pathSignatures(fileSystem, paths);
+      // A path touched around the scan may have changed between the read and this stat.
+      const racy = signatures.some(
+        (entry) => entry.mtimeMs !== undefined && entry.mtimeMs >= scanStartedAt - RACY_WINDOW_MS,
+      );
+      if (!racy) {
+        skillCache.delete(key);
+        skillCache.set(key, {
+          skills,
+          watched: paths,
+          signatures: signatures.map((entry) => entry.signature),
+        });
+        if (skillCache.size > SKILL_CACHE_CAPACITY) {
+          const oldest = skillCache.keys().next().value;
+          if (oldest !== undefined) skillCache.delete(oldest);
+        }
+      }
+      return skills;
+    }),
+  );
 });

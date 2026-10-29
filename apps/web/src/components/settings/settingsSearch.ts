@@ -689,6 +689,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["about check for updates download install upgrade release"],
   },
   {
+    id: "release-history",
+    title: "Versions",
+    to: "/settings/about",
+    searchTerms: ["release history versions changelog list github"],
+  },
+  {
     id: "update-track",
     title: "Update track",
     to: "/settings/about",
@@ -920,7 +926,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "pull-request-links-open-in-app",
-    title: "Open pull requests in T3 Code",
+    title: "Open pull requests in RenanCode",
     to: "/settings/diffs",
     searchTerms: [
       `pr links ${SOURCE_CONTROL_HOST_LABELS} browser external click default pull request view panel`,
