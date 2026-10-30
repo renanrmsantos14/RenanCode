@@ -166,7 +166,8 @@ function ReasoningBar(props: {
     >
       <div
         className={cn(
-          "relative touch-none py-2",
+          // A size container, so the thumb and label move in cqw without a full-width layer.
+          "@container relative touch-none py-2",
           props.disabled ? "cursor-not-allowed" : "cursor-pointer",
         )}
         onPointerDown={(event) => {
@@ -188,21 +189,16 @@ function ReasoningBar(props: {
         }}
         onPointerCancel={() => setDragIndex(null)}
       >
-        <div
+        <span
           aria-hidden="true"
-          className={cn("pointer-events-none absolute inset-x-0 -top-6", motion)}
-          style={{ transform: `translateX(${percent}%)` }}
+          className={cn(
+            "pointer-events-none absolute -top-6 left-0 whitespace-nowrap font-semibold text-foreground text-sm",
+            motion,
+          )}
+          style={{ transform: `translateX(calc(${percent}cqw - ${percent}%))` }}
         >
-          <span
-            className={cn(
-              "absolute left-0 whitespace-nowrap font-semibold text-foreground text-sm",
-              motion,
-            )}
-            style={{ transform: `translateX(-${percent}%)` }}
-          >
-            {label}
-          </span>
-        </div>
+          {label}
+        </span>
         <div className="relative h-1.5 overflow-hidden rounded-full bg-muted">
           <div
             className={cn("absolute inset-0 rounded-full bg-foreground", motion)}
@@ -228,18 +224,15 @@ function ReasoningBar(props: {
           </MenuPrimitive.RadioItem>
         ))}
         {index === -1 ? null : (
-          <div
+          <span
             aria-hidden="true"
-            className={cn("pointer-events-none absolute inset-x-0 top-1/2", motion)}
-            style={{ transform: `translateX(${percent}%)` }}
-          >
-            <span
-              className={cn(
-                "absolute left-0 block size-4 -translate-1/2 rounded-full border-2 border-foreground bg-background shadow-sm transition-[scale] duration-150",
-                dragIndex !== null && "scale-110",
-              )}
-            />
-          </div>
+            className={cn(
+              "pointer-events-none absolute top-1/2 left-0 -mt-2 -ml-2 block size-4 rounded-full border-2 border-foreground bg-background shadow-sm",
+              motion,
+              dragIndex !== null && "scale-110",
+            )}
+            style={{ transform: `translateX(${percent}cqw)` }}
+          />
         )}
       </div>
     </MenuPrimitive.RadioGroup>
