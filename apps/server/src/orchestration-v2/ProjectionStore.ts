@@ -783,6 +783,7 @@ export function applyToProjection(
     case "thread.metadata-updated":
     case "thread.runtime-mode-updated":
     case "thread.interaction-mode-updated":
+    case "thread.mcp-servers-updated":
     case "thread.model-selection-updated":
     case "thread.provider-switched":
     case "thread.guest-share-updated":
@@ -1880,6 +1881,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             case "thread.pull-request-synced":
             case "thread.runtime-mode-updated":
             case "thread.interaction-mode-updated":
+            case "thread.mcp-servers-updated":
             case "thread.model-selection-updated":
             case "thread.provider-switched":
             case "thread.guest-share-updated": {
@@ -2687,6 +2689,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             event.type !== "thread.pull-request-link-updated" &&
             event.type !== "thread.runtime-mode-updated" &&
             event.type !== "thread.interaction-mode-updated" &&
+            event.type !== "thread.mcp-servers-updated" &&
             event.type !== "thread.model-selection-updated" &&
             event.type !== "thread.provider-switched" &&
             event.type !== "thread.guest-share-updated"

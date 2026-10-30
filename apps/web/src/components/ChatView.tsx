@@ -48,7 +48,10 @@ import {
   latestExecutedRun,
   latestRootProviderFailure,
 } from "@t3tools/shared/orchestrationV2ThreadError";
-import type { UsageLimitSourceSnapshots } from "@t3tools/contracts";
+import type {
+  OrchestrationV2ProviderMcpServer,
+  UsageLimitSourceSnapshots,
+} from "@t3tools/contracts";
 import { feedbackBannerItem } from "./chat/ComposerFeedback";
 import { useUsageLimitsPanel } from "./chat/useUsageLimitsPanel";
 import { useWorktreeSetup } from "./chat/useWorktreeSetup";
@@ -380,6 +383,8 @@ import type { CodexArtifactTemplate } from "@t3tools/shared/codexArtifactTemplat
 
 const EMPTY_FEEDBACK_SUBMISSIONS: ReadonlyArray<CodexFeedbackSubmission> = [];
 const EMPTY_PROVIDER_SKILLS: ServerProvider["skills"] = [];
+const EMPTY_MCP_SERVERS: ReadonlyArray<OrchestrationV2ProviderMcpServer> = [];
+const EMPTY_MCP_SERVER_NAMES: ReadonlyArray<string> = [];
 const EMPTY_TURN_ITEMS: ThreadStructure["turnItems"] = [];
 const EMPTY_AUTO_UPDATE_ENVIRONMENTS: ReadonlyArray<EnvironmentPresentation> = [];
 
@@ -440,6 +445,7 @@ export default function ChatView(props: ChatViewProps) {
   const setThreadInteractionMode = useOrchestrationCommand(threadEnvironment.setInteractionMode, {
     reportFailure: false,
   });
+  const setThreadMcpServer = useOrchestrationCommand(threadEnvironment.setMcpServer);
   const startThreadTurn = useOrchestrationCommand(threadEnvironment.startTurn, {
     reportFailure: false,
   });
@@ -2091,6 +2097,14 @@ export default function ChatView(props: ChatViewProps) {
     return result;
   };
 
+  const onMcpServerChange = useStableCallback((server: string, enabled: boolean) => {
+    if (serverProjection === null) return;
+    void setThreadMcpServer({
+      environmentId,
+      input: { threadId: serverProjection.thread.id, server, enabled },
+    });
+  });
+
   const {
     showScrollToBottom,
     timelineLiveFollowEnabled,
@@ -3586,6 +3600,11 @@ export default function ChatView(props: ChatViewProps) {
                               activeThreadModelSelection={activeThread?.modelSelection}
                               activeProjectId={activeProject?.id ?? null}
                               activeContextWindow={activeContextWindow}
+                              mcpServers={activeProviderThread?.mcpServers ?? EMPTY_MCP_SERVERS}
+                              enabledMcpServers={
+                                serverProjection?.thread.enabledMcpServers ?? EMPTY_MCP_SERVER_NAMES
+                              }
+                              onMcpServerChange={onMcpServerChange}
                               compactThreadUnavailable={compactThreadUnavailable}
                               compactDisabled={compactDisabled}
                               compactDisabledReason={compactDisabledReason}

@@ -442,6 +442,8 @@ export const OrchestrationV2AppThread = Schema.Struct({
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
+  /** MCP servers switched on for this thread when its provider starts sessions without them. */
+  enabledMcpServers: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
@@ -1043,6 +1045,24 @@ export const OrchestrationV2ProviderGoal = Schema.Struct({
 });
 export type OrchestrationV2ProviderGoal = typeof OrchestrationV2ProviderGoal.Type;
 
+export const OrchestrationV2ProviderMcpServerStatus = Schema.Literals([
+  "connected",
+  "failed",
+  "needs-auth",
+  "pending",
+  "disabled",
+]);
+export type OrchestrationV2ProviderMcpServerStatus =
+  typeof OrchestrationV2ProviderMcpServerStatus.Type;
+
+export const OrchestrationV2ProviderMcpServer = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  status: OrchestrationV2ProviderMcpServerStatus,
+  /** Kept on by the provider settings, so the thread cannot switch it off. */
+  alwaysOn: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+});
+export type OrchestrationV2ProviderMcpServer = typeof OrchestrationV2ProviderMcpServer.Type;
+
 export const OrchestrationV2ProviderThread = Schema.Struct({
   id: ProviderThreadId,
   driver: ProviderDriverKind,
@@ -1075,6 +1095,8 @@ export const OrchestrationV2ProviderThread = Schema.Struct({
   goal: Schema.optional(Schema.NullOr(OrchestrationV2ProviderGoal)).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
+  /** Switchable MCP servers of the live session; absent or empty when the provider loads them all. */
+  mcpServers: Schema.optional(Schema.Array(OrchestrationV2ProviderMcpServer)),
   createdAt: Schema.DateTimeUtc,
   updatedAt: Schema.DateTimeUtc,
 });
@@ -1852,6 +1874,7 @@ export const OrchestrationV2DomainEvent = Schema.Union([
       "thread.pull-request-synced",
       "thread.runtime-mode-updated",
       "thread.interaction-mode-updated",
+      "thread.mcp-servers-updated",
       "thread.model-selection-updated",
       "thread.provider-switched",
       "thread.guest-share-updated",
@@ -2732,6 +2755,7 @@ export const OrchestrationV2DomainEventJson = Schema.Union([
       "thread.metadata-updated",
       "thread.runtime-mode-updated",
       "thread.interaction-mode-updated",
+      "thread.mcp-servers-updated",
       "thread.model-selection-updated",
       "thread.provider-switched",
       "thread.guest-share-updated",
@@ -3085,6 +3109,13 @@ export const OrchestrationV2Command = Schema.Union([
     commandId: CommandId,
     threadId: ThreadId,
     modelSelection: ModelSelection,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("thread.mcp-server.set"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    server: TrimmedNonEmptyString,
+    enabled: Schema.Boolean,
   }),
   Schema.Struct({
     type: Schema.Literal("provider-session.detach"),

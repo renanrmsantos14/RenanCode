@@ -182,7 +182,11 @@ import { useThreadContextDrop, threadContextDropTargetProps } from "./threadCont
 import { readThreadShell } from "~/state/entities";
 import { useLinkedEnvironments } from "~/state/peerLinks";
 import { encodeComposerContextFragment } from "@t3tools/shared/composerContextClipboard";
-import type { ComposerContextRecord, ThreadPullRequestLink } from "@t3tools/contracts";
+import type {
+  ComposerContextRecord,
+  OrchestrationV2ProviderMcpServer,
+  ThreadPullRequestLink,
+} from "@t3tools/contracts";
 import { threadContextAttachment } from "~/lib/threadContextAttachment";
 import {
   type ComposerCommandItem,
@@ -202,6 +206,7 @@ import { ComposerVoiceControl } from "./voice/ComposerVoiceControl";
 import { useComposerVoiceInput } from "./voice/useComposerVoiceInput";
 import { voiceInputBlocksSubmission } from "@t3tools/client-runtime/voice-input";
 import { ComposerFooterPrimaryActions } from "./ComposerFooterControls";
+import { McpServersMenu } from "./McpServersMenu";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
 import { resolveComposerMenuActiveItemId } from "./composerMenuHighlight";
@@ -432,6 +437,10 @@ export interface ChatComposerProps {
   activeProjectId: ProjectId | null;
 
   activeContextWindow: ContextWindowSnapshot | null;
+  /** Empty when the thread's provider loads every MCP server, so there is nothing to switch. */
+  mcpServers: ReadonlyArray<OrchestrationV2ProviderMcpServer>;
+  enabledMcpServers: ReadonlyArray<string>;
+  onMcpServerChange: (server: string, enabled: boolean) => void;
   compactThreadUnavailable: boolean;
   compactDisabled: boolean;
   compactDisabledReason: string | null;
@@ -557,6 +566,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     reportedModelSelection,
     activeProjectId,
     activeContextWindow,
+    mcpServers,
+    enabledMcpServers,
+    onMcpServerChange,
     compactThreadUnavailable,
     compactDisabled,
     compactDisabledReason,
@@ -3495,6 +3507,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     {composerControls}
                   </div>
                   {voice.available ? <ComposerVoiceControl voice={voice} /> : null}
+                  {mcpServers.length > 0 ? (
+                    <McpServersMenu
+                      servers={mcpServers}
+                      enabledServers={enabledMcpServers}
+                      disabled={!canOperateThread}
+                      onServerChange={onMcpServerChange}
+                    />
+                  ) : null}
                   <ComposerFooterPrimaryActions
                     compact={isComposerPrimaryActionsCompact}
                     canOperateThread={canOperateThread}
