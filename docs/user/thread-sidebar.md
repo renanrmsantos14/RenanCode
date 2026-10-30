@@ -165,6 +165,10 @@ sending an answer or restarting the agent. Settling also closes the thread's
 terminals that wait at an idle prompt, and keeps their output. A terminal that
 runs a command, such as a dev server, stays open.
 
+Choose **Move to testing** from a thread's menu to park work you are checking by hand in the
+**Testing** section, above Working. Sending a message moves it back to active work, and
+**Remove from testing** or **Settle** takes it out directly.
+
 To reclaim disk space from settled work, turn on **Run in the thread's worktree when the
 thread settles** for one of the project's actions, or set `"runOnSettle": true` on a
 `t3.json` script, for example `cargo clean`. It runs each time a thread in its own

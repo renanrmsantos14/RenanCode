@@ -201,6 +201,7 @@ export function useThreadListActions(): {
     thread: EnvironmentThreadShell,
     enabled: boolean,
   ) => Promise<boolean>;
+  readonly setThreadTesting: (thread: EnvironmentThreadShell, testing: boolean) => Promise<boolean>;
   readonly moveThread: (
     thread: EnvironmentThreadShell,
     direction: ThreadMoveDestination,
@@ -214,6 +215,9 @@ export function useThreadListActions(): {
   const pinMutation = useAtomCommand(threadEnvironment.pin, { reportFailure: false });
   const unpinMutation = useAtomCommand(threadEnvironment.unpin, { reportFailure: false });
   const setAutoSettleMutation = useAtomCommand(threadEnvironment.setAutoSettle, {
+    reportFailure: false,
+  });
+  const setTestingMutation = useAtomCommand(threadEnvironment.setTesting, {
     reportFailure: false,
   });
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
@@ -493,6 +497,24 @@ export function useThreadListActions(): {
     }
     return true;
   };
+  const setThreadTesting = async (thread: EnvironmentThreadShell, testing: boolean) => {
+    selectionHaptic();
+    const result = await setTestingMutation({
+      environmentId: thread.environmentId,
+      input: { threadId: thread.id, testing },
+    });
+    if (result._tag === "Failure") {
+      const error = Cause.squash(result.cause);
+      Dialog.alert(
+        "Could not update test state",
+        error instanceof Error && error.message.trim().length > 0
+          ? error.message
+          : "The test state could not be changed.",
+      );
+      return false;
+    }
+    return true;
+  };
   const regenerateThreadTitle = async (thread: EnvironmentThreadShell) => {
     if (!checkThreadOperationPermission(thread, "Could not regenerate title")) return false;
     const key = scopedThreadKey(thread.environmentId, thread.id);
@@ -711,6 +733,7 @@ export function useThreadListActions(): {
     pinThread,
     unpinThread,
     setThreadAutoSettle,
+    setThreadTesting,
     moveThread,
     renameThread,
     regenerateThreadTitle,

@@ -123,6 +123,10 @@ interface HomeScreenProps {
     thread: EnvironmentThreadShell,
     enabled: boolean,
   ) => Promise<boolean>;
+  readonly onSetThreadTesting: (
+    thread: EnvironmentThreadShell,
+    testing: boolean,
+  ) => Promise<boolean>;
   readonly onMoveThread: (
     thread: EnvironmentThreadShell,
     direction: ThreadMoveDestination,
@@ -401,6 +405,7 @@ export function HomeScreen(props: HomeScreenProps) {
   const handleMoveThread = props.onMoveThread;
   const handleUnpinThread = props.onUnpinThread;
   const handleSetThreadAutoSettle = props.onSetThreadAutoSettle;
+  const handleSetThreadTesting = props.onSetThreadTesting;
   const handleRegenerateThreadTitle = props.onRegenerateThreadTitle;
   const handleRenameThread = props.onRenameThread;
   const handleDeleteThread = props.onDeleteThread;
@@ -620,6 +625,7 @@ export function HomeScreen(props: HomeScreenProps) {
         onPinThread={handlePinThread}
         onUnpinThread={handleUnpinThread}
         onSetThreadAutoSettle={handleSetThreadAutoSettle}
+        onSetThreadTesting={handleSetThreadTesting}
         onMoveThread={handleMoveThread}
         onSwipeableClose={handleSwipeableClose}
         onSwipeableWillOpen={handleSwipeableWillOpen}

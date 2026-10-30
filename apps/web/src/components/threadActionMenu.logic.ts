@@ -11,6 +11,8 @@ export type ThreadActionMenuId =
   | "unpin"
   | "settle"
   | "unsettle"
+  | "testing"
+  | "untesting"
   | "auto-settle"
   | "auto-settle:enabled"
   | "auto-settle:disabled"
@@ -77,6 +79,7 @@ export interface ThreadActionMenuState {
   } | null;
   readonly isPinned: boolean;
   readonly isSettled: boolean;
+  readonly isTesting?: boolean;
   readonly autoSettleEnabled: boolean;
   readonly isSnoozed: boolean;
   readonly canSnoozeNow: boolean;
@@ -141,6 +144,9 @@ export function buildThreadActionMenuItems(
           state.isSettled
             ? { id: "unsettle" as const, label: "Un-settle thread", icon: "circle-check" }
             : { id: "settle" as const, label: "Settle thread", icon: "circle-check" },
+          state.isTesting
+            ? { id: "untesting" as const, label: "Remove from testing", icon: "flask-conical" }
+            : { id: "testing" as const, label: "Move to testing", icon: "flask-conical" },
         ]
       : []),
     ...(state.supports.snooze

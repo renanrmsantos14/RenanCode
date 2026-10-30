@@ -35,11 +35,13 @@ describe("buildThreadActionMenuItems", () => {
         isPinned: reversed,
         isSettled: reversed,
         isSnoozed: reversed,
+        isTesting: reversed,
       });
       const expected = reversed
         ? [
             "unpin",
             "unsettle",
+            "untesting",
             "unsnooze",
             "rename",
             "regenerate-title",
@@ -50,6 +52,7 @@ describe("buildThreadActionMenuItems", () => {
         : [
             "pin",
             "settle",
+            "testing",
             "snooze",
             "rename",
             "regenerate-title",

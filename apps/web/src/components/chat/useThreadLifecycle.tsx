@@ -42,7 +42,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { useUiStateStore } from "../../uiStateStore";
 import { type ChatMessage } from "../../types";
-import { AlarmClockIcon, CheckCircle2Icon } from "lucide-react";
+import { AlarmClockIcon, CheckCircle2Icon, FlaskConicalIcon } from "lucide-react";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { newMessageId } from "~/lib/utils";
 import { buildThreadRouteParams } from "../../threadRoutes";
@@ -556,6 +556,18 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
   const snoozeWake = snoozedUntil
     ? snoozeWakeLabel(snoozedUntil, { now: `${nowMinute}:00.000Z` })
     : null;
+  const toastThreadActionFailure =
+    (title: string) => (result: AtomCommandResult<unknown, unknown>) => {
+      if (result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
+      const error = squashAtomCommandFailure(result);
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title,
+          description: error instanceof Error ? error.message : "An error occurred.",
+        }),
+      );
+    };
   const threadStatusLine = activeThreadSnoozed ? (
     <ThreadStatusLine
       icon={<AlarmClockIcon />}
@@ -574,6 +586,16 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
       actionDisabled={!canOperateThread || isUnsettling}
       onAction={() => void handleUnsettleActiveThreadStable()}
     />
+  ) : activeThreadShell?.testingAt != null && activeThreadRef ? (
+    <ThreadStatusLine
+      icon={<FlaskConicalIcon />}
+      label="Testing"
+      actionLabel="Settle"
+      actionDisabled={!canOperateThread || !serverConfigLoaded}
+      onAction={() =>
+        void settleThread(activeThreadRef).then(toastThreadActionFailure("Failed to settle thread"))
+      }
+    />
   ) : activeThreadWokeVisible ? (
     <ThreadStatusLine
       icon={<AlarmClockIcon />}
@@ -582,18 +604,6 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
       onAction={acknowledgeActiveThreadWokeStable}
     />
   ) : null;
-  const toastThreadActionFailure =
-    (title: string) => (result: AtomCommandResult<unknown, unknown>) => {
-      if (result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
-      const error = squashAtomCommandFailure(result);
-      toastManager.add(
-        stackedThreadToast({
-          type: "error",
-          title,
-          description: error instanceof Error ? error.message : "An error occurred.",
-        }),
-      );
-    };
   const shortcuts = {
     "thread.settle": () => {
       if (!readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) return false;

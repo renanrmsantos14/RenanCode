@@ -164,6 +164,7 @@ function ThreadNavigationSidebarPane(
     pinThread,
     unpinThread,
     setThreadAutoSettle,
+    setThreadTesting,
     moveThread,
     renameThread,
     regenerateThreadTitle,
@@ -605,6 +606,7 @@ function ThreadNavigationSidebarPane(
             onPinThread={pinThread}
             onUnpinThread={unpinThread}
             onSetThreadAutoSettle={setThreadAutoSettle}
+            onSetThreadTesting={setThreadTesting}
             onMoveThread={moveThread}
             onSwipeableClose={handleSwipeableClose}
             onSwipeableWillOpen={handleSwipeableWillOpen}

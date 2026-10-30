@@ -515,6 +515,20 @@ export const setThreadAutoSettle = Effect.fn("EnvironmentCommands.setThreadAutoS
   });
 });
 
+export interface SetThreadTestingInput extends ThreadCommandInput {
+  readonly testing: boolean;
+}
+export const setThreadTesting = Effect.fn("EnvironmentCommands.setThreadTesting")(function* (
+  input: SetThreadTestingInput,
+) {
+  return yield* dispatch({
+    type: "thread.testing.set",
+    commandId: yield* allocateCommandId(input),
+    threadId: input.threadId,
+    testing: input.testing,
+  });
+});
+
 export const reorderPinnedThread = Effect.fn("EnvironmentCommands.reorderPinnedThread")(function* (
   input: ReorderPinnedThreadInput,
 ) {
