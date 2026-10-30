@@ -174,7 +174,14 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
         name: "AgentActivity",
         displayName: "Agent Activity",
         description: "Shows the current state of active RenanCode agents.",
-        android: null,
+        android: {
+          minWidth: 250,
+          minHeight: 110,
+          targetCellWidth: 4,
+          targetCellHeight: 2,
+          resizeMode: "both",
+          initialLayout: "./src/widgets/AgentActivityWidget.android.tsx",
+        },
         ios: { supportedFamilies: ["systemSmall", "systemMedium", "accessoryRectangular"] },
       },
     ],
@@ -424,6 +431,7 @@ const config: ExpoConfig = {
   extra: {
     appVariant: APP_VARIANT,
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
+    androidRemotePush: Boolean(repoEnv.T3CODE_ANDROID_GOOGLE_SERVICES_FILE),
     apkUpdateRepo,
     relay: {
       url: repoEnv.T3CODE_RELAY_URL ?? null,

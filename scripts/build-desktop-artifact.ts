@@ -2889,8 +2889,11 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     buildConfig.toolsets = { appimage: "1.0.3" };
     const path = yield* Path.Path;
     const repoRoot = yield* RepoRoot;
+    const skipDeb = yield* Config.Boolean("T3CODE_DESKTOP_SKIP_DEB").pipe(
+      Config.withDefault(false),
+    );
     buildConfig.linux = {
-      target: target === "AppImage" ? [target, "deb"] : [target],
+      target: target === "AppImage" && !skipDeb ? [target, "deb"] : [target],
       executableName: "t3code",
       icon: "icons",
       category: "Development",

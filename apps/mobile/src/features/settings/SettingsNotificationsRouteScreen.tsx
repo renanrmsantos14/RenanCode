@@ -20,7 +20,7 @@ import {
   settlePromise,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { supportsAgentAwarenessPush } from "../agent-awareness/capabilities";
+import { supportsAgentAwarenessPush, usesLocalAgentAlerts } from "../agent-awareness/capabilities";
 import {
   openAndroidLiveUpdateSettings,
   supportsAndroidLiveUpdateSettings,
@@ -89,6 +89,9 @@ function useDeviceRegistered(): boolean {
 }
 
 export function SettingsNotificationsRouteScreen() {
+  if (usesLocalAgentAlerts()) {
+    return <LocalSettingsNotificationsRouteScreen />;
+  }
   if (!hasCloudPublicConfig()) {
     return (
       <SettingsScreen title="Notifications">
@@ -105,6 +108,71 @@ export function SettingsNotificationsRouteScreen() {
   }
 
   return <ConfiguredSettingsNotificationsRouteScreen />;
+}
+
+function LocalSettingsNotificationsRouteScreen() {
+  const insets = useSafeAreaInsets();
+  const notificationStatus = useAtomValue(notificationStatusAtom);
+  const setNotificationStatus = useAtomSet(notificationStatusAtom);
+
+  const handleChange = async (enabled: boolean) => {
+    if (!enabled) {
+      Dialog.alert(
+        "Disable notifications",
+        "Open system Settings to disable notifications for RenanCode.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Open Settings", onPress: () => void Linking.openSettings() },
+        ],
+      );
+      return;
+    }
+    const result = await settleAsyncResult(() =>
+      runtime.runPromiseExit(requestAgentNotificationPermission),
+    );
+    if (result._tag === "Failure") {
+      reportAtomCommandResult(result, { label: "local notification permission request" });
+      return;
+    }
+    if (result.value.type === "granted") {
+      setNotificationStatus("enabled");
+      return;
+    }
+    setNotificationStatus(result.value.type === "unsupported" ? "unsupported" : "disabled");
+    if (result.value.type === "denied" && !result.value.canAskAgain) {
+      Dialog.alert(
+        "Notifications disabled",
+        "Notifications were denied for this app. Open Settings to enable them.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Open Settings", onPress: () => void Linking.openSettings() },
+        ],
+      );
+    }
+  };
+
+  return (
+    <SettingsScreen title="Notifications">
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        showsVerticalScrollIndicator={false}
+        className="flex-1"
+        contentContainerClassName="gap-6 px-5 pt-4"
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
+      >
+        <SettingsSection title="Agent activity">
+          <SettingsSwitchRow
+            icon="bell.badge"
+            label="Device Notifications"
+            disabled={notificationStatus === "checking" || notificationStatus === "unsupported"}
+            subtitle="Alerts while RenanCode is open or in the background"
+            value={notificationStatus === "enabled"}
+            onValueChange={(enabled) => void handleChange(enabled)}
+          />
+        </SettingsSection>
+      </ScrollView>
+    </SettingsScreen>
+  );
 }
 
 function ConfiguredSettingsNotificationsRouteScreen() {
