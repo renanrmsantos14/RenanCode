@@ -361,6 +361,7 @@ export function applyServerSettingsPatch(
     setModelFavorites,
     setModelsHidden,
     setProviderModelOrder,
+    setMcpServerPinned,
     providerModelPreferences,
     automaticGitFetchInterval,
     providerHealthRefreshInterval,
@@ -472,6 +473,14 @@ export function applyServerSettingsPatch(
     ...next,
     favorites,
     providerModelPreferences: nextModelPreferences,
+    ...(setMcpServerPinned === undefined
+      ? {}
+      : {
+          pinnedMcpServers: [
+            ...current.pinnedMcpServers.filter((server) => server !== setMcpServerPinned.server),
+            ...(setMcpServerPinned.pinned ? [setMcpServerPinned.server] : []),
+          ],
+        }),
     ...(worktreeCleanupPatch === undefined
       ? {}
       : {

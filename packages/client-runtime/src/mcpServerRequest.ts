@@ -1,4 +1,8 @@
-import type { OrchestrationV2ProviderMcpServer, OrchestrationV2TurnItem } from "@t3tools/contracts";
+import {
+  mcpServerIsOn,
+  type OrchestrationV2ProviderMcpServer,
+  type OrchestrationV2TurnItem,
+} from "@t3tools/contracts";
 
 export type McpServerRequestItem = Extract<
   OrchestrationV2TurnItem,
@@ -50,4 +54,19 @@ export function mcpServerNote(
   if (server.alwaysOn) return "Always on in settings";
   if (on !== (server.status !== "disabled")) return "Applies on next message";
   return on ? STATUS_NOTES[server.status] : undefined;
+}
+
+/**
+ * Pinned, on, and always-on servers stay in view; the rest fold away.
+ * With nothing pinned yet every server stays in view so the user can find one to pin.
+ */
+export function splitMcpServers(
+  servers: ReadonlyArray<OrchestrationV2ProviderMcpServer>,
+  enabled: ReadonlyArray<string>,
+  pinned: ReadonlyArray<string>,
+) {
+  if (pinned.length === 0) return { shown: servers, more: [] };
+  const inView = (server: OrchestrationV2ProviderMcpServer) =>
+    pinned.includes(server.name) || mcpServerIsOn(server, enabled);
+  return { shown: servers.filter(inView), more: servers.filter((server) => !inView(server)) };
 }

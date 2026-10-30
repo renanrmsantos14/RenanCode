@@ -270,6 +270,10 @@ MCP servers section of the thread settings on mobile, to switch a server on for 
 current thread; the change applies from your next message and stays with that
 thread. The list appears after the thread's first message.
 
+Star the servers you use on web or desktop to pin them. Once any server is pinned,
+the list shows only pinned servers and those that are on, and the rest move under
+**More servers**. Pins are saved on the server, so mobile follows them too.
+
 When the agent needs a server that is off, it asks in a card. **Turn on** switches
 it on for the thread and the agent carries on by itself; **Not now** tells it to
 continue without. Delegated tasks start with the servers their thread has on.

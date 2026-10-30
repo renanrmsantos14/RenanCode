@@ -440,7 +440,9 @@ export interface ChatComposerProps {
   /** Empty when the thread's provider loads every MCP server, so there is nothing to switch. */
   mcpServers: ReadonlyArray<OrchestrationV2ProviderMcpServer>;
   enabledMcpServers: ReadonlyArray<string>;
+  pinnedMcpServers: ReadonlyArray<string>;
   onMcpServerChange: (server: string, enabled: boolean) => void;
+  onMcpServerPinnedChange: (server: string, pinned: boolean) => void;
   compactThreadUnavailable: boolean;
   compactDisabled: boolean;
   compactDisabledReason: string | null;
@@ -568,7 +570,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     activeContextWindow,
     mcpServers,
     enabledMcpServers,
+    pinnedMcpServers,
     onMcpServerChange,
+    onMcpServerPinnedChange,
     compactThreadUnavailable,
     compactDisabled,
     compactDisabledReason,
@@ -3512,7 +3516,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       servers={mcpServers}
                       enabledServers={enabledMcpServers}
                       disabled={!canOperateThread}
+                      pinnedServers={pinnedMcpServers}
                       onServerChange={onMcpServerChange}
+                      onServerPinnedChange={onMcpServerPinnedChange}
                     />
                   ) : null}
                   <ComposerFooterPrimaryActions
