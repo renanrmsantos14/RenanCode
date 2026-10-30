@@ -46,6 +46,10 @@ jobs:
       EXPO_NO_GIT_STATUS: "1"
       # The app checks this repo's android-v* releases and offers to install newer APKs.
       T3CODE_ANDROID_APK_UPDATE_REPO: ${{ github.repository }}
+      # T3 Connect against the public t3.codes Clerk instance and relay, same values as .env.example.
+      T3CODE_CLERK_PUBLISHABLE_KEY: pk_live_Y2xlcmsudDMuY29kZXMk
+      T3CODE_CLERK_JWT_TEMPLATE: t3-relay
+      T3CODE_RELAY_URL: https://relay.t3.codes
     steps:
       - name: Checkout
         uses: actions/checkout@v6
