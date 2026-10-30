@@ -359,6 +359,10 @@
       "types": "./src/state/composerDispatch.ts",
       "default": "./src/state/composerDispatch.ts"
     },
+    "./state/next-action-suggestion": {
+      "types": "./src/state/nextActionSuggestion.ts",
+      "default": "./src/state/nextActionSuggestion.ts"
+    },
     "./state/thread-subagents": {
       "types": "./src/state/threadSubagents.ts",
       "default": "./src/state/threadSubagents.ts"

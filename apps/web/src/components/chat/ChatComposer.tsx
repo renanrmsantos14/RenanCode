@@ -231,6 +231,8 @@ import { observeResize } from "~/lib/observeResize";
 
 const isEnvironmentRequestInvalidError = Schema.is(EnvironmentRequestInvalidError);
 import { toastManager } from "../ui/toast";
+import { Kbd } from "../ui/kbd";
+import { useNextActionSuggestion } from "./useNextActionSuggestion";
 import { PlayIcon } from "lucide-react";
 import { proposedPlanTitle } from "@t3tools/shared/proposedPlanText";
 import { hasProviderSetup } from "./ProviderStatusBanner";
@@ -1167,6 +1169,21 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const activePendingUserInput = pendingUserInputs[0] ?? null;
   const isChoiceOnlyPendingQuestion =
     activePendingProgress?.activeQuestion?.allowCustomAnswer === false;
+  const nextAction = useNextActionSuggestion({
+    enabled: settings.nextActionSuggestionsEnabled,
+    environmentId,
+    thread: activeThread,
+    prompt,
+    promptRef,
+  });
+  const nextActionGhost =
+    isComposerApprovalState ||
+    activePendingProgress ||
+    (showPlanFollowUpPrompt && activeProposedPlan) ||
+    projectSelectionRequired ||
+    showProviderUnavailable
+      ? null
+      : nextAction.suggestion;
   const showComposerTopDrawer =
     pendingUserInputs.length > 0 ||
     (!isComposerCollapsedMobile && showPlanFollowUpPrompt && activeProposedPlan !== null);
@@ -2237,6 +2254,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       applyPromptReplacement,
       submitComposer,
       steerQueuedMessage: onSteerQueuedMessage,
+      nextActionSuggestion: nextActionGhost,
+      dismissNextActionSuggestion: nextAction.dismiss,
     })(key, event, isTaskItem);
 
   const {
@@ -3403,8 +3422,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                               ? "Choose a project above to start a thread"
                               : showProviderUnavailable
                                 ? "Enable a provider in Settings to send a message"
-                                : DEFAULT_COMPOSER_PLACEHOLDER
+                                : (nextActionGhost ?? DEFAULT_COMPOSER_PLACEHOLDER)
                     }
+                    placeholderHint={nextActionGhost ? <Kbd>Tab</Kbd> : null}
                     disabled={
                       projectSelectionRequired ||
                       isChoiceOnlyPendingQuestion ||

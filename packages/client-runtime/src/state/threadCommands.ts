@@ -363,6 +363,10 @@ export function createThreadEnvironmentAtoms<R, E>(
       scheduler,
       concurrency,
     }),
+    suggestNextAction: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:commands:thread:suggest-next-action",
+      tag: WS_METHODS.threadsSuggestNextAction,
+    }),
   };
   const optimistic = createOptimisticThreadLifecycle(snapshotAtom);
   return {

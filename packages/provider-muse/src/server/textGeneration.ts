@@ -21,11 +21,13 @@ import { investigationUnsupported } from "@t3tools/provider-core/server/textGene
 import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
+  buildNextActionPrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
 } from "@t3tools/provider-core/server/textGenerationPrompts";
 import {
   sanitizeCommitSubject,
+  sanitizeNextAction,
   sanitizePrTitle,
   sanitizeThreadTitle,
   toJsonSchemaObject,
@@ -342,11 +344,22 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
   });
   const generateReviewGuide: ProviderTextGeneration["generateReviewGuide"] = () =>
     Effect.fail(investigationUnsupported("generateReviewGuide", "Muse Code"));
+  const generateNextAction: ProviderTextGeneration["generateNextAction"] = Effect.fn(
+    "MuseTextGeneration.generateNextAction",
+  )(function* (input) {
+    const generated = yield* runMuseJson({
+      operation: "generateNextAction",
+      ...buildNextActionPrompt(input),
+      modelSelection: input.modelSelection,
+    });
+    return { suggestion: sanitizeNextAction(generated.suggestion) };
+  });
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
     generateReviewGuide,
+    generateNextAction,
   } satisfies ProviderTextGeneration;
 });

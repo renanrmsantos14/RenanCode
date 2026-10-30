@@ -585,6 +585,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["composer rich text tiptap bold italic markdown styled wysiwyg"],
   },
   {
+    id: "next-action-suggestions",
+    title: "Suggest next message",
+    to: "/settings/chat",
+    searchTerms: ["ghost text autocomplete predict follow up tab composer"],
+  },
+  {
     id: "send-shortcut",
     title: "Send shortcut",
     to: "/settings/chat",
