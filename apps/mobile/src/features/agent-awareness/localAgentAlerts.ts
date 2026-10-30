@@ -94,7 +94,7 @@ export function localAgentActivityProps(
     (state) => ACTIVE_PHASES.has(state.phase) || ATTENTION_PHASES.has(state.phase),
   ).length;
   return {
-    title: "T3 Code",
+    title: "RenanCode",
     subtitle: activeCount > 0 ? `${activeCount} active` : "No active agents",
     activeCount,
     updatedAt: states.reduce(

@@ -119,7 +119,7 @@ function LocalSettingsNotificationsRouteScreen() {
     if (!enabled) {
       Dialog.alert(
         "Disable notifications",
-        "Open system Settings to disable notifications for T3 Code.",
+        "Open system Settings to disable notifications for RenanCode.",
         [
           { text: "Cancel", style: "cancel" },
           { text: "Open Settings", onPress: () => void Linking.openSettings() },
@@ -165,7 +165,7 @@ function LocalSettingsNotificationsRouteScreen() {
             icon="bell.badge"
             label="Device Notifications"
             disabled={notificationStatus === "checking" || notificationStatus === "unsupported"}
-            subtitle="Alerts while T3 Code is open or in the background"
+            subtitle="Alerts while RenanCode is open or in the background"
             value={notificationStatus === "enabled"}
             onValueChange={(enabled) => void handleChange(enabled)}
           />
@@ -394,7 +394,7 @@ function ConfiguredSettingsNotificationsRouteScreen() {
 
     Dialog.alert(
       "Disable notifications",
-      "Open system Settings to disable notifications for T3 Code.",
+      "Open system Settings to disable notifications for RenanCode.",
       [
         { text: "Cancel", style: "cancel" },
         { text: "Open Settings", onPress: () => void Linking.openSettings() },
@@ -527,7 +527,7 @@ function ConfiguredSettingsNotificationsRouteScreen() {
                 void openAndroidLiveUpdateSettings().catch(() => {
                   Dialog.alert(
                     "Couldn't open Settings",
-                    "Open Android Settings, select T3 Code, then enable Live Updates in Notifications.",
+                    "Open Android Settings, select RenanCode, then enable Live Updates in Notifications.",
                   );
                 });
               }}

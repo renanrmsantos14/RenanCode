@@ -43,7 +43,7 @@ export function AgentActivityWidget(
     >
       <Column modifiers={[fillMaxSize(), paddingAll(14)]}>
         <Text color={colors.onSurface} maxLines={1} style={{ fontSize: 13, fontWeight: "bold" }}>
-          {props.title ? `${props.title} · ${props.subtitle ?? ""}` : "T3 Code"}
+          {props.title ? `${props.title} · ${props.subtitle ?? ""}` : "RenanCode"}
         </Text>
         {activities.length === 0 ? (
           <Text color={muted} maxLines={1} style={{ fontSize: 11 }}>
