@@ -1,25 +1,30 @@
-import { MASCOT_MANIFEST, type MascotState } from "@t3tools/client-runtime/mascot";
+import { MASCOT_GESTURES, MASCOT_MANIFEST, type MascotState } from "@t3tools/client-runtime/mascot";
 import { useEffect, useState } from "react";
 import { Image, View } from "react-native";
 import { useReducedMotion } from "react-native-reanimated";
 
-import { MASCOT_SOURCES } from "./mascotAssets";
+import { MASCOT_GESTURE_SOURCES, MASCOT_SOURCES } from "./mascotAssets";
+import { useMascotGesture } from "./useMascotGesture";
 
 export function Mascot(props: { readonly state: MascotState; readonly size?: number }) {
   const reduceMotion = useReducedMotion();
+  const { gesture, endGesture } = useMascotGesture(props.state, reduceMotion);
+  const shownKey = gesture ?? props.state;
   const [frame, setFrame] = useState(0);
-  const [shownState, setShownState] = useState(props.state);
-  if (shownState !== props.state) {
-    setShownState(props.state);
-    setFrame(0);
+  const [shownState, setShownState] = useState(shownKey);
+  const sprite = gesture === null ? MASCOT_MANIFEST[props.state] : MASCOT_GESTURES[gesture];
+  if (shownState !== shownKey) {
+    // A "once" state already played before its gesture; resume on its last frame instead of replaying.
+    const resuming = gesture === null && shownState !== props.state && sprite.mode === "once";
+    setShownState(shownKey);
+    setFrame(resuming ? sprite.frames - 1 : 0);
   }
-  const sprite = props.state === "idle" ? null : MASCOT_MANIFEST[props.state];
-  const lastFrame = sprite ? sprite.frames - 1 : 0;
-  const animating =
-    sprite !== null && !reduceMotion && (sprite.mode === "loop" || frame < lastFrame);
+  const source = gesture === null ? MASCOT_SOURCES[props.state] : MASCOT_GESTURE_SOURCES[gesture];
+  const lastFrame = sprite.frames - 1;
+  const animating = !reduceMotion && (sprite.mode === "loop" || frame < lastFrame);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- frame timer runs only while a strip plays
   useEffect(() => {
-    if (!animating || sprite === null) return;
+    if (!animating) return;
     const timer = setInterval(
       () =>
         setFrame((current) =>
@@ -29,7 +34,12 @@ export function Mascot(props: { readonly state: MascotState; readonly size?: num
     );
     return () => clearInterval(timer);
   }, [animating, sprite]);
-  if (props.state === "idle" || sprite === null) return null;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- the gesture strip hands control back to the state loop after its last frame is shown
+  useEffect(() => {
+    if (gesture === null || frame < lastFrame) return;
+    const timer = setTimeout(endGesture, 1000 / sprite.fps);
+    return () => clearTimeout(timer);
+  }, [endGesture, frame, gesture, lastFrame, sprite.fps]);
   const size = props.size ?? 32;
   const shown = reduceMotion
     ? sprite.mode === "loop"
@@ -44,7 +54,7 @@ export function Mascot(props: { readonly state: MascotState; readonly size?: num
       style={{ width: size, height: size, overflow: "hidden" }}
     >
       <Image
-        source={MASCOT_SOURCES[props.state]}
+        source={source}
         style={{
           width: size * sprite.frames,
           height: size,
