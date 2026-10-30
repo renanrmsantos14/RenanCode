@@ -812,13 +812,6 @@ export const ClaudeSettings = makeProviderSettingsSchema(
 );
 export type ClaudeSettings = typeof ClaudeSettings.Type;
 
-export function parseMcpServerNames(value: string): ReadonlyArray<string> {
-  return value
-    .split(",")
-    .map((name) => name.trim())
-    .filter((name) => name.length > 0);
-}
-
 export const ANTIGRAVITY_AUTH_METHODS = [
   { value: "oauth-personal", label: "Google account" },
   { value: "oauth-business", label: "Gemini Enterprise" },

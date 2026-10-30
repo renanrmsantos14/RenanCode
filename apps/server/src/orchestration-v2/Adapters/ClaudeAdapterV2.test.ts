@@ -588,23 +588,28 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
 });
 
 describe("ClaudeAdapterV2 on-demand MCP servers", () => {
-  const statuses: ReadonlyArray<
-    Pick<ClaudeSdk.McpServerStatus, "name" | "status" | "source" | "tools">
-  > = [
-    { name: "t3-code", status: "connected", source: "dynamic", tools: [{ name: "a" }] },
+  const statuses: ReadonlyArray<Pick<ClaudeSdk.McpServerStatus, "name" | "status" | "source">> = [
+    { name: "t3-code", status: "connected", source: "dynamic" },
     { name: "claude.ai Infleet", status: "connected", source: "claudeai" },
     { name: "claude.ai Spotify", status: "disabled", source: "claudeai" },
     { name: "memsearch", status: "pending", source: "user" },
     { name: "org-docs", status: "connected", source: "managed" },
+    { name: "from-old-cli", status: "connected" },
   ];
 
   it("switches only the user's servers whose state differs from the thread's choice", () => {
     assert.deepEqual(
-      ClaudeAdapterV2.planClaudeMcpToggles(statuses, new Set(["claude.ai Spotify", "memsearch"])),
+      ClaudeAdapterV2.planClaudeMcpToggles(statuses, (name) =>
+        ["claude.ai Spotify", "memsearch"].includes(name),
+      ),
       [
         { name: "claude.ai Infleet", enabled: false },
         { name: "claude.ai Spotify", enabled: true },
       ],
+    );
+    assert.deepEqual(
+      ClaudeAdapterV2.planClaudeMcpToggles(statuses, () => true),
+      [{ name: "claude.ai Spotify", enabled: true }],
     );
   });
 
@@ -615,10 +620,10 @@ describe("ClaudeAdapterV2 on-demand MCP servers", () => {
         new Set(["memsearch"]),
       ),
       [
-        { name: "claude.ai Infleet", status: "connected", toolCount: 0 },
-        { name: "claude.ai Spotify", status: "disabled", toolCount: 0 },
-        { name: "memsearch", status: "pending", toolCount: 0, alwaysOn: true },
-        { name: "beta", status: "failed", toolCount: 0 },
+        { name: "claude.ai Infleet", status: "connected", alwaysOn: false },
+        { name: "claude.ai Spotify", status: "disabled", alwaysOn: false },
+        { name: "memsearch", status: "pending", alwaysOn: true },
+        { name: "beta", status: "failed", alwaysOn: false },
       ],
     );
   });

@@ -80,8 +80,7 @@ import {
   type OrchestrationV2ProviderFailure,
   OrchestrationV2ProviderGoal,
   type OrchestrationV2ProviderMcpServer,
-  type OrchestrationV2ProviderMcpServerStatus,
-  parseMcpServerNames,
+  OrchestrationV2ProviderMcpServerStatus,
   type OrchestrationV2PlanArtifact,
   type OrchestrationV2PlanStep,
   type OrchestrationV2PendingBackgroundTask,
@@ -807,48 +806,47 @@ export type ClaudeAgentSdkProtocolLogger = (
 ) => Effect.Effect<void>;
 
 // T3's own servers arrive as "dynamic"; organization-managed ones are not the user's to switch.
-const UNSWITCHABLE_CLAUDE_MCP_SOURCES = new Set(["sdk", "dynamic", "managed", "enterprise"]);
-const CLAUDE_MCP_STATUSES = new Set<string>([
-  "connected",
-  "failed",
-  "needs-auth",
-  "pending",
-  "disabled",
-] satisfies ReadonlyArray<OrchestrationV2ProviderMcpServerStatus>);
+// CLIs too old to report a source could be T3's own server, so they stay untouched.
+const UNSWITCHABLE_CLAUDE_MCP_SOURCES: ReadonlySet<string | undefined> = new Set([
+  undefined,
+  "sdk",
+  "dynamic",
+  "managed",
+  "enterprise",
+]);
+const isProviderMcpServerStatus = Schema.is(OrchestrationV2ProviderMcpServerStatus);
 
 function isSwitchableClaudeMcpServer(status: Pick<ClaudeMcpServerStatus, "source">): boolean {
-  return status.source === undefined || !UNSWITCHABLE_CLAUDE_MCP_SOURCES.has(status.source);
+  return !UNSWITCHABLE_CLAUDE_MCP_SOURCES.has(status.source);
+}
+
+function parseMcpServerNames(value: string): ReadonlyArray<string> {
+  return value
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0);
 }
 
 export function planClaudeMcpToggles(
   statuses: ReadonlyArray<Pick<ClaudeMcpServerStatus, "name" | "status" | "source">>,
-  keepOn: ReadonlySet<string>,
+  wantOn: (name: string) => boolean,
 ): ReadonlyArray<{ readonly name: string; readonly enabled: boolean }> {
   return statuses.flatMap((status) => {
     if (!isSwitchableClaudeMcpServer(status)) return [];
-    const enabled = keepOn.has(status.name);
+    const enabled = wantOn(status.name);
     return enabled === (status.status !== "disabled") ? [] : [{ name: status.name, enabled }];
   });
 }
 
 export function summarizeClaudeMcpServers(
-  statuses: ReadonlyArray<Pick<ClaudeMcpServerStatus, "name" | "status" | "source" | "tools">>,
+  statuses: ReadonlyArray<Pick<ClaudeMcpServerStatus, "name" | "status" | "source">>,
   alwaysOn: ReadonlySet<string>,
 ): ReadonlyArray<OrchestrationV2ProviderMcpServer> {
-  return statuses.flatMap((status) => {
-    const name = status.name.trim();
-    if (name.length === 0 || !isSwitchableClaudeMcpServer(status)) return [];
-    return [
-      {
-        name,
-        status: CLAUDE_MCP_STATUSES.has(status.status)
-          ? (status.status as OrchestrationV2ProviderMcpServerStatus)
-          : "failed",
-        toolCount: status.tools?.length ?? 0,
-        ...(alwaysOn.has(name) ? { alwaysOn: true } : {}),
-      },
-    ];
-  });
+  return statuses.filter(isSwitchableClaudeMcpServer).map((status) => ({
+    name: status.name,
+    status: isProviderMcpServerStatus(status.status) ? status.status : "failed",
+    alwaysOn: alwaysOn.has(status.name),
+  }));
 }
 
 export function loggedClaudeQueryOptions(
@@ -4038,7 +4036,7 @@ interface ClaudeLiveQueryContext {
   permissionMode: PermissionMode;
   stopping: boolean;
   readonly subagentsFromEarlierProcesses: ReadonlySet<ActiveClaudeSubagent>;
-  // Sorted names last switched on; null until the session's MCP servers are gated.
+  // Mode and sorted names last applied; null until the session's MCP servers are gated.
   mcpGateKey: string | null;
 }
 
@@ -5181,6 +5179,34 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             taskId,
           );
 
+        const liveProviderThreadFields = (
+          nativeThreadId: string,
+        ): Pick<Partial<OrchestrationV2ProviderThread>, "goal" | "mcpServers"> => ({
+          ...(goalsByNativeThread.has(nativeThreadId)
+            ? { goal: goalsByNativeThread.get(nativeThreadId) ?? null }
+            : {}),
+          ...(mcpServersByNativeThread.has(nativeThreadId)
+            ? { mcpServers: mcpServersByNativeThread.get(nativeThreadId) }
+            : {}),
+        });
+
+        const patchLastProviderThread = Effect.fnUntraced(function* (
+          nativeThreadId: string,
+          patch: Pick<Partial<OrchestrationV2ProviderThread>, "goal" | "mcpServers">,
+        ) {
+          const providerThread = (yield* Ref.get(lastProviderThreadByNativeThread)).get(
+            nativeThreadId,
+          );
+          if (providerThread === undefined) return;
+          const updated = { ...providerThread, ...patch, updatedAt: yield* DateTime.now };
+          yield* rememberProviderThread(updated);
+          yield* emitProviderEvent({
+            type: "provider_thread.updated",
+            driver: CLAUDE_PROVIDER,
+            providerThread: updated,
+          });
+        });
+
         const emitProviderThreadRoster = Effect.fnUntraced(function* (input: {
           readonly nativeThreadId: string;
           readonly providerThread: OrchestrationV2ProviderThread;
@@ -5200,12 +5226,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             providerSessionId: session.id,
             ...(input.status === undefined ? {} : { status: input.status }),
             pendingBackgroundTasks: claudePendingBackgroundTasksFromRoster(roster, awaitedTaskIds),
-            ...(goalsByNativeThread.has(input.nativeThreadId)
-              ? { goal: goalsByNativeThread.get(input.nativeThreadId) ?? null }
-              : {}),
-            ...(mcpServersByNativeThread.has(input.nativeThreadId)
-              ? { mcpServers: mcpServersByNativeThread.get(input.nativeThreadId) }
-              : {}),
+            ...liveProviderThreadFields(input.nativeThreadId),
             updatedAt: now,
           };
           yield* rememberProviderThread(providerThread);
@@ -5233,30 +5254,23 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           const next = nextClaudeGoal(current, input.message);
           if (next === undefined || providerGoalsEqual(current, next)) return;
           goalsByNativeThread.set(input.nativeThreadId, next);
-          const providerThread = (yield* Ref.get(lastProviderThreadByNativeThread)).get(
-            input.nativeThreadId,
-          );
-          if (providerThread === undefined) return;
-          const updated = { ...providerThread, goal: next, updatedAt: yield* DateTime.now };
-          yield* rememberProviderThread(updated);
-          yield* emitProviderEvent({
-            type: "provider_thread.updated",
-            driver: CLAUDE_PROVIDER,
-            providerThread: updated,
-          });
+          yield* patchLastProviderThread(input.nativeThreadId, { goal: next });
         });
 
         const gateClaudeMcpServers = Effect.fnUntraced(function* (
           live: ClaudeLiveQueryContext,
           appThread: ProviderAdapter.ProviderAdapterV2TurnInput["appThread"],
         ) {
-          if (adapterOptions.settings.mcpAtStart !== "none") return;
+          const loadAll = adapterOptions.settings.mcpAtStart === "all";
           const alwaysOn = new Set(parseMcpServerNames(adapterOptions.settings.alwaysOnMcpServers));
           const keepOn = new Set([...alwaysOn, ...(appThread.enabledMcpServers ?? [])]);
-          const gateKey = [...keepOn].toSorted().join(",");
+          const gateKey = loadAll ? "all" : `none:${[...keepOn].toSorted().join(",")}`;
           if (live.mcpGateKey === gateKey) return;
+          const statuses = yield* live.query.mcpServerStatus;
+          // Toggles persist per folder, so "all" re-enables what an earlier "none" session left off.
+          const toggles = planClaudeMcpToggles(statuses, (name) => loadAll || keepOn.has(name));
           let applied = true;
-          for (const toggle of planClaudeMcpToggles(yield* live.query.mcpServerStatus, keepOn)) {
+          for (const toggle of toggles) {
             yield* live.query.toggleMcpServer(toggle.name, toggle.enabled).pipe(
               Effect.catchTags({
                 ClaudeAgentSdkQueryRunnerError: () => {
@@ -5272,20 +5286,19 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           }
           // A failed switch retries on the next turn.
           if (applied) live.mcpGateKey = gateKey;
-          const mcpServers = summarizeClaudeMcpServers(yield* live.query.mcpServerStatus, alwaysOn);
-          if (mcpServers.length === 0 && !mcpServersByNativeThread.has(live.nativeThreadId)) return;
+          // "all" clears the list a "none" session left on the thread, which hides the switch menu.
+          const mcpServers = loadAll
+            ? []
+            : summarizeClaudeMcpServers(
+                toggles.length === 0 ? statuses : yield* live.query.mcpServerStatus,
+                alwaysOn,
+              );
+          const shown =
+            mcpServersByNativeThread.get(live.nativeThreadId) ??
+            (yield* Ref.get(lastProviderThreadByNativeThread)).get(live.nativeThreadId)?.mcpServers;
+          if (mcpServers.length === 0 && (shown === undefined || shown.length === 0)) return;
           mcpServersByNativeThread.set(live.nativeThreadId, mcpServers);
-          const providerThread = (yield* Ref.get(lastProviderThreadByNativeThread)).get(
-            live.nativeThreadId,
-          );
-          if (providerThread === undefined) return;
-          const updated = { ...providerThread, mcpServers, updatedAt: yield* DateTime.now };
-          yield* rememberProviderThread(updated);
-          yield* emitProviderEvent({
-            type: "provider_thread.updated",
-            driver: CLAUDE_PROVIDER,
-            providerThread: updated,
-          });
+          yield* patchLastProviderThread(live.nativeThreadId, { mcpServers });
         });
 
         const rememberOpaqueTasks = (tasks: ReadonlyArray<OrchestrationV2PendingBackgroundTask>) =>
@@ -7581,12 +7594,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                   ...input.context.input.providerThread,
                   providerSessionId: session.id,
                   ...(clearConversationHead ? { nativeConversationHeadRef: null } : {}),
-                  ...(nativeThreadId !== null && goalsByNativeThread.has(nativeThreadId)
-                    ? { goal: goalsByNativeThread.get(nativeThreadId) ?? null }
-                    : {}),
-                  ...(nativeThreadId !== null && mcpServersByNativeThread.has(nativeThreadId)
-                    ? { mcpServers: mcpServersByNativeThread.get(nativeThreadId) }
-                    : {}),
+                  ...(nativeThreadId === null ? {} : liveProviderThreadFields(nativeThreadId)),
                   firstRunOrdinal:
                     input.context.input.providerThread.firstRunOrdinal ??
                     input.context.input.runOrdinal,

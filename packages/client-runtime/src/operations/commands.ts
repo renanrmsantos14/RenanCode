@@ -140,8 +140,9 @@ export interface SetThreadInteractionModeInput extends ThreadCommandInput {
   readonly interactionMode: ProviderInteractionMode;
 }
 
-export interface SetThreadMcpServersInput extends ThreadCommandInput {
-  readonly enabledMcpServers: ReadonlyArray<string>;
+export interface SetThreadMcpServerInput extends ThreadCommandInput {
+  readonly server: string;
+  readonly enabled: boolean;
 }
 
 interface StartThreadBootstrap {
@@ -654,14 +655,15 @@ export const setThreadInteractionMode = Effect.fn("EnvironmentCommands.setThread
   },
 );
 
-export const setThreadMcpServers = Effect.fn("EnvironmentCommands.setThreadMcpServers")(function* (
-  input: SetThreadMcpServersInput,
+export const setThreadMcpServer = Effect.fn("EnvironmentCommands.setThreadMcpServer")(function* (
+  input: SetThreadMcpServerInput,
 ) {
   return yield* dispatch({
-    type: "thread.mcp-servers.set",
+    type: "thread.mcp-server.set",
     commandId: yield* allocateCommandId(input),
     threadId: input.threadId,
-    enabledMcpServers: input.enabledMcpServers,
+    server: input.server,
+    enabled: input.enabled,
   });
 });
 

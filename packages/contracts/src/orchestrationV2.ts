@@ -1058,9 +1058,8 @@ export type OrchestrationV2ProviderMcpServerStatus =
 export const OrchestrationV2ProviderMcpServer = Schema.Struct({
   name: TrimmedNonEmptyString,
   status: OrchestrationV2ProviderMcpServerStatus,
-  toolCount: NonNegativeInt,
   /** Kept on by the provider settings, so the thread cannot switch it off. */
-  alwaysOn: Schema.optional(Schema.Boolean),
+  alwaysOn: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
 });
 export type OrchestrationV2ProviderMcpServer = typeof OrchestrationV2ProviderMcpServer.Type;
 
@@ -1096,7 +1095,7 @@ export const OrchestrationV2ProviderThread = Schema.Struct({
   goal: Schema.optional(Schema.NullOr(OrchestrationV2ProviderGoal)).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
-  /** Switchable MCP servers of the live session; absent when the provider loads them all. */
+  /** Switchable MCP servers of the live session; absent or empty when the provider loads them all. */
   mcpServers: Schema.optional(Schema.Array(OrchestrationV2ProviderMcpServer)),
   createdAt: Schema.DateTimeUtc,
   updatedAt: Schema.DateTimeUtc,
@@ -3109,10 +3108,11 @@ export const OrchestrationV2Command = Schema.Union([
     modelSelection: ModelSelection,
   }),
   Schema.Struct({
-    type: Schema.Literal("thread.mcp-servers.set"),
+    type: Schema.Literal("thread.mcp-server.set"),
     commandId: CommandId,
     threadId: ThreadId,
-    enabledMcpServers: Schema.Array(TrimmedNonEmptyString),
+    server: TrimmedNonEmptyString,
+    enabled: Schema.Boolean,
   }),
   Schema.Struct({
     type: Schema.Literal("provider-session.detach"),

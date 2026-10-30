@@ -2229,14 +2229,29 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
         interactionMode: "plan",
       });
       yield* orchestrator.dispatch({
-        type: "thread.mcp-servers.set",
+        type: "thread.mcp-server.set",
         commandId: CommandId.make("runtime-layer-lifecycle-mcp-servers"),
         threadId,
-        enabledMcpServers: ["claude.ai Infleet"],
+        server: "claude.ai Infleet",
+        enabled: true,
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.mcp-server.set",
+        commandId: CommandId.make("runtime-layer-lifecycle-mcp-servers-2"),
+        threadId,
+        server: "claude.ai Spotify",
+        enabled: true,
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.mcp-server.set",
+        commandId: CommandId.make("runtime-layer-lifecycle-mcp-servers-3"),
+        threadId,
+        server: "claude.ai Infleet",
+        enabled: false,
       });
       assert.deepEqual(
         (yield* orchestrator.getThreadProjection(threadId)).thread.enabledMcpServers,
-        ["claude.ai Infleet"],
+        ["claude.ai Spotify"],
       );
       yield* orchestrator.dispatch({
         type: "thread.model-selection.set",

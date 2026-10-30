@@ -435,10 +435,10 @@ export interface ChatComposerProps {
   activeProjectId: ProjectId | null;
 
   activeContextWindow: ContextWindowSnapshot | null;
-  /** Null when the thread's provider loads every MCP server, so there is nothing to switch. */
-  mcpServers: ReadonlyArray<OrchestrationV2ProviderMcpServer> | null;
+  /** Empty when the thread's provider loads every MCP server, so there is nothing to switch. */
+  mcpServers: ReadonlyArray<OrchestrationV2ProviderMcpServer>;
   enabledMcpServers: ReadonlyArray<string>;
-  onEnabledMcpServersChange: (names: ReadonlyArray<string>) => void;
+  onMcpServerChange: (server: string, enabled: boolean) => void;
   compactThreadUnavailable: boolean;
   compactDisabled: boolean;
   compactDisabledReason: string | null;
@@ -566,7 +566,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     activeContextWindow,
     mcpServers,
     enabledMcpServers,
-    onEnabledMcpServersChange,
+    onMcpServerChange,
     compactThreadUnavailable,
     compactDisabled,
     compactDisabledReason,
@@ -3487,12 +3487,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     {composerControls}
                   </div>
                   {voice.available ? <ComposerVoiceControl voice={voice} /> : null}
-                  {mcpServers !== null ? (
+                  {mcpServers.length > 0 ? (
                     <McpServersMenu
                       servers={mcpServers}
                       enabledServers={enabledMcpServers}
                       disabled={!canOperateThread}
-                      onEnabledServersChange={onEnabledMcpServersChange}
+                      onServerChange={onMcpServerChange}
                     />
                   ) : null}
                   <ComposerFooterPrimaryActions

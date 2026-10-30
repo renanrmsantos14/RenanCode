@@ -262,7 +262,8 @@ To keep some servers on everywhere, list them in **Settings → Providers → Cl
 Always-on MCP servers**. Set **MCP servers at session start** to **Load all servers**
 to go back to loading every configured server. Sessions started without MCP servers
 also record them as disabled for that folder in Claude Code's own config, so
-`claude` run there in a terminal starts with them off too.
+`claude` run there in a terminal starts with them off too. **Load all servers**
+switches them back on in each folder at the next session.
 
 ## Goals
 
