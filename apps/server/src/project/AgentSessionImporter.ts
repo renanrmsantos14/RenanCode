@@ -16,6 +16,9 @@ import {
   TurnItemId,
   type AgentSessionImportInput,
   type AgentSessionImportResult,
+  type AgentSessionListThreadsInput,
+  type AgentSessionListThreadsResult,
+  type AgentSessionThreadSummary,
   type OrchestrationV2AppThread,
   type OrchestrationV2ConversationMessage,
   type OrchestrationV2DomainEvent,
@@ -165,6 +168,10 @@ function messageEvents(input: {
   ];
 }
 
+function sinceOptions(since: string | undefined) {
+  return since === undefined ? {} : { sinceMs: Date.parse(since) };
+}
+
 const make = Effect.gen(function* () {
   const scanner = yield* AgentSessionScanner.AgentSessionScanner;
   const orchestrator = yield* Orchestrator.OrchestratorV2;
@@ -172,6 +179,64 @@ const make = Effect.gen(function* () {
   const eventSink = yield* EventSink.EventSinkV2;
   const idAllocator = yield* IdAllocator.IdAllocatorV2;
   const runtimes = yield* ProviderSessionRuntime.ProviderSessionRuntimeRepository;
+  const completedSourcesFor = Effect.fn("AgentSessionImporter.completedSourcesFor")(function* (
+    workspaceRoot: string,
+  ) {
+    const runtimeRows = yield* runtimes
+      .list()
+      .pipe(
+        Effect.mapError(
+          (cause) => new AgentSessionScanError({ operation: "read-projects", cause }),
+        ),
+      );
+    return runtimeRows.flatMap((runtime) => {
+      const payload = decodeImportedTranscriptPayload(runtime.runtimePayload);
+      if (
+        Option.isNone(payload) ||
+        payload.value.cwd === undefined ||
+        normalizeProjectPathForComparison(payload.value.cwd) !==
+          normalizeProjectPathForComparison(workspaceRoot)
+      ) {
+        return [];
+      }
+      return payload.value.importedTranscripts ?? [];
+    });
+  });
+
+  const listImportableThreads = Effect.fn("AgentSessionImporter.listImportableThreads")(function* (
+    input: AgentSessionListThreadsInput,
+  ) {
+    const completedSources = yield* completedSourcesFor(input.workspaceRoot);
+    const threads: Array<AgentSessionThreadSummary> = [];
+    const filePathsBySession = new Map<string, Array<string>>();
+    const sessionKey = (source: AgentSessionImportSource) =>
+      `${source.providerInstanceId}\0${source.providerSessionId}`;
+    let alreadyImportedCount = 0;
+    let skippedCount = 0;
+    yield* Stream.runForEach(
+      scanner.recentThreads(input.workspaceRoot, completedSources, sinceOptions(input.since)),
+      (outcome) =>
+        Effect.sync(() => {
+          if (outcome._tag === "AlreadyImported") alreadyImportedCount += 1;
+          else if (outcome._tag === "Skipped") skippedCount += 1;
+          else if (outcome._tag === "Duplicate") {
+            filePathsBySession.get(sessionKey(outcome.source))?.push(outcome.source.filePath);
+          } else {
+            const filePaths: [string, ...Array<string>] = [outcome.source.filePath];
+            filePathsBySession.set(sessionKey(outcome.source), filePaths);
+            threads.push({
+              provider: outcome.thread.source,
+              filePaths,
+              title: outcome.thread.title,
+              updatedAt: outcome.thread.updatedAt,
+              messageCount: outcome.thread.messages.length,
+            });
+          }
+        }),
+    );
+    return { threads, alreadyImportedCount, skippedCount } satisfies AgentSessionListThreadsResult;
+  });
+
   const importRecentAgentThreads = Effect.fn("importRecentAgentThreadsV2")(function* (
     input: AgentSessionImportInput,
   ) {
@@ -192,26 +257,11 @@ const make = Effect.gen(function* () {
     ) {
       return yield* new AgentSessionImportProjectChangedError({ projectId: input.projectId });
     }
-    const runtimeRows = yield* runtimes
-      .list()
-      .pipe(
-        Effect.mapError(
-          (cause) => new AgentSessionScanError({ operation: "read-projects", cause }),
-        ),
-      );
-    const completedSources = runtimeRows.flatMap((runtime) => {
-      const payload = decodeImportedTranscriptPayload(runtime.runtimePayload);
-      if (
-        Option.isNone(payload) ||
-        payload.value.cwd === undefined ||
-        normalizeProjectPathForComparison(payload.value.cwd) !==
-          normalizeProjectPathForComparison(project.workspaceRoot)
-      ) {
-        return [];
-      }
-      return payload.value.importedTranscripts ?? [];
+    const completedSources = yield* completedSourcesFor(project.workspaceRoot);
+    const outcomes = scanner.recentThreads(project.workspaceRoot, completedSources, {
+      ...sinceOptions(input.since),
+      ...(input.excludeFilePaths === undefined ? {} : { excludeFilePaths: input.excludeFilePaths }),
     });
-    const outcomes = scanner.recentThreads(project.workspaceRoot, completedSources);
     const importedThreadIds = new Set<ThreadId>();
     let importedCount = 0;
     let skippedCount = 0;
@@ -401,7 +451,7 @@ const make = Effect.gen(function* () {
     return { importedCount, skippedCount } satisfies AgentSessionImportResult;
   });
 
-  return { importRecentAgentThreads };
+  return { importRecentAgentThreads, listImportableThreads };
 });
 
 type AgentSessionImporterShape = Effect.Success<typeof make>;

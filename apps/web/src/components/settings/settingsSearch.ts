@@ -37,7 +37,8 @@ export type SettingsPath =
   | "/settings/maintenance"
   | "/settings/labs"
   | "/settings/about"
-  | "/settings/archived";
+  | "/settings/archived"
+  | "/settings/import";
 
 export type SettingsSearchScope =
   | "environment"
@@ -108,6 +109,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/labs": "Labs",
   "/settings/about": "About",
   "/settings/archived": "Archive",
+  "/settings/import": "Import history",
 };
 
 /** Sidebar order. A group without a heading is set apart by space alone. */
@@ -138,7 +140,12 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
   },
   {
     heading: "Code",
-    paths: ["/settings/projects", "/settings/source-control", "/settings/worktrees"],
+    paths: [
+      "/settings/projects",
+      "/settings/import",
+      "/settings/source-control",
+      "/settings/worktrees",
+    ],
   },
   {
     heading: "Connections",
@@ -1191,6 +1198,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/archived",
     searchTerms: ["restore reopen deleted history projects"],
   },
+  {
+    id: "history-import",
+    title: "Import Claude Code and Codex history",
+    to: "/settings/import",
+    searchTerms: ["import sessions conversations threads claude codex history migrate"],
+    scope: "environment",
+  },
 ] as const satisfies ReadonlyArray<SettingsSearchItem>;
 
 export type SettingsSearchItemId = (typeof SETTINGS_SEARCH_ITEMS)[number]["id"];
@@ -1220,6 +1234,7 @@ const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScop
   "/settings/labs": null,
   "/settings/about": null,
   "/settings/archived": "project-defaults",
+  "/settings/import": "environment",
 };
 
 const RENAMED_SETTINGS_PATHS: Readonly<Record<string, SettingsPath>> = {
