@@ -56,6 +56,13 @@ jobs:
               ~/.cache/electron-builder
             files: "*.AppImage latest-linux.yml"
     steps:
+      # Real-time scanning inspects every file the install and packaging write.
+      - name: Disable Windows Defender real-time scanning
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        shell: pwsh
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
+
       - name: Checkout
         uses: actions/checkout@v6
         with:
@@ -64,13 +71,12 @@ jobs:
             !/.repos/
           sparse-checkout-cone-mode: false
 
-      # No package cache: restoring the ~1 GB store took longer than a cold install.
+      # Caches Vite+ and Node.js only. No package cache: restoring the ~1 GB
+      # store took longer than a cold install.
       - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
+        uses: ./.github/actions/setup-ci-deps
         with:
-          node-version-file: package.json
-          cache: false
-          run-install: false
+          install: "false"
 
       - name: Install Linux desktop build libraries
         if: runner.os == 'Linux'
@@ -85,17 +91,26 @@ jobs:
           key: fork-release-${{ runner.os }}-electron-v1-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: fork-release-${{ runner.os }}-electron-v1-
 
-      - name: Rust target
-        run: rustup target add ${{ matrix.rust_target }}
-
-      - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2
+      # The finished binaries are cached, so Rust only compiles when its sources change.
+      - name: Cache resource monitor
+        id: resource_monitor_cache
+        uses: actions/cache@v6
         with:
-          workspaces: native/resource-monitor
-          key: ${{ matrix.rust_target }}
+          path: native/resource-monitor/target/${{ matrix.rust_target }}/release/t3-resource-monitor${{ runner.os == 'Windows' && '.exe' || '' }}
+          key: resource-monitor-${{ matrix.rust_target }}-${{ hashFiles('native/resource-monitor/Cargo.lock', 'native/resource-monitor/Cargo.toml', 'native/resource-monitor/src/**') }}
+
+      - name: Cache Linux capture helpers
+        if: runner.os == 'Linux'
+        id: capture_helper_cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            native/kde-snap-shot/target/${{ matrix.rust_target }}/release/t3-kde-snap-shot
+            native/hyprland-snap-shot/target/${{ matrix.rust_target }}/release/t3-hyprland-snap-shot
+          key: linux-capture-helpers-${{ matrix.rust_target }}-${{ hashFiles('native/kde-snap-shot/Cargo.lock', 'native/kde-snap-shot/Cargo.toml', 'native/kde-snap-shot/src/**', 'native/hyprland-snap-shot/Cargo.lock', 'native/hyprland-snap-shot/Cargo.toml', 'native/hyprland-snap-shot/src/**', 'native/hyprland-snap-shot/protocols/**') }}
 
       - name: Install
-        run: vp install
+        run: vp install --filter=@t3tools/desktop... --filter=t3... --filter=@t3tools/scripts...
 
       - name: Resolve version
         id: version
@@ -107,6 +122,10 @@ jobs:
       - name: Build installer
         env:
           T3CODE_DESKTOP_VERSION: ${{ steps.version.outputs.version }}
+          T3CODE_DESKTOP_REUSE_RESOURCE_MONITOR: ${{ steps.resource_monitor_cache.outputs.cache-hit == 'true' }}
+          T3CODE_DESKTOP_REUSE_LINUX_CAPTURE_HELPERS: ${{ steps.capture_helper_cache.outputs.cache-hit == 'true' }}
+          # Only the AppImage is published.
+          T3CODE_DESKTOP_SKIP_DEB: true
           # T3 Connect against the public t3.codes Clerk instance and relay, same values as .env.example.
           T3CODE_CLERK_PUBLISHABLE_KEY: pk_live_Y2xlcmsudDMuY29kZXMk
           T3CODE_CLERK_JWT_TEMPLATE: t3-relay
