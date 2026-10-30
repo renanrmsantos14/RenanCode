@@ -4,6 +4,7 @@
 # The release is never marked latest, so electron-updater keeps resolving the
 # desktop release. OTA updates are off: upstream's Expo channel must not replace
 # the fork's JavaScript.
+# Installed APKs update themselves from these releases (apps/mobile/src/features/updates/apk-updates.ts).
 # ANDROID_KEYSTORE_BASE64 keeps every APK on one signing key, so a new APK
 # installs over the previous one. Without it each build gets a throwaway key.
 name: Fork release (Android)
@@ -38,6 +39,8 @@ jobs:
       T3CODE_MOBILE_UPDATES_ENABLED: "0"
       MOBILE_VERSION_POLICY: appVersion
       EXPO_NO_GIT_STATUS: "1"
+      # The app checks this repo's android-v* releases and offers to install newer APKs.
+      T3CODE_ANDROID_APK_UPDATE_REPO: ${{ github.repository }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
