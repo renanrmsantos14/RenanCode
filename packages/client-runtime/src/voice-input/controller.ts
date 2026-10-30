@@ -199,6 +199,7 @@ export class VoiceInputController {
   private readonly ownedRecordingUris = new Set<string>();
   private recordingConfigured = false;
   private finishing = false;
+  private awaitingPermission = false;
 
   constructor(dependencies: VoiceInputControllerDependencies) {
     this.dependencies = dependencies;
@@ -243,7 +244,10 @@ export class VoiceInputController {
         return;
       }
 
-      const permission = await this.dependencies.requestPermission();
+      this.awaitingPermission = true;
+      const permission = await this.dependencies
+        .requestPermission()
+        .finally(() => (this.awaitingPermission = false));
       if (!this.isCurrent(operationToken)) return;
       if (!permission.granted) {
         this.setError(
@@ -330,6 +334,8 @@ export class VoiceInputController {
   }
 
   appMovedToBackground(): Promise<void> | void {
+    // Android pauses the app behind the system permission dialog.
+    if (this.awaitingPermission) return;
     if (this.state.phase === "preparing") {
       this.invalidateOperation();
       this.setError("Voice input stopped when the app moved to the background.", "retry");
@@ -491,6 +497,7 @@ export class VoiceInputController {
 
   private invalidateOperation(): void {
     this.operationToken += 1;
+    this.awaitingPermission = false;
     if (this.sessionToken) this.sessionToken.abandoned = true;
     this.transcriptionAbortController?.abort();
   }

@@ -123,9 +123,9 @@ const voiceInputAtom = Atom.make((get) => {
     publishAudioLevels: (levels) => audioLevels.set(levels),
     keepAwake: () => keepScreenAwake(`voice-input:${++keepAwakeSequence}`),
   });
-  // iOS reports `inactive` while its permission dialog is open. Only the real
-  // background state cancels preparation; recorder status handles calls and
-  // route interruptions during capture.
+  // The permission dialog reports `inactive` on iOS (ignored here) and `background`
+  // on Android (ignored by the controller while permission is pending). Recorder
+  // status handles calls and route interruptions during capture.
   const appStateSubscription = AppState.addEventListener("change", (nextState) => {
     if (nextState === "background") void session.controller.appMovedToBackground();
   });
