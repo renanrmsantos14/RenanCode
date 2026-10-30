@@ -91,7 +91,7 @@ export const ThreadErrorBanner = memo(function ThreadErrorBanner({
         {chatGptLimit ? (
           <OpenAI className="size-4 text-foreground!" aria-hidden="true" />
         ) : (
-          <Mascot state="error" size={20} />
+          <Mascot state="error" size={16} />
         )}
         <AlertDescription>
           {chatGptLimit ? (

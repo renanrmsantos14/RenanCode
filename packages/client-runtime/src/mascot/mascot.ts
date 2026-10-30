@@ -1,3 +1,4 @@
+import type { OrchestrationV2RunStatus } from "@t3tools/contracts";
 import type { EnvironmentConnectionPhase } from "../connection/presentation.ts";
 
 export type MascotState =
@@ -33,13 +34,21 @@ export interface MascotInput {
   readonly connectionPhase: EnvironmentConnectionPhase;
   readonly hasThread: boolean;
   readonly hasPendingRequest: boolean;
-  readonly runStatus: string | null;
+  readonly runStatus: OrchestrationV2RunStatus | null;
   readonly hasVisibleError: boolean;
   readonly justCompleted: boolean;
 }
 
-const STARTING_RUN_STATUSES = new Set(["preparing", "queued", "starting"]);
-const ACTIVE_RUN_STATUSES = new Set(["running", "waiting"]);
+const STARTING_RUN_STATUSES: ReadonlySet<OrchestrationV2RunStatus> = new Set([
+  "preparing",
+  "queued",
+  "starting",
+]);
+const ACTIVE_RUN_STATUSES: ReadonlySet<OrchestrationV2RunStatus> = new Set(["running", "waiting"]);
+
+export function isMascotLiveRunStatus(status: OrchestrationV2RunStatus): boolean {
+  return STARTING_RUN_STATUSES.has(status) || ACTIVE_RUN_STATUSES.has(status);
+}
 
 export function deriveMascotState(input: MascotInput): MascotState {
   if (input.connectionPhase === "offline" || input.connectionPhase === "reconnecting") {

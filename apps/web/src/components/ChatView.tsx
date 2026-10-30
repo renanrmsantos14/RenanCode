@@ -1,4 +1,4 @@
-import { deriveMascotState } from "@t3tools/client-runtime/mascot";
+import { deriveMascotState, isMascotLiveRunStatus } from "@t3tools/client-runtime/mascot";
 import { useJustCompleted } from "./mascot/useJustCompleted";
 import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
@@ -1437,14 +1437,10 @@ export default function ChatView(props: ChatViewProps) {
     activeProviderThread,
   );
   const pendingBackgroundTasks = deriveThreadPendingBackgroundTasks(serverProjection);
-  const finishedWell =
-    activeActivityRun?.status === undefined ||
-    activeActivityRun.status === "completed" ||
-    activeActivityRun.status === "waiting";
+  const finishedWell = activeActivityRun?.status === "completed";
   const justCompleted = useJustCompleted(isWorking, routeThreadKey) && finishedWell;
   const mascotRunStatus =
-    activeActivityRun !== null &&
-    ["preparing", "queued", "starting", "running", "waiting"].includes(activeActivityRun.status)
+    activeActivityRun !== null && isMascotLiveRunStatus(activeActivityRun.status)
       ? activeActivityRun.status
       : isWorking
         ? "running"

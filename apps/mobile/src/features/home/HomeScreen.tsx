@@ -675,7 +675,7 @@ export function HomeScreen(props: HomeScreenProps) {
         >
           <View className="w-full max-w-[430px]">
             {props.catalogState.hasReadyEnvironment && !emptyState.loading ? (
-              <View className="items-center">
+              <View className="items-center pb-3">
                 <Mascot state="welcome" size={96} />
               </View>
             ) : null}

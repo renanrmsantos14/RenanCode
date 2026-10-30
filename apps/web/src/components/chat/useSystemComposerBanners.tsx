@@ -188,7 +188,7 @@ export function useSystemComposerBanners(input: SystemComposerBannersInput) {
         icon:
           unavailableConnection.phase === "offline" ||
           unavailableConnection.phase === "reconnecting" ? (
-            <Mascot state="offline" size={20} />
+            <Mascot state="offline" size={16} />
           ) : (
             <WifiOffIcon />
           ),

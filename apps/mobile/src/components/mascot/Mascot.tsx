@@ -37,7 +37,12 @@ export function Mascot(props: { readonly state: MascotState; readonly size?: num
       : lastFrame
     : Math.min(frame, lastFrame);
   return (
-    <View accessible={false} style={{ width: size, height: size, overflow: "hidden" }}>
+    <View
+      accessible={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={{ width: size, height: size, overflow: "hidden" }}
+    >
       <Image
         source={MASCOT_SOURCES[props.state]}
         style={{
