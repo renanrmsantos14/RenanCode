@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { deriveMascotState, MASCOT_MANIFEST, type MascotInput } from "./mascot.ts";
+import {
+  deriveMascotState,
+  MASCOT_GESTURES,
+  MASCOT_MANIFEST,
+  mascotGestureDelayMs,
+  pickMascotGesture,
+  type MascotInput,
+} from "./mascot.ts";
 
 const base: MascotInput = {
   connectionPhase: "connected",
@@ -41,11 +48,40 @@ describe("deriveMascotState", () => {
     expect(deriveMascotState({ ...base, ...overrides })).toBe(expected);
   });
 
-  it("only working and offline loop", () => {
+  it("only working, thinking, offline and idle loop", () => {
     const looping = Object.entries(MASCOT_MANIFEST)
       .filter(([, sprite]) => sprite.mode === "loop")
       .map(([state]) => state)
       .toSorted();
-    expect(looping).toEqual(["offline", "working"]);
+    expect(looping).toEqual(["idle", "offline", "thinking", "working"]);
+  });
+});
+
+describe("mascot gestures", () => {
+  it("every gesture plays once and never chains another gesture", () => {
+    for (const sprite of Object.values(MASCOT_GESTURES)) {
+      expect(sprite.mode).toBe("once");
+      expect(sprite.gestures).toEqual([]);
+    }
+  });
+
+  it.each([
+    ["working picks the first gesture at random 0", "working", 0, "coffee"],
+    ["working picks the last gesture at random ~1", "working", 0.999, "stretch"],
+    ["thinking only twists the cube", "thinking", 0.5, "cube"],
+    ["idle twists the cube", "idle", 0.5, "cube"],
+    ["welcome twists the cube", "welcome", 0.5, "cube"],
+    ["needsYou has no gesture", "needsYou", 0.5, null],
+    ["error has no gesture", "error", 0.5, null],
+    ["done has no gesture", "done", 0.5, null],
+    ["offline has no gesture", "offline", 0.5, null],
+  ] as const)("%s", (_name, state, random, expected) => {
+    expect(pickMascotGesture(state, random)).toBe(expected);
+  });
+
+  it("delays the next gesture between 15 and 30 seconds", () => {
+    expect(mascotGestureDelayMs(0)).toBe(15_000);
+    expect(mascotGestureDelayMs(0.999)).toBeLessThan(30_000);
+    expect(mascotGestureDelayMs(0.999)).toBeGreaterThan(29_000);
   });
 });
