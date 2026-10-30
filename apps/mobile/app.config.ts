@@ -3,6 +3,8 @@ import type { ExpoConfig } from "expo/config";
 import { BRAND_ASSET_PATHS } from "../../scripts/lib/brand-assets.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 
+const MICROPHONE_PERMISSION = "Allow RenanCode to use your microphone for voice input.";
+
 type AppVariant = "development" | "preview" | "production";
 
 const repoEnv = loadRepoEnv();
@@ -358,8 +360,7 @@ const config: ExpoConfig = {
     [
       "expo-audio",
       {
-        microphonePermission: "Allow RenanCode to use your microphone for voice input.",
-        recordAudioAndroid: false,
+        microphonePermission: MICROPHONE_PERMISSION,
         enableBackgroundPlayback: false,
         enableBackgroundRecording: false,
       },
@@ -373,7 +374,8 @@ const config: ExpoConfig = {
         recordAudioAndroid: false,
       },
     ],
-    ["expo-image-picker", { photosPermission: false, microphonePermission: false }],
+    // `microphonePermission: false` here would block RECORD_AUDIO and break Android voice input.
+    ["expo-image-picker", { photosPermission: false, microphonePermission: MICROPHONE_PERMISSION }],
     [
       "expo-splash-screen",
       {
