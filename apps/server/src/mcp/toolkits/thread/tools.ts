@@ -42,6 +42,8 @@ const ThreadOrganizeTool = Tool.make("t3_thread_organize", {
       "unsnooze",
       "settle",
       "unsettle",
+      "testing",
+      "untesting",
       "archive",
       "unarchive",
       "mark_unread",

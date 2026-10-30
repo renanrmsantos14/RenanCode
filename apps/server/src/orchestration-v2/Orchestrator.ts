@@ -511,6 +511,7 @@ function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
     case "thread.snooze":
     case "thread.unsnooze":
     case "thread.auto-settle.set":
+    case "thread.testing.set":
     case "thread.pin":
     case "thread.unpin":
     case "thread.pin.reorder":
@@ -2937,6 +2938,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           | "thread.snooze"
           | "thread.unsnooze"
           | "thread.auto-settle.set"
+          | "thread.testing.set"
           | "thread.pin"
           | "thread.unpin"
           | "thread.pin.reorder"
@@ -3085,6 +3087,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         command.type === "thread.snooze" ||
         command.type === "thread.unsnooze" ||
         command.type === "thread.auto-settle.set" ||
+        command.type === "thread.testing.set" ||
         command.type === "thread.pin" ||
         command.type === "thread.unpin" ||
         command.type === "thread.pin.reorder" ||
@@ -3385,6 +3388,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             settledAt: alreadySettled ? thread.settledAt : (command.settledAt ?? now),
             pullRequests: thread.pullRequests?.map((link) => withPullRequestWatch(link, undefined)),
             unsettledAt: null,
+            testingAt: null,
             pinnedAt: null,
             pinOrderKey: null,
             activeOrderKey: null,
@@ -3424,6 +3428,28 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             snoozedAt: null,
             lastSnoozeWakeAt: alreadyAwake ? thread.lastSnoozeWakeAt : now,
             updatedAt: alreadyAwake ? thread.updatedAt : now,
+          };
+        }
+        case "thread.testing.set": {
+          if (!command.testing) {
+            return {
+              ...thread,
+              testingAt: null,
+              updatedAt: thread.testingAt == null ? thread.updatedAt : now,
+            };
+          }
+          // Settled and snoozed outrank testing in the sidebar, so moving in promotes like pin.
+          const promotes = thread.settledOverride === "settled" || thread.snoozedUntil != null;
+          return {
+            ...thread,
+            testingAt: thread.testingAt ?? now,
+            settledOverride:
+              thread.settledOverride === "settled" ? "active" : thread.settledOverride,
+            settledAt: thread.settledOverride === "settled" ? null : thread.settledAt,
+            snoozedUntil: null,
+            snoozedAt: null,
+            lastSnoozeWakeAt: thread.snoozedUntil == null ? thread.lastSnoozeWakeAt : now,
+            updatedAt: thread.testingAt != null && !promotes ? thread.updatedAt : now,
           };
         }
         case "thread.auto-settle.set": {
@@ -3847,6 +3873,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           return "thread.unsnoozed" as const;
         case "thread.auto-settle.set":
           return "thread.auto-settle-set" as const;
+        case "thread.testing.set":
+          return "thread.testing-set" as const;
         case "thread.pin":
           return "thread.pinned" as const;
         case "thread.unpin":
@@ -5304,11 +5332,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       (run) => run.id === command.restartContinuationOfRunId,
     )?.delegatedTaskId;
 
-    if (projection.thread.settledOverride !== null) {
+    if (projection.thread.settledOverride !== null || projection.thread.testingAt != null) {
       const now = yield* DateTime.now;
       const thread: OrchestrationV2AppThread = {
         ...projection.thread,
         settledOverride: null,
+        testingAt: null,
         settledAt: null,
         unsettledAt:
           projection.thread.settledOverride === "active"
@@ -12909,6 +12938,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       case "thread.snooze":
       case "thread.unsnooze":
       case "thread.auto-settle.set":
+      case "thread.testing.set":
       case "thread.pin":
       case "thread.unpin":
       case "thread.pin.reorder":

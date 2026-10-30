@@ -411,6 +411,31 @@ it.effect(
         assert.ok(shell);
         assert.equal(shell.autoSettleDisabledAt == null, enabled);
       }
+      for (const [index, testing] of [true, false, true].entries()) {
+        yield* orchestrator.dispatch({
+          type: "thread.testing.set",
+          commandId: CommandId.make(`testing-${index}`),
+          threadId,
+          testing,
+        });
+        const shell = yield* projections.getThreadShell(threadId);
+        assert.equal(shell?.testingAt != null, testing);
+      }
+      yield* orchestrator.dispatch({
+        type: "thread.settle",
+        commandId: CommandId.make("settle-clears-testing"),
+        threadId,
+      });
+      assert.isNull((yield* projections.getThreadShell(threadId))?.testingAt);
+      yield* orchestrator.dispatch({
+        type: "thread.testing.set",
+        commandId: CommandId.make("testing-from-settled"),
+        threadId,
+        testing: true,
+      });
+      const promoted = yield* projections.getThreadShell(threadId);
+      assert.ok(promoted?.testingAt);
+      assert.notEqual(promoted?.settledOverride, "settled");
       yield* sql`INSERT INTO orchestration_v2_projection_messages
       (message_id, thread_id, run_id, node_id, role, streaming, created_at, updated_at, payload_json)
       VALUES ('obsolete', ${threadId}, NULL, NULL, 'assistant', 0, ${DateTime.formatIso(now)}, ${DateTime.formatIso(now)}, '{"obsolete":true}')`;

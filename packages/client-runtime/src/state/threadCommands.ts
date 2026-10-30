@@ -46,6 +46,7 @@ import {
   reorderPinnedThread,
   reorderActiveThread,
   setThreadAutoSettle,
+  setThreadTesting,
   settleThread,
   snoozeThread,
   startThreadTurn,
@@ -201,6 +202,12 @@ export function createThreadEnvironmentAtoms<R, E>(
     setAutoSettle: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:set-auto-settle",
       execute: setThreadAutoSettle,
+      scheduler,
+      concurrency,
+    }),
+    setTesting: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:set-testing",
+      execute: setThreadTesting,
       scheduler,
       concurrency,
     }),
@@ -397,6 +404,7 @@ export function createThreadEnvironmentAtoms<R, E>(
             settledOverride: "settled",
             settledAt: thread.settledOverride === "settled" ? (thread.settledAt ?? now) : now,
             unsettledAt: null,
+            testingAt: null,
             activeOrderKey: null,
             pinnedAt: null,
             pinOrderKey: null,
@@ -428,6 +436,19 @@ export function createThreadEnvironmentAtoms<R, E>(
       snoozedUntil: null,
       snoozedAt: null,
     })),
+    setTesting: optimistic.wrap(commands.setTesting, (thread, input, now) =>
+      input.testing
+        ? {
+            ...thread,
+            testingAt: thread.testingAt ?? now,
+            ...(thread.settledOverride === "settled"
+              ? { settledOverride: "active" as const, settledAt: null }
+              : {}),
+            snoozedUntil: null,
+            snoozedAt: null,
+          }
+        : { ...thread, testingAt: null },
+    ),
     setAutoSettle: optimistic.wrap(commands.setAutoSettle, (thread, input, now) => ({
       ...thread,
       autoSettleDisabledAt: input.enabled ? null : (thread.autoSettleDisabledAt ?? now),

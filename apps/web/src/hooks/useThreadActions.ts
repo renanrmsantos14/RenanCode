@@ -281,6 +281,9 @@ export function useThreadActions() {
   const setThreadAutoSettleMutation = useOrchestrationCommand(threadEnvironment.setAutoSettle, {
     reportFailure: false,
   });
+  const setThreadTestingMutation = useOrchestrationCommand(threadEnvironment.setTesting, {
+    reportFailure: false,
+  });
   const reorderPinnedThreadMutation = useOrchestrationCommand(threadEnvironment.reorderPin, {
     reportFailure: false,
   });
@@ -665,6 +668,12 @@ export function useThreadActions() {
     });
   };
 
+  const setThreadTesting = (target: ScopedThreadRef, testing: boolean) =>
+    setThreadTestingMutation({
+      environmentId: target.environmentId,
+      input: { threadId: target.threadId, testing },
+    });
+
   const pinThread = async (target: ScopedThreadRef, opts: { orderKey?: string } = {}) => {
     if (!readEnvironmentServerConfigLoaded(target.environmentId)) {
       return AsyncResult.failure(
@@ -943,6 +952,7 @@ export function useThreadActions() {
     reorderActiveThread,
     markThreadUnread,
     setThreadAutoSettle,
+    setThreadTesting,
     turnThreadIntoProject: (target: ScopedThreadRef) =>
       createProjectFromThread({
         environmentId: target.environmentId,
