@@ -15,6 +15,7 @@ import {
   registerHiddenUpdateTap,
   runAppUpdateCheck,
 } from "../updates/app-updates";
+import { isApkUpdateAvailable, runApkUpdateCheck } from "../updates/apk-updates";
 import { SettingsRow } from "./components/SettingsRow";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsScreen } from "./components/SettingsScreen";
@@ -54,7 +55,8 @@ function AppSettingsSection() {
   const variant = (Constants.expoConfig?.extra?.appVariant as string | undefined) ?? "production";
   const variantLabel = variant === "production" ? "" : capitalize(variant);
   const versionLabel = variantLabel ? `${version} · ${variantLabel}` : version;
-  const updateCheckAvailable = isAppUpdateCheckAvailable();
+  const apkUpdates = isApkUpdateAvailable();
+  const updateCheckAvailable = apkUpdates || isAppUpdateCheckAvailable();
   const busy =
     updateState === "checking" || updateState === "downloading" || updateState === "restarting";
 
@@ -62,16 +64,22 @@ function AppSettingsSection() {
     // disabled updates next render; the ref blocks same-frame double taps.
     if (updateInFlight.current) return;
     updateInFlight.current = true;
+    const onStateChange = (state: AppUpdateCheckState) =>
+      setCheckState({
+        state,
+        settledUntil: state === "current" ? Date.now() + 3000 : null,
+      });
+    if (apkUpdates) {
+      await runApkUpdateCheck({ interactive: true, onStateChange });
+      updateInFlight.current = false;
+      return;
+    }
     // Failures arrive through onFailure; the settled result only matters for unlocking.
     await settlePromise(() =>
       runAppUpdateCheck({
         applyMode: "immediate",
         onFailure: (message) => Dialog.alert("Update failed", message),
-        onStateChange: (state) =>
-          setCheckState({
-            state,
-            settledUntil: state === "current" ? Date.now() + 3000 : null,
-          }),
+        onStateChange,
       }),
     );
     updateInFlight.current = false;
@@ -79,6 +87,11 @@ function AppSettingsSection() {
 
   function handleVersionPress() {
     if (!updateCheckAvailable || updateInFlight.current) return;
+    // Sideloaded APKs have no store to fall back on, so one tap checks.
+    if (apkUpdates) {
+      void checkForUpdate();
+      return;
+    }
     const tap = registerHiddenUpdateTap(hiddenUpdateTapCount.current);
     hiddenUpdateTapCount.current = tap.nextCount;
     if (tap.shouldCheck) {
