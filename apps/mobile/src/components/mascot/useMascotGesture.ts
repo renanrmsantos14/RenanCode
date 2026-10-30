@@ -9,6 +9,8 @@ import { AppState } from "react-native";
 
 export function useMascotGesture(state: MascotState, reduceMotion: boolean) {
   const [active, setActive] = useState<{ state: MascotState; gesture: MascotGesture } | null>(null);
+  // A gesture outlives its state only as stale data; dropping it here keeps the next one on schedule.
+  if (active !== null && (active.state !== state || reduceMotion)) setActive(null);
   const gesture = active?.state === state ? active.gesture : null;
   const endGesture = useCallback(() => setActive(null), []);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a gesture is a timer outside React: it fires 15-30 s after the state settles and is dropped when the state changes

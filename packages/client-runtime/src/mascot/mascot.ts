@@ -23,7 +23,7 @@ export interface MascotSprite {
   readonly gestures: readonly MascotGesture[];
 }
 
-// Os gestos continuam a pose do estado: com notebook (working) ou sem (idle, welcome, thinking).
+// A gesture continues the state's pose: with the laptop (working) or without it (idle, welcome, thinking).
 export const MASCOT_MANIFEST: Record<MascotState, MascotSprite> = {
   working: {
     file: "working.png",

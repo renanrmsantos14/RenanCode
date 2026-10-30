@@ -12,11 +12,13 @@ export function Mascot(props: { readonly state: MascotState; readonly size?: num
   const shownKey = gesture ?? props.state;
   const [frame, setFrame] = useState(0);
   const [shownState, setShownState] = useState(shownKey);
-  if (shownState !== shownKey) {
-    setShownState(shownKey);
-    setFrame(0);
-  }
   const sprite = gesture === null ? MASCOT_MANIFEST[props.state] : MASCOT_GESTURES[gesture];
+  if (shownState !== shownKey) {
+    // A "once" state already played before its gesture; resume on its last frame instead of replaying.
+    const resuming = gesture === null && shownState !== props.state && sprite.mode === "once";
+    setShownState(shownKey);
+    setFrame(resuming ? sprite.frames - 1 : 0);
+  }
   const source = gesture === null ? MASCOT_SOURCES[props.state] : MASCOT_GESTURE_SOURCES[gesture];
   const lastFrame = sprite.frames - 1;
   const animating = !reduceMotion && (sprite.mode === "loop" || frame < lastFrame);
