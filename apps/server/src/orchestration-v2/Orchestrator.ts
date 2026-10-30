@@ -480,6 +480,20 @@ export function threadHasUnfinishedWork(records: {
   );
 }
 
+/** A card still waiting for the user, closed unanswered. */
+function closedUserCard(item: OrchestrationV2TurnItem): OrchestrationV2TurnItem | undefined {
+  switch (item.type) {
+    case "link_request":
+      return item.linkStatus === "pending" ? { ...item, linkStatus: "cancelled" } : undefined;
+    case "mcp_server_request":
+      return item.mcpServerStatus === "pending"
+        ? { ...item, mcpServerStatus: "cancelled" }
+        : undefined;
+    default:
+      return undefined;
+  }
+}
+
 function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
   switch (command.type) {
     case "thread.create":
@@ -515,6 +529,7 @@ function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
     case "thread.runtime-mode.set":
     case "thread.interaction-mode.set":
     case "thread.mcp-server.set":
+    case "thread.mcp-server-request.answer":
     case "thread.model-selection.set":
     case "provider-session.detach":
     case "message.dispatch":
@@ -552,6 +567,7 @@ function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
       return command.parentThreadId;
     case "secret_request.record":
     case "link_request.record":
+    case "mcp_server_request.record":
       return command.threadId;
     case "thread.fork":
     case "thread.merge_back":
@@ -3980,7 +3996,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         now,
         cancelQueuedDelivery: false,
       });
-      yield* closePendingLinkRequests({ command, events, threadId: command.threadId, now });
+      yield* closePendingUserCards({ command, events, threadId: command.threadId, now });
     }
 
     // Archive and settle stop idle background work; serialized commands prevent starts racing detach.
@@ -7395,6 +7411,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         }),
         runtimeMode: command.runtimeMode,
         interactionMode: command.interactionMode,
+        ...(parentProjection.thread.enabledMcpServers === undefined
+          ? {}
+          : { enabledMcpServers: parentProjection.thread.enabledMcpServers }),
         ...(command.workspaceStrategy === undefined ? {} : { branch: null, worktreePath: null }),
       };
       const task: OrchestrationV2Subagent = {
@@ -8561,11 +8580,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   );
 
   /**
-   * Closes the link cards still waiting for the user. Their agent stopped
-   * waiting long ago, so nobody is woken: stopping or archiving the thread
-   * means the user is done with it.
+   * Closes the link and MCP server cards still waiting for the user. Their
+   * agent stopped waiting long ago, so nobody is woken: stopping or archiving
+   * the thread means the user is done with it.
    */
-  const closePendingLinkRequests = Effect.fn("orchestrationV2.closePendingLinkRequests")(
+  const closePendingUserCards = Effect.fn("orchestrationV2.closePendingUserCards")(
     function* (input: {
       readonly command: OrchestrationV2ServerCommand;
       readonly events: Ref.Ref<Array<OrchestrationV2DomainEvent>>;
@@ -8574,13 +8593,14 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     }) {
       const { turnItems } = yield* projectionStore
         .getThreadRecords(input.threadId, ["turnItems"], {
-          turnItemTypes: ["link_request"],
+          turnItemTypes: ["link_request", "mcp_server_request"],
           turnItemStatuses: ["waiting"],
           messageRoles: [],
         })
         .pipe(mapDispatchError(input.command));
       for (const item of turnItems) {
-        if (item.type !== "link_request" || item.linkStatus !== "pending") continue;
+        const closed = closedUserCard(item);
+        if (closed === undefined) continue;
         yield* emit(
           input.events,
           input.command,
@@ -8590,17 +8610,167 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           ...(item.runId === null ? {} : { runId: item.runId }),
           ...(item.nodeId === null ? {} : { nodeId: item.nodeId }),
           occurredAt: input.now,
-          payload: {
-            ...item,
-            status: "cancelled",
-            linkStatus: "cancelled",
-            completedAt: input.now,
-            updatedAt: input.now,
-          },
+          payload: { ...closed, status: "cancelled", completedAt: input.now, updatedAt: input.now },
         });
       }
     },
   );
+
+  const dispatchMcpServerRequestRecord = Effect.fn(
+    "orchestrationV2.dispatch.mcpServerRequestRecord",
+  )(function* (
+    command: Extract<
+      OrchestrationV2InternalCommand,
+      { readonly type: "mcp_server_request.record" }
+    >,
+    events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
+  ) {
+    const projection = yield* projectionStore
+      .getThreadRecords(command.threadId, ["runs", "turnItems", "attempts", "providerTurns"], {
+        turnItemTypes: ["mcp_server_request"],
+        messageRoles: [],
+      })
+      .pipe(
+        Effect.mapError(
+          (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+        ),
+      );
+    // A retry finds its card and records nothing.
+    if (projection.turnItems.some((item) => item.id === command.turnItemId)) return;
+    const run = projection.runs.find((candidate) => candidate.id === command.runId);
+    if (
+      run === undefined ||
+      run.rootNodeId !== command.nodeId ||
+      !isBlockingRun(run) ||
+      (yield* stopReachedRun(command, command.threadId, run.id))
+    ) {
+      return yield* new OrchestratorDispatchError({
+        commandId: command.commandId,
+        commandType: command.type,
+        cause: `Run ${command.runId} is not active.`,
+      });
+    }
+    const now = yield* DateTime.now;
+    yield* emit(
+      events,
+      command,
+    )({
+      type: "turn-item.updated",
+      threadId: command.threadId,
+      runId: command.runId,
+      nodeId: command.nodeId,
+      providerInstanceId: run.providerInstanceId,
+      occurredAt: now,
+      payload: {
+        id: command.turnItemId,
+        threadId: command.threadId,
+        runId: command.runId,
+        nodeId: command.nodeId,
+        providerThreadId: run.providerThreadId,
+        providerTurnId: providerTurnForRun(projection, run)?.id ?? null,
+        nativeItemRef: null,
+        parentItemId: null,
+        ordinal: yield* nextTurnItemOrdinal(projection),
+        status: "waiting",
+        title: command.server,
+        startedAt: now,
+        completedAt: null,
+        updatedAt: now,
+        type: "mcp_server_request",
+        server: command.server,
+        reason: command.reason,
+        mcpServerStatus: "pending",
+      },
+    });
+  });
+
+  /**
+   * Answers an MCP server card in one commit: switches the server on for the
+   * thread, closes the card and wakes the agent, whose next turn has the tools.
+   */
+  const dispatchMcpServerRequestAnswer = Effect.fn(
+    "orchestrationV2.dispatch.mcpServerRequestAnswer",
+  )(function* (
+    command: Extract<OrchestrationV2Command, { readonly type: "thread.mcp-server-request.answer" }>,
+    events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
+    effects: Ref.Ref<Array<PendingOrchestrationEffectV2>>,
+  ) {
+    const projection = yield* projectionStore
+      .getThreadRecords(command.threadId, ["turnItems"], {
+        turnItemTypes: ["mcp_server_request"],
+        turnItemStatuses: ["waiting"],
+        messageRoles: [],
+      })
+      .pipe(
+        Effect.mapError(
+          (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+        ),
+      );
+    const card = projection.turnItems.find((item) => item.id === command.turnItemId);
+    if (
+      card?.type !== "mcp_server_request" ||
+      card.mcpServerStatus !== "pending" ||
+      projection.thread.deletedAt !== null
+    ) {
+      return yield* new OrchestratorDispatchError({
+        commandId: command.commandId,
+        commandType: command.type,
+        cause: `MCP server request ${command.turnItemId} is not waiting for an answer.`,
+      });
+    }
+    const now = yield* DateTime.now;
+    const emitEvent = emit(events, command);
+    yield* emitEvent({
+      type: "turn-item.updated",
+      threadId: command.threadId,
+      ...(card.runId === null ? {} : { runId: card.runId }),
+      ...(card.nodeId === null ? {} : { nodeId: card.nodeId }),
+      occurredAt: now,
+      payload: {
+        ...card,
+        status: command.enable ? "completed" : "cancelled",
+        mcpServerStatus: command.enable ? "enabled" : "declined",
+        completedAt: now,
+        updatedAt: now,
+      },
+    });
+    if (command.enable) {
+      yield* dispatchThreadMutation(
+        {
+          type: "thread.mcp-server.set",
+          commandId: command.commandId,
+          threadId: command.threadId,
+          server: card.server,
+          enabled: true,
+        },
+        events,
+        effects,
+      );
+    }
+    if (projection.thread.archivedAt !== null) return;
+    yield* dispatchMessage(
+      {
+        type: "message.dispatch",
+        commandId: command.commandId,
+        threadId: command.threadId,
+        messageId: MessageId.make(`message:mcp-server-request:${card.id}`),
+        text: command.enable
+          ? `The user switched on the ${card.server} MCP server for this thread; its tools load as this turn starts. Continue the task.`
+          : `The user declined to switch on the ${card.server} MCP server. Continue without it.`,
+        notification: {
+          source: { kind: "background_task" },
+          outcome: command.enable ? "completed" : "cancelled",
+          summary: command.enable ? `Switched on ${card.server}` : `Kept ${card.server} off`,
+        },
+        attachments: [],
+        dispatchMode: { type: "queue_after_active" },
+        createdBy: "agent",
+        creationSource: "server",
+      },
+      events,
+      effects,
+    );
+  });
 
   const dispatchRuntimeRequestRespond = Effect.fn("Orchestrator.dispatchRuntimeRequestRespond")(
     function* (
@@ -10538,7 +10708,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         now: input.now,
       });
     }
-    yield* closePendingLinkRequests({ ...input, threadId: thread.id });
+    yield* closePendingUserCards({ ...input, threadId: thread.id });
   });
 
   const dispatchInterruptUnresponsive = Effect.fn("Orchestrator.dispatchInterruptUnresponsive")(
@@ -12758,6 +12928,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       case "provider.switch":
         yield* dispatchThreadMutation(command, events, effects);
         break;
+      case "thread.mcp-server-request.answer":
+        yield* dispatchMcpServerRequestAnswer(command, events, effects);
+        break;
       case "thread.pull-request-watch.sync":
         yield* dispatchPullRequestWatchSync(command, events, effects);
         break;
@@ -13005,6 +13178,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         break;
       case "link_request.record":
         yield* dispatchLinkRequestRecord(command, events, effects);
+        break;
+      case "mcp_server_request.record":
+        yield* dispatchMcpServerRequestRecord(command, events);
         break;
       default:
         return yield* dispatchUnsupported(command);

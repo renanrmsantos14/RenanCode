@@ -6,7 +6,8 @@ import { SheetHeader } from "../../components/ui/SheetHeader";
 import { Toolbar } from "../../components/ui/Toolbar";
 import * as Dialog from "../../components/ui/Dialog";
 import { createV5StackNavigator as createNativeStackNavigator } from "../../native/createV5StackNavigator";
-import { DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
+import { DEFAULT_SERVER_SETTINGS, mcpServerIsOn } from "@t3tools/contracts";
+import { mcpServerNote } from "@t3tools/client-runtime/mcp-server-request";
 import {
   modelPreferencesMigrationPatch,
   resolveModelPreferences,
@@ -14,6 +15,7 @@ import {
 import type {
   EnvironmentId,
   ModelSelection,
+  OrchestrationV2ProviderMcpServer,
   ProjectId,
   ProviderInstanceId,
   ProviderOptionDescriptor,
@@ -94,6 +96,7 @@ import { threadAllowsProviderSwitch } from "../../state/thread-provider-switchin
 import { environmentServerConfigsAtom, serverEnvironment } from "../../state/server";
 import { mobilePreferencesAtom } from "../../state/preferences";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { threadEnvironment } from "../../state/threads";
 import { useNewTaskFlow } from "./new-task-flow-provider";
 import { ScreenContent } from "../../components/ui/ScreenContent";
 import {
@@ -236,26 +239,43 @@ function DisclosureRow(props: {
 
 function SwitchRow(props: {
   readonly label: string;
+  readonly description?: string | undefined;
   readonly value: boolean;
   readonly onValueChange: (value: boolean) => void;
+  readonly disabled?: boolean;
   readonly isLast?: boolean;
 }) {
   return (
     <View
       className={cn(
-        "min-h-11 flex-row items-center justify-between bg-grouped-card px-4 py-1",
+        "min-h-11 flex-row items-center justify-between gap-3 bg-grouped-card px-4 py-1",
         !props.isLast && "border-b border-border-subtle",
       )}
     >
-      <Text className="text-sm font-t3-medium text-foreground">{props.label}</Text>
+      <View className="min-w-0 flex-1">
+        <Text className="text-sm font-t3-medium text-foreground" numberOfLines={1}>
+          {props.label}
+        </Text>
+        {props.description ? (
+          <Text className="text-xs text-foreground-muted">{props.description}</Text>
+        ) : null}
+      </View>
       <ThemedSwitch
         accessibilityLabel={props.label}
+        {...(props.description ? { accessibilityHint: props.description } : {})}
+        disabled={props.disabled}
         onValueChange={props.onValueChange}
         value={props.value}
       />
     </View>
   );
 }
+
+type ThreadMcpServers = {
+  readonly servers: ReadonlyArray<OrchestrationV2ProviderMcpServer>;
+  readonly enabled: ReadonlyArray<string>;
+  readonly onChange: (server: string, enabled: boolean) => void;
+};
 
 type ThreadSettingsSubmenuPage =
   | { readonly kind: "descriptor"; readonly id: string }
@@ -277,6 +297,7 @@ type ThreadSettingsSessionProps = {
   readonly onUpdateOptionSelections: (selections: ReadonlyArray<ProviderOptionSelection>) => void;
   readonly runtimeMode: RuntimeMode;
   readonly onUpdateRuntimeMode: (mode: RuntimeMode) => void;
+  readonly mcpServers?: ThreadMcpServers | undefined;
 };
 
 /** The composer draft the sheet edits: the thread's own, or a queued message being edited. */
@@ -300,6 +321,7 @@ type ThreadSettingsSessionValue = {
   readonly runtimeMode: RuntimeMode;
   readonly runtimeModeChoices: ReturnType<typeof runtimeModeChoicesForSupportedModes>;
   readonly onUpdateRuntimeMode: (mode: RuntimeMode) => void;
+  readonly mcpServers: ThreadMcpServers | undefined;
   readonly displayedDescriptors: ReadonlyArray<ProviderOptionDescriptor>;
   readonly promptTraits: ReturnType<typeof getPromptControlledTraits>;
   readonly displayedModelSelection: ModelSelection | null;
@@ -610,6 +632,7 @@ function ThreadSettingsSessionProvider(
     runtimeMode: compatibleRuntimeMode,
     runtimeModeChoices,
     onUpdateRuntimeMode: props.onUpdateRuntimeMode,
+    mcpServers: props.mcpServers,
     displayedDescriptors,
     promptTraits,
     displayedModelSelection: pendingModel?.selection ?? props.selectedModel,
@@ -899,6 +922,10 @@ function ThreadSettingsOptionsItem(props: {
         </Animated.View>
       </Animated.View>
 
+      {session.mcpServers && session.mcpServers.servers.length > 0 ? (
+        <ThreadSettingsMcpServers mcpServers={session.mcpServers} />
+      ) : null}
+
       <Text className="px-5 pb-2 pt-7 text-sm font-t3-medium text-foreground-muted">Catalog</Text>
       <View className="mx-4 overflow-hidden rounded-2xl bg-grouped-card">
         <SwitchRow
@@ -917,6 +944,33 @@ function ThreadSettingsOptionsItem(props: {
         ) : null}
       </View>
     </View>
+  );
+}
+
+function ThreadSettingsMcpServers(props: { readonly mcpServers: ThreadMcpServers }) {
+  const { servers, onChange } = props.mcpServers;
+  return (
+    <>
+      <Text className="px-5 pb-2 pt-7 text-sm font-t3-medium text-foreground-muted">
+        MCP servers
+      </Text>
+      <View className="mx-4 overflow-hidden rounded-2xl bg-grouped-card">
+        {servers.map((server, index) => {
+          const on = mcpServerIsOn(server, props.mcpServers.enabled);
+          return (
+            <SwitchRow
+              key={server.name}
+              label={server.name}
+              description={mcpServerNote(server, on)}
+              value={on}
+              disabled={server.alwaysOn}
+              onValueChange={(value) => onChange(server.name, value)}
+              isLast={index === servers.length - 1}
+            />
+          );
+        })}
+      </View>
+    </>
   );
 }
 
@@ -1507,6 +1561,7 @@ export function ExistingThreadSettingsRouteScreen({
   // A queued edit can end while the sheet is open; the prompt then belongs to the thread's draft.
   const draftKey = activeComposerDraftKey(threadKey, route.params.draftKey, queuedRunEdit);
   const prompt = useComposerDraft(draftKey).text;
+  const setMcpServer = useAtomCommand(threadEnvironment.setMcpServer, "set MCP server");
 
   if (!selectedThread) {
     return <View className="flex-1 bg-sheet" />;
@@ -1534,6 +1589,22 @@ export function ExistingThreadSettingsRouteScreen({
     ) ?? null;
   const updateModelSelection = (selection: ModelSelection) =>
     updateThreadDraftModelSelection(threadKey, selection, serverConfig?.providers ?? []);
+  const projection = structure?.projection;
+  const servers = projection?.providerThreads.find(
+    (providerThread) => providerThread.id === projection.thread.activeProviderThreadId,
+  )?.mcpServers;
+  const mcpServers =
+    projection && servers
+      ? {
+          servers,
+          enabled: projection.thread.enabledMcpServers ?? [],
+          onChange: (server: string, enabled: boolean) =>
+            void setMcpServer({
+              environmentId: selectedThread.environmentId,
+              input: { threadId: selectedThread.id, server, enabled },
+            }),
+        }
+      : undefined;
 
   return (
     <ThreadSettingsPickerScreen
@@ -1558,6 +1629,7 @@ export function ExistingThreadSettingsRouteScreen({
       }}
       runtimeMode={draftSettings.runtimeMode ?? selectedThread.runtimeMode}
       onUpdateRuntimeMode={(runtimeMode) => updateComposerDraftSettings(threadKey, { runtimeMode })}
+      mcpServers={mcpServers}
       onClose={() => navigation.goBack()}
     />
   );

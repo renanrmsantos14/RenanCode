@@ -822,6 +822,48 @@ export const OrchestratorMcpEnvironmentLinkResult = Schema.Union([
 ]);
 export type OrchestratorMcpEnvironmentLinkResult = typeof OrchestratorMcpEnvironmentLinkResult.Type;
 
+export const OrchestratorMcpMcpServerRequestInput = Schema.Struct({
+  server: Schema.optional(TrimmedNonEmptyString).annotate({
+    description:
+      "The server's name exactly as listed. Omit it to list the servers you can ask for.",
+  }),
+  reason: Schema.optional(TrimmedNonEmptyString).annotate({
+    description: "One sentence for the card: what you need the server for.",
+  }),
+  clientRequestId: Schema.optional(OrchestratorMcpClientRequestId),
+});
+export type OrchestratorMcpMcpServerRequestInput = typeof OrchestratorMcpMcpServerRequestInput.Type;
+
+export const OrchestratorMcpMcpServerRequestResult = Schema.Union([
+  Schema.Struct({
+    status: Schema.Literal("available").annotate({
+      description: "The servers this thread has off. Ask for one by name.",
+    }),
+    servers: Schema.Array(Schema.String),
+  }),
+  Schema.Struct({
+    status: Schema.Literal("pending").annotate({
+      description:
+        "The card is waiting for the user. Their answer arrives as a message in this thread; end your turn instead of waiting.",
+    }),
+    turnItemId: TurnItemId,
+  }),
+  Schema.Struct({
+    status: Schema.Literal("enabled").annotate({
+      description:
+        "The server is on for this thread. If its tools are not listed yet, they arrive with the next turn.",
+    }),
+  }),
+  Schema.Struct({
+    status: Schema.Literals(["declined", "cancelled"]).annotate({
+      description:
+        "declined: the user kept it off. cancelled: the card closed unanswered when the thread stopped.",
+    }),
+  }),
+]);
+export type OrchestratorMcpMcpServerRequestResult =
+  typeof OrchestratorMcpMcpServerRequestResult.Type;
+
 export const OrchestratorMcpEnvironmentUnlinkInput = Schema.Struct({
   environmentId: EnvironmentId.annotate({
     description: "The linked environment to forget, from t3_environment_links.",

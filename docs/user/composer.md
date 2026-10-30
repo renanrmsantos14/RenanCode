@@ -265,9 +265,14 @@ Claude instances can also compact idle threads for you. See
 ## MCP servers in Claude threads
 
 Claude sessions start with your MCP servers off, so their tools do not fill the
-context. Use the plug button next to the context meter on web and desktop to switch
-a server on for the current thread; the change applies from your next message and
-stays with that thread. The list appears after the thread's first message.
+context. Use the plug button next to the context meter on web and desktop, or the
+MCP servers section of the thread settings on mobile, to switch a server on for the
+current thread; the change applies from your next message and stays with that
+thread. The list appears after the thread's first message.
+
+When the agent needs a server that is off, it asks in a card. **Turn on** switches
+it on for the thread and the agent carries on by itself; **Not now** tells it to
+continue without. Delegated tasks start with the servers their thread has on.
 
 To keep some servers on everywhere, list them in **Settings → Providers → Claude →
 Always-on MCP servers**. Set **MCP servers at session start** to **Load all servers**
