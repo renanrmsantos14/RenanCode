@@ -145,6 +145,11 @@ export type AgentSessionRecentThread =
   | { readonly _tag: "Duplicate"; readonly source: AgentSessionImportSource }
   | { readonly _tag: "Skipped" };
 
+export interface RecentThreadsOptions {
+  readonly sinceMs?: number;
+  readonly excludeFilePaths?: ReadonlyArray<string>;
+}
+
 export class AgentSessionScanner extends Context.Service<
   AgentSessionScanner,
   {
@@ -152,6 +157,7 @@ export class AgentSessionScanner extends Context.Service<
     readonly recentThreads: (
       workspaceRoot: string,
       completedSources?: ReadonlyArray<AgentSessionImportSource>,
+      options?: RecentThreadsOptions,
     ) => Stream.Stream<AgentSessionRecentThread, AgentSessionScanError>;
   }
 >()("t3/project/AgentSessionScanner") {}
@@ -1307,13 +1313,15 @@ export const make = Effect.gen(function* () {
   const prepareRecentThreads = Effect.fn("AgentSessionScanner.prepareRecentThreads")(function* (
     workspaceRoot: string,
     completedSources: ReadonlyArray<AgentSessionImportSource>,
+    options: RecentThreadsOptions,
   ) {
     const root = path.resolve(expandHomePath(workspaceRoot, homeDir));
     const realRoot = yield* fileSystem.realPath(root).pipe(Effect.orElseSucceed(() => root));
     if (isExcludedProjectPath(root) || isExcludedProjectPath(realRoot)) return Stream.empty;
     const rootIdentity = yield* directoryIdentity(root);
     const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
-    const cutoffMs = nowMs - RECENT_THREAD_WINDOW_MS;
+    const cutoffMs = options.sinceMs ?? nowMs - RECENT_THREAD_WINDOW_MS;
+    const excludedFiles = new Set(options.excludeFilePaths);
 
     const candidates = cachedCandidates ?? (yield* collectCandidates()).candidates;
     cachedCandidates = candidates;
@@ -1332,7 +1340,8 @@ export const make = Effect.gen(function* () {
         if (
           transcript.mtimeMs === null ||
           transcript.mtimeMs < cutoffMs ||
-          transcript.mtimeMs > nowMs
+          transcript.mtimeMs > nowMs ||
+          excludedFiles.has(transcript.filePath)
         ) {
           continue;
         }
@@ -1460,7 +1469,8 @@ export const make = Effect.gen(function* () {
   const recentThreads: AgentSessionScanner["Service"]["recentThreads"] = (
     workspaceRoot,
     completedSources = [],
-  ) => Stream.unwrap(prepareRecentThreads(workspaceRoot, completedSources));
+    options = {},
+  ) => Stream.unwrap(prepareRecentThreads(workspaceRoot, completedSources, options));
 
   return AgentSessionScanner.of({ scan, recentThreads });
 });
