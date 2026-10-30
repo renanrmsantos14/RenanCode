@@ -43,9 +43,11 @@ runs:
     - name: Use cached Vite+
       if: steps.vp_cache.outputs.cache-hit == 'true'
       shell: bash
+      # Git Bash's $HOME is /c/Users/..., which pwsh steps cannot resolve on PATH.
       run: |
-        echo "$HOME/.vite-plus/bin" >> "$GITHUB_PATH"
-        "$HOME/.vite-plus/bin/vp" env use "${{ steps.vp.outputs.node }}"
+        bin="$HOME/.vite-plus/bin"
+        if command -v cygpath >/dev/null; then cygpath -w "$bin"; else echo "$bin"; fi >> "$GITHUB_PATH"
+        "$bin/vp" env use "${{ steps.vp.outputs.node }}"
 
     # vp gives each Node.js download attempt 10 minutes by default, so one
     # stalled stream holds the job that long. It retries 3 times and resumes
