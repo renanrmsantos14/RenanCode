@@ -89,8 +89,8 @@ export function createWebVoiceRecorder(
       analyser.getByteTimeDomainData(data);
       let sum = 0;
       for (const sample of data) sum += ((sample - 128) / 128) ** 2;
-      // Speech RMS sits well below 0.3; the square root lifts quiet voices into view.
-      return Math.min(1, Math.sqrt(Math.sqrt(sum / data.length) / 0.3));
+      // Normal speech RMS is roughly 0.02-0.1; the curve lifts quiet voices into view.
+      return Math.min(1, (Math.sqrt(sum / data.length) / 0.08) ** 0.6);
     },
     release() {
       if (limitTimer) clearTimeout(limitTimer);
