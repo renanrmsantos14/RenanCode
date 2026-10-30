@@ -32,7 +32,7 @@ import {
 import { StackActions, useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { ReactNode } from "react";
 import { useEffect, useEffectEvent, useRef, useState, type RefObject } from "react";
-import { Keyboard, Platform, View, type ViewStyle } from "react-native";
+import { Keyboard, Platform, Pressable, View, type ViewStyle } from "react-native";
 import { composerImageGallery } from "../../lib/composerImageGallery";
 import { filePreviewGallery } from "../../lib/filePreviewGallery";
 import { FilePreviewModal, type FilePreviewSource } from "../../components/FilePreviewModal";
@@ -71,6 +71,8 @@ import { useLinkedEnvironments } from "../../state/peerLinks";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 
 import { AppText as Text } from "../../components/ui/AppText";
+import { SymbolView } from "../../components/ui/AppSymbol";
+import { useNextActionSuggestion } from "./useNextActionSuggestion";
 import { ComposerAttachmentButton } from "./ComposerAttachmentButton";
 import {
   ComposerAttachmentStrip,
@@ -445,6 +447,13 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     draftMessage.trim().length > 0 ||
     draftAttachments.length > 0 ||
     (queuedEdit?.existingAttachments.length ?? 0) > 0;
+  const nextAction = useNextActionSuggestion({
+    environmentId: props.environmentId,
+    thread: props.selectedThread,
+    draftKey: composerDraftKey,
+    draftText: draftMessage,
+  });
+  const nextActionSuggestion = props.isDraft || hasContent ? null : nextAction.suggestion;
   const stripAttachments = composerStripAttachments(draftAttachments);
   const showStopAction = !hasContent && props.canStopThread && queuedEdit === null;
   const onResumeQueue = props.onResumeQueue;
@@ -738,6 +747,34 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
   // Removable attachments: inside the card, or above the focused one-row composer.
   const editingAttachments = hasEditingAttachments ? (
     <>
+      {nextActionSuggestion !== null ? (
+        <View className="flex-row items-center gap-1 px-[14px] pt-2">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Use suggested message: ${nextActionSuggestion}`}
+            accessibilityHint="Puts the suggestion in the composer without sending"
+            className="min-w-0 flex-1 rounded-full bg-subtle px-3 py-1.5 active:opacity-70"
+            onPress={() => {
+              props.onChangeDraftMessage(nextActionSuggestion);
+              nextAction.dismiss();
+              inputRef.current?.focus();
+            }}
+          >
+            <Text numberOfLines={1} className="text-sm text-foreground-muted">
+              {nextActionSuggestion}
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss suggested message"
+            hitSlop={8}
+            className="p-1.5 active:opacity-70"
+            onPress={nextAction.dismiss}
+          >
+            <SymbolView name="xmark" size={11} tintColor={foregroundColor} type="monochrome" />
+          </Pressable>
+        </View>
+      ) : null}
       {queuedEdit !== null && queuedEdit.existingAttachments.length > 0 ? (
         <Animated.View
           className="px-[14px] pb-2.5 pt-2"
