@@ -777,6 +777,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                         }
                       : null;
   const isWokeStatus = topStatus?.icon === "woke";
+  const showUnreadDot = topStatus?.icon === "done";
 
   const branchMismatch = resolveLocalCheckoutBranchMismatch({
     effectiveEnvMode: thread.worktreePath === null ? "local" : "worktree",
@@ -1014,7 +1015,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       aria-hidden
       className={cn(
         "min-w-0 flex-1 text-start text-sm transition-opacity motion-reduce:transition-none",
-        shouldRecede ? "font-normal" : "font-medium",
+        showUnreadDot ? "font-semibold" : shouldRecede ? "font-normal" : "font-medium",
         variant !== "slim"
           ? cn(
               "truncate",
@@ -1038,6 +1039,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       )}
       dir={textDirection(thread.title)}
     >
+      {showUnreadDot ? (
+        <span className="me-1.5 inline-block size-2 rounded-full bg-info align-middle" />
+      ) : null}
       {thread.title}
     </span>
   );
