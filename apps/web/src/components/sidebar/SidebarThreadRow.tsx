@@ -785,7 +785,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const unreadDotClassName =
     topStatus?.icon === "done"
       ? allPullRequestsMerged
-        ? "bg-violet-500"
+        ? "bg-guest"
         : "bg-success"
       : topStatus?.icon === "input" ||
           topStatus?.icon === "approval" ||
