@@ -89,11 +89,11 @@ jobs:
         run: |
           base=$(grep -oP 'T3CODE_MOBILE_VERSION \?\? "\K[0-9]+\.[0-9]+' apps/mobile/app.config.ts)
           echo "version=$base.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          # Gradle re-evaluates app.config.ts to embed the config About reads, so later steps need it too.
+          echo "T3CODE_MOBILE_VERSION=$base.${{ github.run_number }}" >> "$GITHUB_ENV"
 
       - name: Prebuild Android project
         working-directory: apps/mobile
-        env:
-          T3CODE_MOBILE_VERSION: ${{ steps.version.outputs.version }}
         run: vp exec expo prebuild --clean --platform android --no-install
 
       - name: Set version code and signing key
