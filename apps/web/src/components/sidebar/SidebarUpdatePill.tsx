@@ -488,9 +488,9 @@ function SidebarUpdateControl() {
   );
 
   return (
-    <SidebarMenuItem className="ml-auto flex shrink-0 items-center gap-1.5">
+    <SidebarMenuItem className="ml-auto flex shrink-0 items-center">
       {state ? (
-        <span className="pointer-events-none text-xs text-muted-foreground tabular-nums select-none">
+        <span className="pointer-events-none me-1.5 text-xs text-muted-foreground tabular-nums select-none">
           v{state.currentVersion}
           {localUpdateVersion && localUpdateVersion !== state.currentVersion ? (
             <>
