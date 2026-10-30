@@ -5898,12 +5898,13 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               ) AS pending_link_request_payload_json,
               (
                 -- The status IN repeats migration 073's active-items index predicate so SQLite uses it.
-                SELECT item.payload_json
-                FROM orchestration_v2_projection_turn_items item
-                WHERE item.thread_id = t.thread_id
-                  AND item.type = 'mcp_server_request'
-                  AND item.status IN ('pending', 'running', 'waiting') AND item.status = 'waiting'
-                ORDER BY item.updated_at DESC, item.turn_item_id DESC
+                SELECT mcp_request.payload_json
+                FROM orchestration_v2_projection_turn_items mcp_request
+                WHERE mcp_request.thread_id = t.thread_id
+                  AND mcp_request.type = 'mcp_server_request'
+                  AND mcp_request.status IN ('pending', 'running', 'waiting')
+                  AND mcp_request.status = 'waiting'
+                ORDER BY mcp_request.updated_at DESC, mcp_request.turn_item_id DESC
                 LIMIT 1
               ) AS pending_mcp_server_request_payload_json,
               (
@@ -6207,10 +6208,11 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                   AND link.type = 'link_request' AND link.status = 'waiting'
               )
               AND NOT EXISTS (
-                SELECT 1 FROM orchestration_v2_projection_turn_items item
-                WHERE item.thread_id = t.thread_id
-                  AND item.type = 'mcp_server_request'
-                  AND item.status IN ('pending', 'running', 'waiting') AND item.status = 'waiting'
+                SELECT 1 FROM orchestration_v2_projection_turn_items mcp_request
+                WHERE mcp_request.thread_id = t.thread_id
+                  AND mcp_request.type = 'mcp_server_request'
+                  AND mcp_request.status IN ('pending', 'running', 'waiting')
+                  AND mcp_request.status = 'waiting'
               )
             ORDER BY t.updated_at ASC, t.thread_id ASC
           `;
@@ -6730,10 +6732,11 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 AND link_request.type = 'link_request' AND link_request.status = 'waiting'
             )
             OR EXISTS (
-              SELECT 1 FROM orchestration_v2_projection_turn_items item
-              WHERE item.thread_id = t.thread_id
-                AND item.type = 'mcp_server_request'
-                AND item.status IN ('pending', 'running', 'waiting') AND item.status = 'waiting'
+              SELECT 1 FROM orchestration_v2_projection_turn_items mcp_request
+              WHERE mcp_request.thread_id = t.thread_id
+                AND mcp_request.type = 'mcp_server_request'
+                AND mcp_request.status IN ('pending', 'running', 'waiting')
+                AND mcp_request.status = 'waiting'
             )
             OR EXISTS (
               SELECT 1 FROM orchestration_v2_projection_provider_threads provider_thread
