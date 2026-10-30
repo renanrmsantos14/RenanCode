@@ -126,6 +126,11 @@ jobs:
           T3CODE_DESKTOP_REUSE_LINUX_CAPTURE_HELPERS: ${{ steps.capture_helper_cache.outputs.cache-hit == 'true' }}
           # Only the AppImage is published.
           T3CODE_DESKTOP_SKIP_DEB: true
+          # T3 Connect against the public t3.codes Clerk instance and relay, same values as .env.example.
+          T3CODE_CLERK_PUBLISHABLE_KEY: pk_live_Y2xlcmsudDMuY29kZXMk
+          T3CODE_CLERK_JWT_TEMPLATE: t3-relay
+          T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: hzxSgY2cH10sDU2r
+          T3CODE_RELAY_URL: https://relay.t3.codes
         run: vp run ${{ matrix.script }}
 
       - name: Collect release files

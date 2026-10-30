@@ -9,6 +9,7 @@ import {
 } from "react";
 import {
   ArchiveIcon,
+  HistoryIcon,
   FlaskConicalIcon,
   BotIcon,
   createLucideIcon,
@@ -108,6 +109,7 @@ const SETTINGS_SECTION_ICONS: Readonly<
   "/settings/labs": FlaskConicalIcon,
   "/settings/about": InfoIcon,
   "/settings/archived": ArchiveIcon,
+  "/settings/import": HistoryIcon,
 };
 
 // Detail pages without a nav entry highlight the page that links to them.

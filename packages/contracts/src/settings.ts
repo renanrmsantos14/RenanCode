@@ -20,6 +20,7 @@ import {
   TrimmedString,
 } from "./baseSchemas.ts";
 import { UsageLimitSourceId } from "./usageLimitSourceId.ts";
+import { SecretProviderId, SecretProviderSlug } from "./secretReference.ts";
 import { EnvironmentMachineKind, ThreadEnvMode, WorktreeSubmodules } from "./environment.ts";
 import { KeybindingShortcut } from "./keybindings.ts";
 import {
@@ -52,6 +53,8 @@ import { PullRequestMergeMethod } from "./pullRequest.ts";
 export const TimestampFormat = Schema.Literals(["locale", "12-hour", "24-hour"]);
 export type TimestampFormat = typeof TimestampFormat.Type;
 const DEFAULT_TIMESTAMP_FORMAT: TimestampFormat = "locale";
+export const TerminalPlacement = Schema.Literals(["bottom", "side"]);
+export type TerminalPlacement = typeof TerminalPlacement.Type;
 
 export const DiffLayout = Schema.Literals(["stacked", "split"]);
 export type DiffLayout = typeof DiffLayout.Type;
@@ -465,6 +468,9 @@ export const ClientSettingsSchema = Schema.Struct({
   planModeEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   contextWindowMeterEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   composerRichTextEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  nextActionSuggestionsEnabled: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
+  ),
   sendShortcut: Schema.Literals(["enter", "mod-enter-multiline", "mod-enter"]).pipe(
     Schema.withDecodingDefault(Effect.succeed("enter")),
   ),
@@ -518,6 +524,9 @@ export const ClientSettingsSchema = Schema.Struct({
   snapShotFlash: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   snapShotAnimations: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   wordWrap: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  terminalPlacement: TerminalPlacement.pipe(
+    Schema.withDecodingDefault(Effect.succeed<TerminalPlacement>("bottom")),
+  ),
   // Opt-in TeX typesetting in rendered Markdown. Off keeps math parsing and
   // KaTeX out of the render path entirely.
   mathRenderingEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
@@ -702,6 +711,12 @@ const InstanceIdleCompaction = Schema.Literals(
   INSTANCE_IDLE_COMPACTION_MODES.map((mode) => mode.value),
 );
 
+const CLAUDE_MCP_AT_START_MODES = [
+  { value: "none", label: "Off until switched on" },
+  { value: "all", label: "Load all servers" },
+] as const;
+const ClaudeMcpAtStart = Schema.Literals(CLAUDE_MCP_AT_START_MODES.map((mode) => mode.value));
+
 export const ClaudeSettings = makeProviderSettingsSchema(
   {
     enabled: Schema.Boolean.pipe(
@@ -766,9 +781,42 @@ export const ClaudeSettings = makeProviderSettingsSchema(
         },
       }),
     ),
+    mcpAtStart: ClaudeMcpAtStart.pipe(
+      Schema.withDecodingDefault(Effect.succeed("none" as const)),
+      Schema.annotateKey({
+        title: "MCP servers at session start",
+        description:
+          "Start sessions with MCP servers off and switch them on per thread from the composer, or load every configured server.",
+        providerSettingsForm: {
+          control: "select",
+          options: CLAUDE_MCP_AT_START_MODES,
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    alwaysOnMcpServers: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "Always-on MCP servers",
+        description:
+          "Comma-separated server names that stay on in every session when sessions start with MCP servers off.",
+        providerSettingsForm: {
+          placeholder: "e.g. claude.ai Claude Docs, memsearch",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
   },
   {
-    order: ["binaryPath", "homePath", "autoCompactWindow", "idleCompaction", "launchArgs"],
+    order: [
+      "binaryPath",
+      "homePath",
+      "autoCompactWindow",
+      "idleCompaction",
+      "mcpAtStart",
+      "alwaysOnMcpServers",
+      "launchArgs",
+    ],
   },
 );
 export type ClaudeSettings = typeof ClaudeSettings.Type;
@@ -911,41 +959,10 @@ export const UsageLimitSourceConfig = Schema.Struct({
 });
 export type UsageLimitSourceConfig = typeof UsageLimitSourceConfig.Type;
 
-// Final once shipped: older builds drop entries whose key fails here, and erase them on their next save.
-// Unlike provider slugs it may start with a digit, so a provider named "1Password" fits.
-const SecretProviderSlug = TrimmedNonEmptyString.check(
-  Schema.isMaxLength(64),
-  Schema.isPattern(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/),
-);
-
-export const SecretProviderId = SecretProviderSlug.pipe(Schema.brand("SecretProviderId"));
-export type SecretProviderId = typeof SecretProviderId.Type;
-
 export const SecretProviderKind = SecretProviderSlug.pipe(Schema.brand("SecretProviderKind"));
 export type SecretProviderKind = typeof SecretProviderKind.Type;
 
-const ONE_PASSWORD_ACCOUNT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-
-/**
- * Any value `op --account` accepts: shorthand, sign-in address, account ID, or user ID.
- * It is passed to the CLI as an argument, so it can never start with `-`.
- */
-export const OnePasswordAccount = Schema.String.check(
-  Schema.isMaxLength(253),
-  Schema.makeFilter((value: string) =>
-    ONE_PASSWORD_ACCOUNT_PATTERN.test(value)
-      ? true
-      : "1Password account must be a shorthand, sign-in address, or ID with no spaces.",
-  ),
-).pipe(Schema.brand("OnePasswordAccount"));
-export type OnePasswordAccount = typeof OnePasswordAccount.Type;
-
 export const SecretProviderLabel = TrimmedNonEmptyString.check(Schema.isMaxLength(64));
-
-export const OnePasswordSecretProviderConfig = Schema.Struct({
-  account: OnePasswordAccount,
-});
-export type OnePasswordSecretProviderConfig = typeof OnePasswordSecretProviderConfig.Type;
 
 /** Kinds decode their own config; unknown-kind envelopes round-trip verbatim across versions. */
 export const SecretProviderConfig = Schema.Struct({
@@ -955,31 +972,12 @@ export const SecretProviderConfig = Schema.Struct({
 });
 export type SecretProviderConfig = typeof SecretProviderConfig.Type;
 
-/** Kinds this build can resolve. Their `config` holds no credentials, so clients may read it. */
-const SECRET_PROVIDER_KIND_CONFIG_GUARDS: Readonly<Record<string, (config: unknown) => boolean>> = {
-  one_password: Schema.is(OnePasswordSecretProviderConfig),
-};
-
-export function isKnownSecretProviderKind(kind: string): boolean {
-  return Object.hasOwn(SECRET_PROVIDER_KIND_CONFIG_GUARDS, kind);
-}
-
-// Limits that may change later are enforced on writes only, never on the stored envelope.
-// Writes must be a kind this build knows with a config it accepts, so an older server
-// rejects a newer kind instead of storing what it cannot check.
+// Limits that may change later are enforced on writes only, never on the stored envelope. The
+// server also checks the kind and its config against the secret providers it has loaded.
 const SecretProviderConfigWrite = Schema.Struct({
   ...SecretProviderConfig.fields,
   label: SecretProviderLabel,
-}).check(
-  Schema.makeFilter((entry) => {
-    if (!isKnownSecretProviderKind(entry.kind)) {
-      return `Unsupported secret provider kind: ${entry.kind}.`;
-    }
-    return SECRET_PROVIDER_KIND_CONFIG_GUARDS[entry.kind]!(entry.config)
-      ? true
-      : `Invalid ${entry.kind} secret provider config.`;
-  }),
-);
+});
 
 export const SourceControlHostSettings = Schema.Record(Schema.String, Schema.Unknown);
 export type SourceControlHostSettings = typeof SourceControlHostSettings.Type;
@@ -1581,6 +1579,7 @@ export const ServerSettingsOperation = Schema.Literals([
   "remove-secret",
   "remove-stale-secret",
   "write-secret",
+  "write-secret-provider",
   "write-file",
   "prepare-directory",
 ]);
@@ -1879,6 +1878,7 @@ export const ClientSettingsPatch = Schema.Struct({
   planModeEnabled: Schema.optionalKey(Schema.Boolean),
   contextWindowMeterEnabled: Schema.optionalKey(Schema.Boolean),
   composerRichTextEnabled: Schema.optionalKey(Schema.Boolean),
+  nextActionSuggestionsEnabled: Schema.optionalKey(Schema.Boolean),
   sendShortcut: Schema.optionalKey(Schema.Literals(["enter", "mod-enter-multiline", "mod-enter"])),
   followUpBehavior: Schema.optionalKey(Schema.Literals(["queue", "steer"])),
   proactivePanelsEnabled: Schema.optionalKey(Schema.Boolean),
@@ -1904,6 +1904,7 @@ export const ClientSettingsPatch = Schema.Struct({
   snapShotFlash: Schema.optionalKey(Schema.Boolean),
   snapShotAnimations: Schema.optionalKey(Schema.Boolean),
   wordWrap: Schema.optionalKey(Schema.Boolean),
+  terminalPlacement: Schema.optionalKey(TerminalPlacement),
   mathRenderingEnabled: Schema.optionalKey(Schema.Boolean),
 });
 export type ClientSettingsPatch = typeof ClientSettingsPatch.Type;

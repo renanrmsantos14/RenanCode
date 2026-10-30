@@ -5,6 +5,7 @@ import {
   AuthProvidersManageScope,
   AuthSettingsWriteScope,
   DEFAULT_SERVER_SETTINGS,
+  ProviderDriverKind,
   ProviderInstanceId,
   SecretProviderId,
   ThreadId,
@@ -44,10 +45,10 @@ describe("RPC authorization scopes", () => {
     }
   });
 
-  it("keeps triage, which seeds an agent that reads logs and the database, behind operate scope", () => {
-    expect(requiredScopeForRpcMethod(WS_METHODS.serverPrepareTriage)).toBe(
-      AuthOrchestrationOperateScope,
-    );
+  it("keeps methods that run an agent or model on this environment behind operate scope", () => {
+    for (const method of [WS_METHODS.serverPrepareTriage, WS_METHODS.threadsSuggestNextAction]) {
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationOperateScope);
+    }
   });
 
   it("separates passive terminal observation from operations that can change a shell", () => {
@@ -164,13 +165,34 @@ describe("settings mutation authorization", () => {
       );
       yield* client[WS_METHODS.serverUpdateSettings]({ patch: {}, providerInstanceMutation });
       expect(handled).toBe(1);
+      yield* client[WS_METHODS.serverUpdateSettings]({
+        patch: {},
+        providerInstanceMutation: {
+          operation: "upsert",
+          instanceId: ProviderInstanceId.make("codex_work"),
+          instance: {
+            driver: ProviderDriverKind.make("codex"),
+            environment: [
+              {
+                name: "OPENAI_API_KEY",
+                sensitive: true,
+                value: {
+                  provider: SecretProviderId.make("personal"),
+                  reference: "op://Private/OpenAI/credential",
+                },
+              },
+            ],
+          },
+        },
+      });
+      expect(handled).toBe(2);
       expect(
         yield* client[WS_METHODS.serverUpdateSettings]({
           patch: { defaultRuntimeMode: "full-access" },
           providerInstanceMutation,
         }).pipe(Effect.flip),
       ).toMatchObject({ requiredPermission: AuthSettingsWriteScope });
-      expect(handled).toBe(1);
+      expect(handled).toBe(2);
     }).pipe(Effect.scoped),
   );
 

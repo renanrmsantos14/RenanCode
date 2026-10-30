@@ -51,8 +51,34 @@ export type AgentSessionScanResult = typeof AgentSessionScanResult.Type;
 export const AgentSessionImportInput = Schema.Struct({
   projectId: ProjectId,
   expectedWorkspaceRoot: Schema.optional(TrimmedNonEmptyString),
+  // Defaults to the last 30 days.
+  since: Schema.optional(IsoDateTime),
+  excludeFilePaths: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
 });
 export type AgentSessionImportInput = typeof AgentSessionImportInput.Type;
+
+export const AgentSessionListThreadsInput = Schema.Struct({
+  workspaceRoot: TrimmedNonEmptyString,
+  since: Schema.optional(IsoDateTime),
+});
+export type AgentSessionListThreadsInput = typeof AgentSessionListThreadsInput.Type;
+
+export const AgentSessionThreadSummary = Schema.Struct({
+  provider: AgentSessionSource,
+  // Newest transcript first; exclude them all, or an older copy of the session imports instead.
+  filePaths: Schema.NonEmptyArray(TrimmedNonEmptyString),
+  title: Schema.String,
+  updatedAt: IsoDateTime,
+  messageCount: NonNegativeInt,
+});
+export type AgentSessionThreadSummary = typeof AgentSessionThreadSummary.Type;
+
+export const AgentSessionListThreadsResult = Schema.Struct({
+  threads: Schema.Array(AgentSessionThreadSummary),
+  alreadyImportedCount: NonNegativeInt,
+  skippedCount: NonNegativeInt,
+});
+export type AgentSessionListThreadsResult = typeof AgentSessionListThreadsResult.Type;
 
 export class AgentSessionImportProjectNotFoundError extends Schema.TaggedError<AgentSessionImportProjectNotFoundError>()(
   "AgentSessionImportProjectNotFoundError",

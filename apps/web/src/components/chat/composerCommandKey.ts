@@ -80,6 +80,9 @@ export function composerCommandKeyHandler(input: {
     submissionIntent: ComposerSubmissionIntent,
   ) => void;
   readonly steerQueuedMessage: (repeat: boolean) => boolean;
+  /** Ghost text shown in the empty composer; Tab accepts it and Escape dismisses it. */
+  readonly nextActionSuggestion: string | null;
+  readonly dismissNextActionSuggestion: () => void;
 }) {
   const {
     keybindings,
@@ -118,6 +121,8 @@ export function composerCommandKeyHandler(input: {
     applyPromptReplacement,
     submitComposer,
     steerQueuedMessage,
+    nextActionSuggestion,
+    dismissNextActionSuggestion,
   } = input;
 
   // The composer persists across threads. A recall from thread A must not
@@ -191,6 +196,26 @@ export function composerCommandKeyHandler(input: {
     const { trigger } = resolveActiveComposerTrigger();
     const menuIsActive =
       !isLiteralPendingAnswer && (composerMenuOpenRef.current || trigger !== null);
+    const canUseSuggestion =
+      nextActionSuggestion !== null &&
+      !menuIsActive &&
+      !event.isComposing &&
+      promptRef.current.length === 0;
+    if (canUseSuggestion && key === "Escape") {
+      dismissNextActionSuggestion();
+      return true;
+    }
+    if (
+      canUseSuggestion &&
+      key === "Tab" &&
+      !event.shiftKey &&
+      !event.altKey &&
+      !event.metaKey &&
+      !event.ctrlKey
+    ) {
+      replacePromptFromHistory(nextActionSuggestion);
+      return true;
+    }
     if (key === "Escape") {
       if (!menuIsActive || event.isComposing || event.keyCode === 229) return false;
       dismissComposerTrigger(trigger);

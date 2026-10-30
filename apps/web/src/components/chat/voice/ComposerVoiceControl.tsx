@@ -1,35 +1,47 @@
-import { CheckIcon, MicIcon, XIcon } from "lucide-react";
+import { MicIcon, SquareIcon, XIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import { Button } from "../../ui/button";
 import { Spinner } from "../../ui/spinner";
 import type { ComposerVoiceInput } from "./useComposerVoiceInput";
-import { VOICE_WAVEFORM_BARS } from "./webVoiceRecorder";
+
+const WAVEFORM_BARS = 16;
+const SAMPLE_INTERVAL_MS = 80;
+const MIN_BAR_SCALE = 0.15;
 
 const formatElapsed = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
-function VoiceWaveform({ levels }: { readonly levels: () => ReadonlyArray<number> }) {
+/** Scrolling loudness history: the newest sample enters on the right. */
+function VoiceWaveform({ level }: { readonly level: () => number }) {
   const bars = useRef<Array<HTMLSpanElement | null>>([]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- samples the microphone analyser outside React state
   useEffect(() => {
+    const history = Array<number>(WAVEFORM_BARS).fill(0);
+    let smoothed = 0;
     const timer = setInterval(() => {
-      const current = levels();
-      bars.current.forEach((bar, index) => {
-        if (bar) bar.style.transform = `scaleY(${Math.max(0.12, current[index] ?? 0)})`;
+      const next = level();
+      smoothed = next > smoothed ? next : smoothed * 0.6 + next * 0.4;
+      history.shift();
+      history.push(smoothed);
+      history.forEach((value, index) => {
+        const bar = bars.current[index];
+        if (!bar) return;
+        bar.style.transform = `scaleY(${Math.max(MIN_BAR_SCALE, value)})`;
       });
-    }, 50);
+    }, SAMPLE_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, [levels]);
+  }, [level]);
   return (
-    <span aria-hidden className="flex h-5 items-center gap-px">
-      {Array.from({ length: VOICE_WAVEFORM_BARS }, (_, index) => (
+    <span aria-hidden className="flex h-5 shrink-0 items-center gap-0.5">
+      {Array.from({ length: WAVEFORM_BARS }, (_, index) => (
         <span
           key={index}
           ref={(node) => {
             bars.current[index] = node;
           }}
-          className="h-full w-0.5 origin-center scale-y-[0.12] rounded-full bg-foreground/70"
+          style={{ transform: `scaleY(${MIN_BAR_SCALE})` }}
+          className="h-full w-0.5 origin-center rounded-full bg-foreground transition-transform duration-75 ease-out"
         />
       ))}
     </span>
@@ -41,16 +53,16 @@ export function ComposerVoiceControl({ voice }: { readonly voice: ComposerVoiceI
 
   if (phase === "recording") {
     return (
-      <div className="flex items-center gap-1.5">
-        <VoiceWaveform levels={voice.levels} />
-        <span className="text-xs tabular-nums text-muted-foreground">
+      <div role="status" aria-label="Recording dictation" className="flex items-center gap-1.5">
+        <VoiceWaveform level={voice.level} />
+        <span className="w-8 text-end text-xs tabular-nums text-muted-foreground">
           {formatElapsed(voice.elapsedSeconds)}
         </span>
         <Button variant="ghost" size="icon-sm" aria-label="Cancel dictation" onClick={voice.cancel}>
           <XIcon />
         </Button>
-        <Button variant="ghost" size="icon-sm" aria-label="Finish dictation" onClick={voice.stop}>
-          <CheckIcon />
+        <Button variant="default" size="icon-sm" aria-label="Finish dictation" onClick={voice.stop}>
+          <SquareIcon className="fill-current" />
         </Button>
       </div>
     );

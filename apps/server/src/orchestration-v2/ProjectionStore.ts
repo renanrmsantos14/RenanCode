@@ -612,6 +612,9 @@ export interface ProjectionStoreV2Shape {
   readonly canStartQueuedRun: (
     threadId: ThreadId,
   ) => Effect.Effect<boolean, ProjectionStoreV2Error>;
+  readonly getHeldQueuedRuns: (
+    threadId: ThreadId,
+  ) => Effect.Effect<ReadonlyArray<OrchestrationV2Run>, ProjectionStoreV2Error>;
   readonly getRecoveryThreadIds: (
     kind: ProjectionRecoveryKind,
   ) => Effect.Effect<ReadonlyArray<ThreadId>, ProjectionStoreV2Error>;
@@ -780,6 +783,7 @@ export function applyToProjection(
     case "thread.metadata-updated":
     case "thread.runtime-mode-updated":
     case "thread.interaction-mode-updated":
+    case "thread.mcp-servers-updated":
     case "thread.model-selection-updated":
     case "thread.provider-switched":
     case "thread.guest-share-updated":
@@ -958,6 +962,7 @@ type ShellThreadRow = {
   readonly pending_request_payload_json: string | null;
   readonly pending_secret_request_payload_json: string | null;
   readonly pending_link_request_payload_json: string | null;
+  readonly pending_mcp_server_request_payload_json: string | null;
   readonly latest_user_message_at: string | null;
   readonly latest_user_authored_message_at: string | null;
   readonly has_actionable_proposed_plan: number;
@@ -1378,10 +1383,15 @@ function pendingRuntimeRequestSummary(
   };
 }
 
-function secretRequestAsPendingInput(
+function waitingCardAsPendingInput(
   item: OrchestrationV2TurnItem | null,
 ): OrchestrationV2PendingRuntimeRequestSummary | null {
-  if ((item?.type !== "secret_request" && item?.type !== "link_request") || item.nodeId === null)
+  if (
+    (item?.type !== "secret_request" &&
+      item?.type !== "link_request" &&
+      item?.type !== "mcp_server_request") ||
+    item.nodeId === null
+  )
     return null;
   return {
     id: RuntimeRequestId.make(item.id),
@@ -1392,11 +1402,14 @@ function secretRequestAsPendingInput(
 }
 
 /**
- * A secret card is answered while its agent waits in the run. A link card's
- * agent asked without waiting, so the card waits on the user after its run.
+ * A secret card is answered while its agent waits in the run. Link and MCP
+ * server cards' agents asked without waiting, so they wait on the user after the run.
  */
+export const waitsOnUserAfterRun = (item: Pick<OrchestrationV2TurnItem, "type">) =>
+  item.type === "link_request" || item.type === "mcp_server_request";
+
 const waitsOnUser = (item: OrchestrationV2TurnItem, liveRunIds: ReadonlySet<RunId>) =>
-  item.type === "link_request" ||
+  waitsOnUserAfterRun(item) ||
   (item.type === "secret_request" && item.runId !== null && liveRunIds.has(item.runId));
 
 export function threadShellFromProjection(
@@ -1436,7 +1449,7 @@ export function threadShellFromProjection(
   );
   if (pendingRuntimeRequest === null || pendingRuntimeRequest.blocking === false) {
     pendingRuntimeRequest =
-      secretRequestAsPendingInput(
+      waitingCardAsPendingInput(
         projection.turnItems
           .filter((item) => item.status === "waiting" && waitsOnUser(item, liveRunIds))
           .toSorted(
@@ -1877,6 +1890,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             case "thread.pull-request-synced":
             case "thread.runtime-mode-updated":
             case "thread.interaction-mode-updated":
+            case "thread.mcp-servers-updated":
             case "thread.model-selection-updated":
             case "thread.provider-switched":
             case "thread.guest-share-updated": {
@@ -2684,6 +2698,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             event.type !== "thread.pull-request-link-updated" &&
             event.type !== "thread.runtime-mode-updated" &&
             event.type !== "thread.interaction-mode-updated" &&
+            event.type !== "thread.mcp-servers-updated" &&
             event.type !== "thread.model-selection-updated" &&
             event.type !== "thread.provider-switched" &&
             event.type !== "thread.guest-share-updated"
@@ -5183,6 +5198,17 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
         )
         .pipe(Effect.mapError(controlReadError(threadId)));
 
+    const getHeldQueuedRuns: ProjectionStoreV2Shape["getHeldQueuedRuns"] = (threadId) =>
+      sql<PayloadRow>`
+        SELECT payload_json FROM orchestration_v2_projection_runs
+        WHERE thread_id = ${threadId} AND status = 'queued'
+          AND json_extract(payload_json, '$.queueHeld') IS 1
+        ORDER BY ordinal ASC
+      `.pipe(
+        Effect.flatMap(decodeRows(decodeRunPayload, threadId)),
+        Effect.mapError(controlReadError(threadId)),
+      );
+
     const getMessageCount: ProjectionStoreV2Shape["getMessageCount"] = (threadId) =>
       sql<{
         count: number;
@@ -5871,6 +5897,17 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 LIMIT 1
               ) AS pending_link_request_payload_json,
               (
+                -- The status IN repeats migration 073's active-items index predicate so SQLite uses it.
+                SELECT mcp_request.payload_json
+                FROM orchestration_v2_projection_turn_items mcp_request
+                WHERE mcp_request.thread_id = t.thread_id
+                  AND mcp_request.type = 'mcp_server_request'
+                  AND mcp_request.status IN ('pending', 'running', 'waiting')
+                  AND mcp_request.status = 'waiting'
+                ORDER BY mcp_request.updated_at DESC, mcp_request.turn_item_id DESC
+                LIMIT 1
+              ) AS pending_mcp_server_request_payload_json,
+              (
                 SELECT message.updated_at
                 FROM orchestration_v2_projection_messages message
                 WHERE message.thread_id = t.thread_id
@@ -6170,6 +6207,13 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 WHERE link.thread_id = t.thread_id
                   AND link.type = 'link_request' AND link.status = 'waiting'
               )
+              AND NOT EXISTS (
+                SELECT 1 FROM orchestration_v2_projection_turn_items mcp_request
+                WHERE mcp_request.thread_id = t.thread_id
+                  AND mcp_request.type = 'mcp_server_request'
+                  AND mcp_request.status IN ('pending', 'running', 'waiting')
+                  AND mcp_request.status = 'waiting'
+              )
             ORDER BY t.updated_at ASC, t.thread_id ASC
           `;
             if (rows.length === 0) return [];
@@ -6341,6 +6385,9 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           row.pending_link_request_payload_json === null
             ? null
             : yield* decodeTurnItemPayload(row.pending_link_request_payload_json),
+          row.pending_mcp_server_request_payload_json === null
+            ? null
+            : yield* decodeTurnItemPayload(row.pending_mcp_server_request_payload_json),
         ].filter((item) => item !== null);
         let pendingRuntimeRequest =
           row.pending_request_payload_json !== null
@@ -6353,7 +6400,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           waitingCards.length > 0
         ) {
           pendingRuntimeRequest =
-            secretRequestAsPendingInput(
+            waitingCardAsPendingInput(
               waitingCards.toSorted(
                 (left, right) =>
                   DateTime.toEpochMillis(right.updatedAt) - DateTime.toEpochMillis(left.updatedAt),
@@ -6685,6 +6732,13 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 AND link_request.type = 'link_request' AND link_request.status = 'waiting'
             )
             OR EXISTS (
+              SELECT 1 FROM orchestration_v2_projection_turn_items mcp_request
+              WHERE mcp_request.thread_id = t.thread_id
+                AND mcp_request.type = 'mcp_server_request'
+                AND mcp_request.status IN ('pending', 'running', 'waiting')
+                AND mcp_request.status = 'waiting'
+            )
+            OR EXISTS (
               SELECT 1 FROM orchestration_v2_projection_provider_threads provider_thread
               WHERE provider_thread.thread_id = t.thread_id
                 AND json_array_length(provider_thread.payload_json, '$.pendingBackgroundTasks') > 0
@@ -6899,6 +6953,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       getCheckpointRollbackContext: readOnReader(getCheckpointRollbackContext),
       getRunMessage: readOnReader(getRunMessage),
       canStartQueuedRun: readOnReader(canStartQueuedRun),
+      getHeldQueuedRuns: readOnReader(getHeldQueuedRuns),
       getPendingNativeUserInputs: readOnReader(getPendingNativeUserInputs),
       hasUnpairedRunInterruptRequest: readOnReader(hasUnpairedRunInterruptRequest),
       isNodeStored: readOnReader(isNodeStored),

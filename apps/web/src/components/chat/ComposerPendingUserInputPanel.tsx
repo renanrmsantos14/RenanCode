@@ -1,3 +1,4 @@
+import { Mascot } from "../mascot/Mascot";
 import { type RuntimeRequestId, type ScopedThreadRef } from "@t3tools/contracts";
 import { memo, use, useEffect, useEffectEvent, useState } from "react";
 import { BackgroundThreadContext } from "./backgroundThread";
@@ -181,6 +182,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
         className="px-4 pt-1.5"
       >
         <ComposerBanner.Content>
+          <Mascot state="needsYou" size={32} />
           <span className="shrink-0 text-muted-foreground">{activeQuestion.header}</span>
           {isCollapsed ? (
             <>

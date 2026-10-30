@@ -162,7 +162,7 @@ const seedOwner = Effect.fn(function* (
 });
 
 const makeImporter = Effect.fn(function* (
-  candidates: ReadonlyArray<ReturnType<typeof candidate>>,
+  candidates: ReadonlyArray<AgentSessionScanner.AgentSessionRecentThread>,
   beforeTransaction: Effect.Effect<void> = Effect.void,
 ) {
   const sql = yield* SqlClient.SqlClient;
@@ -235,8 +235,38 @@ const makeImporter = Effect.fn(function* (
     ),
   );
   const importer = Context.get(context, AgentSessionImporter.AgentSessionImporter);
-  return { run: importer.importRecentAgentThreads({ projectId }), published };
+  return {
+    run: importer.importRecentAgentThreads({ projectId }),
+    list: importer.listImportableThreads({ workspaceRoot: "/workspace/project" }),
+    published,
+  };
 });
+
+it.effect("lists importable threads with their duplicate transcripts", () =>
+  Effect.gen(function* () {
+    const listed = candidate(CODEX_MODEL_SELECTION, "listed");
+    const olderCopy = "/tmp/older/listed.jsonl";
+    const importer = yield* makeImporter([
+      listed,
+      { _tag: "Duplicate", source: { ...listed.source, filePath: olderCopy } },
+      { _tag: "AlreadyImported", source: { ...listed.source, providerSessionId: "done" } },
+      { _tag: "Skipped" },
+    ]);
+    expect(yield* importer.list).toEqual({
+      threads: [
+        {
+          provider: "codex",
+          filePaths: [listed.source.filePath, olderCopy],
+          title: "Imported thread",
+          updatedAt: timestamp,
+          messageCount: 2,
+        },
+      ],
+      alreadyImportedCount: 1,
+      skippedCount: 1,
+    });
+  }).pipe(Effect.scoped, Effect.provide(persistence)),
+);
 
 it.effect(
   "ignores owned sessions, including archived and deleted threads, but imports other instances and unowned sessions",

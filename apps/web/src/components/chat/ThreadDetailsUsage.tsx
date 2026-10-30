@@ -37,7 +37,7 @@ export interface ThreadDetailsUsageInput {
 
 /**
  * The selected provider's limit windows and the thread's context window.
- * Every row reads as room left, so a longer bar always means more headroom.
+ * Every row reads as usage, so the bar fills up from 0% as the window is spent.
  */
 export function ThreadDetailsUsage({
   providerInstanceId,
@@ -69,7 +69,7 @@ export function ThreadDetailsUsage({
         {notice ? (
           <UsageRow
             label="Limits"
-            left={null}
+            used={null}
             value="Unavailable"
             tooltip={<span className="text-foreground">{notice}</span>}
           />
@@ -91,17 +91,17 @@ function LimitRow({
   readonly now: number;
 }) {
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
-  const left = remainingPercent(window);
+  const used = 100 - remainingPercent(window);
   const pace = paceOf(window, now);
   const resetsAt = window.resetsAt ? Date.parse(window.resetsAt) : Number.NaN;
   return (
     <UsageRow
       label={window.label}
-      left={left}
+      used={used}
       tooltip={
         <>
           <span className="text-foreground">
-            {window.label}: {left}% left
+            {window.label}: {used}% used
           </span>
           {window.resetsAt && resetsAt > now ? (
             <span className="text-muted-foreground">
@@ -124,28 +124,30 @@ function ContextRow({
   readonly spaced: boolean;
 }) {
   const maxTokens = usage.maxTokens ?? null;
-  const left =
+  const usedPercent =
     maxTokens !== null && usage.usedPercentage !== null
-      ? Math.round(100 - Math.max(0, Math.min(100, usage.usedPercentage)))
+      ? Math.round(Math.max(0, Math.min(100, usage.usedPercentage)))
       : null;
-  const used = formatContextWindowTokens(usage.usedTokens);
+  const usedTokens = formatContextWindowTokens(usage.usedTokens);
   return (
     <UsageRow
       label="Context"
-      left={left}
+      used={usedPercent}
       muted
       className={cn(spaced && "mt-2")}
       tooltip={
         <>
-          {left !== null ? <span className="text-foreground">Context: {left}% left</span> : null}
-          <span className={left !== null ? "text-muted-foreground" : "text-foreground"}>
+          {usedPercent !== null ? (
+            <span className="text-foreground">Context: {usedPercent}% used</span>
+          ) : null}
+          <span className={usedPercent !== null ? "text-muted-foreground" : "text-foreground"}>
             {maxTokens !== null
-              ? `${used} of ${formatContextWindowTokens(maxTokens)} tokens used`
-              : `${used} tokens used`}
+              ? `${usedTokens} of ${formatContextWindowTokens(maxTokens)} tokens used`
+              : `${usedTokens} tokens used`}
           </span>
         </>
       }
-      value={left === null ? used : undefined}
+      value={usedPercent === null ? usedTokens : undefined}
     />
   );
 }
@@ -153,28 +155,28 @@ function ContextRow({
 /** One label, hairline, and value row; the whole row opens the details tooltip. */
 function UsageRow({
   label,
-  left,
+  used,
   tooltip,
   value,
   muted = false,
   className,
 }: {
   readonly label: string;
-  readonly left: number | null;
+  readonly used: number | null;
   readonly tooltip: ReactNode;
   /** Replaces the percentage when there is none. */
   readonly value?: string | undefined;
   readonly muted?: boolean;
   readonly className?: string | undefined;
 }) {
-  const tone = left === null ? null : left <= 10 ? "error" : left <= 20 ? "warning" : null;
+  const tone = used === null ? null : used >= 90 ? "error" : used >= 80 ? "warning" : null;
   return (
     <Tooltip>
       <TooltipTrigger
         render={
           <div
             tabIndex={0}
-            aria-label={`${label}: ${value ?? `${left}% left`}`}
+            aria-label={`${label}: ${value ?? `${used}% used`}`}
             className={cn(
               "col-span-3 grid h-6 cursor-default grid-cols-subgrid items-center rounded-lg px-2.5 outline-none hover:bg-black/[0.035] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring data-popup-open:bg-black/[0.035] dark:hover:bg-white/[0.08] dark:data-popup-open:bg-white/[0.08]",
               className,
@@ -183,9 +185,9 @@ function UsageRow({
         }
       >
         <span className="max-w-28 truncate text-muted-foreground">{label}</span>
-        {left !== null ? (
+        {used !== null ? (
           <span className="relative h-[3px] rounded-full bg-muted-foreground/30 dark:bg-muted-foreground/20">
-            {left > 0 ? (
+            {used > 0 ? (
               <span
                 className={cn(
                   "absolute inset-y-0 left-0 rounded-full",
@@ -197,7 +199,7 @@ function UsageRow({
                         ? "bg-muted-foreground"
                         : "bg-foreground/80",
                 )}
-                style={{ width: `max(${left}%, 6px)` }}
+                style={{ width: `max(${used}%, 6px)` }}
               />
             ) : null}
           </span>
@@ -206,17 +208,17 @@ function UsageRow({
           className={cn(
             // Text-only rows span the bar column so they never widen the shared value column.
             "text-end font-medium tabular-nums",
-            left === null && "col-span-2",
+            used === null && "col-span-2",
             tone === "error"
               ? "text-error-foreground"
               : tone === "warning"
                 ? "text-warning-foreground"
-                : left === null
+                : used === null
                   ? "text-muted-foreground"
                   : "text-foreground/80",
           )}
         >
-          {value ?? `${left}%`}
+          {value ?? `${used}%`}
         </span>
       </TooltipTrigger>
       {/* Rows sit 8px inside the card; clear its edge instead of overlapping it. */}

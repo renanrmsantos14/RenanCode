@@ -14,6 +14,7 @@ import {
   type OrchestrationV2ThreadLaunchWorkspaceStrategy,
   type OrchestrationV2TurnItem,
   OrchestratorMcpFailure,
+  mcpServerIsOn,
   type OrchestratorMcpCapabilitiesInput,
   type OrchestratorMcpCapabilitiesResult,
   type OrchestratorMcpModelOption,
@@ -25,6 +26,8 @@ import {
   type OrchestratorMcpDeleteScheduledTaskInput,
   type OrchestratorMcpRequestSecretInput,
   type OrchestratorMcpRequestSecretResult,
+  type OrchestratorMcpMcpServerRequestInput,
+  type OrchestratorMcpMcpServerRequestResult,
   type OrchestratorMcpDeleteScheduledTaskResult,
   type OrchestratorMcpListScheduledTasksResult,
   type OrchestratorMcpScheduledTask,
@@ -189,6 +192,10 @@ export interface OrchestratorMcpServiceShape {
     scope: McpInvocationScope,
     input: OrchestratorMcpRequestSecretInput,
   ) => Effect.Effect<OrchestratorMcpRequestSecretResult, OrchestratorMcpFailure>;
+  readonly requestMcpServer: (
+    scope: McpInvocationScope,
+    input: OrchestratorMcpMcpServerRequestInput,
+  ) => Effect.Effect<OrchestratorMcpMcpServerRequestResult, OrchestratorMcpFailure>;
   readonly listThreads: (
     scope: McpInvocationScope,
     input: OrchestratorMcpThreadListInput,
@@ -912,6 +919,8 @@ function turnItemText(item: OrchestrationV2TurnItem): string | null {
       return item.linkStatus === "linked"
         ? `Linked ${item.linkedLabel ?? item.label ?? item.url ?? "an environment"} (${item.linkedAccess}).`
         : `Asked the user to link ${item.label ?? item.url ?? "an environment"}: ${item.linkStatus}.`;
+    case "mcp_server_request":
+      return `Asked the user to switch on the ${item.server} MCP server: ${item.mcpServerStatus}.`;
     case "subagent":
       return item.result ?? item.progress ?? item.prompt;
     case "dynamic_tool":
@@ -1974,6 +1983,89 @@ const make = Effect.gen(function* () {
             ),
           );
         return { scheduledTaskId: existing.id, deleted: true };
+      },
+    ),
+    requestMcpServer: Effect.fn("OrchestratorMcpService.requestMcpServer")(
+      function* (scope, input) {
+        yield* requireCapability(scope);
+        const threadScope = yield* requireThreadScope(scope, "t3_mcp_server_request");
+        const threadId = threadScope.thread.threadId;
+        const parent = yield* threadManagement
+          .getThreadRecords(threadId, ["runs", "providerThreads", "turnItems"], {
+            turnItemTypes: ["mcp_server_request"],
+            messageRoles: [],
+          })
+          .pipe(
+            Effect.mapError((error) =>
+              failure("orchestration_error", `Unable to read the thread: ${errorMessage(error)}`),
+            ),
+          );
+        const servers =
+          parent.providerThreads.find(
+            (providerThread) => providerThread.id === parent.thread.activeProviderThreadId,
+          )?.mcpServers ?? [];
+        const enabled = parent.thread.enabledMcpServers ?? [];
+        const isOn = (server: (typeof servers)[number]) => mcpServerIsOn(server, enabled);
+        const off = servers.filter((server) => !isOn(server)).map((server) => server.name);
+        if (input.server === undefined) return { status: "available", servers: off } as const;
+        const server = servers.find((candidate) => candidate.name === input.server);
+        if (server === undefined) {
+          return yield* failure(
+            "invalid_request",
+            off.length === 0
+              ? "This thread has no MCP servers switched off."
+              : `Unknown MCP server. Ask for one of: ${off.join(", ")}.`,
+          );
+        }
+        if (isOn(server)) return { status: "enabled" } as const;
+        // Asking again while a card for this server is open points at that card.
+        const open = parent.turnItems.find(
+          (item) =>
+            item.type === "mcp_server_request" &&
+            item.server === server.name &&
+            item.mcpServerStatus === "pending",
+        );
+        if (open !== undefined) return { status: "pending", turnItemId: open.id } as const;
+        const run = ThreadManagementService.latestActiveRun(parent);
+        if (
+          run === undefined ||
+          run.rootNodeId === null ||
+          run.providerInstanceId !== threadScope.thread.providerInstanceId
+        ) {
+          return yield* failure(
+            "parent_not_active",
+            "Asking for an MCP server requires an active run owned by this MCP provider session.",
+          );
+        }
+        const key = yield* requestKey(input.clientRequestId);
+        const turnItemId = TurnItemId.make(
+          `turn-item:mcp-server-request:${stablePart(threadId)}:${stablePart(key)}`,
+        );
+        // A retry of an answered request hears how its card ended.
+        const asked = parent.turnItems.find((item) => item.id === turnItemId);
+        if (asked?.type === "mcp_server_request" && asked.mcpServerStatus !== "pending") {
+          return { status: asked.mcpServerStatus } as const;
+        }
+        yield* threadManagement
+          .dispatch({
+            type: "mcp_server_request.record",
+            commandId: stableCommandId({ scope, requestKey: key, operation: "mcp-server-request" }),
+            threadId,
+            runId: run.id,
+            nodeId: run.rootNodeId,
+            turnItemId,
+            server: server.name,
+            reason: input.reason ?? "",
+          })
+          .pipe(
+            Effect.mapError((error) =>
+              failure(
+                "orchestration_error",
+                `Could not record the MCP server request: ${errorMessage(error)}`,
+              ),
+            ),
+          );
+        return { status: "pending", turnItemId } as const;
       },
     ),
     requestSecret: Effect.fn("OrchestratorMcpService.requestSecret")(function* (scope, input) {

@@ -1,3 +1,5 @@
+import { deriveMascotState, isMascotLiveRunStatus } from "@t3tools/client-runtime/mascot";
+import { useJustCompleted } from "./mascot/useJustCompleted";
 import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
@@ -46,7 +48,10 @@ import {
   latestExecutedRun,
   latestRootProviderFailure,
 } from "@t3tools/shared/orchestrationV2ThreadError";
-import type { UsageLimitSourceSnapshots } from "@t3tools/contracts";
+import type {
+  OrchestrationV2ProviderMcpServer,
+  UsageLimitSourceSnapshots,
+} from "@t3tools/contracts";
 import { feedbackBannerItem } from "./chat/ComposerFeedback";
 import { useUsageLimitsPanel } from "./chat/useUsageLimitsPanel";
 import { useWorktreeSetup } from "./chat/useWorktreeSetup";
@@ -378,6 +383,8 @@ import type { CodexArtifactTemplate } from "@t3tools/shared/codexArtifactTemplat
 
 const EMPTY_FEEDBACK_SUBMISSIONS: ReadonlyArray<CodexFeedbackSubmission> = [];
 const EMPTY_PROVIDER_SKILLS: ServerProvider["skills"] = [];
+const EMPTY_MCP_SERVERS: ReadonlyArray<OrchestrationV2ProviderMcpServer> = [];
+const EMPTY_MCP_SERVER_NAMES: ReadonlyArray<string> = [];
 const EMPTY_TURN_ITEMS: ThreadStructure["turnItems"] = [];
 const EMPTY_AUTO_UPDATE_ENVIRONMENTS: ReadonlyArray<EnvironmentPresentation> = [];
 
@@ -438,6 +445,7 @@ export default function ChatView(props: ChatViewProps) {
   const setThreadInteractionMode = useOrchestrationCommand(threadEnvironment.setInteractionMode, {
     reportFailure: false,
   });
+  const setThreadMcpServer = useOrchestrationCommand(threadEnvironment.setMcpServer);
   const startThreadTurn = useOrchestrationCommand(threadEnvironment.startTurn, {
     reportFailure: false,
   });
@@ -1010,7 +1018,12 @@ export default function ChatView(props: ChatViewProps) {
   useLayoutEffect(() => {
     const explicitThreadRef = explicitDiffOpenRef.current;
     explicitDiffOpenRef.current = null;
-    if (diffOpen && activeThreadRef && explicitThreadRef !== activeThreadRef) {
+    if (
+      diffOpen &&
+      activeThreadRef &&
+      explicitThreadRef !== activeThreadRef &&
+      !useDiffPanelStore.getState().consumeKeepSelectionOnOpen(activeThreadRef)
+    ) {
       useDiffPanelStore.getState().selectGitScope(activeThreadRef, "branch");
     }
   }, [activeThreadRef, diffOpen]);
@@ -1435,6 +1448,22 @@ export default function ChatView(props: ChatViewProps) {
     activeProviderThread,
   );
   const pendingBackgroundTasks = deriveThreadPendingBackgroundTasks(serverProjection);
+  const finishedWell = activeActivityRun?.status === "completed";
+  const justCompleted = useJustCompleted(isWorking, routeThreadKey) && finishedWell;
+  const mascotRunStatus =
+    activeActivityRun !== null && isMascotLiveRunStatus(activeActivityRun.status)
+      ? activeActivityRun.status
+      : isWorking
+        ? "running"
+        : null;
+  const mascotState = deriveMascotState({
+    connectionPhase: "connected",
+    hasThread: true,
+    hasPendingRequest: pendingApprovals.length > 0 || pendingUserInputs.length > 0,
+    runStatus: mascotRunStatus,
+    hasVisibleError: visibleThreadError !== null,
+    justCompleted,
+  });
   const activeWorkStartedAt =
     deriveActiveWorkStartedAt(activeActivityRun, activeRuntime, localDispatchStartedAt) ??
     runlessWorkStartedAt;
@@ -2068,6 +2097,14 @@ export default function ChatView(props: ChatViewProps) {
     return result;
   };
 
+  const onMcpServerChange = useStableCallback((server: string, enabled: boolean) => {
+    if (serverProjection === null) return;
+    void setThreadMcpServer({
+      environmentId,
+      input: { threadId: serverProjection.thread.id, server, enabled },
+    });
+  });
+
   const {
     showScrollToBottom,
     timelineLiveFollowEnabled,
@@ -2353,7 +2390,8 @@ export default function ChatView(props: ChatViewProps) {
   const {
     acknowledgeActiveThreadWoke,
     activeBranchMismatchKey,
-    backgroundWorkNow,
+    attentionNow,
+    workNow,
     childInputNow,
     goalNow,
     handleSwitchCheckoutToThread,
@@ -2996,10 +3034,7 @@ export default function ChatView(props: ChatViewProps) {
   const onExpandTimelineImageStable = useStableCallback(onExpandTimelineImage);
   const shownThreadSyncPhase = activeEnvironmentUnavailable ? null : delayedThreadSyncPhase;
   const hasThreadNow =
-    childInputNow !== null ||
-    backgroundWorkNow !== null ||
-    goalNow !== null ||
-    shownThreadSyncPhase !== null;
+    attentionNow !== null || workNow !== null || goalNow !== null || shownThreadSyncPhase !== null;
   const queuedRunCount = serverProjection ? getUserQueuedThreadRuns(serverProjection).length : 0;
   // The queue control is mounted for every server thread but joins the footer only while it shows
   // something, by its own rule: an optimistic message stops counting once the server has it.
@@ -3038,8 +3073,8 @@ export default function ChatView(props: ChatViewProps) {
         )}
         <ThreadNow
           key={routeThreadKey}
-          attention={childInputNow}
-          work={backgroundWorkNow}
+          attention={attentionNow}
+          work={workNow}
           syncPhase={shownThreadSyncPhase}
           goal={goalNow}
         />
@@ -3312,6 +3347,7 @@ export default function ChatView(props: ChatViewProps) {
                 onCiteAssistantText={citeAssistantTextStable}
                 {...(activeProject ? { onRunShellCommand: runShellCommandStable } : {})}
                 isWorking={isWorking}
+                mascotState={mascotState}
                 runlessWorkActive={runlessWorkStartedAt !== null}
                 isCompacting={isCompacting}
                 awaitingUser={
@@ -3564,6 +3600,11 @@ export default function ChatView(props: ChatViewProps) {
                               activeThreadModelSelection={activeThread?.modelSelection}
                               activeProjectId={activeProject?.id ?? null}
                               activeContextWindow={activeContextWindow}
+                              mcpServers={activeProviderThread?.mcpServers ?? EMPTY_MCP_SERVERS}
+                              enabledMcpServers={
+                                serverProjection?.thread.enabledMcpServers ?? EMPTY_MCP_SERVER_NAMES
+                              }
+                              onMcpServerChange={onMcpServerChange}
                               compactThreadUnavailable={compactThreadUnavailable}
                               compactDisabled={compactDisabled}
                               compactDisabledReason={compactDisabledReason}

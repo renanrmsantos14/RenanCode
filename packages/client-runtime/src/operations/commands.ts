@@ -24,6 +24,7 @@ import {
   type RuntimeMode,
   type RuntimeRequestId,
   type ThreadId,
+  type TurnItemId,
   type ThreadEnvMode,
   type UploadChatAttachment,
   type GuestMessageId,
@@ -138,6 +139,16 @@ export interface SetThreadRuntimeModeInput extends ThreadCommandInput {
 
 export interface SetThreadInteractionModeInput extends ThreadCommandInput {
   readonly interactionMode: ProviderInteractionMode;
+}
+
+export interface SetThreadMcpServerInput extends ThreadCommandInput {
+  readonly server: string;
+  readonly enabled: boolean;
+}
+
+export interface AnswerThreadMcpServerRequestInput extends ThreadCommandInput {
+  readonly turnItemId: TurnItemId;
+  readonly enable: boolean;
 }
 
 interface StartThreadBootstrap {
@@ -649,6 +660,30 @@ export const setThreadInteractionMode = Effect.fn("EnvironmentCommands.setThread
     });
   },
 );
+
+export const setThreadMcpServer = Effect.fn("EnvironmentCommands.setThreadMcpServer")(function* (
+  input: SetThreadMcpServerInput,
+) {
+  return yield* dispatch({
+    type: "thread.mcp-server.set",
+    commandId: yield* allocateCommandId(input),
+    threadId: input.threadId,
+    server: input.server,
+    enabled: input.enabled,
+  });
+});
+
+export const answerThreadMcpServerRequest = Effect.fn(
+  "EnvironmentCommands.answerThreadMcpServerRequest",
+)(function* (input: AnswerThreadMcpServerRequestInput) {
+  return yield* dispatch({
+    type: "thread.mcp-server-request.answer",
+    commandId: yield* allocateCommandId(input),
+    threadId: input.threadId,
+    turnItemId: input.turnItemId,
+    enable: input.enable,
+  });
+});
 
 export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(function* (
   input: StartThreadTurnInput,

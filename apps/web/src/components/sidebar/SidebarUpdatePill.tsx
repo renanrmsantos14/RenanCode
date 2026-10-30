@@ -488,7 +488,20 @@ function SidebarUpdateControl() {
   );
 
   return (
-    <SidebarMenuItem className="ml-auto shrink-0">
+    <SidebarMenuItem className="ml-auto flex shrink-0 items-center">
+      {state ? (
+        <span className="pointer-events-none me-1.5 text-xs text-muted-foreground tabular-nums select-none">
+          v{state.currentVersion}
+          {localUpdateVersion && localUpdateVersion !== state.currentVersion ? (
+            <>
+              {" → "}
+              <strong className="font-semibold text-sidebar-foreground">
+                v{localUpdateVersion}
+              </strong>
+            </>
+          ) : null}
+        </span>
+      ) : null}
       <Popover
         handle={releaseNotesPopoverHandle}
         open={releaseNotesOpen && showReleaseNotesPopover}

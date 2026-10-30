@@ -1,3 +1,4 @@
+import type { MascotState } from "@t3tools/client-runtime/mascot";
 import type { SubagentPillSegment } from "@t3tools/client-runtime/state/thread-subagents";
 import { formatDuration } from "@t3tools/shared/orchestrationTiming";
 import { GlassContainer, GlassView } from "expo-glass-effect";
@@ -23,6 +24,7 @@ import { withUniwind } from "uniwind";
 
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import { AppText as Text } from "../../components/ui/AppText";
+import { Mascot } from "../../components/mascot/Mascot";
 import { SymbolView } from "../../components/ui/AppSymbol";
 import { ControlPill } from "../../components/ui/ControlPill";
 import { NATIVE_LIQUID_GLASS_SUPPORTED } from "../../native/native-glass";
@@ -83,7 +85,9 @@ export function FloatingWorkingControl(props: {
   const [queueWidth, setQueueWidth] = useState(0);
   const [actionWidth, setActionWidth] = useState(0);
   const action =
-    props.status?.kind === "background" || props.status?.kind === "lifecycle"
+    props.status?.kind === "background" ||
+    props.status?.kind === "lifecycle" ||
+    props.status?.kind === "stop"
       ? props.status.action
       : null;
   const [agentsWidth, setAgentsWidth] = useState(0);
@@ -354,7 +358,12 @@ export function FloatingWorkingControl(props: {
 
 function CompactingLabel(props: { readonly onLayout: (event: LayoutChangeEvent) => void }) {
   return (
-    <StatusLabelRow accessibilityLabel="Compacting" className="gap-1.5" onLayout={props.onLayout}>
+    <StatusLabelRow
+      accessibilityLabel="Compacting"
+      className="gap-1.5"
+      mascot="thinking"
+      onLayout={props.onLayout}
+    >
       <SymbolView
         name="arrow.down.right.and.arrow.up.left"
         size={13}
@@ -395,6 +404,7 @@ function FloatingStatusLabel(props: {
         accessibilityLabel={props.status.accessibilityLabel}
         accessibilityRole="button"
         className="gap-2"
+        mascot="needsYou"
         onLayout={props.onLayout}
         onPress={props.status.onPress}
       >
@@ -471,6 +481,30 @@ function FloatingStatusLabel(props: {
       </StatusLabelRow>
     );
   }
+  if (props.status.kind === "stop") {
+    return (
+      <StatusLabelRow
+        key="stop"
+        accessibilityLabel={props.status.label}
+        className="gap-2"
+        onLayout={props.onLayout}
+      >
+        {props.status.unresponsive ? (
+          <SymbolView
+            name="exclamationmark.triangle"
+            size={13}
+            tintColorClassName="accent-warning-foreground"
+            type="monochrome"
+          />
+        ) : (
+          <AppActivityIndicator size="small" colorClassName="accent-icon-muted" />
+        )}
+        <Text className="shrink font-t3-medium text-xs text-foreground" numberOfLines={1}>
+          {props.status.label}
+        </Text>
+      </StatusLabelRow>
+    );
+  }
   if (props.status.kind === "goal") {
     return (
       <StatusLabelRow
@@ -492,6 +526,7 @@ function FloatingStatusLabel(props: {
         key="preparing"
         accessibilityLabel={props.status.label}
         className="gap-1.5"
+        mascot="thinking"
         onLayout={props.onLayout}
       >
         <SymbolView
@@ -522,10 +557,17 @@ function StatusLabelRow(props: {
   readonly accessibilityRole?: "button";
   readonly className?: string;
   readonly children: ReactNode;
+  readonly mascot?: MascotState;
   readonly onLayout: (event: LayoutChangeEvent) => void;
   readonly onPress?: () => void;
 }) {
   const rowClassName = `h-11 flex-row items-center px-4 ${props.className ?? ""}`;
+  const content = (
+    <>
+      {props.mascot ? <Mascot state={props.mascot} size={28} /> : null}
+      {props.children}
+    </>
+  );
   return (
     <Animated.View
       className="absolute max-w-full"
@@ -540,11 +582,11 @@ function StatusLabelRow(props: {
           className={`${rowClassName} active:opacity-70`}
           onPress={props.onPress}
         >
-          {props.children}
+          {content}
         </Pressable>
       ) : (
         <View accessible accessibilityLabel={props.accessibilityLabel} className={rowClassName}>
-          {props.children}
+          {content}
         </View>
       )}
     </Animated.View>
@@ -556,7 +598,7 @@ function WorkingDuration(props: {
   readonly onLayout: (event: LayoutChangeEvent) => void;
 }) {
   return (
-    <StatusLabelRow onLayout={props.onLayout}>
+    <StatusLabelRow mascot="working" className="gap-2" onLayout={props.onLayout}>
       <WorkingTimer startedAt={props.startedAt} />
     </StatusLabelRow>
   );

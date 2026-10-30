@@ -31,6 +31,7 @@ import {
   getSessionMessages,
   getSubagentMessages,
   type HookCallback,
+  type McpServerStatus as ClaudeMcpServerStatus,
   query,
   resolveSettings as resolveClaudeSettings,
   type Options as ClaudeQueryOptions,
@@ -78,6 +79,8 @@ import {
   type OrchestrationV2ProviderCapabilities,
   type OrchestrationV2ProviderFailure,
   OrchestrationV2ProviderGoal,
+  type OrchestrationV2ProviderMcpServer,
+  OrchestrationV2ProviderMcpServerStatus,
   type OrchestrationV2PlanArtifact,
   type OrchestrationV2PlanStep,
   type OrchestrationV2PendingBackgroundTask,
@@ -322,6 +325,8 @@ const WORKFLOW_MEMBER_TRANSCRIPT_FLUSH_MS = 500;
 // A steer waits at most this long, from its request, for its foreground
 // subagents to move to the background before it is sent.
 const BACKGROUND_MOVE_TIMEOUT_MS = 5_000;
+// How long a Stop waits for the CLI to exit before the user is offered Force stop.
+const CLAUDE_STOP_CONFIRM_TIMEOUT_MS = 10_000;
 
 const CLAUDE_GROUP_WATCH_SCRIPT = [
   "{ trap '' TERM; read -r _ <&3; kill -TERM 0; sleep 5; kill -KILL 0; } </dev/null >/dev/null 2>&1 &",
@@ -519,6 +524,14 @@ export interface ClaudeAgentSdkQuerySession {
   ) => Effect.Effect<void, ClaudeAgentSdkQueryRunnerError>;
   readonly setPermissionMode: (
     mode: PermissionMode,
+  ) => Effect.Effect<void, ClaudeAgentSdkQueryRunnerError>;
+  readonly mcpServerStatus: Effect.Effect<
+    ReadonlyArray<ClaudeMcpServerStatus>,
+    ClaudeAgentSdkQueryRunnerError
+  >;
+  readonly toggleMcpServer: (
+    name: string,
+    enabled: boolean,
   ) => Effect.Effect<void, ClaudeAgentSdkQueryRunnerError>;
   readonly stopTask: (taskId: string) => Effect.Effect<void, ClaudeAgentSdkQueryRunnerError>;
   readonly backgroundTasks: (
@@ -793,6 +806,50 @@ export type ClaudeAgentSdkProtocolLogEvent =
 export type ClaudeAgentSdkProtocolLogger = (
   event: ClaudeAgentSdkProtocolLogEvent,
 ) => Effect.Effect<void>;
+
+// T3's own servers arrive as "dynamic"; organization-managed ones are not the user's to switch.
+// CLIs too old to report a source could be T3's own server, so they stay untouched.
+const UNSWITCHABLE_CLAUDE_MCP_SOURCES: ReadonlySet<string | undefined> = new Set([
+  undefined,
+  "sdk",
+  "dynamic",
+  "managed",
+  "enterprise",
+]);
+const isProviderMcpServerStatus = Schema.is(OrchestrationV2ProviderMcpServerStatus);
+
+function isSwitchableClaudeMcpServer(status: Pick<ClaudeMcpServerStatus, "source">): boolean {
+  return !UNSWITCHABLE_CLAUDE_MCP_SOURCES.has(status.source);
+}
+
+function parseMcpServerNames(value: string): ReadonlyArray<string> {
+  return value
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0);
+}
+
+export function planClaudeMcpToggles(
+  statuses: ReadonlyArray<Pick<ClaudeMcpServerStatus, "name" | "status" | "source">>,
+  wantOn: (name: string) => boolean,
+): ReadonlyArray<{ readonly name: string; readonly enabled: boolean }> {
+  return statuses.flatMap((status) => {
+    if (!isSwitchableClaudeMcpServer(status)) return [];
+    const enabled = wantOn(status.name);
+    return enabled === (status.status !== "disabled") ? [] : [{ name: status.name, enabled }];
+  });
+}
+
+export function summarizeClaudeMcpServers(
+  statuses: ReadonlyArray<Pick<ClaudeMcpServerStatus, "name" | "status" | "source">>,
+  alwaysOn: ReadonlySet<string>,
+): ReadonlyArray<OrchestrationV2ProviderMcpServer> {
+  return statuses.filter(isSwitchableClaudeMcpServer).map((status) => ({
+    name: status.name,
+    status: isProviderMcpServerStatus(status.status) ? status.status : "failed",
+    alwaysOn: alwaysOn.has(status.name),
+  }));
+}
 
 export function loggedClaudeQueryOptions(
   options: ClaudeAgentSdkQueryOptions,
@@ -1179,6 +1236,15 @@ export const layerQueryRunner: Layer.Layer<
                   }),
                 ),
               ),
+            mcpServerStatus: Effect.tryPromise({
+              try: () => queryRuntime.mcpServerStatus(),
+              catch: (cause) => queryRunnerError(cause, "mcpServerStatus"),
+            }),
+            toggleMcpServer: (name, enabled) =>
+              Effect.tryPromise({
+                try: () => queryRuntime.toggleMcpServer(name, enabled),
+                catch: (cause) => queryRunnerError(cause, "toggleMcpServer"),
+              }),
             setPermissionMode: (mode) =>
               Effect.tryPromise({
                 try: () => queryRuntime.setPermissionMode(mode),
@@ -1440,6 +1506,12 @@ const CLAUDE_BACKGROUND_WAIT_INSTRUCTIONS = `
 To wait for a background command or Monitor you started (tests, a build), call \`t3_background_wait\` with its task ID before you end your turn. Do not mark work you leave running, or PRs. T3 MCP tools are deferred: load one with ToolSearch before you call it.
 `;
 
+const CLAUDE_MCP_ON_DEMAND_INSTRUCTIONS = `
+### MCP servers start off
+
+This thread's other MCP servers are off until the user switches them on. When a task needs one (for example a database, Figma or Gmail), call \`t3_mcp_server_request\` with its name, or without a name to list them, then end your turn: the user's answer arrives as a message. Do not ask the user to switch it on in chat.
+`;
+
 // Native subagents start from their task, not this session's system prompt.
 const subagentDeviceInstructions: HookCallback = () =>
   Promise.resolve({
@@ -1583,6 +1655,7 @@ export function makeClaudeQueryOptions(input: {
             ? ""
             : T3_CODE_ORCHESTRATION_INSTRUCTIONS +
               CLAUDE_BACKGROUND_WAIT_INSTRUCTIONS +
+              (input.settings?.mcpAtStart === "none" ? CLAUDE_MCP_ON_DEMAND_INSTRUCTIONS : "") +
               (deviceInstructions
                 ? `\n${T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH}\n`
                 : "")),
@@ -3972,6 +4045,8 @@ interface ClaudeLiveQueryContext {
   permissionMode: PermissionMode;
   stopping: boolean;
   readonly subagentsFromEarlierProcesses: ReadonlySet<ActiveClaudeSubagent>;
+  // Mode and sorted names last applied; null until the session's MCP servers are gated.
+  mcpGateKey: string | null;
 }
 
 interface ActiveClaudeToolCall {
@@ -4211,6 +4286,20 @@ function claudeTaskField(value: unknown, key: string): unknown {
 function claudeTaskString(value: unknown, key: string): string | undefined {
   const field = claudeTaskField(value, key);
   return typeof field === "string" && field.trim().length > 0 ? field.trim() : undefined;
+}
+
+// A Claude Code mod can hold a tool call until the user acts in its terminal
+// pane. T3 cannot provide the requested pane interaction.
+// Passive panes never request focus and keep working.
+function claudeFocusRequestedPanePlugin(message: SDKMessage): string | null {
+  if (message.type !== "system" || claudeTaskField(message, "subtype") !== "ui_panes") return null;
+  const paneId = claudeTaskString(message, "focus_requested_id");
+  if (paneId === undefined) return null;
+  const panes = claudeTaskField(message, "panes");
+  const pane = Array.isArray(panes)
+    ? panes.find((entry) => claudeTaskField(entry, "id") === paneId)
+    : undefined;
+  return claudeTaskString(pane, "plugin") ?? paneId;
 }
 
 function claudeTaskStatus(value: unknown): OrchestrationV2PlanStep["status"] | undefined {
@@ -4677,6 +4766,10 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           new Map<string, OrchestrationV2ProviderThread>(),
         );
         const goalsByNativeThread = new Map<string, OrchestrationV2ProviderGoal | null>();
+        const mcpServersByNativeThread = new Map<
+          string,
+          ReadonlyArray<OrchestrationV2ProviderMcpServer>
+        >();
         const goalCheckedTurns = new Set<string>();
         // Background subagents can finish after root settlement; retain their registry for wake evidence and hydration.
         const sessionSubagentsByTaskId = yield* Ref.make(new Map<string, ActiveClaudeSubagent>());
@@ -5109,6 +5202,34 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             taskId,
           );
 
+        const liveProviderThreadFields = (
+          nativeThreadId: string,
+        ): Pick<Partial<OrchestrationV2ProviderThread>, "goal" | "mcpServers"> => ({
+          ...(goalsByNativeThread.has(nativeThreadId)
+            ? { goal: goalsByNativeThread.get(nativeThreadId) ?? null }
+            : {}),
+          ...(mcpServersByNativeThread.has(nativeThreadId)
+            ? { mcpServers: mcpServersByNativeThread.get(nativeThreadId) }
+            : {}),
+        });
+
+        const patchLastProviderThread = Effect.fnUntraced(function* (
+          nativeThreadId: string,
+          patch: Pick<Partial<OrchestrationV2ProviderThread>, "goal" | "mcpServers">,
+        ) {
+          const providerThread = (yield* Ref.get(lastProviderThreadByNativeThread)).get(
+            nativeThreadId,
+          );
+          if (providerThread === undefined) return;
+          const updated = { ...providerThread, ...patch, updatedAt: yield* DateTime.now };
+          yield* rememberProviderThread(updated);
+          yield* emitProviderEvent({
+            type: "provider_thread.updated",
+            driver: CLAUDE_PROVIDER,
+            providerThread: updated,
+          });
+        });
+
         const emitProviderThreadRoster = Effect.fnUntraced(function* (input: {
           readonly nativeThreadId: string;
           readonly providerThread: OrchestrationV2ProviderThread;
@@ -5128,9 +5249,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             providerSessionId: session.id,
             ...(input.status === undefined ? {} : { status: input.status }),
             pendingBackgroundTasks: claudePendingBackgroundTasksFromRoster(roster, awaitedTaskIds),
-            ...(goalsByNativeThread.has(input.nativeThreadId)
-              ? { goal: goalsByNativeThread.get(input.nativeThreadId) ?? null }
-              : {}),
+            ...liveProviderThreadFields(input.nativeThreadId),
             updatedAt: now,
           };
           yield* rememberProviderThread(providerThread);
@@ -5158,17 +5277,51 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           const next = nextClaudeGoal(current, input.message);
           if (next === undefined || providerGoalsEqual(current, next)) return;
           goalsByNativeThread.set(input.nativeThreadId, next);
-          const providerThread = (yield* Ref.get(lastProviderThreadByNativeThread)).get(
-            input.nativeThreadId,
-          );
-          if (providerThread === undefined) return;
-          const updated = { ...providerThread, goal: next, updatedAt: yield* DateTime.now };
-          yield* rememberProviderThread(updated);
-          yield* emitProviderEvent({
-            type: "provider_thread.updated",
-            driver: CLAUDE_PROVIDER,
-            providerThread: updated,
-          });
+          yield* patchLastProviderThread(input.nativeThreadId, { goal: next });
+        });
+
+        const gateClaudeMcpServers = Effect.fnUntraced(function* (
+          live: ClaudeLiveQueryContext,
+          appThread: ProviderAdapter.ProviderAdapterV2TurnInput["appThread"],
+        ) {
+          const loadAll = adapterOptions.settings.mcpAtStart === "all";
+          const alwaysOn = new Set(parseMcpServerNames(adapterOptions.settings.alwaysOnMcpServers));
+          const keepOn = new Set([...alwaysOn, ...(appThread.enabledMcpServers ?? [])]);
+          const gateKey = loadAll ? "all" : `none:${[...keepOn].toSorted().join(",")}`;
+          if (live.mcpGateKey === gateKey) return;
+          const statuses = yield* live.query.mcpServerStatus;
+          // Toggles persist per folder, so "all" re-enables what an earlier "none" session left off.
+          const toggles = planClaudeMcpToggles(statuses, (name) => loadAll || keepOn.has(name));
+          let applied = true;
+          for (const toggle of toggles) {
+            yield* live.query.toggleMcpServer(toggle.name, toggle.enabled).pipe(
+              Effect.catchTags({
+                ClaudeAgentSdkQueryRunnerError: () => {
+                  applied = false;
+                  return Effect.logWarning("orchestration-v2.claude-mcp-toggle-failed", {
+                    threadId: appThread.id,
+                    server: toggle.name,
+                    enabled: toggle.enabled,
+                  });
+                },
+              }),
+            );
+          }
+          // A failed switch retries on the next turn.
+          if (applied) live.mcpGateKey = gateKey;
+          // "all" clears the list a "none" session left on the thread, which hides the switch menu.
+          const mcpServers = loadAll
+            ? []
+            : summarizeClaudeMcpServers(
+                toggles.length === 0 ? statuses : yield* live.query.mcpServerStatus,
+                alwaysOn,
+              );
+          const shown =
+            mcpServersByNativeThread.get(live.nativeThreadId) ??
+            (yield* Ref.get(lastProviderThreadByNativeThread)).get(live.nativeThreadId)?.mcpServers;
+          if (mcpServers.length === 0 && (shown === undefined || shown.length === 0)) return;
+          mcpServersByNativeThread.set(live.nativeThreadId, mcpServers);
+          yield* patchLastProviderThread(live.nativeThreadId, { mcpServers });
         });
 
         const rememberOpaqueTasks = (tasks: ReadonlyArray<OrchestrationV2PendingBackgroundTask>) =>
@@ -7464,9 +7617,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                   ...input.context.input.providerThread,
                   providerSessionId: session.id,
                   ...(clearConversationHead ? { nativeConversationHeadRef: null } : {}),
-                  ...(nativeThreadId !== null && goalsByNativeThread.has(nativeThreadId)
-                    ? { goal: goalsByNativeThread.get(nativeThreadId) ?? null }
-                    : {}),
+                  ...(nativeThreadId === null ? {} : liveProviderThreadFields(nativeThreadId)),
                   firstRunOrdinal:
                     input.context.input.providerThread.firstRunOrdinal ??
                     input.context.input.runOrdinal,
@@ -8180,6 +8331,28 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               });
               yield* bufferWakeMessage({ nativeThreadId: liveQuery.nativeThreadId, message });
             }
+            return;
+          }
+          const focusedPlugin = claudeFocusRequestedPanePlugin(message);
+          if (focusedPlugin !== null && context === (yield* Ref.get(activeTurn))) {
+            yield* Effect.logWarning("orchestration-v2.claude-mod-pane-focus-unsupported", {
+              providerTurnId: context.providerTurnId,
+              plugin: focusedPlugin,
+            });
+            liveQuery.stopping = true;
+            yield* finalizeActiveTurn({
+              context,
+              status: "failed",
+              completedAt: yield* DateTime.now,
+              failure: makeProviderFailure({
+                class: "provider_error",
+                code: "claude_mod_ui_unsupported",
+                message: `The Claude Code mod "${focusedPlugin}" is waiting for input in its terminal pane, which T3 Code cannot show. Disable the mod for sessions run from T3 Code, or run the task in the Claude Code terminal.`,
+              }),
+            });
+            // Closing ends the CLI process and abandons the held tool call
+            // without answering it. Not interrupt: the held CLI may never ack it.
+            yield* liveQuery.query.close.pipe(Effect.ignore);
             return;
           }
           yield* trackClaudeGoal({ nativeThreadId: liveQuery.nativeThreadId, context, message });
@@ -9817,6 +9990,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           if (
             existing !== null &&
             existing.nativeThreadId === nativeThreadId &&
+            !existing.stopping &&
             isClaudeProviderContinuationTurn(turnInput)
           ) {
             return existing;
@@ -9848,6 +10022,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             existing !== null &&
             existing.nativeThreadId === nativeThreadId &&
             existing.queryPolicyKey === queryPolicyKey &&
+            !existing.stopping &&
             existing.selection.queryIdentity === compiledSelection.queryIdentity
           ) {
             // A denied ExitPlanMode leaves Claude in plan mode. Restore only from plan:
@@ -9995,6 +10170,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             receivedInit: false,
             permissionMode: queryOptions.permissionMode,
             stopping: false,
+            mcpGateKey: null,
             subagentsFromEarlierProcesses: new Set(
               [...(yield* Ref.get(sessionSubagentsByTaskId)).values()].filter(
                 (subagent) => subagent.task.status === "running",
@@ -10131,6 +10307,16 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                     Effect.provideService(Path.Path, path),
                   );
             const querySession = yield* openQuery(turnInput, nativeThreadId);
+            // A failed gate leaves the session's servers as they were rather than failing the turn.
+            yield* gateClaudeMcpServers(querySession, turnInput.appThread).pipe(
+              Effect.catchTags({
+                ClaudeAgentSdkQueryRunnerError: (error) =>
+                  Effect.logWarning("orchestration-v2.claude-mcp-gate-failed", {
+                    threadId: turnInput.threadId,
+                    method: error.method,
+                  }),
+              }),
+            );
             const context: ActiveClaudeTurnContext = {
               input: turnInput,
               queryPolicy: querySession.queryPolicy,
@@ -10433,44 +10619,36 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             yield* existing.query.interrupt;
             yield* existing.query.close.pipe(Effect.ignore);
             const closed = yield* Deferred.await(existing.closed).pipe(
-              Effect.timeoutOption("10 seconds"),
+              Effect.timeoutOption(CLAUDE_STOP_CONFIRM_TIMEOUT_MS),
             );
             if (Option.isSome(closed)) {
               return;
             }
-
-            const completedAt = yield* DateTime.now;
+            // The turn stays open: the CLI may still be working, and the user decides
+            // whether to Force stop it.
             yield* Effect.logWarning("orchestration-v2.claude-query-interrupt-timeout", {
               providerSessionId: input.providerSessionId,
               providerThreadId: turnInput.providerThread.id,
               providerTurnId: turnInput.providerTurnId,
             });
-            const ownedLiveQuery = yield* Ref.modify(queryContext, (current) =>
-              current?.query === existing.query ? [true, null] : [false, current],
-            );
-            if (ownedLiveQuery) {
-              existing.stopping = true;
-              yield* finalizeActiveTurnAfterQueryExit(existing);
-              yield* endSubagentCallsOfClosedQuery(existing.nativeThreadId, "interrupted");
-            } else {
-              yield* finalizeActiveTurn({
-                context: currentTurn,
-                status: "interrupted",
-                completedAt,
-              });
-            }
-            yield* Deferred.succeed(existing.closed, undefined);
+            return yield* new ProviderAdapter.ProviderAdapterInterruptTimeoutError({
+              driver: CLAUDE_PROVIDER,
+              providerThreadId: turnInput.providerThread.id,
+              providerTurnId: turnInput.providerTurnId,
+              timeoutMs: CLAUDE_STOP_CONFIRM_TIMEOUT_MS,
+            });
           },
           (effect, turnInput) =>
             effect.pipe(
-              Effect.mapError(
-                (cause) =>
-                  new ProviderAdapter.ProviderAdapterInterruptError({
-                    driver: CLAUDE_PROVIDER,
-                    providerThreadId: turnInput.providerThread.id,
-                    providerTurnId: turnInput.providerTurnId,
-                    cause,
-                  }),
+              Effect.mapError((cause) =>
+                cause._tag === "ProviderAdapterInterruptTimeoutError"
+                  ? cause
+                  : new ProviderAdapter.ProviderAdapterInterruptError({
+                      driver: CLAUDE_PROVIDER,
+                      providerThreadId: turnInput.providerThread.id,
+                      providerTurnId: turnInput.providerTurnId,
+                      cause,
+                    }),
               ),
             ),
         );

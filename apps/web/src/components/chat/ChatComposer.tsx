@@ -182,7 +182,11 @@ import { useThreadContextDrop, threadContextDropTargetProps } from "./threadCont
 import { readThreadShell } from "~/state/entities";
 import { useLinkedEnvironments } from "~/state/peerLinks";
 import { encodeComposerContextFragment } from "@t3tools/shared/composerContextClipboard";
-import type { ComposerContextRecord, ThreadPullRequestLink } from "@t3tools/contracts";
+import type {
+  ComposerContextRecord,
+  OrchestrationV2ProviderMcpServer,
+  ThreadPullRequestLink,
+} from "@t3tools/contracts";
 import { threadContextAttachment } from "~/lib/threadContextAttachment";
 import {
   type ComposerCommandItem,
@@ -202,6 +206,7 @@ import { ComposerVoiceControl } from "./voice/ComposerVoiceControl";
 import { useComposerVoiceInput } from "./voice/useComposerVoiceInput";
 import { voiceInputBlocksSubmission } from "@t3tools/client-runtime/voice-input";
 import { ComposerFooterPrimaryActions } from "./ComposerFooterControls";
+import { McpServersMenu } from "./McpServersMenu";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
 import { resolveComposerMenuActiveItemId } from "./composerMenuHighlight";
@@ -231,6 +236,8 @@ import { observeResize } from "~/lib/observeResize";
 
 const isEnvironmentRequestInvalidError = Schema.is(EnvironmentRequestInvalidError);
 import { toastManager } from "../ui/toast";
+import { Kbd } from "../ui/kbd";
+import { useNextActionSuggestion } from "./useNextActionSuggestion";
 import { PlayIcon } from "lucide-react";
 import { proposedPlanTitle } from "@t3tools/shared/proposedPlanText";
 import { hasProviderSetup } from "./ProviderStatusBanner";
@@ -430,6 +437,10 @@ export interface ChatComposerProps {
   activeProjectId: ProjectId | null;
 
   activeContextWindow: ContextWindowSnapshot | null;
+  /** Empty when the thread's provider loads every MCP server, so there is nothing to switch. */
+  mcpServers: ReadonlyArray<OrchestrationV2ProviderMcpServer>;
+  enabledMcpServers: ReadonlyArray<string>;
+  onMcpServerChange: (server: string, enabled: boolean) => void;
   compactThreadUnavailable: boolean;
   compactDisabled: boolean;
   compactDisabledReason: string | null;
@@ -555,6 +566,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     reportedModelSelection,
     activeProjectId,
     activeContextWindow,
+    mcpServers,
+    enabledMcpServers,
+    onMcpServerChange,
     compactThreadUnavailable,
     compactDisabled,
     compactDisabledReason,
@@ -1167,6 +1181,21 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const activePendingUserInput = pendingUserInputs[0] ?? null;
   const isChoiceOnlyPendingQuestion =
     activePendingProgress?.activeQuestion?.allowCustomAnswer === false;
+  const nextAction = useNextActionSuggestion({
+    enabled: settings.nextActionSuggestionsEnabled,
+    environmentId,
+    thread: activeThread,
+    prompt,
+    promptRef,
+  });
+  const nextActionGhost =
+    isComposerApprovalState ||
+    activePendingProgress ||
+    (showPlanFollowUpPrompt && activeProposedPlan) ||
+    projectSelectionRequired ||
+    showProviderUnavailable
+      ? null
+      : nextAction.suggestion;
   const showComposerTopDrawer =
     pendingUserInputs.length > 0 ||
     (!isComposerCollapsedMobile && showPlanFollowUpPrompt && activeProposedPlan !== null);
@@ -2237,6 +2266,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       applyPromptReplacement,
       submitComposer,
       steerQueuedMessage: onSteerQueuedMessage,
+      nextActionSuggestion: nextActionGhost,
+      dismissNextActionSuggestion: nextAction.dismiss,
     })(key, event, isTaskItem);
 
   const {
@@ -3403,8 +3434,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                               ? "Choose a project above to start a thread"
                               : showProviderUnavailable
                                 ? "Enable a provider in Settings to send a message"
-                                : DEFAULT_COMPOSER_PLACEHOLDER
+                                : (nextActionGhost ?? DEFAULT_COMPOSER_PLACEHOLDER)
                     }
+                    placeholderHint={nextActionGhost ? <Kbd>Tab</Kbd> : null}
                     disabled={
                       projectSelectionRequired ||
                       isChoiceOnlyPendingQuestion ||
@@ -3475,6 +3507,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     {composerControls}
                   </div>
                   {voice.available ? <ComposerVoiceControl voice={voice} /> : null}
+                  {mcpServers.length > 0 ? (
+                    <McpServersMenu
+                      servers={mcpServers}
+                      enabledServers={enabledMcpServers}
+                      disabled={!canOperateThread}
+                      onServerChange={onMcpServerChange}
+                    />
+                  ) : null}
                   <ComposerFooterPrimaryActions
                     compact={isComposerPrimaryActionsCompact}
                     canOperateThread={canOperateThread}

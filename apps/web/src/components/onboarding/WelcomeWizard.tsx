@@ -1,3 +1,4 @@
+import { Mascot } from "../mascot/Mascot";
 import { useAuth } from "@clerk/react";
 import { useAtomValue } from "@effect/atom-react";
 import type {
@@ -232,11 +233,14 @@ export function WelcomeWizard({
         <WizardHeader
           title="Set up RenanCode"
           identity={
-            <div className="flex items-baseline gap-1.5" role="img" aria-label="RenanCode">
-              <span className="text-2xl font-semibold tracking-tight">Renan</span>
-              <span className="text-2xl font-medium tracking-tight text-muted-foreground">
-                Code
-              </span>
+            <div className="flex flex-col items-center gap-2">
+              <Mascot state="welcome" size={96} className="mx-auto" />
+              <div className="flex items-baseline gap-1.5" role="img" aria-label="RenanCode">
+                <span className="text-2xl font-semibold tracking-tight">Renan</span>
+                <span className="text-2xl font-medium tracking-tight text-muted-foreground">
+                  Code
+                </span>
+              </div>
             </div>
           }
         >

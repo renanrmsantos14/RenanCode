@@ -130,6 +130,11 @@ const TIMESTAMP_FORMAT_LABELS = {
   "24-hour": "24-hour",
 } as const;
 
+const TERMINAL_PLACEMENT_LABELS = {
+  bottom: "Bottom",
+  side: "Side panel",
+} as const;
+
 const DIFF_LAYOUT_LABELS: Record<DiffLayout, string> = {
   stacked: "Stacked",
   split: "Split",
@@ -488,6 +493,9 @@ export function useSettingsRestore(onRestored?: () => void) {
       ? ["Snooze options"]
       : []),
     ...(settings.wordWrap !== DEFAULT_UNIFIED_SETTINGS.wordWrap ? ["Word wrap"] : []),
+    ...(settings.terminalPlacement !== DEFAULT_UNIFIED_SETTINGS.terminalPlacement
+      ? ["Terminal placement"]
+      : []),
     ...(settings.persistComposerContextStrip !==
     DEFAULT_UNIFIED_SETTINGS.persistComposerContextStrip
       ? ["Composer context"]
@@ -508,6 +516,10 @@ export function useSettingsRestore(onRestored?: () => void) {
       : []),
     ...(settings.composerRichTextEnabled !== DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled
       ? ["Rich text composer"]
+      : []),
+    ...(settings.nextActionSuggestionsEnabled !==
+    DEFAULT_UNIFIED_SETTINGS.nextActionSuggestionsEnabled
+      ? ["Suggest next message"]
       : []),
     ...(settings.sendShortcut !== DEFAULT_UNIFIED_SETTINGS.sendShortcut ? ["Send shortcut"] : []),
     ...(settings.followUpBehavior !== DEFAULT_UNIFIED_SETTINGS.followUpBehavior
@@ -618,6 +630,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       notificationMode: DEFAULT_UNIFIED_SETTINGS.notificationMode,
       inAppNotificationsEnabled: DEFAULT_UNIFIED_SETTINGS.inAppNotificationsEnabled,
       wordWrap: DEFAULT_UNIFIED_SETTINGS.wordWrap,
+      terminalPlacement: DEFAULT_UNIFIED_SETTINGS.terminalPlacement,
       persistComposerContextStrip: DEFAULT_UNIFIED_SETTINGS.persistComposerContextStrip,
       diffFilesCollapsed: DEFAULT_UNIFIED_SETTINGS.diffFilesCollapsed,
       diffIgnoreWhitespace: DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace,
@@ -625,6 +638,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       proactivePanelsEnabled: DEFAULT_UNIFIED_SETTINGS.proactivePanelsEnabled,
       showSkillsInSlashMenu: DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu,
       composerRichTextEnabled: DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled,
+      nextActionSuggestionsEnabled: DEFAULT_UNIFIED_SETTINGS.nextActionSuggestionsEnabled,
       sendShortcut: DEFAULT_UNIFIED_SETTINGS.sendShortcut,
       followUpBehavior: DEFAULT_UNIFIED_SETTINGS.followUpBehavior,
       contextWindowMeterEnabled: DEFAULT_UNIFIED_SETTINGS.contextWindowMeterEnabled,
@@ -1052,6 +1066,44 @@ export function GeneralSettingsPanel() {
             </Select>
           }
         />
+        <SettingsRow
+          {...searchableSetting("terminal-placement")}
+          description="Where the terminal shortcut and Run in terminal open a terminal."
+          resetAction={
+            settings.terminalPlacement !== DEFAULT_UNIFIED_SETTINGS.terminalPlacement ? (
+              <SettingResetButton
+                label="terminal placement"
+                onClick={() =>
+                  updateSettings({
+                    terminalPlacement: DEFAULT_UNIFIED_SETTINGS.terminalPlacement,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={settings.terminalPlacement}
+              onValueChange={(value) => {
+                if (value === "bottom" || value === "side") {
+                  updateSettings({ terminalPlacement: value });
+                }
+              }}
+            >
+              <SelectTrigger size="sm" className="w-full sm:w-40" aria-label="Terminal placement">
+                <SelectValue>{TERMINAL_PLACEMENT_LABELS[settings.terminalPlacement]}</SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                <SelectItem hideIndicator value="bottom">
+                  {TERMINAL_PLACEMENT_LABELS.bottom}
+                </SelectItem>
+                <SelectItem hideIndicator value="side">
+                  {TERMINAL_PLACEMENT_LABELS.side}
+                </SelectItem>
+              </SelectPopup>
+            </Select>
+          }
+        />
       </SettingsSection>
     </SettingsPageContainer>
   );
@@ -1093,6 +1145,33 @@ export function ChatSettingsPanel() {
                 updateSettings({ composerRichTextEnabled: Boolean(checked) })
               }
               aria-label="Rich text composer"
+            />
+          }
+        />
+        <SettingsRow
+          {...searchableSetting("next-action-suggestions")}
+          description="After a turn finishes, suggest your likely next message. Press Tab to accept it."
+          resetAction={
+            settings.nextActionSuggestionsEnabled !==
+            DEFAULT_UNIFIED_SETTINGS.nextActionSuggestionsEnabled ? (
+              <SettingResetButton
+                label="next message suggestions"
+                onClick={() =>
+                  updateSettings({
+                    nextActionSuggestionsEnabled:
+                      DEFAULT_UNIFIED_SETTINGS.nextActionSuggestionsEnabled,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.nextActionSuggestionsEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ nextActionSuggestionsEnabled: Boolean(checked) })
+              }
+              aria-label="Suggest next message"
             />
           }
         />

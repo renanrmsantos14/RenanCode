@@ -37,7 +37,8 @@ export type SettingsPath =
   | "/settings/maintenance"
   | "/settings/labs"
   | "/settings/about"
-  | "/settings/archived";
+  | "/settings/archived"
+  | "/settings/import";
 
 export type SettingsSearchScope =
   | "environment"
@@ -108,6 +109,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/labs": "Labs",
   "/settings/about": "About",
   "/settings/archived": "Archive",
+  "/settings/import": "Import history",
 };
 
 /** Sidebar order. A group without a heading is set apart by space alone. */
@@ -138,7 +140,12 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
   },
   {
     heading: "Code",
-    paths: ["/settings/projects", "/settings/source-control", "/settings/worktrees"],
+    paths: [
+      "/settings/projects",
+      "/settings/import",
+      "/settings/source-control",
+      "/settings/worktrees",
+    ],
   },
   {
     heading: "Connections",
@@ -536,6 +543,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["timestamp clock locale system browser os 12 hour 24 hour"],
   },
   {
+    id: "terminal-placement",
+    title: "Terminal placement",
+    to: "/settings/general",
+    searchTerms: ["terminal shell drawer bottom side right panel open default position"],
+  },
+  {
     id: "response-streaming",
     title: "Response streaming",
     to: "/settings/threads",
@@ -577,6 +590,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Rich text composer",
     to: "/settings/chat",
     searchTerms: ["composer rich text tiptap bold italic markdown styled wysiwyg"],
+  },
+  {
+    id: "next-action-suggestions",
+    title: "Suggest next message",
+    to: "/settings/chat",
+    searchTerms: ["ghost text autocomplete predict follow up tab composer"],
   },
   {
     id: "send-shortcut",
@@ -929,7 +948,7 @@ export const SETTINGS_SEARCH_ITEMS = [
     title: "Open pull requests in RenanCode",
     to: "/settings/diffs",
     searchTerms: [
-      `pr links ${SOURCE_CONTROL_HOST_LABELS} browser external click default pull request view panel`,
+      `pr commit links ${SOURCE_CONTROL_HOST_LABELS} browser external click default pull request view panel`,
     ],
   },
   {
@@ -1179,6 +1198,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/archived",
     searchTerms: ["restore reopen deleted history projects"],
   },
+  {
+    id: "history-import",
+    title: "Import Claude Code and Codex history",
+    to: "/settings/import",
+    searchTerms: ["import sessions conversations threads claude codex history migrate"],
+    scope: "environment",
+  },
 ] as const satisfies ReadonlyArray<SettingsSearchItem>;
 
 export type SettingsSearchItemId = (typeof SETTINGS_SEARCH_ITEMS)[number]["id"];
@@ -1208,6 +1234,7 @@ const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScop
   "/settings/labs": null,
   "/settings/about": null,
   "/settings/archived": "project-defaults",
+  "/settings/import": "environment",
 };
 
 const RENAMED_SETTINGS_PATHS: Readonly<Record<string, SettingsPath>> = {

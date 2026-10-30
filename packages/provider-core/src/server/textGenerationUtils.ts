@@ -118,3 +118,18 @@ export function normalizeCliError(
     cause: error,
   });
 }
+
+const MAX_NEXT_ACTION_CHARS = 200;
+
+export function sanitizeNextAction(raw: string): string {
+  const line =
+    raw
+      .trim()
+      .split(/\r?\n/g)[0]
+      ?.trim()
+      .replace(/^['"`]+|['"`]+$/g, "")
+      .trim()
+      .replace(/\s+/g, " ") ?? "";
+  if (line.length <= MAX_NEXT_ACTION_CHARS) return line;
+  return line.slice(0, MAX_NEXT_ACTION_CHARS).trimEnd();
+}

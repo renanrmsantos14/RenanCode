@@ -52,7 +52,7 @@ function WindowRow(props: {
   readonly now: number;
 }) {
   const { window, now } = props;
-  const remaining = remainingPercent(window);
+  const used = 100 - remainingPercent(window);
   const timeLeft = paceRemainingPercent(window, now);
   const pace = paceOf(window, now);
   const resetsIn = formatResetsIn(window, now);
@@ -60,7 +60,7 @@ function WindowRow(props: {
   const tickX =
     timeLeft === null || barWidth < 6
       ? null
-      : Math.min(Math.max((barWidth * timeLeft) / 100, 3), barWidth - 3);
+      : Math.min(Math.max((barWidth * (100 - timeLeft)) / 100, 3), barWidth - 3);
   const bar = (
     <View
       className="h-1.5 flex-row overflow-hidden rounded-full bg-subtle"
@@ -68,27 +68,22 @@ function WindowRow(props: {
     >
       <View
         className={
-          remaining <= 10
+          used >= 90
             ? "h-full rounded-full bg-red-500"
-            : remaining <= 30
+            : used >= 70
               ? "h-full rounded-full bg-amber-500"
               : "h-full rounded-full bg-foreground"
         }
-        style={[
-          { flex: remaining },
-          remaining > 30 && props.color ? { backgroundColor: props.color } : null,
-        ]}
+        style={[{ flex: used }, used < 70 && props.color ? { backgroundColor: props.color } : null]}
       />
-      <View style={{ flex: 100 - remaining }} />
+      <View style={{ flex: 100 - used }} />
     </View>
   );
   return (
     <View className="gap-1">
       <View className="flex-row items-baseline justify-between gap-3">
         <Text className="text-sm text-foreground">{window.label}</Text>
-        <Text className="text-sm font-t3-medium tabular-nums text-foreground">
-          {remaining}% left
-        </Text>
+        <Text className="text-sm font-t3-medium tabular-nums text-foreground">{used}% used</Text>
       </View>
       <View
         className="h-3 justify-center"

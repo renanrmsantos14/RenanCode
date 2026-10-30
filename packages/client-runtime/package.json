@@ -59,6 +59,10 @@
       "types": "./src/promptLinks.ts",
       "default": "./src/promptLinks.ts"
     },
+    "./mcp-server-request": {
+      "types": "./src/mcpServerRequest.ts",
+      "default": "./src/mcpServerRequest.ts"
+    },
     "./secret-request": {
       "types": "./src/secretRequest.ts",
       "default": "./src/secretRequest.ts"
@@ -74,6 +78,10 @@
     "./connection": {
       "types": "./src/connection/index.ts",
       "default": "./src/connection/index.ts"
+    },
+    "./mascot": {
+      "types": "./src/mascot/mascot.ts",
+      "default": "./src/mascot/mascot.ts"
     },
     "./authorization": {
       "types": "./src/authorization/index.ts",
@@ -206,6 +214,10 @@
     "./state/voice": {
       "types": "./src/state/voice.ts",
       "default": "./src/state/voice.ts"
+    },
+    "./state/thread-history-merge": {
+      "types": "./src/state/threadHistoryMerge.ts",
+      "default": "./src/state/threadHistoryMerge.ts"
     },
     "./state/orchestration-v2-projection": {
       "types": "./src/state/orchestrationV2Projection.ts",
@@ -350,6 +362,10 @@
     "./state/composer-dispatch": {
       "types": "./src/state/composerDispatch.ts",
       "default": "./src/state/composerDispatch.ts"
+    },
+    "./state/next-action-suggestion": {
+      "types": "./src/state/nextActionSuggestion.ts",
+      "default": "./src/state/nextActionSuggestion.ts"
     },
     "./state/thread-subagents": {
       "types": "./src/state/threadSubagents.ts",

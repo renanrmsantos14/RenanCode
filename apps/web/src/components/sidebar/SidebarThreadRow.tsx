@@ -87,6 +87,7 @@ import {
   useSidebarRowSubscriptionLease,
   setFileDragActive,
 } from "../Sidebar.logic";
+import { visibleThreadPullRequests } from "@t3tools/client-runtime/thread-pull-requests";
 import { resolveLocalCheckoutBranchMismatch } from "../BranchToolbar.logic";
 import {
   ThreadPullRequestBadgeControl,
@@ -743,7 +744,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             ? {
                 label: "Input",
                 icon: "input" as const,
-                className: "text-indigo-600 dark:text-indigo-300",
+                className: "text-yellow-600 dark:text-yellow-300",
               }
             : status === "request"
               ? {
@@ -777,6 +778,23 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                         }
                       : null;
   const isWokeStatus = topStatus?.icon === "woke";
+  const visiblePullRequests = visibleThreadPullRequests(thread.pullRequests ?? []);
+  const allPullRequestsMerged =
+    visiblePullRequests.length > 0 &&
+    visiblePullRequests.every((link) => link.snapshot?.state === "merged");
+  const unreadDotClassName =
+    topStatus?.icon === "done"
+      ? allPullRequestsMerged
+        ? "bg-guest"
+        : "bg-success"
+      : topStatus?.icon === "input" ||
+          topStatus?.icon === "approval" ||
+          topStatus?.icon === "request"
+        ? "bg-warning"
+        : topStatus?.icon === "failed" && status === "failed"
+          ? "bg-error"
+          : null;
+  const showUnreadDot = unreadDotClassName !== null;
 
   const branchMismatch = resolveLocalCheckoutBranchMismatch({
     effectiveEnvMode: thread.worktreePath === null ? "local" : "worktree",
@@ -1014,7 +1032,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       aria-hidden
       className={cn(
         "min-w-0 flex-1 text-start text-sm transition-opacity motion-reduce:transition-none",
-        shouldRecede ? "font-normal" : "font-medium",
+        showUnreadDot ? "font-semibold" : shouldRecede ? "font-normal" : "font-medium",
         variant !== "slim"
           ? cn(
               "truncate",
@@ -1038,6 +1056,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       )}
       dir={textDirection(thread.title)}
     >
+      {showUnreadDot ? (
+        <span
+          className={cn("me-1.5 inline-block size-2 rounded-full align-middle", unreadDotClassName)}
+        />
+      ) : null}
       {thread.title}
     </span>
   );

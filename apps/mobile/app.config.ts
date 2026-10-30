@@ -14,6 +14,9 @@ const runtimeVersionPolicy =
   process.env.MOBILE_VERSION_POLICY ??
   (APP_VARIANT === "development" ? "appVersion" : "fingerprint");
 
+// Sideloaded builds that update themselves from this repo's android-v* GitHub releases.
+const apkUpdateRepo = repoEnv.T3CODE_ANDROID_APK_UPDATE_REPO?.trim() || null;
+
 const personalTeamBundleIdentifier = repoEnv.T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID?.trim();
 const IOS_BUNDLE_IDENTIFIER_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
 
@@ -300,6 +303,7 @@ const config: ExpoConfig = {
     predictiveBackGestureEnabled: true,
     // expo-sensors declares this for its pedometer, which the app does not use.
     blockedPermissions: ["android.permission.ACTIVITY_RECOGNITION"],
+    ...(apkUpdateRepo ? { permissions: ["android.permission.REQUEST_INSTALL_PACKAGES"] } : {}),
   },
   web: {
     favicon: variant.assets.appIcon,
@@ -437,6 +441,7 @@ const config: ExpoConfig = {
   extra: {
     appVariant: APP_VARIANT,
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
+    apkUpdateRepo,
     relay: {
       url: repoEnv.T3CODE_RELAY_URL ?? null,
     },

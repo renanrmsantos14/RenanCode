@@ -1,3 +1,5 @@
+import type { MascotState } from "@t3tools/client-runtime/mascot";
+import { Mascot } from "../mascot/Mascot";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import type { ToolCallDiffTarget } from "../../diffPanelStore";
@@ -229,6 +231,7 @@ interface MessagesTimelineProps {
   isPreparingWorktree?: boolean;
   isCompacting?: boolean;
   awaitingUser?: "approval" | "input" | null;
+  mascotState?: MascotState;
   /** Which request is waiting, so a second one of the same kind is announced too. */
   awaitingRequestId?: string | null;
   footer?: ReactNode;
@@ -338,6 +341,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   isPreparingWorktree = false,
   isCompacting = false,
   awaitingUser = null,
+  mascotState = "idle",
   awaitingRequestId = null,
   listRef,
   timelineEntries,
@@ -659,12 +663,11 @@ const ConversationTimeline = memo(function ConversationTimeline({
       ? new Set(paintedExpandedAttemptIds).add(activeFindAttemptId)
       : paintedExpandedAttemptIds;
 
-  const pendingApprovalsByRequestId = new Map(
-    pendingApprovals
-      .filter((approval) => !heldApprovalRequestIds?.has(approval.requestId))
-      .map((approval) => [approval.requestId, approval]),
+  const isVisiblePendingApproval = (approval: PendingApproval) =>
+    !heldApprovalRequestIds?.has(approval.requestId);
+  const pendingApprovalRequestIds = new Set(
+    pendingApprovals.filter(isVisiblePendingApproval).map((approval) => approval.requestId),
   );
-  const pendingApprovalRequestIds = new Set(pendingApprovalsByRequestId.keys());
   const rawRows = useIncrementalTimelineRows(`${listIdentityKey}\0${workspaceRoot ?? ""}`, {
     timelineEntries,
     pendingApprovalRequestIds,
@@ -683,17 +686,19 @@ const ConversationTimeline = memo(function ConversationTimeline({
     worktreeSetup,
   });
   const rows = useStableRows(rawRows, listIdentityKey);
-  const unmatchedPendingApprovals = new Map(pendingApprovalsByRequestId);
-  if (unmatchedPendingApprovals.size > 0) {
-    for (const row of rows) {
-      const entries =
-        row.kind === "work" ? row.groupedEntries : row.kind === "work-live" ? [row.entry] : [];
-      for (const entry of entries) {
-        const item = entry.projectedItem?.item;
-        if (item?.type === "approval_request") unmatchedPendingApprovals.delete(item.requestId);
-      }
+  const matchedApprovalRequestIds = new Set<string>();
+  for (const row of pendingApprovalRequestIds.size > 0 ? rows : []) {
+    const entries =
+      row.kind === "work" ? row.groupedEntries : row.kind === "work-live" ? [row.entry] : [];
+    for (const entry of entries) {
+      const item = entry.projectedItem?.item;
+      if (item?.type === "approval_request") matchedApprovalRequestIds.add(item.requestId);
     }
   }
+  const unmatchedPendingApprovals = pendingApprovals.filter(
+    (approval) =>
+      isVisiblePendingApproval(approval) && !matchedApprovalRequestIds.has(approval.requestId),
+  );
   // Run status/timestamps change per stream event; keep them out of shared row context.
   const runs = useStableHandoffRuns(runsProp);
   const minimapItems = deriveTimelineMinimapItems(rows);
@@ -706,7 +711,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
     restoringThreadPosition && restoreRowIndex >= 0 ? { indices: [restoreRowIndex] } : undefined;
   const showsEmptyState =
     rows.length === 0 &&
-    unmatchedPendingApprovals.size === 0 &&
+    unmatchedPendingApprovals.length === 0 &&
     !isWorking &&
     parentThreadLink === null &&
     historyControls === undefined &&
@@ -1000,6 +1005,13 @@ const ConversationTimeline = memo(function ConversationTimeline({
     };
   };
 
+  // Built from props after the last hook so the compiler can memoize the row context; a map
+  // made before a hook would rebuild it, and re-render every row, on each streamed update.
+  const pendingApprovalsByRequestId = new Map(
+    pendingApprovals
+      .filter(isVisiblePendingApproval)
+      .map((approval) => [approval.requestId, approval]),
+  );
   const sharedState: TimelineRowSharedState = {
     pendingApprovals: pendingApprovalsByRequestId,
     respondingRequestIds,
@@ -1064,6 +1076,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
     isRevertingCheckpoint,
     backgroundWorktreeSetup,
     awaitingUser: awaitingUser !== null,
+    mascotState,
     isPreparingWorktree,
     latestRunId: latestRun?.runId ?? null,
   };
@@ -1238,12 +1251,17 @@ const ConversationTimeline = memo(function ConversationTimeline({
       onGrow={onFooterGrow}
     >
       {footer}
-      {unmatchedPendingApprovals.size > 0 ? (
+      {mascotState === "done" ? (
+        <div className="chat-content-lane px-1 pb-2">
+          <Mascot state="done" size={32} />
+        </div>
+      ) : null}
+      {unmatchedPendingApprovals.length > 0 ? (
         <TimelineRowCtx value={sharedState}>
           <div className="messages-timeline-row-frame">
             <div className="chat-content-lane overflow-x-clip" data-timeline-root="true">
               <WorkLogBlock>
-                {[...unmatchedPendingApprovals.values()].map((approval) => (
+                {unmatchedPendingApprovals.map((approval) => (
                   <TimelinePendingApprovalRow key={approval.requestId} approval={approval} />
                 ))}
               </WorkLogBlock>

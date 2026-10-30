@@ -115,6 +115,7 @@ export interface Preferences {
   readonly projectGroupingEnabled?: boolean;
   readonly projectGroupingMode?: SidebarProjectGroupingMode;
   readonly planModeEnabled?: boolean;
+  readonly nextActionSuggestionsEnabled?: boolean;
   readonly workingShelfEnabled?: boolean;
   readonly useLastProjectForNewThreads?: boolean;
   readonly lastThreadProject?: typeof ThreadProject.Type;
@@ -195,6 +196,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     projectGroupingEnabled?: boolean;
     projectGroupingMode?: SidebarProjectGroupingMode;
     planModeEnabled?: boolean;
+    nextActionSuggestionsEnabled?: boolean;
     workingShelfEnabled?: boolean;
     useLastProjectForNewThreads?: boolean;
     lastThreadProject?: typeof ThreadProject.Type;
@@ -320,6 +322,9 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   }
   if (typeof parsed.planModeEnabled === "boolean") {
     preferences.planModeEnabled = parsed.planModeEnabled;
+  }
+  if (typeof parsed.nextActionSuggestionsEnabled === "boolean") {
+    preferences.nextActionSuggestionsEnabled = parsed.nextActionSuggestionsEnabled;
   }
   if (typeof parsed.workingShelfEnabled === "boolean") {
     preferences.workingShelfEnabled = parsed.workingShelfEnabled;

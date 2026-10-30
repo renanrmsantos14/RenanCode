@@ -442,6 +442,8 @@ export const OrchestrationV2AppThread = Schema.Struct({
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
+  /** MCP servers switched on for this thread when its provider starts sessions without them. */
+  enabledMcpServers: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
@@ -1043,6 +1045,30 @@ export const OrchestrationV2ProviderGoal = Schema.Struct({
 });
 export type OrchestrationV2ProviderGoal = typeof OrchestrationV2ProviderGoal.Type;
 
+export const OrchestrationV2ProviderMcpServerStatus = Schema.Literals([
+  "connected",
+  "failed",
+  "needs-auth",
+  "pending",
+  "disabled",
+]);
+export type OrchestrationV2ProviderMcpServerStatus =
+  typeof OrchestrationV2ProviderMcpServerStatus.Type;
+
+export const OrchestrationV2ProviderMcpServer = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  status: OrchestrationV2ProviderMcpServerStatus,
+  /** Kept on by the provider settings, so the thread cannot switch it off. */
+  alwaysOn: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+});
+export type OrchestrationV2ProviderMcpServer = typeof OrchestrationV2ProviderMcpServer.Type;
+
+/** A server is on when settings keep it on or the thread switched it on. */
+export const mcpServerIsOn = (
+  server: Pick<OrchestrationV2ProviderMcpServer, "name" | "alwaysOn">,
+  enabledMcpServers: ReadonlyArray<string>,
+): boolean => server.alwaysOn || enabledMcpServers.includes(server.name);
+
 export const OrchestrationV2ProviderThread = Schema.Struct({
   id: ProviderThreadId,
   driver: ProviderDriverKind,
@@ -1075,6 +1101,8 @@ export const OrchestrationV2ProviderThread = Schema.Struct({
   goal: Schema.optional(Schema.NullOr(OrchestrationV2ProviderGoal)).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
+  /** Switchable MCP servers of the live session; absent or empty when the provider loads them all. */
+  mcpServers: Schema.optional(Schema.Array(OrchestrationV2ProviderMcpServer)),
   createdAt: Schema.DateTimeUtc,
   updatedAt: Schema.DateTimeUtc,
 });
@@ -1557,6 +1585,23 @@ const OrchestrationV2LinkRequestFields = {
   failure: Schema.optional(Schema.String),
 } as const;
 
+export const OrchestrationV2McpServerRequestStatus = Schema.Literals([
+  "pending",
+  "enabled",
+  "declined",
+  "cancelled",
+]);
+export type OrchestrationV2McpServerRequestStatus =
+  typeof OrchestrationV2McpServerRequestStatus.Type;
+
+/** An agent asked the user to switch on an MCP server that its thread has off. */
+const OrchestrationV2McpServerRequestFields = {
+  type: Schema.Literal("mcp_server_request"),
+  server: TrimmedNonEmptyString,
+  reason: Schema.String,
+  mcpServerStatus: OrchestrationV2McpServerRequestStatus,
+} as const;
+
 export const OrchestrationV2TurnItem = Schema.Union([
   Schema.Struct({
     ...OrchestrationV2TurnItemBaseFields,
@@ -1676,6 +1721,8 @@ export const OrchestrationV2TurnItem = Schema.Union([
     ...OrchestrationV2TurnItemBaseFields,
     type: Schema.Literal("run_interrupt_request"),
     message: Schema.String,
+    /** Set when the provider did not confirm the stop in time; clients then offer Force stop. */
+    unresponsiveAt: Schema.optionalKey(Schema.DateTimeUtc),
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemBaseFields,
@@ -1750,6 +1797,10 @@ export const OrchestrationV2TurnItem = Schema.Union([
   Schema.Struct({
     ...OrchestrationV2TurnItemBaseFields,
     ...OrchestrationV2LinkRequestFields,
+  }),
+  Schema.Struct({
+    ...OrchestrationV2TurnItemBaseFields,
+    ...OrchestrationV2McpServerRequestFields,
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemBaseFields,
@@ -1850,6 +1901,7 @@ export const OrchestrationV2DomainEvent = Schema.Union([
       "thread.pull-request-synced",
       "thread.runtime-mode-updated",
       "thread.interaction-mode-updated",
+      "thread.mcp-servers-updated",
       "thread.model-selection-updated",
       "thread.provider-switched",
       "thread.guest-share-updated",
@@ -2500,6 +2552,7 @@ export const OrchestrationV2TurnItemJson = Schema.Union([
     ...OrchestrationV2TurnItemJsonBaseFields,
     type: Schema.Literal("run_interrupt_request"),
     message: Schema.String,
+    unresponsiveAt: Schema.optionalKey(Schema.DateTimeUtcFromString),
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemJsonBaseFields,
@@ -2574,6 +2627,10 @@ export const OrchestrationV2TurnItemJson = Schema.Union([
   Schema.Struct({
     ...OrchestrationV2TurnItemJsonBaseFields,
     ...OrchestrationV2LinkRequestFields,
+  }),
+  Schema.Struct({
+    ...OrchestrationV2TurnItemJsonBaseFields,
+    ...OrchestrationV2McpServerRequestFields,
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemJsonBaseFields,
@@ -2729,6 +2786,7 @@ export const OrchestrationV2DomainEventJson = Schema.Union([
       "thread.metadata-updated",
       "thread.runtime-mode-updated",
       "thread.interaction-mode-updated",
+      "thread.mcp-servers-updated",
       "thread.model-selection-updated",
       "thread.provider-switched",
       "thread.guest-share-updated",
@@ -3084,6 +3142,21 @@ export const OrchestrationV2Command = Schema.Union([
     modelSelection: ModelSelection,
   }),
   Schema.Struct({
+    type: Schema.Literal("thread.mcp-server.set"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    server: TrimmedNonEmptyString,
+    enabled: Schema.Boolean,
+  }),
+  /** Answers an agent's MCP server card; enabling switches the server on for the thread. */
+  Schema.Struct({
+    type: Schema.Literal("thread.mcp-server-request.answer"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    turnItemId: TurnItemId,
+    enable: Schema.Boolean,
+  }),
+  Schema.Struct({
     type: Schema.Literal("provider-session.detach"),
     commandId: CommandId,
     threadId: ThreadId,
@@ -3436,12 +3509,22 @@ const OrchestrationV2InternalCommand = Schema.Union([
     threadId: ThreadId,
     requestId: RuntimeRequestId,
   }),
+  /** The provider did not confirm a Stop of this turn in time. */
+  Schema.Struct({
+    type: Schema.Literal("thread.interrupt.unresponsive"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    providerThreadId: ProviderThreadId,
+    providerTurnId: ProviderTurnId,
+  }),
   Schema.Struct({
     type: Schema.Literal("thread.background-work.settle"),
     commandId: CommandId,
     threadId: ThreadId,
     providerThreadId: ProviderThreadId,
     providerTurnId: ProviderTurnId,
+    /** Replaces the Stop's own reason on the result, as Force stop does. */
+    reason: Schema.optional(Schema.String),
     subagent: Schema.optional(
       Schema.Struct({
         id: NodeId,
@@ -3502,6 +3585,17 @@ const OrchestrationV2InternalCommand = Schema.Union([
       }),
     ),
   }),
+  /** Shows the card for an MCP server an agent asked the user to switch on. */
+  Schema.Struct({
+    type: Schema.Literal("mcp_server_request.record"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    runId: RunId,
+    nodeId: NodeId,
+    turnItemId: TurnItemId,
+    server: TrimmedNonEmptyString,
+    reason: Schema.String,
+  }),
 ]);
 export type OrchestrationV2InternalCommand = typeof OrchestrationV2InternalCommand.Type;
 
@@ -3521,6 +3615,7 @@ export const ORCHESTRATION_V2_WS_METHODS = {
   getThreadProjection: "orchestration.getThreadProjection",
   getWorkflowScript: "orchestration.getWorkflowScript",
   stopWorkflow: "orchestration.stopWorkflow",
+  forceStopThread: "orchestration.forceStopThread",
   getTurnItem: "orchestration.getTurnItem",
   launchThread: "orchestration.launchThread",
   subscribeShell: "orchestration.subscribeShell",
@@ -3908,6 +4003,41 @@ export class OrchestrationV2StopWorkflowError extends Schema.TaggedError<Orchest
   }
 }
 
+export const OrchestrationV2ForceStopThreadInput = Schema.Struct({
+  threadId: ThreadId,
+  /** The run the user saw ignore Stop; Force stop refuses once a newer run has started. */
+  runId: Schema.optionalKey(RunId),
+});
+export type OrchestrationV2ForceStopThreadInput = typeof OrchestrationV2ForceStopThreadInput.Type;
+
+export const OrchestrationV2ForceStopThreadResult = Schema.Struct({
+  /**
+   * `killed`: the thread's own agent processes were killed. `released`: its provider session
+   * was torn down, which kills the agent's process group. `releasing`: that teardown has not
+   * finished yet and continues on the server. `shared`: the agent process also works for
+   * `sharedWithThreadIds`, so only this thread's turn was ended.
+   */
+  outcome: Schema.Literals(["killed", "released", "releasing", "shared"]),
+  sharedWithThreadIds: Schema.Array(ThreadId),
+});
+export type OrchestrationV2ForceStopThreadResult = typeof OrchestrationV2ForceStopThreadResult.Type;
+
+export class OrchestrationV2ForceStopThreadError extends Schema.TaggedError<OrchestrationV2ForceStopThreadError>()(
+  "OrchestrationV2ForceStopThreadError",
+  {
+    threadId: ThreadId,
+    /** `superseded`: a newer run started since the user asked; nothing was stopped. */
+    reason: Schema.optional(Schema.Literal("superseded")),
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {
+  override get message(): string {
+    return this.reason === "superseded"
+      ? "A new turn started, so nothing was force stopped."
+      : "Failed to force stop the agent.";
+  }
+}
+
 export const OrchestrationV2GetWorkflowScriptInput = Schema.Struct({
   threadId: ThreadId,
   scriptPath: TrimmedNonEmptyString,
@@ -4093,6 +4223,10 @@ export const OrchestrationV2RpcSchemas = {
   stopWorkflow: {
     input: OrchestrationV2StopWorkflowInput,
     output: Schema.Void,
+  },
+  forceStopThread: {
+    input: OrchestrationV2ForceStopThreadInput,
+    output: OrchestrationV2ForceStopThreadResult,
   },
   getWorkflowScript: {
     input: OrchestrationV2GetWorkflowScriptInput,

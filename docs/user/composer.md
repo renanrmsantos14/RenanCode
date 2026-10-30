@@ -152,6 +152,17 @@ the text is an unedited recalled prompt, with the caret on the first visual line
 the last visual line for `ArrowDown`, counting wrapped lines. Editing a recalled prompt turns it
 into a normal draft.
 
+## Suggested next message
+
+Turn on **Settings > Chat > Suggest next message** to get a guess at your next message after a turn
+you watched finishes. It appears in the empty composer as faded text. Press `Tab` to put it in the
+composer without sending, or `Escape` to dismiss it. Typing, switching threads, or starting another
+turn also discards it. Suggestions use your text generation model, so each one is a small model
+request on the environment running the thread.
+
+On mobile, turn it on in **Settings > Chat**. The suggestion appears above the composer; tap it to
+put it in the composer, or tap the close button to dismiss it.
+
 ## Edit an earlier prompt
 
 On web and desktop, choose **Edit from here** beneath a sent message to rewind
@@ -250,6 +261,25 @@ provider supports it. Web and desktop also offer compaction from the context met
 
 Claude instances can also compact idle threads for you. See
 [compact long conversations](./providers-claude.md#compact-long-conversations).
+
+## MCP servers in Claude threads
+
+Claude sessions start with your MCP servers off, so their tools do not fill the
+context. Use the plug button next to the context meter on web and desktop, or the
+MCP servers section of the thread settings on mobile, to switch a server on for the
+current thread; the change applies from your next message and stays with that
+thread. The list appears after the thread's first message.
+
+When the agent needs a server that is off, it asks in a card. **Turn on** switches
+it on for the thread and the agent carries on by itself; **Not now** tells it to
+continue without. Delegated tasks start with the servers their thread has on.
+
+To keep some servers on everywhere, list them in **Settings → Providers → Claude →
+Always-on MCP servers**. Set **MCP servers at session start** to **Load all servers**
+to go back to loading every configured server. Sessions started without MCP servers
+also record them as disabled for that folder in Claude Code's own config, so
+`claude` run there in a terminal starts with them off too. **Load all servers**
+switches them back on in each folder at the next session.
 
 ## Goals
 

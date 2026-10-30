@@ -39,6 +39,8 @@ import {
   dismissThreadUserInput,
   revertThreadCheckpoint,
   setThreadInteractionMode,
+  setThreadMcpServer,
+  answerThreadMcpServerRequest,
   setThreadRuntimeMode,
   pinThread,
   reorderPinnedThread,
@@ -256,6 +258,18 @@ export function createThreadEnvironmentAtoms<R, E>(
       scheduler,
       concurrency,
     }),
+    setMcpServer: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:set-mcp-server",
+      execute: setThreadMcpServer,
+      scheduler,
+      concurrency,
+    }),
+    answerMcpServerRequest: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:answer-mcp-server-request",
+      execute: answerThreadMcpServerRequest,
+      scheduler,
+      concurrency,
+    }),
     startTurn: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:start-turn",
       execute: startThreadTurn,
@@ -362,6 +376,10 @@ export function createThreadEnvironmentAtoms<R, E>(
       tag: WS_METHODS.providerUploadFeedback,
       scheduler,
       concurrency,
+    }),
+    suggestNextAction: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:commands:thread:suggest-next-action",
+      tag: WS_METHODS.threadsSuggestNextAction,
     }),
   };
   const optimistic = createOptimisticThreadLifecycle(snapshotAtom);

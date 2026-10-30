@@ -83,16 +83,21 @@ const runScan = (input: ScannerTestInput) =>
     return yield* scanner.scan;
   }).pipe(Effect.provide(layerScannerTest(input)));
 
-const runRecentThreadOutcomes = (input: ScannerTestInput & { readonly workspaceRoot: string }) =>
+const runRecentThreadOutcomes = (
+  input: ScannerTestInput & {
+    readonly workspaceRoot: string;
+    readonly options?: AgentSessionScanner.RecentThreadsOptions;
+  },
+) =>
   Effect.gen(function* () {
     const scanner = yield* AgentSessionScanner.AgentSessionScanner;
-    return yield* scanner.recentThreads(input.workspaceRoot).pipe(
+    return yield* scanner.recentThreads(input.workspaceRoot, [], input.options).pipe(
       Stream.runCollect,
       Effect.map((outcomes) => Array.from(outcomes)),
     );
   }).pipe(Effect.provide(layerScannerTest(input)));
 
-const runRecentThreads = (input: ScannerTestInput & { readonly workspaceRoot: string }) =>
+const runRecentThreads = (input: Parameters<typeof runRecentThreadOutcomes>[0]) =>
   runRecentThreadOutcomes(input).pipe(
     Effect.map((outcomes) =>
       outcomes.flatMap((outcome) => (outcome._tag === "Importable" ? [outcome.thread] : [])),
@@ -1067,6 +1072,35 @@ it.layer(NodeServices.layer)("AgentSessionScanner", (it) => {
         expect(threads.map((thread) => thread.messages.map((message) => message.text))).toEqual([
           ["Review this code", "Looks good"],
           ["Fix the project", "Done"],
+        ]);
+
+        const sinceMs = nowMs - 40 * 24 * 60 * 60 * 1000;
+        const longerWindow = yield* runRecentThreads({
+          claudeHomePath,
+          codexHomePath,
+          workspaceRoot: workspace,
+          options: { sinceMs },
+        });
+        expect(longerWindow.map((thread) => thread.providerSessionId)).toEqual([
+          "codex-recent",
+          "claude-recent",
+          "claude-old",
+        ]);
+
+        const withoutExcluded = yield* runRecentThreads({
+          claudeHomePath,
+          codexHomePath,
+          workspaceRoot: workspace,
+          options: {
+            sinceMs,
+            excludeFilePaths: [
+              path.join(claudeHomePath, "projects", "-selected", "claude-recent.jsonl"),
+            ],
+          },
+        });
+        expect(withoutExcluded.map((thread) => thread.providerSessionId)).toEqual([
+          "codex-recent",
+          "claude-old",
         ]);
       }),
     );

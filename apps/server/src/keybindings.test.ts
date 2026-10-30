@@ -338,7 +338,9 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       });
 
       const persisted = yield* readKeybindingsConfig(keybindingsConfigPath);
-      assert.isFalse(persisted.some((entry) => entry.command === "terminal.toggle"));
+      assert.isFalse(
+        persisted.some((entry) => entry.key === "mod+j" && entry.command === "terminal.toggle"),
+      );
       assert.isTrue(persisted.some((entry) => entry.command === "script.custom-action.run"));
 
       assert.isTrue(

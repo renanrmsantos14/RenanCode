@@ -214,6 +214,7 @@ import * as ProjectService from "./project/ProjectService.ts";
 import { threadWorkspaceRoot } from "./project/threadWorkspaceRoot.ts";
 import * as ManagedProjectFolders from "./project/ManagedProjectFolders.ts";
 import * as ScratchThreadPromotion from "./project/ScratchThreadPromotion.ts";
+import * as NextActionSuggestionService from "./orchestration-v2/NextActionSuggestionService.ts";
 import { projectMutationOperation } from "./project/ProjectMutation.ts";
 import * as ProjectCloneTracker from "./project/ProjectCloneTracker.ts";
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
@@ -1241,6 +1242,7 @@ export const layerWsRpc = (
       const projectService = yield* ProjectService.ProjectService;
       const managedFolders = yield* ManagedProjectFolders.ManagedProjectFolders;
       const scratchThreadPromotion = yield* ScratchThreadPromotion.ScratchThreadPromotion;
+      const nextActionSuggestions = yield* NextActionSuggestionService.NextActionSuggestionService;
       const eventLoopMonitor = yield* EventLoopMonitor.EventLoopMonitor;
       const threadSearch = yield* ThreadSearch.ThreadSearch;
 
@@ -1793,6 +1795,7 @@ export const layerWsRpc = (
           threadFind: true,
           threadFindProgressive: true,
           secretProviderSettings: true,
+          secretReferences: true,
           ...Option.match(scratchWorkspaceRoot, {
             onNone: () => ({}),
             onSome: (root) => ({ scratchWorkspaceRoot: root }),
@@ -1914,6 +1917,8 @@ export const layerWsRpc = (
             ),
           ),
         [ORCHESTRATION_V2_WS_METHODS.stopWorkflow]: (input) => threadManagement.stopWorkflow(input),
+        [ORCHESTRATION_V2_WS_METHODS.forceStopThread]: (input) =>
+          threadManagement.forceStopThread(input),
         [ORCHESTRATION_V2_WS_METHODS.getWorkflowScript]: (input) =>
           readWorkflowScript({ scriptPath: input.scriptPath }),
         [ORCHESTRATION_V2_WS_METHODS.getTurnItem]: (input) =>
@@ -2312,9 +2317,11 @@ export const layerWsRpc = (
                   cwd: input.cwd,
                   fresh: input.fresh === true,
                 })
-              : input.instanceId !== undefined
-                ? providerRegistry.refreshInstance(input.instanceId)
-                : providerRegistry.refresh();
+              : input.reloadSecrets === true
+                ? providerRegistry.reloadSecretsAndRefresh(input.instanceId)
+                : input.instanceId !== undefined
+                  ? providerRegistry.refreshInstance(input.instanceId)
+                  : providerRegistry.refresh();
             if (input.refreshModels) {
               const instances = yield* providerInstances.listInstances;
               for (const instance of instances) {
@@ -2728,6 +2735,7 @@ export const layerWsRpc = (
                 (cause) => new OrchestrationDispatchCommandError({ message: cause.message, cause }),
               ),
             ),
+        [WS_METHODS.threadsSuggestNextAction]: (input) => nextActionSuggestions.suggest(input),
         [WS_METHODS.projectCloneCancel]: (input) =>
           projectCloneTracker.cancel(input.projectId).pipe(Effect.map((applied) => ({ applied }))),
         [WS_METHODS.projectCloneRetry]: (input) =>
@@ -2841,6 +2849,8 @@ export const layerWsRpc = (
         [WS_METHODS.agentSessionsScan]: () => agentSessionScanner.scan,
         [WS_METHODS.agentSessionsImport]: (input) =>
           agentSessionImporter.importRecentAgentThreads(input),
+        [WS_METHODS.agentSessionsListThreads]: (input) =>
+          agentSessionImporter.listImportableThreads(input),
         [WS_METHODS.assetsCreateUrl]:
           /* Request instrumentation already owns the span; keep this helper in that context. */
           Effect.fnUntraced(function* (input) {
@@ -2996,6 +3006,7 @@ export const layerWsRpc = (
           gitWorkflow.switchRef(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
         [WS_METHODS.vcsInit]: (input) =>
           vcsProvisioning.initRepository(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
+        [WS_METHODS.reviewGetBranchCommits]: (input) => review.getBranchCommits(input),
         [WS_METHODS.reviewGetDiffPreview]: (input) => review.getDiffPreview(input),
         [WS_METHODS.reviewGetDiffFileContents]: (input) => review.getDiffFileContents(input),
         [WS_METHODS.terminalOpen]: (input) => terminalManager.open(input),

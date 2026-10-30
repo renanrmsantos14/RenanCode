@@ -33,6 +33,7 @@ import {
   ANDROID_READING_MAX_WIDTH,
   deriveCenteredContentHorizontalPadding,
 } from "../../lib/layout";
+import { Mascot } from "../../components/mascot/Mascot";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { FloatingActionButton } from "../../components/ui/FloatingActionButton";
 import type { WorkspaceEnvironment, WorkspaceState } from "../../state/workspaceModel";
@@ -673,6 +674,11 @@ export function HomeScreen(props: HomeScreenProps) {
           }}
         >
           <View className="w-full max-w-[430px]">
+            {props.catalogState.hasReadyEnvironment && !emptyState.loading ? (
+              <View className="items-center pb-3">
+                <Mascot state="welcome" size={96} />
+              </View>
+            ) : null}
             <EmptyState
               title={emptyState.title}
               detail={emptyState.detail}
