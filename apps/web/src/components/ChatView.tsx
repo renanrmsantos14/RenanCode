@@ -446,6 +446,7 @@ export default function ChatView(props: ChatViewProps) {
     reportFailure: false,
   });
   const setThreadMcpServer = useOrchestrationCommand(threadEnvironment.setMcpServer);
+  const updateServerSettings = useAtomCommand(serverEnvironment.updateSettings, "Pin MCP server");
   const startThreadTurn = useOrchestrationCommand(threadEnvironment.startTurn, {
     reportFailure: false,
   });
@@ -2104,6 +2105,12 @@ export default function ChatView(props: ChatViewProps) {
       input: { threadId: serverProjection.thread.id, server, enabled },
     });
   });
+  const onMcpServerPinnedChange = useStableCallback((server: string, pinned: boolean) => {
+    void updateServerSettings({
+      environmentId,
+      input: { patch: { setMcpServerPinned: { server, pinned } } },
+    });
+  });
 
   const {
     showScrollToBottom,
@@ -3604,7 +3611,9 @@ export default function ChatView(props: ChatViewProps) {
                               enabledMcpServers={
                                 serverProjection?.thread.enabledMcpServers ?? EMPTY_MCP_SERVER_NAMES
                               }
+                              pinnedMcpServers={settings.pinnedMcpServers}
                               onMcpServerChange={onMcpServerChange}
+                              onMcpServerPinnedChange={onMcpServerPinnedChange}
                               compactThreadUnavailable={compactThreadUnavailable}
                               compactDisabled={compactDisabled}
                               compactDisabledReason={compactDisabledReason}

@@ -7,7 +7,7 @@ description: 'Verifica os MCP servers sob demanda nas threads do Claude: sessão
 
 ## Cobre
 
-- Código: `gateClaudeMcpServers`, `planClaudeMcpToggles` e `summarizeClaudeMcpServers` em `apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts`; o comando `thread.mcp-server.set` (contrato em `packages/contracts/src/orchestrationV2.ts`, mutação em `Orchestrator.ts`); `mcpAtStart` e `alwaysOnMcpServers` em `packages/contracts/src/settings.ts`; `apps/web/src/components/chat/McpServersMenu.tsx` e a ligação em `ChatComposer.tsx`/`ChatView.tsx`.
+- Código: `gateClaudeMcpServers`, `planClaudeMcpToggles` e `summarizeClaudeMcpServers` em `apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts`; o comando `thread.mcp-server.set` (contrato em `packages/contracts/src/orchestrationV2.ts`, mutação em `Orchestrator.ts`); `mcpAtStart` e `alwaysOnMcpServers` em `packages/contracts/src/settings.ts`; `pinnedMcpServers`/`setMcpServerPinned` em `settings.ts` e `serverSettings.ts`; `splitMcpServers` em `packages/client-runtime/src/mcpServerRequest.ts`; `apps/web/src/components/chat/McpServersMenu.tsx` e a ligação em `ChatComposer.tsx`/`ChatView.tsx`.
 - Telas: composer de uma thread do Claude (botão de plug ao lado do medidor de contexto) e Settings → Providers → Claude.
 
 ## Testes rápidos
@@ -33,6 +33,15 @@ description: 'Verifica os MCP servers sob demanda nas threads do Claude: sessão
 6. Trocar **MCP servers at session start** para **Load all servers**. A sessão já aberta mantém as configurações antigas: reinicie o servidor de dev para abrir sessão nova. Perguntar a contagem do Spotify. Esperado: 5, botão de plug some e `disabledMcpServers` da pasta fica vazio.
 7. Voltar a configuração para **Off until switched on** ao terminar.
 
+## Fixar servidores (favoritos)
+
+Não precisa de turno pago: o `vp run dev` com dados copiados já traz threads do Claude com `mcpServers` (procure em `orchestration_v2_projection_provider_threads.payload_json` do `.t3/userdata/statev2.sqlite`) e a rota é `/<environmentId>/<threadId>`.
+
+1. Sem nada fixado, o menu lista todos os servidores. Passar o mouse num item mostra a estrela (`button[aria-label="Pin <nome>"]`).
+2. Clicar na estrela: o switch não muda, o menu passa a mostrar só fixados e ligados, e o resto vai para "More servers (N)".
+3. Pela estrela dentro do submenu, o servidor sobe para a lista principal e o N cai.
+4. Conferir `pinnedMcpServers` em `.t3/userdata/settings.json`. No mobile, a seção MCP servers das configurações da thread segue os mesmos fixados.
+
 ## Casos de borda
 
 - Cliques rápidos em dois servidores diferentes (ex.: `items[2].click(); items[0].click()` via `preview_evaluate` com o menu aberto) mantêm os dois. O comando é por servidor, então um não apaga o outro.
@@ -40,6 +49,8 @@ description: 'Verifica os MCP servers sob demanda nas threads do Claude: sessão
 - Dados gravados antes do campo `alwaysOn` existir precisam carregar. "Missing key" no `.t3/dev.log` quebra o projection store inteiro.
 
 ## Armadilhas da automação
+
+- Ao fixar o primeiro servidor o menu encolhe; um clique na coordenada antiga pode cair no switch de outro item.
 
 - `preview_act` com `selector` no botão do plug já ligou o primeiro item por engano. Abra o menu por coordenada ou pelo teclado.
 - Um hook Stop de commit do ambiente pode trocar a resposta final do agente. Se isso acontecer, faça perguntas com resposta marcada (`TOTAL=`, `SPOTIFY=`) e procure o texto com `preview_wait_for`.

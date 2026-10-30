@@ -7,7 +7,7 @@ import { Toolbar } from "../../components/ui/Toolbar";
 import * as Dialog from "../../components/ui/Dialog";
 import { createV5StackNavigator as createNativeStackNavigator } from "../../native/createV5StackNavigator";
 import { DEFAULT_SERVER_SETTINGS, mcpServerIsOn } from "@t3tools/contracts";
-import { mcpServerNote } from "@t3tools/client-runtime/mcp-server-request";
+import { mcpServerNote, splitMcpServers } from "@t3tools/client-runtime/mcp-server-request";
 import {
   modelPreferencesMigrationPatch,
   resolveModelPreferences,
@@ -274,6 +274,7 @@ function SwitchRow(props: {
 type ThreadMcpServers = {
   readonly servers: ReadonlyArray<OrchestrationV2ProviderMcpServer>;
   readonly enabled: ReadonlyArray<string>;
+  readonly pinned: ReadonlyArray<string>;
   readonly onChange: (server: string, enabled: boolean) => void;
 };
 
@@ -948,15 +949,18 @@ function ThreadSettingsOptionsItem(props: {
 }
 
 function ThreadSettingsMcpServers(props: { readonly mcpServers: ThreadMcpServers }) {
-  const { servers, onChange } = props.mcpServers;
+  const { servers, enabled, pinned, onChange } = props.mcpServers;
+  const [showMore, setShowMore] = useState(false);
+  const { shown, more } = splitMcpServers(servers, enabled, pinned);
+  const visible = showMore ? [...shown, ...more] : shown;
   return (
     <>
       <Text className="px-5 pb-2 pt-7 text-sm font-t3-medium text-foreground-muted">
         MCP servers
       </Text>
       <View className="mx-4 overflow-hidden rounded-2xl bg-grouped-card">
-        {servers.map((server, index) => {
-          const on = mcpServerIsOn(server, props.mcpServers.enabled);
+        {visible.map((server, index) => {
+          const on = mcpServerIsOn(server, enabled);
           return (
             <SwitchRow
               key={server.name}
@@ -965,10 +969,21 @@ function ThreadSettingsMcpServers(props: { readonly mcpServers: ThreadMcpServers
               value={on}
               disabled={server.alwaysOn}
               onValueChange={(value) => onChange(server.name, value)}
-              isLast={index === servers.length - 1}
+              isLast={index === visible.length - 1 && more.length === 0}
             />
           );
         })}
+        {more.length > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            className="min-h-11 justify-center px-4"
+            onPress={() => setShowMore((value) => !value)}
+          >
+            <Text className="text-sm text-foreground-muted">
+              {showMore ? "Show fewer" : `More servers (${more.length})`}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
     </>
   );
@@ -1598,6 +1613,7 @@ export function ExistingThreadSettingsRouteScreen({
       ? {
           servers,
           enabled: projection.thread.enabledMcpServers ?? [],
+          pinned: serverConfig?.settings.pinnedMcpServers ?? [],
           onChange: (server: string, enabled: boolean) =>
             void setMcpServer({
               environmentId: selectedThread.environmentId,

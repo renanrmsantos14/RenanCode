@@ -846,6 +846,16 @@ describe("synchronized model preferences", () => {
     expect(first.favorites).toEqual([{ provider, model: "sol" }]);
   });
 
+  it("pins and unpins one MCP server per patch without touching the others", () => {
+    const pin = (server: string, pinned: boolean) => ({ setMcpServerPinned: { server, pinned } });
+    const both = [pin("github", true), pin("rea", true), pin("github", true)].reduce(
+      applyServerSettingsPatch,
+      DEFAULT_SERVER_SETTINGS,
+    );
+    expect(both.pinnedMcpServers).toEqual(["rea", "github"]);
+    expect(applyServerSettingsPatch(both, pin("rea", false)).pinnedMcpServers).toEqual(["github"]);
+  });
+
   it("preserves unrelated models and providers during bulk visibility and order edits", () => {
     const otherProvider = ProviderInstanceId.make("claude_work");
     const initial = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
