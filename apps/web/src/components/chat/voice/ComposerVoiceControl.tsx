@@ -40,7 +40,8 @@ function VoiceWaveform({ level }: { readonly level: () => number }) {
           ref={(node) => {
             bars.current[index] = node;
           }}
-          className="h-full w-0.5 origin-center scale-y-[0.15] rounded-full bg-foreground transition-transform duration-75 ease-out"
+          style={{ transform: `scaleY(${MIN_BAR_SCALE})` }}
+          className="h-full w-0.5 origin-center rounded-full bg-foreground transition-transform duration-75 ease-out"
         />
       ))}
     </span>
