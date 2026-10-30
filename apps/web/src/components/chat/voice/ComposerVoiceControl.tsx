@@ -33,7 +33,7 @@ function VoiceWaveform({ level }: { readonly level: () => number }) {
     return () => clearInterval(timer);
   }, [level]);
   return (
-    <span aria-hidden className="flex h-4 shrink-0 items-center gap-0.5">
+    <span aria-hidden className="flex h-5 shrink-0 items-center gap-0.5">
       {Array.from({ length: WAVEFORM_BARS }, (_, index) => (
         <span
           key={index}

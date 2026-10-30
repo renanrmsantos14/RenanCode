@@ -70,6 +70,8 @@ export function createWebVoiceRecorder(
       analyser = audioContext.createAnalyser();
       analyser.fftSize = 512;
       audioContext.createMediaStreamSource(stream).connect(analyser);
+      // Created after awaiting getUserMedia, so Chrome may start it suspended and the analyser reads silence.
+      await audioContext.resume();
     },
     record({ forDuration }) {
       recorder?.start(1000);
@@ -89,8 +91,8 @@ export function createWebVoiceRecorder(
       analyser.getByteTimeDomainData(data);
       let sum = 0;
       for (const sample of data) sum += ((sample - 128) / 128) ** 2;
-      // Normal speech RMS is roughly 0.02-0.1; the curve lifts quiet voices into view.
-      return Math.min(1, (Math.sqrt(sum / data.length) / 0.08) ** 0.6);
+      // Normal speech RMS is roughly 0.01-0.1; the curve lifts quiet voices into view.
+      return Math.min(1, (Math.sqrt(sum / data.length) / 0.05) ** 0.5);
     },
     release() {
       if (limitTimer) clearTimeout(limitTimer);
