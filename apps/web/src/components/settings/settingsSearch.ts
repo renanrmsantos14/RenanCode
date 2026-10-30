@@ -536,6 +536,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["timestamp clock locale system browser os 12 hour 24 hour"],
   },
   {
+    id: "terminal-placement",
+    title: "Terminal placement",
+    to: "/settings/general",
+    searchTerms: ["terminal shell drawer bottom side right panel open default position"],
+  },
+  {
     id: "response-streaming",
     title: "Response streaming",
     to: "/settings/threads",

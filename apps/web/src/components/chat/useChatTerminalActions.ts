@@ -23,7 +23,11 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { MAX_TERMINALS_PER_GROUP } from "../../types";
-import { type RightPanelSurface, useRightPanelStore } from "../../rightPanelStore";
+import {
+  type RightPanelSurface,
+  selectThreadRightPanelState,
+  useRightPanelStore,
+} from "../../rightPanelStore";
 import { isPreviewSupportedInRuntime } from "../../previewStateStore";
 import { openUrlInPreview } from "../../browser/openFileInPreview";
 import { resolveDiscoveredServerUrl } from "../../browser/browserTargetResolver";
@@ -43,6 +47,7 @@ import {
   makeThreadErrorSetter,
 } from "../ChatView.logic";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
+import { getClientSettings } from "~/hooks/useSettings";
 import { previewEnvironment } from "../../state/preview";
 import { readEnvironmentScope } from "../../state/session";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -136,8 +141,33 @@ export function useChatTerminalActions(input: ChatTerminalActionsInput) {
     focusActiveDrawerTerminal(activeThreadRef);
   };
   const setTerminalOpenStable = useStableCallback(setTerminalOpen);
+  const findPanelTerminalSurface = (ref: ScopedThreadRef) =>
+    selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, ref).surfaces.find(
+      (surface) => surface.kind === "terminal",
+    );
+  const toggleSideTerminal = (ref: ScopedThreadRef) => {
+    if (activeRightPanelSurface?.kind === "terminal") {
+      useRightPanelStore.getState().close(ref);
+      return;
+    }
+    const surface = findPanelTerminalSurface(ref);
+    if (surface) {
+      useRightPanelStore.getState().activateSurface(ref, surface.id);
+      focusTerminal(ref, surface.activeTerminalId);
+      return;
+    }
+    if (!hasTerminalWriteAccess()) return;
+    const launched = terminalActions.launchTerminal({
+      place: (terminalId) => useRightPanelStore.getState().openTerminal(ref, terminalId),
+    });
+    if (!launched) return;
+    focusTerminal(ref, launched.terminalId);
+    void launched.result;
+  };
   const toggleTerminalVisibility = () => {
     if (!activeThreadRef) return;
+    if (getClientSettings().terminalPlacement === "side")
+      return toggleSideTerminal(activeThreadRef);
     const nextOpen = !terminalUiState.terminalOpen;
     if (
       nextOpen &&
@@ -213,7 +243,9 @@ export function useChatTerminalActions(input: ChatTerminalActionsInput) {
       });
     }
     const targetCwd = options?.cwd ?? gitCwd ?? activeProject.workspaceRoot;
+    const inPanel = getClientSettings().terminalPlacement === "side";
     const reusableTerminalId =
+      inPanel ||
       options?.preferNewTerminal ||
       !canReuseTerminal ||
       !readEnvironmentScope(environmentId, AuthTerminalReadScope)
@@ -243,9 +275,11 @@ export function useChatTerminalActions(input: ChatTerminalActionsInput) {
       // The drawer opens with the target already placed: opening it empty would claim
       // DEFAULT_THREAD_TERMINAL_ID, which a right-panel terminal may already own.
       place: (terminalId) =>
-        reusableTerminalId === null
-          ? storeNewTerminal(activeThreadRef, terminalId)
-          : storeEnsureTerminal(activeThreadRef, terminalId, { open: true }),
+        inPanel
+          ? useRightPanelStore.getState().openTerminal(activeThreadRef, terminalId)
+          : reusableTerminalId === null
+            ? storeNewTerminal(activeThreadRef, terminalId)
+            : storeEnsureTerminal(activeThreadRef, terminalId, { open: true }),
       ...(reusableTerminalId === null
         ? { size: { cols: SCRIPT_TERMINAL_COLS, rows: SCRIPT_TERMINAL_ROWS } }
         : { terminalId: reusableTerminalId }),
