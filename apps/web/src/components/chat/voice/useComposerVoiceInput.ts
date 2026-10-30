@@ -18,7 +18,7 @@ export type ComposerVoiceInput = {
   readonly state: VoiceInputState;
   readonly available: boolean;
   readonly elapsedSeconds: number;
-  readonly levels: () => ReadonlyArray<number>;
+  readonly level: () => number;
   readonly toggle: () => void;
   readonly stop: () => void;
   readonly cancel: () => void;
@@ -130,7 +130,7 @@ export function useComposerVoiceInput(input: {
     state,
     available: input.enabled && typeof MediaRecorder !== "undefined",
     elapsedSeconds: Math.max(0, Math.floor((now - recordingStartedAt) / 1000)),
-    levels: () => session.current?.recorder.levels() ?? [],
+    level: () => session.current?.recorder.level() ?? 0,
     toggle: () => {
       const controller = session.current?.controller;
       if (!controller) return;
