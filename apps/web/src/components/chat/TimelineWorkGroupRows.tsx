@@ -1,3 +1,4 @@
+import type { MascotState } from "@t3tools/client-runtime/mascot";
 import { Mascot } from "../mascot/Mascot";
 import { TimelinePendingApprovalRow } from "./TimelinePendingApprovalRow";
 import { WorkLogButton, WorkLogList, WorkLogRow } from "./WorkLog";
@@ -275,6 +276,9 @@ function ExpandedWorkGroupEntries({
 
 const workEntryKey = (entry: TimelineWorkEntry) => entry.id;
 
+const rowMascotState = (state: MascotState): MascotState =>
+  state === "thinking" ? "thinking" : "working";
+
 export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "working" }> }) {
   const { isCompacting, isPreparingWorktree, backgroundWorktreeSetup, mascotState } =
     use(TimelineRowActivityCtx);
@@ -294,7 +298,7 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
   return (
     <div className="border-b border-border/60 pb-2 pt-1">
       <div className="flex h-6 min-w-0 items-baseline gap-2 px-1 text-sm leading-relaxed text-muted-foreground tabular-nums">
-        <Mascot state={mascotState} size={32} className="self-center" />
+        <Mascot state={rowMascotState(mascotState)} size={24} className="self-center" />
         <span
           ref={shimmer ? observeVisibleAnimation : undefined}
           className="relative shrink-0 overflow-hidden whitespace-nowrap"
@@ -367,7 +371,7 @@ export function ThinkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind:
   const live = ctx.pendingApprovals.size === 0;
   const activity = (
     <div className="flex items-center gap-2">
-      <Mascot state={mascotState} size={32} />
+      <Mascot state={rowMascotState(mascotState)} size={24} />
       <LiveActivityRow label="Thinking" iconName="brain" active={live} shimmer={live} />
     </div>
   );

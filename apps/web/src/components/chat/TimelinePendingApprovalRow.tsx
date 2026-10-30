@@ -1,3 +1,4 @@
+import { Mascot } from "../mascot/Mascot";
 import {
   FULL_ACCESS_OVERRIDE_QUESTION,
   fullAccessOverrideExplanation,
@@ -75,6 +76,7 @@ export const TimelinePendingApprovalRow = memo(function TimelinePendingApprovalR
           {canRespond ? (
             <>
               <span className="inline-flex items-center gap-1 text-warning">
+                <Mascot state="needsYou" size={24} />
                 <ShieldIcon aria-hidden className="size-3 shrink-0" />
                 Waiting for approval
               </span>

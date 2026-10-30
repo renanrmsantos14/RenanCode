@@ -1437,12 +1437,23 @@ export default function ChatView(props: ChatViewProps) {
     activeProviderThread,
   );
   const pendingBackgroundTasks = deriveThreadPendingBackgroundTasks(serverProjection);
-  const justCompleted = useJustCompleted(isWorking);
+  const finishedWell =
+    activeActivityRun?.status === undefined ||
+    activeActivityRun.status === "completed" ||
+    activeActivityRun.status === "waiting";
+  const justCompleted = useJustCompleted(isWorking, routeThreadKey) && finishedWell;
+  const mascotRunStatus =
+    activeActivityRun !== null &&
+    ["preparing", "queued", "starting", "running", "waiting"].includes(activeActivityRun.status)
+      ? activeActivityRun.status
+      : isWorking
+        ? "running"
+        : null;
   const mascotState = deriveMascotState({
     connectionPhase: "connected",
     hasThread: true,
     hasPendingRequest: pendingApprovals.length > 0 || pendingUserInputs.length > 0,
-    runStatus: activeActivityRun?.status ?? (isWorking ? "running" : null),
+    runStatus: mascotRunStatus,
     hasVisibleError: visibleThreadError !== null,
     justCompleted,
   });
