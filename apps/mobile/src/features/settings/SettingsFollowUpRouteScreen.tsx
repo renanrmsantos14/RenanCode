@@ -10,6 +10,7 @@ import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/
 import { ListChoiceRow as SettingsChoiceRow } from "../../components/ui/ListChoiceRow";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsScreen } from "./components/SettingsScreen";
+import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
 
 const FOLLOW_UP_OPTIONS: ReadonlyArray<{
   readonly behavior: FollowUpBehavior;
@@ -36,6 +37,9 @@ export function SettingsFollowUpRouteScreen() {
   const selectedBehavior = AsyncResult.isSuccess(preferencesResult)
     ? (preferencesResult.value.followUpBehavior ?? DEFAULT_FOLLOW_UP_BEHAVIOR)
     : null;
+  const suggestionsEnabled =
+    AsyncResult.isSuccess(preferencesResult) &&
+    preferencesResult.value.nextActionSuggestionsEnabled === true;
 
   const content = (
     <ScrollView
@@ -62,6 +66,15 @@ export function SettingsFollowUpRouteScreen() {
         Long-press the send button to use the other option for a single message. With a hardware
         keyboard, hold Command while sending.
       </Text>
+      <SettingsSection title="After a turn">
+        <SettingsSwitchRow
+          label="Suggest next message"
+          subtitle="Offer a likely next message when a turn you watched finishes. Each suggestion is a small request to the text generation model."
+          value={suggestionsEnabled}
+          disabled={!preferencesReady}
+          onValueChange={(value) => savePreferences({ nextActionSuggestionsEnabled: value })}
+        />
+      </SettingsSection>
     </ScrollView>
   );
 

@@ -160,6 +160,9 @@ composer without sending, or `Escape` to dismiss it. Typing, switching threads, 
 turn also discards it. Suggestions use your text generation model, so each one is a small model
 request on the environment running the thread.
 
+On mobile, turn it on in **Settings > Chat**. The suggestion appears above the composer; tap it to
+put it in the composer, or tap the close button to dismiss it.
+
 ## Edit an earlier prompt
 
 On web and desktop, choose **Edit from here** beneath a sent message to rewind
