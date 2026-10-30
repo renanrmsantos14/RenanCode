@@ -1,10 +1,8 @@
 import type { VoiceRecorder, VoiceRecorderStatus } from "@t3tools/client-runtime/voice-input";
 
-export const VOICE_WAVEFORM_BARS = 24;
-const SILENT_LEVELS: ReadonlyArray<number> = Array<number>(VOICE_WAVEFORM_BARS).fill(0);
-
 export type WebVoiceRecorder = VoiceRecorder & {
-  readonly levels: () => ReadonlyArray<number>;
+  /** Current loudness from 0 to 1. */
+  readonly level: () => number;
   readonly release: () => void;
 };
 
@@ -70,7 +68,7 @@ export function createWebVoiceRecorder(
       );
       audioContext = new AudioContext();
       analyser = audioContext.createAnalyser();
-      analyser.fftSize = 64;
+      analyser.fftSize = 512;
       audioContext.createMediaStreamSource(stream).connect(analyser);
     },
     record({ forDuration }) {
@@ -85,11 +83,14 @@ export function createWebVoiceRecorder(
       if (limitTimer) clearTimeout(limitTimer);
       await finish();
     },
-    levels() {
-      if (!analyser) return SILENT_LEVELS;
-      const data = new Uint8Array(analyser.frequencyBinCount);
-      analyser.getByteFrequencyData(data);
-      return Array.from({ length: VOICE_WAVEFORM_BARS }, (_, index) => (data[index] ?? 0) / 255);
+    level() {
+      if (!analyser) return 0;
+      const data = new Uint8Array(analyser.fftSize);
+      analyser.getByteTimeDomainData(data);
+      let sum = 0;
+      for (const sample of data) sum += ((sample - 128) / 128) ** 2;
+      // Speech RMS sits well below 0.3; the square root lifts quiet voices into view.
+      return Math.min(1, Math.sqrt(Math.sqrt(sum / data.length) / 0.3));
     },
     release() {
       if (limitTimer) clearTimeout(limitTimer);
