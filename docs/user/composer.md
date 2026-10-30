@@ -251,6 +251,19 @@ provider supports it. Web and desktop also offer compaction from the context met
 Claude instances can also compact idle threads for you. See
 [compact long conversations](./providers-claude.md#compact-long-conversations).
 
+## MCP servers in Claude threads
+
+Claude sessions start with your MCP servers off, so their tools do not fill the
+context. Use the plug button next to the context meter on web and desktop to switch
+a server on for the current thread; the change applies from your next message and
+stays with that thread. The list appears after the thread's first message.
+
+To keep some servers on everywhere, list them in **Settings → Providers → Claude →
+Always-on MCP servers**. Set **MCP servers at session start** to **Load all servers**
+to go back to loading every configured server. Sessions started without MCP servers
+also record them as disabled for that folder in Claude Code's own config, so
+`claude` run there in a terminal starts with them off too.
+
 ## Goals
 
 With Codex and Claude, send `/goal` followed by what "done" means, for example

@@ -93,6 +93,8 @@ const makeClaudeConfig = (overrides: Partial<ClaudeSettings>): ClaudeSettings =>
   binaryPath: "claude",
   homePath: "",
   customModels: [],
+  mcpAtStart: "none",
+  alwaysOnMcpServers: "",
   launchArgs: "",
   autoCompactWindow: "",
   idleCompaction: "default",

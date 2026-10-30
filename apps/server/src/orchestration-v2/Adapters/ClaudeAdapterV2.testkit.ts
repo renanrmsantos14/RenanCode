@@ -836,6 +836,8 @@ function makeReplayQueryRunner(
               mode,
             });
           }),
+        mcpServerStatus: Effect.succeed([]),
+        toggleMcpServer: () => Effect.void,
         stopTask: (taskId) =>
           replayEffect(() => {
             assertNextOutboundFrame({ type: "query.stop_task", taskId });

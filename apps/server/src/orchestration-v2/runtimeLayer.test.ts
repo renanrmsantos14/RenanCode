@@ -2229,6 +2229,16 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
         interactionMode: "plan",
       });
       yield* orchestrator.dispatch({
+        type: "thread.mcp-servers.set",
+        commandId: CommandId.make("runtime-layer-lifecycle-mcp-servers"),
+        threadId,
+        enabledMcpServers: ["claude.ai Infleet"],
+      });
+      assert.deepEqual(
+        (yield* orchestrator.getThreadProjection(threadId)).thread.enabledMcpServers,
+        ["claude.ai Infleet"],
+      );
+      yield* orchestrator.dispatch({
         type: "thread.model-selection.set",
         commandId: CommandId.make("runtime-layer-lifecycle-model"),
         threadId,

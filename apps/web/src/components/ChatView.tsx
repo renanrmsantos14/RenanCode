@@ -440,6 +440,7 @@ export default function ChatView(props: ChatViewProps) {
   const setThreadInteractionMode = useOrchestrationCommand(threadEnvironment.setInteractionMode, {
     reportFailure: false,
   });
+  const setThreadMcpServers = useOrchestrationCommand(threadEnvironment.setMcpServers);
   const startThreadTurn = useOrchestrationCommand(threadEnvironment.startTurn, {
     reportFailure: false,
   });
@@ -2086,6 +2087,14 @@ export default function ChatView(props: ChatViewProps) {
     return result;
   };
 
+  const onEnabledMcpServersChange = (enabledMcpServers: ReadonlyArray<string>) => {
+    if (serverProjection === null) return;
+    void setThreadMcpServers({
+      environmentId,
+      input: { threadId: serverProjection.thread.id, enabledMcpServers },
+    });
+  };
+
   const {
     showScrollToBottom,
     timelineLiveFollowEnabled,
@@ -3583,6 +3592,9 @@ export default function ChatView(props: ChatViewProps) {
                               activeThreadModelSelection={activeThread?.modelSelection}
                               activeProjectId={activeProject?.id ?? null}
                               activeContextWindow={activeContextWindow}
+                              mcpServers={activeProviderThread?.mcpServers ?? null}
+                              enabledMcpServers={serverProjection?.thread.enabledMcpServers ?? []}
+                              onEnabledMcpServersChange={onEnabledMcpServersChange}
                               compactThreadUnavailable={compactThreadUnavailable}
                               compactDisabled={compactDisabled}
                               compactDisabledReason={compactDisabledReason}

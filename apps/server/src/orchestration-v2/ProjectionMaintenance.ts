@@ -213,6 +213,7 @@ export const layer: Layer.Layer<
       "thread.pull-request-synced",
       "thread.runtime-mode-updated",
       "thread.interaction-mode-updated",
+      "thread.mcp-servers-updated",
       "thread.model-selection-updated",
       "thread.provider-switched",
       "thread.guest-share-updated",

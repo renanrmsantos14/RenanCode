@@ -702,6 +702,12 @@ const InstanceIdleCompaction = Schema.Literals(
   INSTANCE_IDLE_COMPACTION_MODES.map((mode) => mode.value),
 );
 
+const CLAUDE_MCP_AT_START_MODES = [
+  { value: "none", label: "Off until switched on" },
+  { value: "all", label: "Load all servers" },
+] as const;
+const ClaudeMcpAtStart = Schema.Literals(CLAUDE_MCP_AT_START_MODES.map((mode) => mode.value));
+
 export const ClaudeSettings = makeProviderSettingsSchema(
   {
     enabled: Schema.Boolean.pipe(
@@ -766,12 +772,52 @@ export const ClaudeSettings = makeProviderSettingsSchema(
         },
       }),
     ),
+    mcpAtStart: ClaudeMcpAtStart.pipe(
+      Schema.withDecodingDefault(Effect.succeed("none" as const)),
+      Schema.annotateKey({
+        title: "MCP servers at session start",
+        description:
+          "Start sessions with MCP servers off and switch them on per thread from the composer, or load every configured server.",
+        providerSettingsForm: {
+          control: "select",
+          options: CLAUDE_MCP_AT_START_MODES,
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    alwaysOnMcpServers: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "Always-on MCP servers",
+        description:
+          "Comma-separated server names that stay on in every session when sessions start with MCP servers off.",
+        providerSettingsForm: {
+          placeholder: "e.g. claude.ai Claude Docs, memsearch",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
   },
   {
-    order: ["binaryPath", "homePath", "autoCompactWindow", "idleCompaction", "launchArgs"],
+    order: [
+      "binaryPath",
+      "homePath",
+      "autoCompactWindow",
+      "idleCompaction",
+      "mcpAtStart",
+      "alwaysOnMcpServers",
+      "launchArgs",
+    ],
   },
 );
 export type ClaudeSettings = typeof ClaudeSettings.Type;
+
+export function parseMcpServerNames(value: string): ReadonlyArray<string> {
+  return value
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0);
+}
 
 export const ANTIGRAVITY_AUTH_METHODS = [
   { value: "oauth-personal", label: "Google account" },
