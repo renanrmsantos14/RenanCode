@@ -24,9 +24,10 @@ on:
 permissions:
   contents: write
 
+# A running build finishes and publishes; pushes meanwhile collapse into one queued run.
 concurrency:
   group: fork-release-android
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   apk:
@@ -36,6 +37,10 @@ jobs:
     timeout-minutes: 90
     env:
       APP_VARIANT: preview
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_COMPILERCHECK: content
       T3CODE_MOBILE_UPDATES_ENABLED: "0"
       MOBILE_VERSION_POLICY: appVersion
       EXPO_NO_GIT_STATUS: "1"
@@ -68,6 +73,13 @@ jobs:
       - name: Setup Gradle cache
         uses: gradle/actions/setup-gradle@v5
 
+      # prebuild --clean discards android/.cxx, so native libraries recompile every run without ccache.
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: fork-release-android
+          max-size: 2G
+
       - name: Resolve version
         id: version
         run: |
@@ -94,7 +106,7 @@ jobs:
 
       - name: Build APK
         working-directory: apps/mobile/android
-        run: ./gradlew app:assembleRelease -PreactNativeArchitectures=arm64-v8a
+        run: ./gradlew app:assembleRelease --build-cache -PreactNativeArchitectures=arm64-v8a
 
       - name: Publish release
         env:
