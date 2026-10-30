@@ -1,3 +1,4 @@
+import type { MascotState } from "@t3tools/client-runtime/mascot";
 import type { ToolCallDiffTarget } from "../../diffPanelStore";
 import type {
   ProviderApprovalDecision,
@@ -104,6 +105,7 @@ export interface TimelineRowActivityState {
   isCompacting: boolean;
   isRevertingCheckpoint: boolean;
   awaitingUser: boolean;
+  mascotState: MascotState;
   isPreparingWorktree: boolean;
   latestRunId: RunId | null;
   backgroundWorktreeSetup: WorktreeSetupSnapshot | null;

@@ -1,3 +1,5 @@
+import type { MascotState } from "@t3tools/client-runtime/mascot";
+import { Mascot } from "../mascot/Mascot";
 import { TimelinePendingApprovalRow } from "./TimelinePendingApprovalRow";
 import { WorkLogButton, WorkLogList, WorkLogRow } from "./WorkLog";
 import type { WorktreeSetupSnapshot } from "@t3tools/contracts";
@@ -274,8 +276,11 @@ function ExpandedWorkGroupEntries({
 
 const workEntryKey = (entry: TimelineWorkEntry) => entry.id;
 
+const rowMascotState = (state: MascotState): MascotState =>
+  state === "thinking" ? "thinking" : "working";
+
 export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "working" }> }) {
-  const { isCompacting, isPreparingWorktree, backgroundWorktreeSetup } =
+  const { isCompacting, isPreparingWorktree, backgroundWorktreeSetup, mascotState } =
     use(TimelineRowActivityCtx);
   const compacting = row.compacting === true || isCompacting;
   const shimmer = isPreparingWorktree || compacting;
@@ -293,6 +298,7 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
   return (
     <div className="border-b border-border/60 pb-2 pt-1">
       <div className="flex h-6 min-w-0 items-baseline gap-2 px-1 text-sm leading-relaxed text-muted-foreground tabular-nums">
+        <Mascot state={rowMascotState(mascotState)} size={24} className="self-center" />
         <span
           ref={shimmer ? observeVisibleAnimation : undefined}
           className="relative shrink-0 overflow-hidden whitespace-nowrap"
@@ -359,12 +365,15 @@ function CompactingLabel({ createdAt }: { createdAt: string | null }) {
 
 export function ThinkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "thinking" }> }) {
   const ctx = use(TimelineRowCtx);
-  const { isCompacting, isPreparingWorktree } = use(TimelineRowActivityCtx);
+  const { isCompacting, isPreparingWorktree, mascotState } = use(TimelineRowActivityCtx);
   if (isPreparingWorktree || isCompacting) return <WorkLogRow label="" />;
   // A failed group keeps this disclosure while an approval waits, but nothing is thinking then.
   const live = ctx.pendingApprovals.size === 0;
   const activity = (
-    <LiveActivityRow label="Thinking" iconName="brain" active={live} shimmer={live} />
+    <div className="flex items-center gap-2">
+      <Mascot state={rowMascotState(mascotState)} size={24} />
+      <LiveActivityRow label="Thinking" iconName="brain" active={live} shimmer={live} />
+    </div>
   );
   const { groupId } = row;
   if (groupId === undefined) return activity;

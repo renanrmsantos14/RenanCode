@@ -1,3 +1,4 @@
+import { Mascot } from "../mascot/Mascot";
 import type { OrchestrationV2ProviderFailureClass } from "@t3tools/contracts";
 import {
   CHATGPT_USAGE_LIMIT_CODE,
@@ -9,7 +10,7 @@ import { writeTextToClipboard } from "../../hooks/useCopyToClipboard";
 import { Alert, AlertAction, AlertDescription } from "../ui/alert";
 import { Button } from "../ui/button";
 import { toastManager } from "../ui/toast";
-import { CircleAlertIcon, XIcon } from "lucide-react";
+import { XIcon } from "lucide-react";
 import { OpenAI } from "../Icons";
 import { ChatGptUsageButton } from "../settings/ChatGptUsageButton";
 import { ExpandableText } from "../settings/ExpandableText";
@@ -90,7 +91,7 @@ export const ThreadErrorBanner = memo(function ThreadErrorBanner({
         {chatGptLimit ? (
           <OpenAI className="size-4 text-foreground!" aria-hidden="true" />
         ) : (
-          <CircleAlertIcon />
+          <Mascot state="error" size={16} />
         )}
         <AlertDescription>
           {chatGptLimit ? (

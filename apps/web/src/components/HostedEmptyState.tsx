@@ -1,3 +1,4 @@
+import { Mascot } from "./mascot/Mascot";
 import { useAuth } from "@clerk/react";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { Link } from "@tanstack/react-router";
@@ -34,6 +35,7 @@ export function HostedEmptyState() {
         </WorkspacePageHeader>
 
         <Empty className="flex-1">
+          <Mascot state="welcome" size={96} className="mx-auto" />
           <EmptyHeader>
             <EmptyTitle>
               {localEnvironmentOff ? "This computer is off" : "No computer connected"}

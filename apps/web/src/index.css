@@ -2567,3 +2567,32 @@ code {
     animation: composer-menu-enter 140ms cubic-bezier(0.23, 1, 0.32, 1);
   }
 }
+
+@keyframes mascot-loop {
+  from {
+    background-position-x: 0;
+  }
+  to {
+    background-position-x: calc(var(--mascot-frames) * var(--mascot-size) * -1);
+  }
+}
+@keyframes mascot-once {
+  from {
+    background-position-x: 0;
+  }
+  to {
+    background-position-x: calc((var(--mascot-frames) - 1) * var(--mascot-size) * -1);
+  }
+}
+.mascot-sprite {
+  image-rendering: pixelated;
+  background-repeat: no-repeat;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .mascot-sprite[data-mode="loop"] {
+    animation: mascot-loop var(--mascot-duration) steps(var(--mascot-steps)) infinite;
+  }
+  .mascot-sprite[data-mode="once"] {
+    animation: mascot-once var(--mascot-duration) steps(var(--mascot-steps)) 1 forwards;
+  }
+}

@@ -1,3 +1,4 @@
+import { Mascot } from "../../components/mascot/Mascot";
 import { Button } from "../../components/ui/Button";
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import { ConnectionTraceId } from "./ConnectionTraceId";
@@ -66,11 +67,13 @@ export function EnvironmentConnectionNotice(props: {
   return (
     <View className="flex-1 items-center justify-center px-8">
       <View className="max-w-[320px] items-center gap-3">
-        {isRetrying ? (
+        {props.connection.phase === "offline" || props.connection.phase === "reconnecting" ? (
+          <Mascot state="offline" size={32} />
+        ) : isRetrying ? (
           <AppActivityIndicator size="small" colorClassName={"accent-icon-muted"} />
         ) : (
           <SymbolView
-            name={props.connection.phase === "offline" ? "wifi.slash" : "bolt.horizontal.circle"}
+            name="bolt.horizontal.circle"
             size={24}
             tintColorClassName={"accent-icon-muted"}
             type="monochrome"

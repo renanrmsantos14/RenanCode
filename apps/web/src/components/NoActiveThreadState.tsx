@@ -1,3 +1,4 @@
+import { Mascot } from "./mascot/Mascot";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "./ui/empty";
 import { SidebarInset } from "./ui/sidebar";
 import { isElectron } from "../env";
@@ -21,6 +22,7 @@ export function NoActiveThreadState() {
 
         <Empty className="flex-1">
           <div className="w-full max-w-lg px-8 py-12">
+            <Mascot state="welcome" size={96} className="mx-auto mb-4" />
             <EmptyHeader className="max-w-none">
               <EmptyTitle>Pick a thread to continue</EmptyTitle>
               <EmptyDescription>

@@ -1,3 +1,5 @@
+import type { MascotState } from "@t3tools/client-runtime/mascot";
+import { Mascot } from "../mascot/Mascot";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import type { ToolCallDiffTarget } from "../../diffPanelStore";
@@ -229,6 +231,7 @@ interface MessagesTimelineProps {
   isPreparingWorktree?: boolean;
   isCompacting?: boolean;
   awaitingUser?: "approval" | "input" | null;
+  mascotState?: MascotState;
   /** Which request is waiting, so a second one of the same kind is announced too. */
   awaitingRequestId?: string | null;
   footer?: ReactNode;
@@ -338,6 +341,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   isPreparingWorktree = false,
   isCompacting = false,
   awaitingUser = null,
+  mascotState = "idle",
   awaitingRequestId = null,
   listRef,
   timelineEntries,
@@ -1064,6 +1068,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
     isRevertingCheckpoint,
     backgroundWorktreeSetup,
     awaitingUser: awaitingUser !== null,
+    mascotState,
     isPreparingWorktree,
     latestRunId: latestRun?.runId ?? null,
   };
@@ -1238,6 +1243,11 @@ const ConversationTimeline = memo(function ConversationTimeline({
       onGrow={onFooterGrow}
     >
       {footer}
+      {mascotState === "done" ? (
+        <div className="chat-content-lane px-1 pb-2">
+          <Mascot state="done" size={32} />
+        </div>
+      ) : null}
       {unmatchedPendingApprovals.size > 0 ? (
         <TimelineRowCtx value={sharedState}>
           <div className="messages-timeline-row-frame">
