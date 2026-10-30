@@ -97,6 +97,17 @@ export type ReviewGuideGenerationResult = Omit<
   "headSha" | "generatedAt" | "modelSelection"
 >;
 
+export interface NextActionGenerationInput {
+  cwd: string;
+  lastUserMessage: string;
+  lastAssistantMessage: string;
+  modelSelection: ModelSelection;
+}
+
+export interface NextActionGenerationResult {
+  suggestion: string;
+}
+
 export interface ProviderTextGeneration {
   readonly generateCommitMessage: (
     input: CommitMessageGenerationInput,
@@ -117,4 +128,8 @@ export interface ProviderTextGeneration {
   readonly generateReviewGuide: (
     input: ReviewGuideGenerationInput,
   ) => Effect.Effect<ReviewGuideGenerationResult, TextGenerationError>;
+
+  readonly generateNextAction: (
+    input: NextActionGenerationInput,
+  ) => Effect.Effect<NextActionGenerationResult, TextGenerationError>;
 }

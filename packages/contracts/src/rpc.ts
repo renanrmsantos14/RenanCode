@@ -171,6 +171,7 @@ import {
   GuestShareCreateResult,
 } from "./guestShare.ts";
 import { PullRequestReviewGuideResult } from "./pullRequestReviewGuide.ts";
+import { NextActionSuggestionInput, NextActionSuggestionResult } from "./nextActionSuggestion.ts";
 import {
   PullRequestActionInput,
   PullRequestActivity,
@@ -411,6 +412,7 @@ export const WS_METHODS = {
   projectsEnsureScratch: "projects.ensureScratch",
   projectsCreateNew: "projects.createNew",
   projectsCreateFromThread: "projects.createFromThread",
+  threadsSuggestNextAction: "threads.suggestNextAction",
 
   shellOpenInEditor: "shell.openInEditor",
 
@@ -1328,6 +1330,12 @@ const WsProjectsCreateFromThreadRpc = Rpc.make(WS_METHODS.projectsCreateFromThre
   error: Schema.Union([OrchestrationDispatchCommandError, EnvironmentAuthorizationError]),
 });
 
+const WsThreadsSuggestNextActionRpc = Rpc.make(WS_METHODS.threadsSuggestNextAction, {
+  payload: NextActionSuggestionInput,
+  success: NextActionSuggestionResult,
+  error: EnvironmentAuthorizationError,
+});
+
 const WsShellOpenInEditorRpc = Rpc.make(WS_METHODS.shellOpenInEditor, {
   payload: LaunchEditorInput,
   error: Schema.Union([ExternalLauncherError, EnvironmentAuthorizationError]),
@@ -2071,6 +2079,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsEnsureScratchRpc,
   WsProjectsCreateNewRpc,
   WsProjectsCreateFromThreadRpc,
+  WsThreadsSuggestNextActionRpc,
   WsProjectsWriteFileRpc,
   WsProjectsMutateRpc,
   WsShellOpenInEditorRpc,

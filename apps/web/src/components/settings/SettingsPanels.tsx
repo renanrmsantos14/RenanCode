@@ -517,6 +517,10 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.composerRichTextEnabled !== DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled
       ? ["Rich text composer"]
       : []),
+    ...(settings.nextActionSuggestionsEnabled !==
+    DEFAULT_UNIFIED_SETTINGS.nextActionSuggestionsEnabled
+      ? ["Suggest next message"]
+      : []),
     ...(settings.sendShortcut !== DEFAULT_UNIFIED_SETTINGS.sendShortcut ? ["Send shortcut"] : []),
     ...(settings.followUpBehavior !== DEFAULT_UNIFIED_SETTINGS.followUpBehavior
       ? ["Follow-up behavior"]
@@ -634,6 +638,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       proactivePanelsEnabled: DEFAULT_UNIFIED_SETTINGS.proactivePanelsEnabled,
       showSkillsInSlashMenu: DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu,
       composerRichTextEnabled: DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled,
+      nextActionSuggestionsEnabled: DEFAULT_UNIFIED_SETTINGS.nextActionSuggestionsEnabled,
       sendShortcut: DEFAULT_UNIFIED_SETTINGS.sendShortcut,
       followUpBehavior: DEFAULT_UNIFIED_SETTINGS.followUpBehavior,
       contextWindowMeterEnabled: DEFAULT_UNIFIED_SETTINGS.contextWindowMeterEnabled,
@@ -1140,6 +1145,33 @@ export function ChatSettingsPanel() {
                 updateSettings({ composerRichTextEnabled: Boolean(checked) })
               }
               aria-label="Rich text composer"
+            />
+          }
+        />
+        <SettingsRow
+          {...searchableSetting("next-action-suggestions")}
+          description="After a turn finishes, suggest your likely next message. Press Tab to accept it."
+          resetAction={
+            settings.nextActionSuggestionsEnabled !==
+            DEFAULT_UNIFIED_SETTINGS.nextActionSuggestionsEnabled ? (
+              <SettingResetButton
+                label="next message suggestions"
+                onClick={() =>
+                  updateSettings({
+                    nextActionSuggestionsEnabled:
+                      DEFAULT_UNIFIED_SETTINGS.nextActionSuggestionsEnabled,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.nextActionSuggestionsEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ nextActionSuggestionsEnabled: Boolean(checked) })
+              }
+              aria-label="Suggest next message"
             />
           }
         />

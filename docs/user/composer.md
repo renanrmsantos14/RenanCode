@@ -152,6 +152,14 @@ the text is an unedited recalled prompt, with the caret on the first visual line
 the last visual line for `ArrowDown`, counting wrapped lines. Editing a recalled prompt turns it
 into a normal draft.
 
+## Suggested next message
+
+Turn on **Settings > Chat > Suggest next message** to get a guess at your next message after a turn
+you watched finishes. It appears in the empty composer as faded text. Press `Tab` to put it in the
+composer without sending, or `Escape` to dismiss it. Typing, switching threads, or starting another
+turn also discards it. Suggestions use your text generation model, so each one is a small model
+request on the environment running the thread.
+
 ## Edit an earlier prompt
 
 On web and desktop, choose **Edit from here** beneath a sent message to rewind
