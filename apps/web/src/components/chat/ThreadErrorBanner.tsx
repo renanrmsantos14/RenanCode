@@ -1,3 +1,4 @@
+import { Mascot } from "../mascot/Mascot";
 import type { OrchestrationV2ProviderFailureClass } from "@t3tools/contracts";
 import {
   CHATGPT_USAGE_LIMIT_CODE,
@@ -92,6 +93,7 @@ export const ThreadErrorBanner = memo(function ThreadErrorBanner({
         ) : (
           <CircleAlertIcon />
         )}
+        <Mascot state="error" size={32} />
         <AlertDescription>
           {chatGptLimit ? (
             <div className="space-y-1">

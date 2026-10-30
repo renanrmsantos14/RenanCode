@@ -10,6 +10,8 @@ export type MascotState =
   | "welcome"
   | "idle";
 
+export const MASCOT_DONE_VISIBLE_MS = 3000;
+
 export interface MascotSprite {
   readonly file: string;
   readonly frames: number;

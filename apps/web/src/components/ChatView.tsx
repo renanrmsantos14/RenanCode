@@ -1,3 +1,5 @@
+import { deriveMascotState } from "@t3tools/client-runtime/mascot";
+import { useJustCompleted } from "./mascot/useJustCompleted";
 import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
@@ -1435,6 +1437,15 @@ export default function ChatView(props: ChatViewProps) {
     activeProviderThread,
   );
   const pendingBackgroundTasks = deriveThreadPendingBackgroundTasks(serverProjection);
+  const justCompleted = useJustCompleted(isWorking);
+  const mascotState = deriveMascotState({
+    connectionPhase: "connected",
+    hasThread: true,
+    hasPendingRequest: pendingApprovals.length > 0 || pendingUserInputs.length > 0,
+    runStatus: activeActivityRun?.status ?? (isWorking ? "running" : null),
+    hasVisibleError: visibleThreadError !== null,
+    justCompleted,
+  });
   const activeWorkStartedAt =
     deriveActiveWorkStartedAt(activeActivityRun, activeRuntime, localDispatchStartedAt) ??
     runlessWorkStartedAt;
@@ -3312,6 +3323,7 @@ export default function ChatView(props: ChatViewProps) {
                 onCiteAssistantText={citeAssistantTextStable}
                 {...(activeProject ? { onRunShellCommand: runShellCommandStable } : {})}
                 isWorking={isWorking}
+                mascotState={mascotState}
                 runlessWorkActive={runlessWorkStartedAt !== null}
                 isCompacting={isCompacting}
                 awaitingUser={

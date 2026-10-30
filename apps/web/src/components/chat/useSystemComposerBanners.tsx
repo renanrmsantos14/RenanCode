@@ -1,3 +1,4 @@
+import { Mascot } from "../mascot/Mascot";
 import { useStableCallback } from "../../hooks/useStableCallback";
 import { type EnvironmentId } from "@t3tools/contracts";
 import { type EnvironmentConnectionPresentation } from "@t3tools/client-runtime/connection";
@@ -184,7 +185,13 @@ export function useSystemComposerBanners(input: SystemComposerBannersInput) {
         id: `environment-unavailable:${activeEnvironmentUnavailableState.environmentId}`,
         variant: unavailableConnection.phase === "error" ? "error" : "warning",
         group: "environment",
-        icon: <WifiOffIcon />,
+        icon:
+          unavailableConnection.phase === "offline" ||
+          unavailableConnection.phase === "reconnecting" ? (
+            <Mascot state="offline" size={32} />
+          ) : (
+            <WifiOffIcon />
+          ),
         title: `${activeEnvironmentUnavailableState.label} is ${environmentReconnecting ? "reconnecting" : "offline"}`,
         description: activeEnvironment ? (
           <ConnectionDiagnosisHeadline environment={activeEnvironment} />
