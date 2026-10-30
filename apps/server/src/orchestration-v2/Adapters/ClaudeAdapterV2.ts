@@ -1506,6 +1506,12 @@ const CLAUDE_BACKGROUND_WAIT_INSTRUCTIONS = `
 To wait for a background command or Monitor you started (tests, a build), call \`t3_background_wait\` with its task ID before you end your turn. Do not mark work you leave running, or PRs. T3 MCP tools are deferred: load one with ToolSearch before you call it.
 `;
 
+const CLAUDE_MCP_ON_DEMAND_INSTRUCTIONS = `
+### MCP servers start off
+
+This thread's other MCP servers are off until the user switches them on. When a task needs one (for example a database, Figma or Gmail), call \`t3_mcp_server_request\` with its name, or without a name to list them, then end your turn: the user's answer arrives as a message. Do not ask the user to switch it on in chat.
+`;
+
 // Native subagents start from their task, not this session's system prompt.
 const subagentDeviceInstructions: HookCallback = () =>
   Promise.resolve({
@@ -1649,6 +1655,7 @@ export function makeClaudeQueryOptions(input: {
             ? ""
             : T3_CODE_ORCHESTRATION_INSTRUCTIONS +
               CLAUDE_BACKGROUND_WAIT_INSTRUCTIONS +
+              (input.settings?.mcpAtStart === "none" ? CLAUDE_MCP_ON_DEMAND_INSTRUCTIONS : "") +
               (deviceInstructions
                 ? `\n${T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH}\n`
                 : "")),

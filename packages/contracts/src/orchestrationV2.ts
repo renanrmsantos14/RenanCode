@@ -1063,6 +1063,12 @@ export const OrchestrationV2ProviderMcpServer = Schema.Struct({
 });
 export type OrchestrationV2ProviderMcpServer = typeof OrchestrationV2ProviderMcpServer.Type;
 
+/** A server is on when settings keep it on or the thread switched it on. */
+export const mcpServerIsOn = (
+  server: Pick<OrchestrationV2ProviderMcpServer, "name" | "alwaysOn">,
+  enabledMcpServers: ReadonlyArray<string>,
+): boolean => server.alwaysOn || enabledMcpServers.includes(server.name);
+
 export const OrchestrationV2ProviderThread = Schema.Struct({
   id: ProviderThreadId,
   driver: ProviderDriverKind,
@@ -1579,6 +1585,23 @@ const OrchestrationV2LinkRequestFields = {
   failure: Schema.optional(Schema.String),
 } as const;
 
+export const OrchestrationV2McpServerRequestStatus = Schema.Literals([
+  "pending",
+  "enabled",
+  "declined",
+  "cancelled",
+]);
+export type OrchestrationV2McpServerRequestStatus =
+  typeof OrchestrationV2McpServerRequestStatus.Type;
+
+/** An agent asked the user to switch on an MCP server that its thread has off. */
+const OrchestrationV2McpServerRequestFields = {
+  type: Schema.Literal("mcp_server_request"),
+  server: TrimmedNonEmptyString,
+  reason: Schema.String,
+  mcpServerStatus: OrchestrationV2McpServerRequestStatus,
+} as const;
+
 export const OrchestrationV2TurnItem = Schema.Union([
   Schema.Struct({
     ...OrchestrationV2TurnItemBaseFields,
@@ -1774,6 +1797,10 @@ export const OrchestrationV2TurnItem = Schema.Union([
   Schema.Struct({
     ...OrchestrationV2TurnItemBaseFields,
     ...OrchestrationV2LinkRequestFields,
+  }),
+  Schema.Struct({
+    ...OrchestrationV2TurnItemBaseFields,
+    ...OrchestrationV2McpServerRequestFields,
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemBaseFields,
@@ -2603,6 +2630,10 @@ export const OrchestrationV2TurnItemJson = Schema.Union([
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemJsonBaseFields,
+    ...OrchestrationV2McpServerRequestFields,
+  }),
+  Schema.Struct({
+    ...OrchestrationV2TurnItemJsonBaseFields,
     type: Schema.Literal("subagent"),
     subagentId: NodeId,
     origin: Schema.Literals(["provider_native", "app_owned"]),
@@ -3117,6 +3148,14 @@ export const OrchestrationV2Command = Schema.Union([
     server: TrimmedNonEmptyString,
     enabled: Schema.Boolean,
   }),
+  /** Answers an agent's MCP server card; enabling switches the server on for the thread. */
+  Schema.Struct({
+    type: Schema.Literal("thread.mcp-server-request.answer"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    turnItemId: TurnItemId,
+    enable: Schema.Boolean,
+  }),
   Schema.Struct({
     type: Schema.Literal("provider-session.detach"),
     commandId: CommandId,
@@ -3545,6 +3584,17 @@ const OrchestrationV2InternalCommand = Schema.Union([
         notification: OrchestrationV2Notification,
       }),
     ),
+  }),
+  /** Shows the card for an MCP server an agent asked the user to switch on. */
+  Schema.Struct({
+    type: Schema.Literal("mcp_server_request.record"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    runId: RunId,
+    nodeId: NodeId,
+    turnItemId: TurnItemId,
+    server: TrimmedNonEmptyString,
+    reason: Schema.String,
   }),
 ]);
 export type OrchestrationV2InternalCommand = typeof OrchestrationV2InternalCommand.Type;

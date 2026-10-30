@@ -59,6 +59,10 @@
       "types": "./src/promptLinks.ts",
       "default": "./src/promptLinks.ts"
     },
+    "./mcp-server-request": {
+      "types": "./src/mcpServerRequest.ts",
+      "default": "./src/mcpServerRequest.ts"
+    },
     "./secret-request": {
       "types": "./src/secretRequest.ts",
       "default": "./src/secretRequest.ts"

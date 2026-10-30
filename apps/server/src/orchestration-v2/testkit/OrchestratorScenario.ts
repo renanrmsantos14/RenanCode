@@ -159,6 +159,7 @@ function commandThreadIds(command: OrchestrationV2Command): ReadonlyArray<Thread
     case "thread.runtime-mode.set":
     case "thread.interaction-mode.set":
     case "thread.mcp-server.set":
+    case "thread.mcp-server-request.answer":
     case "thread.model-selection.set":
     case "provider-session.detach":
     case "message.dispatch":

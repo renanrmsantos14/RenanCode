@@ -16,6 +16,8 @@ import {
   OrchestratorMcpEnvironmentTarget,
   OrchestratorMcpRequestSecretInput,
   OrchestratorMcpRequestSecretResult,
+  OrchestratorMcpMcpServerRequestInput,
+  OrchestratorMcpMcpServerRequestResult,
   OrchestratorMcpFailure,
   OrchestratorMcpListScheduledTasksInput,
   OrchestratorMcpListScheduledTasksResult,
@@ -207,6 +209,19 @@ const RequestSecretTool = Tool.make("request_secret", {
   .annotate(Tool.Title, "Request a secret from the user")
   .annotate(Tool.Destructive, false);
 
+const McpServerRequestTool = Tool.make("t3_mcp_server_request", {
+  description:
+    "Ask the user to switch on an MCP server this thread has off; Claude threads start with them off. Call without `server` to list them. Returns `pending`: the user's answer arrives as a message, so end your turn instead of waiting or calling again.",
+  parameters: OrchestratorMcpMcpServerRequestInput,
+  success: OrchestratorMcpMcpServerRequestResult,
+  failure: OrchestratorMcpFailure,
+  failureMode: "return",
+  dependencies,
+})
+  .annotate(Tool.Title, "Ask to switch on an MCP server")
+  .annotate(Tool.Destructive, false)
+  .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromSubagents);
+
 const CreateThreadsTool = Tool.make("create_threads", {
   description:
     "Create new top-level threads in this checkout. Not delegation. One thread or its own worktree: `t3_thread_launch`. Project, branch, and worktree inherit.",
@@ -358,6 +373,7 @@ export const OrchestratorToolkit = Toolkit.make(
   ListScheduledTasksTool,
   DeleteScheduledTaskTool,
   RequestSecretTool,
+  McpServerRequestTool,
   CreateThreadsTool,
   ThreadListTool,
   ThreadReadTool,

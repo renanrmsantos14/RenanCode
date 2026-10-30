@@ -19,6 +19,7 @@ import { ThreadHandoffDivider, ThreadHandoffRow } from "./thread-handoff-row";
 import { GuestBubbleTint, GuestMessageName } from "./guestMessageStyle";
 import { ThreadGuestPendingMessage, useThreadGuestShare } from "./ThreadGuestShareBar";
 import { LinkRequestCard } from "./LinkRequestCard";
+import { McpServerRequestCard } from "./McpServerRequestCard";
 import { SecretRequestCard } from "./SecretRequestCard";
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import {
@@ -194,6 +195,7 @@ import {
   isContextCompactionActivityGroup,
   isContextHandoffActivityGroup,
   isLinkRequestActivityGroup,
+  isMcpServerRequestActivityGroup,
   isSecretRequestActivityGroup,
   type ThreadFeedEntry,
   type ThreadFeedLatestRun,
@@ -1469,6 +1471,16 @@ function renderFeedEntry(
   if (entry.type === "activity-group" && isLinkRequestActivityGroup(entry)) {
     return (
       <LinkRequestCard
+        environmentId={props.environmentId}
+        projectedItem={entry.activities[0]!.projectedItem}
+        iconColor={iconSubtleColor}
+      />
+    );
+  }
+
+  if (entry.type === "activity-group" && isMcpServerRequestActivityGroup(entry)) {
+    return (
+      <McpServerRequestCard
         environmentId={props.environmentId}
         projectedItem={entry.activities[0]!.projectedItem}
         iconColor={iconSubtleColor}

@@ -17,6 +17,7 @@ import {
   DeviceSummary,
   OrchestratorMcpTaskRole,
   ProviderInstanceId,
+  ClaudeSettings,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -389,6 +390,9 @@ const visibleT3Tools = (options: { readonly subagent?: boolean; readonly links?:
       !(options.subagent === true && hiddenFromSubagents.has(tool.name)),
   );
 
+// Defaults, as a new Claude instance has them: sessions start with MCP servers off.
+const DEFAULT_CLAUDE_SETTINGS = Schema.decodeSync(ClaudeSettings)({});
+
 /**
  * T3's Claude Code options for an eval thread: its system prompt append and its hooks. `device` says
  * whether the thread holds the `device` capability, as agent device access decides.
@@ -403,6 +407,7 @@ const claudeQueryOptions = (model: Model, device = true) => {
     resume: false,
     cwd: null,
     mcpServers: { "t3-code": { type: "http", url: "http://127.0.0.1/mcp" } },
+    settings: DEFAULT_CLAUDE_SETTINGS,
     deviceToolsAvailable: device,
   };
   return makeClaudeQueryOptions(input);
@@ -973,6 +978,10 @@ const t3Default = (sample: Sample, name: string, input: Readonly<Record<string, 
       };
     case "task_cancel":
       return { taskId: input.taskId, status: "cancel_requested" };
+    case "t3_mcp_server_request":
+      return input.server === undefined
+        ? { status: "available", servers: ["claude.ai Gmail", "claude.ai Figma"] }
+        : { status: "pending", turnItemId: "turn-item:mcp-server-request:1" };
     case "link_pull_request": {
       const alreadyLinked = sample.linked.has(pr().url);
       sample.linked.add(pr().url);
