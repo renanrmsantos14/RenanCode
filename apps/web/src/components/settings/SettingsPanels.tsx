@@ -128,6 +128,11 @@ const TIMESTAMP_FORMAT_LABELS = {
   "24-hour": "24-hour",
 } as const;
 
+const TERMINAL_PLACEMENT_LABELS = {
+  bottom: "Bottom",
+  side: "Side panel",
+} as const;
+
 const DIFF_LAYOUT_LABELS: Record<DiffLayout, string> = {
   stacked: "Stacked",
   split: "Split",
@@ -485,6 +490,9 @@ export function useSettingsRestore(onRestored?: () => void) {
       ? ["Snooze options"]
       : []),
     ...(settings.wordWrap !== DEFAULT_UNIFIED_SETTINGS.wordWrap ? ["Word wrap"] : []),
+    ...(settings.terminalPlacement !== DEFAULT_UNIFIED_SETTINGS.terminalPlacement
+      ? ["Terminal placement"]
+      : []),
     ...(settings.persistComposerContextStrip !==
     DEFAULT_UNIFIED_SETTINGS.persistComposerContextStrip
       ? ["Composer context"]
@@ -615,6 +623,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       notificationMode: DEFAULT_UNIFIED_SETTINGS.notificationMode,
       inAppNotificationsEnabled: DEFAULT_UNIFIED_SETTINGS.inAppNotificationsEnabled,
       wordWrap: DEFAULT_UNIFIED_SETTINGS.wordWrap,
+      terminalPlacement: DEFAULT_UNIFIED_SETTINGS.terminalPlacement,
       persistComposerContextStrip: DEFAULT_UNIFIED_SETTINGS.persistComposerContextStrip,
       diffFilesCollapsed: DEFAULT_UNIFIED_SETTINGS.diffFilesCollapsed,
       diffIgnoreWhitespace: DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace,
@@ -1044,6 +1053,44 @@ export function GeneralSettingsPanel() {
                 </SelectItem>
                 <SelectItem hideIndicator value="24-hour">
                   {TIMESTAMP_FORMAT_LABELS["24-hour"]}
+                </SelectItem>
+              </SelectPopup>
+            </Select>
+          }
+        />
+        <SettingsRow
+          {...searchableSetting("terminal-placement")}
+          description="Where the terminal shortcut and Run in terminal open a terminal."
+          resetAction={
+            settings.terminalPlacement !== DEFAULT_UNIFIED_SETTINGS.terminalPlacement ? (
+              <SettingResetButton
+                label="terminal placement"
+                onClick={() =>
+                  updateSettings({
+                    terminalPlacement: DEFAULT_UNIFIED_SETTINGS.terminalPlacement,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={settings.terminalPlacement}
+              onValueChange={(value) => {
+                if (value === "bottom" || value === "side") {
+                  updateSettings({ terminalPlacement: value });
+                }
+              }}
+            >
+              <SelectTrigger size="sm" className="w-full sm:w-40" aria-label="Terminal placement">
+                <SelectValue>{TERMINAL_PLACEMENT_LABELS[settings.terminalPlacement]}</SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                <SelectItem hideIndicator value="bottom">
+                  {TERMINAL_PLACEMENT_LABELS.bottom}
+                </SelectItem>
+                <SelectItem hideIndicator value="side">
+                  {TERMINAL_PLACEMENT_LABELS.side}
                 </SelectItem>
               </SelectPopup>
             </Select>

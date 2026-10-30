@@ -170,7 +170,9 @@ export function MarkdownCodeBlock({
   const canRun =
     onRunShellCommand !== undefined &&
     !isStreaming &&
-    /^(?:sh|bash|zsh|fish|shell|powershell|pwsh)$/.test(language) &&
+    /^(?:sh|bash|zsh|fish|shell|shellscript|console|terminal|powershell|pwsh|ps1|cmd|bat|batch)$/.test(
+      language,
+    ) &&
     code.endsWith("\n") &&
     command.length > 0 &&
     !command.endsWith("\\") &&
