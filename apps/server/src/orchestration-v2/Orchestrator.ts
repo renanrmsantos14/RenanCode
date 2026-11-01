@@ -8874,7 +8874,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     if (
       run === undefined ||
       run.rootNodeId !== command.nodeId ||
-      !isBlockingRun(run) ||
+      !isActiveRun(run) ||
       (yield* stopReachedRun(command, command.threadId, run.id))
     ) {
       return yield* new OrchestratorDispatchError({
