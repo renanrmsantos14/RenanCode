@@ -6,6 +6,7 @@ import {
   type ServerSettings,
   SimlockDeviceHostConfig,
   UsageLimitSourceConfig,
+  isSecretReference,
   VoiceTranscriptionSettings,
   secretSettingsFields,
 } from "@t3tools/contracts";
@@ -62,7 +63,7 @@ export function mapSettingsSecrets(
   ) => {
     const next = { ...fields };
     for (const field of secretFields) {
-      if (!(field in next)) continue;
+      if (!(field in next) || isSecretReference(next[field])) continue;
       next[field] = writeSecretFieldValues(
         next[field],
         readSecretFieldValues(next[field]).map(([serverHost, value]) => {
