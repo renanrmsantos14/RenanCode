@@ -22,7 +22,7 @@ import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsL
 import { useSettingsScope } from "./SettingsScopeContext";
 
 const DEFAULT_WINDOW_DAYS = 30;
-const PROVIDER_LABELS = { claudeAgent: "Claude Code", codex: "Codex" } as const;
+const PROVIDER_LABELS = { claudeAgent: "Claude Code", codex: "Codex", pi: "Pi" } as const;
 
 function toDateInputValue(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
