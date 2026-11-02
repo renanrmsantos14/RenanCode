@@ -22,18 +22,21 @@ import {
   type EnvironmentId,
   type ProviderApprovalDecision,
   type RuntimeRequestId,
+  type ScopedThreadRef,
   type ThreadId,
 } from "@t3tools/contracts";
 import {
   type PendingThreadRequests,
   type ThreadUserInputQuestion,
   onThreadRequestsResolved,
+  respondFailureMessage,
   pruneResolvedUserInputDrafts,
   resolvedQuestionDraftKeys,
   seedUserInputDraftAnswers,
   userInputDraftKey,
 } from "@t3tools/client-runtime/state/thread-requests";
 import { AuthOrchestrationOperateScope } from "@t3tools/contracts";
+import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
 import { Atom } from "effect/reactivity";
 
 import { environmentThreadDetails, threadEnvironment } from "../state/threads";
@@ -48,6 +51,8 @@ import { useSelectedThreadPendingRequests } from "./use-thread-detail";
 import { useThreadSelection } from "./use-thread-selection";
 import { useAtomCommand } from "./use-atom-command";
 import { readEnvironmentScope } from "./session";
+import { scopedThreadKey } from "../lib/scopedEntities";
+import { setThreadComposerError } from "./thread-composer-error";
 
 const EMPTY_PENDING_REQUESTS: PendingThreadRequests = { approvals: [], userInputs: [] };
 
@@ -161,6 +166,24 @@ function collectAnsweredRequestDrafts(
       .map((request) => request.requestId)
       .filter((requestId) => requestId !== answeredRequestId),
   );
+}
+
+/** The optimistic response removes the card, so a rejection is reported on a thread's composer. */
+export function reportRespondFailure(
+  result: AtomCommandResult<unknown, unknown>,
+  request: ScopedThreadRef,
+  requestId: RuntimeRequestId,
+  fallback: string,
+  composer: ScopedThreadRef = request,
+) {
+  const current = appAtomRegistry.get(environmentThreadDetails.pendingRequestsAtom(request));
+  const stillPending =
+    current === null ||
+    [...current.approvals, ...current.userInputs].some((item) => item.requestId === requestId);
+  const message = respondFailureMessage(result, stillPending, fallback);
+  if (message !== null) {
+    setThreadComposerError(scopedThreadKey(composer.environmentId, composer.threadId), message);
+  }
 }
 
 export function useSelectedThreadRequests() {
@@ -317,6 +340,12 @@ export function useSelectedThreadRequests() {
       },
     });
     setRespondingApprovalId((current) => (current === requestId ? null : current));
+    reportRespondFailure(
+      result,
+      { environmentId: selectedThreadShell.environmentId, threadId: selectedThreadShell.id },
+      requestId,
+      "Failed to submit approval decision.",
+    );
     return result;
   };
 
@@ -393,6 +422,12 @@ export function useSelectedThreadRequests() {
     setRespondingUserInputId((current) =>
       current === activePendingUserInput.requestId ? null : current,
     );
+    reportRespondFailure(
+      result,
+      { environmentId: selectedThreadShell.environmentId, threadId: selectedThreadShell.id },
+      activePendingUserInput.requestId,
+      "Failed to submit answer.",
+    );
     if (result._tag === "Success") {
       collectAnsweredRequestDrafts(
         selectedThreadShell.environmentId,
@@ -422,6 +457,12 @@ export function useSelectedThreadRequests() {
     });
     setRespondingUserInputId((current) =>
       current === activePendingUserInput.requestId ? null : current,
+    );
+    reportRespondFailure(
+      result,
+      { environmentId: selectedThreadShell.environmentId, threadId: selectedThreadShell.id },
+      activePendingUserInput.requestId,
+      "Failed to dismiss the question.",
     );
     if (result._tag === "Success") {
       collectAnsweredRequestDrafts(

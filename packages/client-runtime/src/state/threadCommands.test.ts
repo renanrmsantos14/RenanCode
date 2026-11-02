@@ -11,6 +11,9 @@ import {
   ThreadId,
   type OrchestrationV2Command,
   type OrchestrationV2ShellSnapshot,
+  NodeId,
+  type OrchestrationV2RuntimeRequest,
+  ProviderSessionId,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Crypto from "effect/Crypto";
@@ -23,13 +26,15 @@ import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import * as Scope from "effect/Scope";
 import * as SubscriptionRef from "effect/SubscriptionRef";
-import { Atom, AtomRegistry } from "effect/reactivity";
+import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 
 import * as EnvironmentRegistry from "../connection/registry.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import type { RpcSession } from "../rpc/session.ts";
 import { createThreadEnvironmentAtoms } from "./threadCommands.ts";
 import * as ThreadHistoryController from "./threadHistoryController.ts";
+import { v2Projection } from "./orchestrationV2TestFixtures.ts";
+import { EMPTY_ENVIRONMENT_THREAD_STATE, type EnvironmentThreadState } from "./threadState.ts";
 
 const ENVIRONMENT_ID = EnvironmentId.make("remote");
 const THREAD_ID = ThreadId.make("thread");
@@ -86,6 +91,33 @@ const SNAPSHOT: OrchestrationV2ShellSnapshot = {
   ],
 };
 
+const pendingRuntimeRequest = (
+  id: RuntimeRequestId,
+  kind: OrchestrationV2RuntimeRequest["kind"],
+): OrchestrationV2RuntimeRequest => ({
+  id,
+  nodeId: NodeId.make(`node-${id}`),
+  providerTurnId: null,
+  nativeRequestRef: null,
+  kind,
+  status: "pending",
+  responseCapability: { type: "live", providerSessionId: ProviderSessionId.make("session") },
+  createdAt: NOW,
+  resolvedAt: null,
+});
+const THREAD_STATE: EnvironmentThreadState = {
+  ...EMPTY_ENVIRONMENT_THREAD_STATE,
+  data: Option.some({
+    ...v2Projection,
+    runtimeRequests: [
+      pendingRuntimeRequest(APPROVAL.id, "command"),
+      pendingRuntimeRequest(USER_INPUT.id, "user_input"),
+    ],
+  }),
+  status: "live",
+  sequence: 3,
+};
+
 const makeHarness = Effect.fn("TestThreadCommands.makeHarness")(function* (options?: {
   readonly loadEarlier?: () => Effect.Effect<ThreadHistoryController.ThreadHistoryLoadEarlierResult>;
   readonly reconcilePendingWork?: (threadId: ThreadId) => Effect.Effect<void>;
@@ -136,12 +168,29 @@ const makeHarness = Effect.fn("TestThreadCommands.makeHarness")(function* (optio
     ),
   );
   const snapshotAtom = Atom.family((_environmentId: EnvironmentId) => Atom.make(SNAPSHOT));
-  const commands = createThreadEnvironmentAtoms(runtime, snapshotAtom);
+  const threadStateFamily = Atom.family((_key: string) =>
+    Atom.make(AsyncResult.success(THREAD_STATE)),
+  );
+  const threadStateAtom = (environmentId: EnvironmentId, threadId: ThreadId) =>
+    threadStateFamily(`${environmentId}:${threadId}`);
+  const commands = createThreadEnvironmentAtoms(runtime, snapshotAtom, threadStateAtom);
   const registry = AtomRegistry.make();
   yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()));
   const visibleAtom = commands.snapshotAtom(ENVIRONMENT_ID);
   registry.mount(visibleAtom);
-  return { registry, commands, snapshotAtom, visibleAtom, requests, reconciled };
+  const sourceStateAtom = threadStateAtom(ENVIRONMENT_ID, THREAD_ID);
+  const stateAtom = commands.threadStateAtom(ENVIRONMENT_ID, THREAD_ID);
+  registry.mount(stateAtom);
+  return {
+    registry,
+    commands,
+    snapshotAtom,
+    visibleAtom,
+    sourceStateAtom,
+    stateAtom,
+    requests,
+    reconciled,
+  };
 });
 
 describe("history loading", () => {
@@ -504,6 +553,124 @@ describe("remote thread lifecycle commands", () => {
         );
         expect(h.registry.get(h.visibleAtom)?.threads[0]?.pendingRuntimeRequest).toBeNull();
         expect(h.registry.get(h.snapshotAtom(ENVIRONMENT_ID))).toBe(stale);
+      }),
+  );
+});
+
+describe("optimistic runtime request responses", () => {
+  const responses = [
+    ["respondToApproval", APPROVAL, { decision: "accept" }],
+    ["respondToUserInput", USER_INPUT, { answers: { question: "answer" } }],
+    ["dismissUserInput", USER_INPUT, {}],
+  ] as const;
+  const resolvedFields = {
+    respondToApproval: { decision: "accept" },
+    respondToUserInput: { answers: { question: "answer" } },
+    dismissUserInput: { decision: "cancel" },
+  } as const;
+
+  type Harness = Effect.Success<ReturnType<typeof makeHarness>>;
+  // The three commands take different inputs, so one table row drives all of them.
+  const respond = (
+    h: Harness,
+    action: (typeof responses)[number][0],
+    requestId: RuntimeRequestId,
+    extra: Record<string, unknown>,
+  ) =>
+    h.commands[action].run(h.registry, {
+      environmentId: ENVIRONMENT_ID,
+      input: { threadId: THREAD_ID, requestId, ...extra },
+    } as never);
+
+  const setup = Effect.fn("TestThreadCommands.setupResponse")(function* (
+    request: typeof APPROVAL | typeof USER_INPUT,
+  ) {
+    const h = yield* makeHarness();
+    const shell = {
+      ...SNAPSHOT,
+      threads: [{ ...SNAPSHOT.threads[0]!, pendingRuntimeRequest: request }],
+    };
+    h.registry.set(h.snapshotAtom(ENVIRONMENT_ID), shell);
+    const requestOf = () => {
+      const state = h.registry.get(h.stateAtom);
+      return AsyncResult.isSuccess(state) && Option.isSome(state.value.data)
+        ? state.value.data.value.runtimeRequests.find((item) => item.id === request.id)
+        : undefined;
+    };
+    return { h, shell, requestOf };
+  });
+
+  it.effect.each(responses)(
+    "%s resolves the request before a delayed reply and restores it on rejection",
+    ([action, request, extra]) =>
+      Effect.gen(function* () {
+        const { h, shell, requestOf } = yield* setup(request);
+        const result = respond(h, action, request.id, extra);
+        expect(requestOf()).toMatchObject({ status: "resolved", ...resolvedFields[action] });
+        expect(h.registry.get(h.visibleAtom)?.threads[0]?.pendingRuntimeRequest).toBeNull();
+        const sent = yield* Queue.take(h.requests);
+        yield* Deferred.fail(sent.reply, new Error("Rejected"));
+        expect((yield* Effect.promise(() => result))._tag).toBe("Failure");
+        expect(h.registry.get(h.stateAtom)).toBe(h.registry.get(h.sourceStateAtom));
+        expect(h.registry.get(h.visibleAtom)).toBe(shell);
+      }),
+  );
+
+  it.effect.each(responses)(
+    "%s stays resolved until the thread reaches the acknowledged sequence",
+    ([action, request, extra]) =>
+      Effect.gen(function* () {
+        const { h, requestOf } = yield* setup(request);
+        const result = respond(h, action, request.id, extra);
+        const sent = yield* Queue.take(h.requests);
+        yield* Deferred.succeed(sent.reply, { sequence: 5 });
+        expect((yield* Effect.promise(() => result))._tag).toBe("Success");
+        h.registry.set(h.sourceStateAtom, AsyncResult.success({ ...THREAD_STATE, sequence: 4 }));
+        expect(requestOf()).toMatchObject({ status: "resolved" });
+        const caughtUp = AsyncResult.success({ ...THREAD_STATE, sequence: 5 });
+        h.registry.set(h.sourceStateAtom, caughtUp);
+        expect(h.registry.get(h.stateAtom)).toBe(caughtUp);
+      }),
+  );
+
+  it.effect.each(responses)(
+    "%s leaves a request the server already cancelled alone when it fails",
+    ([action, request, extra]) =>
+      Effect.gen(function* () {
+        const { h } = yield* setup(request);
+        const result = respond(h, action, request.id, extra);
+        const sent = yield* Queue.take(h.requests);
+        const cancelled = AsyncResult.success({
+          ...THREAD_STATE,
+          sequence: 4,
+          data: Option.map(THREAD_STATE.data, (projection) => ({
+            ...projection,
+            runtimeRequests: projection.runtimeRequests.map((item) =>
+              item.id === request.id ? { ...item, status: "cancelled" as const } : item,
+            ),
+          })),
+        });
+        h.registry.set(h.sourceStateAtom, cancelled);
+        yield* Deferred.fail(sent.reply, new Error("Request is not pending"));
+        expect((yield* Effect.promise(() => result))._tag).toBe("Failure");
+        expect(h.registry.get(h.stateAtom)).toBe(cancelled);
+      }),
+  );
+
+  it.effect.each(responses)(
+    "%s reuses the first response when the same request is answered twice",
+    ([action, request, extra]) =>
+      Effect.gen(function* () {
+        const { h } = yield* setup(request);
+        const first = respond(h, action, request.id, extra);
+        const second = respond(h, action, request.id, extra);
+        const sent = yield* Queue.take(h.requests);
+        expect(Option.isNone(yield* Queue.poll(h.requests))).toBe(true);
+        yield* Deferred.succeed(sent.reply, { sequence: 5 });
+        const [firstResult, secondResult] = yield* Effect.promise(() =>
+          Promise.all([first, second]),
+        );
+        expect(secondResult).toBe(firstResult);
       }),
   );
 });

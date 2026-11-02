@@ -1,15 +1,19 @@
-import type { ThreadId } from "@t3tools/contracts";
+import type { OrchestrationV2ThreadShell, RuntimeRequestId, ThreadId } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import { Atom } from "effect/reactivity";
+import { type AsyncResult, Atom } from "effect/reactivity";
 import {
   WS_METHODS,
   type EnvironmentId,
   type OrchestrationV2ShellSnapshot,
 } from "@t3tools/contracts";
 
-import { createOptimisticThreadLifecycle } from "./threadLifecycle.ts";
+import {
+  createOptimisticRuntimeResponses,
+  createOptimisticThreadLifecycle,
+} from "./threadLifecycle.ts";
+import type { EnvironmentThreadState } from "./threadState.ts";
 import * as DateTime from "effect/DateTime";
 
 import {
@@ -71,9 +75,13 @@ export type LoadEarlierThreadHistoryInput = {
   readonly workAnchorId?: string;
 };
 
-export function createThreadEnvironmentAtoms<R, E>(
+export function createThreadEnvironmentAtoms<R, E, StateError>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry | Crypto.Crypto | R, E>,
   snapshotAtom: (environmentId: EnvironmentId) => Atom.Atom<OrchestrationV2ShellSnapshot | null>,
+  threadStateAtom: (
+    environmentId: EnvironmentId,
+    threadId: ThreadId,
+  ) => Atom.Atom<AsyncResult.AsyncResult<EnvironmentThreadState, StateError>>,
 ) {
   const scheduler = createAtomCommandScheduler();
   const concurrency = {
@@ -400,9 +408,33 @@ export function createThreadEnvironmentAtoms<R, E>(
     }),
   };
   const optimistic = createOptimisticThreadLifecycle(snapshotAtom);
+  const responses = createOptimisticRuntimeResponses(threadStateAtom);
+  const clearShellRequest = (
+    thread: OrchestrationV2ThreadShell,
+    input: { readonly requestId: RuntimeRequestId },
+  ) =>
+    thread.pendingRuntimeRequest?.id === input.requestId
+      ? { ...thread, pendingRuntimeRequest: null }
+      : thread;
   return {
     ...commands,
     snapshotAtom: optimistic.snapshotAtom,
+    threadStateAtom: responses.stateAtom,
+    respondToApproval: optimistic.wrap(
+      responses.wrap(commands.respondToApproval, (input) => ({
+        decision: input.decision,
+        ...(input.feedback === undefined ? {} : { feedback: input.feedback }),
+      })),
+      clearShellRequest,
+    ),
+    respondToUserInput: optimistic.wrap(
+      responses.wrap(commands.respondToUserInput, (input) => ({ answers: input.answers })),
+      clearShellRequest,
+    ),
+    dismissUserInput: optimistic.wrap(
+      responses.wrap(commands.dismissUserInput, () => ({ decision: "cancel" })),
+      clearShellRequest,
+    ),
     settle: optimistic.wrap(commands.settle, (thread, _input, now, accepted) =>
       !accepted &&
       (thread.pendingRuntimeRequest !== null ||

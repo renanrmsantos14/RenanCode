@@ -6,9 +6,14 @@ import { expect, it, vi } from "vite-plus/test";
 
 import { render } from "../../../test/render";
 
-const state = vi.hoisted(() => ({ respond: vi.fn(), approvalsAtom: null as unknown }));
+const state = vi.hoisted(() => ({
+  respond: vi.fn(),
+  addToast: vi.fn(),
+  approvalsAtom: null as unknown,
+}));
 
 vi.mock("../../state/session", () => ({ useEnvironmentScope: () => true }));
+vi.mock("../ui/toast", () => ({ toastManager: { add: state.addToast } }));
 vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => state.respond }));
 vi.mock("../../state/threads", () => ({
   childThreadApprovalsAtom: () => state.approvalsAtom,
@@ -19,6 +24,7 @@ import { ChildThreadApprovals } from "./ChildThreadApprovals";
 
 function setup() {
   state.respond.mockReset();
+  state.addToast.mockReset();
   state.respond
     .mockResolvedValueOnce(AsyncResult.failure(Cause.fail(new Error("Child environment offline"))))
     .mockResolvedValueOnce(AsyncResult.success(undefined));
@@ -42,11 +48,14 @@ function setup() {
   return thread;
 }
 
-it("shows a failed decision and clears the error when the user retries", async () => {
+it("reports a failed decision as a toast and lets the user retry", async () => {
   const thread = setup();
   await using screen = await render(<ChildThreadApprovals threadRef={thread} />);
   await screen.getByRole("button", { name: "Approve", exact: true }).click();
-  await expect.element(screen.getByRole("alert")).toHaveTextContent("Child environment offline");
+  expect(state.addToast).toHaveBeenCalledWith(
+    expect.objectContaining({ type: "error", description: "Child environment offline" }),
+  );
   await screen.getByRole("button", { name: "Approve", exact: true }).click();
-  await expect.element(screen.getByRole("alert")).not.toBeInTheDocument();
+  expect(state.respond).toHaveBeenCalledTimes(2);
+  expect(state.addToast).toHaveBeenCalledTimes(1);
 });
