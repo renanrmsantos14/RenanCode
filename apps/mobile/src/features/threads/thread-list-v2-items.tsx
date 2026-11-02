@@ -30,7 +30,7 @@ import type { SnoozePresetSetting } from "@t3tools/contracts/settings";
 import { canSnooze } from "@t3tools/client-runtime/state/thread-settled";
 import { threadChipCopyTarget } from "@t3tools/client-runtime/thread-reference";
 import type { MenuAction } from "@react-native-menu/menu";
-import { memo, useCallback, useMemo, useState, type ComponentProps } from "react";
+import { memo, useCallback, useMemo, useRef, useState, type ComponentProps } from "react";
 import { Platform, Pressable, useWindowDimensions, View } from "react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 
@@ -575,6 +575,8 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
     </>
   );
 });
+
+const PREFETCH_PRESS_DELAY_MS = 100;
 
 export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly thread: EnvironmentThreadShell;
@@ -1326,8 +1328,18 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     cardContent
   );
 
-  const prefetchThread = () =>
-    startOpeningEnvironmentThread(thread.environmentId, thread.id, 1_000);
+  // A touch that turns into a scroll ends the press, so it never loads the row.
+  const prefetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prefetchThread = () => {
+    prefetchTimer.current = setTimeout(
+      () => startOpeningEnvironmentThread(thread.environmentId, thread.id, 1_000),
+      PREFETCH_PRESS_DELAY_MS,
+    );
+  };
+  const cancelPrefetch = () => {
+    if (prefetchTimer.current !== null) clearTimeout(prefetchTimer.current);
+    prefetchTimer.current = null;
+  };
 
   const rowContent = (close: () => void) =>
     variant === "card" ? (
@@ -1346,6 +1358,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
           if (event.nativeEvent.actionName === "dismissWoke") handleAcknowledgeWoke();
         }}
         onPressIn={prefetchThread}
+        onPressOut={cancelPrefetch}
         onPress={() => {
           close();
           selectThread();
@@ -1374,6 +1387,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         accessibilityState={{ selected }}
         className={rowAppearance.className}
         onPressIn={prefetchThread}
+        onPressOut={cancelPrefetch}
         onPress={() => {
           close();
           selectThread();
