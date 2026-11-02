@@ -1,4 +1,4 @@
-import type { OrchestrationV2ThreadShell, RuntimeRequestId, ThreadId } from "@t3tools/contracts";
+import type { ThreadId } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -409,32 +409,18 @@ export function createThreadEnvironmentAtoms<R, E, StateError>(
   };
   const optimistic = createOptimisticThreadLifecycle(snapshotAtom);
   const responses = createOptimisticRuntimeResponses(threadStateAtom);
-  const clearShellRequest = (
-    thread: OrchestrationV2ThreadShell,
-    input: { readonly requestId: RuntimeRequestId },
-  ) =>
-    thread.pendingRuntimeRequest?.id === input.requestId
-      ? { ...thread, pendingRuntimeRequest: null }
-      : thread;
   return {
     ...commands,
     snapshotAtom: optimistic.snapshotAtom,
     threadStateAtom: responses.stateAtom,
-    respondToApproval: optimistic.wrap(
-      responses.wrap(commands.respondToApproval, (input) => ({
-        decision: input.decision,
-        ...(input.feedback === undefined ? {} : { feedback: input.feedback }),
-      })),
-      clearShellRequest,
-    ),
-    respondToUserInput: optimistic.wrap(
-      responses.wrap(commands.respondToUserInput, (input) => ({ answers: input.answers })),
-      clearShellRequest,
-    ),
-    dismissUserInput: optimistic.wrap(
-      responses.wrap(commands.dismissUserInput, () => ({ decision: "cancel" })),
-      clearShellRequest,
-    ),
+    respondToApproval: responses.wrap(commands.respondToApproval, (input) => ({
+      decision: input.decision,
+      ...(input.feedback === undefined ? {} : { feedback: input.feedback }),
+    })),
+    respondToUserInput: responses.wrap(commands.respondToUserInput, (input) => ({
+      answers: input.answers,
+    })),
+    dismissUserInput: responses.wrap(commands.dismissUserInput, () => ({ decision: "cancel" })),
     settle: optimistic.wrap(commands.settle, (thread, _input, now, accepted) =>
       !accepted &&
       (thread.pendingRuntimeRequest !== null ||

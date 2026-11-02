@@ -181,6 +181,12 @@ export function createOptimisticRuntimeResponses<E>(
     let previousRequests: ReadonlyArray<OrchestrationV2RuntimeRequest> | undefined;
     let previousActive: ReadonlyArray<PendingRuntimeResponse> = [];
     let previousResolved: ReadonlyArray<OrchestrationV2RuntimeRequest> = [];
+    let previousOutput:
+      | {
+          readonly source: AsyncResult.AsyncResult<EnvironmentThreadState, E>;
+          readonly value: AsyncResult.AsyncResult<EnvironmentThreadState, E>;
+        }
+      | undefined;
     return Atom.make((get) => {
       const result = get(sourceStateAtom(ref.environmentId, ref.threadId));
       const pending = get(pendingAtom(key));
@@ -198,12 +204,20 @@ export function createOptimisticRuntimeResponses<E>(
         previousRequests = projection.runtimeRequests;
         previousActive = active;
         previousResolved = resolveRuntimeRequests(projection.runtimeRequests, active);
+        previousOutput = undefined;
       }
       if (previousResolved === projection.runtimeRequests) return result;
-      return AsyncResult.success(
-        { ...state, data: Option.some({ ...projection, runtimeRequests: previousResolved }) },
-        { waiting: result.waiting },
-      );
+      // Keeps the projection's identity when only a pending entry changed, so readers do not re-render.
+      if (previousOutput?.source !== result) {
+        previousOutput = {
+          source: result,
+          value: AsyncResult.success(
+            { ...state, data: Option.some({ ...projection, runtimeRequests: previousResolved }) },
+            { waiting: result.waiting },
+          ),
+        };
+      }
+      return previousOutput.value;
     }).pipe(Atom.setIdleTTL(0), Atom.withLabel(`environment-thread-state-responses:${key}`));
   });
 
@@ -239,9 +253,11 @@ export function createOptimisticRuntimeResponses<E>(
           registry,
           pendingAtom(key),
           sourceStateAtom(target.environmentId, target.input.threadId),
+          // A failed thread shows no overlay, so holding its subscription open would only leak it.
           (source, sequence) =>
-            AsyncResult.isSuccess(source) &&
-            (source.value.status === "deleted" || source.value.sequence >= sequence),
+            AsyncResult.isFailure(source) ||
+            (AsyncResult.isSuccess(source) &&
+              (source.value.status === "deleted" || source.value.sequence >= sequence)),
           response,
           () => command.run(registry, target),
         ).finally(() => inFlight.delete(flightKey));

@@ -607,7 +607,6 @@ describe("optimistic runtime request responses", () => {
         const { h, shell, requestOf } = yield* setup(request);
         const result = respond(h, action, request.id, extra);
         expect(requestOf()).toMatchObject({ status: "resolved", ...resolvedFields[action] });
-        expect(h.registry.get(h.visibleAtom)?.threads[0]?.pendingRuntimeRequest).toBeNull();
         const sent = yield* Queue.take(h.requests);
         yield* Deferred.fail(sent.reply, new Error("Rejected"));
         expect((yield* Effect.promise(() => result))._tag).toBe("Failure");

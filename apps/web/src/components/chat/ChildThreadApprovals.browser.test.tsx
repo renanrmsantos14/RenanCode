@@ -53,10 +53,12 @@ it("reports a failed decision as a toast and lets the user retry", async () => {
   const thread = setup();
   await using screen = await render(<ChildThreadApprovals threadRef={thread} />);
   await screen.getByRole("button", { name: "Approve", exact: true }).click();
-  expect(state.addToast).toHaveBeenCalledWith(
-    expect.objectContaining({ type: "error", description: "Child environment offline" }),
+  await vi.waitFor(() =>
+    expect(state.addToast).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "error", description: "Child environment offline" }),
+    ),
   );
   await screen.getByRole("button", { name: "Approve", exact: true }).click();
-  expect(state.respond).toHaveBeenCalledTimes(2);
+  await vi.waitFor(() => expect(state.respond).toHaveBeenCalledTimes(2));
   expect(state.addToast).toHaveBeenCalledTimes(1);
 });
