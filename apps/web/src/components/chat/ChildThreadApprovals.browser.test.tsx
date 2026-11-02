@@ -18,6 +18,7 @@ vi.mock("../../state/use-atom-command", () => ({ useAtomCommand: () => state.res
 vi.mock("../../state/threads", () => ({
   childThreadApprovalsAtom: () => state.approvalsAtom,
   threadEnvironment: { respondToApproval: {} },
+  environmentThreadDetails: { pendingRequestsAtom: () => Atom.make(null) },
 }));
 
 import { ChildThreadApprovals } from "./ChildThreadApprovals";

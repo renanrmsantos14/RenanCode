@@ -7,7 +7,12 @@ import {
 } from "@t3tools/client-runtime/state/thread-requests";
 import { useState } from "react";
 import { useEnvironmentScope } from "../../state/session";
-import { childThreadApprovalsAtom, threadEnvironment } from "../../state/threads";
+import { appAtomRegistry } from "../../rpc/atomRegistry";
+import {
+  childThreadApprovalsAtom,
+  environmentThreadDetails,
+  threadEnvironment,
+} from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { toastManager } from "../ui/toast";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
@@ -53,7 +58,12 @@ function ChildApproval({ entry }: { entry: ChildThreadApproval }) {
               environmentId: entry.thread.environmentId,
               input: { threadId: entry.thread.threadId, requestId, decision },
             });
-            const description = respondFailureMessage(result, true, "Try again.");
+            const description = respondFailureMessage(
+              result,
+              appAtomRegistry.get(environmentThreadDetails.pendingRequestsAtom(entry.thread)),
+              requestId,
+              "Try again.",
+            );
             if (description !== null) {
               toastManager.add({
                 type: "error",

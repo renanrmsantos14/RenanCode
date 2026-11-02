@@ -177,10 +177,7 @@ export function reportRespondFailure(
   composer: ScopedThreadRef = request,
 ) {
   const current = appAtomRegistry.get(environmentThreadDetails.pendingRequestsAtom(request));
-  const stillPending =
-    current === null ||
-    [...current.approvals, ...current.userInputs].some((item) => item.requestId === requestId);
-  const message = respondFailureMessage(result, stillPending, fallback);
+  const message = respondFailureMessage(result, current, requestId, fallback);
   if (message !== null) {
     setThreadComposerError(scopedThreadKey(composer.environmentId, composer.threadId), message);
   }

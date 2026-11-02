@@ -24,15 +24,22 @@ import type { ThreadStructure, ThreadStructureVisibleTurnItem } from "./models.t
 
 /**
  * The message to show for a failed response, or null when there is nothing to report: it
- * succeeded, was interrupted, or the request is no longer pending (answered elsewhere).
+ * succeeded, was interrupted, or the server no longer holds the request (answered elsewhere).
+ * `current` is the thread's pending requests after rollback; null means not loaded.
  */
 export function respondFailureMessage(
   result: AtomCommandResult<unknown, unknown> | undefined,
-  stillPending: boolean,
+  current: PendingThreadRequests | null,
+  requestId: RuntimeRequestId,
   fallback: string,
 ): string | null {
-  if (result === undefined || result._tag !== "Failure" || !stillPending) return null;
-  if (isAtomCommandInterrupted(result)) return null;
+  if (result === undefined || result._tag !== "Failure" || isAtomCommandInterrupted(result)) {
+    return null;
+  }
+  const stillPending =
+    current === null ||
+    [...current.approvals, ...current.userInputs].some((item) => item.requestId === requestId);
+  if (!stillPending) return null;
   const failure = squashAtomCommandFailure(result);
   return failure instanceof Error && failure.message.length > 0 ? failure.message : fallback;
 }

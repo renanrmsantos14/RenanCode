@@ -141,7 +141,6 @@ interface PendingRuntimeResponse {
   readonly resolution: RuntimeRequestResolution;
   readonly now: DateTime.Utc;
   sequence?: number;
-  result?: Promise<unknown>;
 }
 
 function resolveRuntimeRequests(
@@ -219,6 +218,7 @@ export function createOptimisticRuntimeResponses<E>(
     >,
     resolution: (input: Input) => RuntimeRequestResolution,
   ): typeof command {
+    const inFlight = new Map<string, ReturnType<typeof command.run>>();
     return {
       label: command.label,
       run: (registry, target) => {
@@ -226,14 +226,10 @@ export function createOptimisticRuntimeResponses<E>(
           environmentId: target.environmentId,
           threadId: target.input.threadId,
         });
-        const pending = pendingAtom(key);
-        const existing = registry
-          .get(pending)
-          .find((response) => response.requestId === target.input.requestId);
+        const flightKey = `${key}:${target.input.requestId}`;
         // A second tap on the same request reuses the first response instead of dispatching again.
-        if (existing?.result !== undefined) {
-          return existing.result as ReturnType<typeof command.run>;
-        }
+        const existing = inFlight.get(flightKey);
+        if (existing !== undefined) return existing;
         const response: PendingRuntimeResponse = {
           requestId: target.input.requestId,
           resolution: resolution(target.input),
@@ -241,15 +237,15 @@ export function createOptimisticRuntimeResponses<E>(
         };
         const result = runWithPendingUpdate(
           registry,
-          pending,
+          pendingAtom(key),
           sourceStateAtom(target.environmentId, target.input.threadId),
           (source, sequence) =>
             AsyncResult.isSuccess(source) &&
             (source.value.status === "deleted" || source.value.sequence >= sequence),
           response,
           () => command.run(registry, target),
-        );
-        response.result = result;
+        ).finally(() => inFlight.delete(flightKey));
+        inFlight.set(flightKey, result);
         return result;
       },
     };

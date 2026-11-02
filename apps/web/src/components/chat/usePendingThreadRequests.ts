@@ -16,6 +16,7 @@ import {
   seedUserInputDraftAnswers,
   userInputDraftKey,
 } from "@t3tools/client-runtime/state/thread-requests";
+import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
 import { create } from "zustand";
 import { useRef, useState, type RefObject, type SetStateAction } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -52,19 +53,17 @@ import { toastManager } from "../ui/toast";
 
 import type { ChatComposerHandle } from "./ChatComposer";
 
-/** The optimistic response drops the request, so only a request the server still holds is a failure to report. */
-function requestStillPending(
+function respondFailure(
+  result: AtomCommandResult<unknown, unknown>,
   environmentId: EnvironmentId,
   threadId: ThreadId,
   requestId: RuntimeRequestId,
-): boolean {
+  fallback: string,
+) {
   const current = appAtomRegistry.get(
     environmentThreadDetails.pendingRequestsAtom({ environmentId, threadId }),
   );
-  return (
-    current === null ||
-    [...current.approvals, ...current.userInputs].some((request) => request.requestId === requestId)
-  );
+  return respondFailureMessage(result, current, requestId, fallback);
 }
 
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
@@ -297,9 +296,11 @@ export function usePendingThreadRequests(input: {
         ...(feedback === undefined ? {} : { feedback }),
       },
     });
-    const failure = respondFailureMessage(
+    const failure = respondFailure(
       result,
-      requestStillPending(environmentId, activeThreadId, requestId),
+      environmentId,
+      activeThreadId,
+      requestId,
       "Failed to submit approval decision.",
     );
     if (failure !== null) setThreadError(activeThreadId, failure);
@@ -361,9 +362,11 @@ export function usePendingThreadRequests(input: {
           : {}),
       },
     });
-    const failure = respondFailureMessage(
+    const failure = respondFailure(
       result,
-      requestStillPending(environmentId, activeThreadId, requestId),
+      environmentId,
+      activeThreadId,
+      requestId,
       "Failed to submit user input.",
     );
     if (failure !== null) setThreadError(activeThreadId, failure);
@@ -382,9 +385,11 @@ export function usePendingThreadRequests(input: {
       environmentId,
       input: { threadId: activeThreadId, requestId },
     });
-    const failure = respondFailureMessage(
+    const failure = respondFailure(
       result,
-      requestStillPending(environmentId, activeThreadId, requestId),
+      environmentId,
+      activeThreadId,
+      requestId,
       "Failed to dismiss the question.",
     );
     if (failure !== null) setThreadError(activeThreadId, failure);
