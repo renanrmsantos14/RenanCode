@@ -7,10 +7,12 @@ import {
   textDirection,
   type TextDirection,
 } from "@t3tools/shared/textDirection";
-import { useRef } from "react";
+import * as Haptics from "expo-haptics";
+import { useEffect, useRef, useState } from "react";
 import { Platform, Pressable, ScrollView, View, type LayoutChangeEvent } from "react-native";
 import Animated, {
   Easing,
+  FadeIn,
   FadeInUp,
   FadeOutDown,
   useAnimatedStyle,
@@ -30,7 +32,9 @@ import { useOpenPullRequest } from "../../native/useOpenPullRequest";
 import { useMarkdownPreviewStyles } from "../files/FileMarkdownPreview";
 import { useLiveThreadLinkLabels } from "../../state/entities";
 import {
+  derivePendingUserInputProgress,
   isPendingUserInputOptionSelected,
+  resolvePendingUserInputAnswer,
   type PendingUserInputDraftAnswer,
 } from "@t3tools/client-runtime/state/pending-user-input";
 import type { PendingUserInput } from "../../lib/threadActivity";
@@ -62,6 +66,9 @@ export interface PendingUserInputCardProps {
   readonly onSubmit: () => Promise<unknown>;
   readonly onDismiss: () => Promise<unknown>;
 }
+
+const AUTO_ADVANCE_DELAY_MS = 180;
+const QUESTION_SWITCH_DURATION_MS = 160;
 
 /** Android cannot hit-test overlays beyond their parent's bounds; render its expanded card in-flow. */
 const EXPANDED_CARD_IS_OVERLAY = Platform.OS === "ios";
@@ -97,12 +104,39 @@ function QuestionText(props: {
 }
 
 export function PendingUserInputCard(props: PendingUserInputCardProps) {
-  const questionCount = props.pendingUserInput.questions.length;
+  const questions = props.pendingUserInput.questions;
+  const questionCount = questions.length;
+  const [requestedIndex, setRequestedIndex] = useState(0);
+  const autoAdvanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearAutoAdvance = () => {
+    if (autoAdvanceTimer.current !== null) {
+      clearTimeout(autoAdvanceTimer.current);
+      autoAdvanceTimer.current = null;
+    }
+  };
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- cancels the pending auto-advance timer on unmount
+  useEffect(
+    () => () => {
+      if (autoAdvanceTimer.current !== null) clearTimeout(autoAdvanceTimer.current);
+    },
+    [],
+  );
+  const progress = derivePendingUserInputProgress(questions, props.drafts, requestedIndex);
+  const activeQuestion = questions[progress.questionIndex];
+  const questionIndex = progress.questionIndex;
+  const goToQuestion = (index: number) => {
+    clearAutoAdvance();
+    setRequestedIndex(index);
+  };
+  const counter = questionCount > 1 ? `${questionIndex + 1}/${questionCount}` : null;
+  const firstUnansweredIndex = questions.findIndex(
+    (question) => resolvePendingUserInputAnswer(question, props.drafts[question.id]) === null,
+  );
   const canRespond = props.pendingUserInput.responseCapability !== "not_resumable";
   const isResponding = props.respondingUserInputId === props.pendingUserInput.requestId;
   const responseDisabled = !canRespond || isResponding;
   const setDirection = markdownProseDirection(
-    props.pendingUserInput.questions
+    questions
       .flatMap((question) => [
         question.header,
         question.question,
@@ -132,6 +166,31 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
     cardHeight.set(event.nativeEvent.layout.height);
     notifyCoverage();
   };
+  const handleSelectOption = (question: ThreadUserInputQuestion, value: string) => {
+    void Haptics.selectionAsync().catch(() => undefined);
+    props.onSelectOption(props.pendingUserInput.requestId, question, value);
+    if (!question.multiSelect && !progress.isLastQuestion) {
+      clearAutoAdvance();
+      autoAdvanceTimer.current = setTimeout(() => {
+        autoAdvanceTimer.current = null;
+        setRequestedIndex(questionIndex + 1);
+      }, AUTO_ADVANCE_DELAY_MS);
+    }
+  };
+  const submitButton = (
+    <Button
+      label="Submit answers"
+      fullWidth
+      tone={props.answers ? "primary" : "secondary"}
+      disabled={!props.canOperateThread || responseDisabled || props.answers === null}
+      onPress={() => {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+          () => undefined,
+        );
+        void props.onSubmit();
+      }}
+    />
+  );
   const cardProgress = props.cardProgress;
   const maxHeight = props.maxHeight;
   const cardAnimatedStyle = useAnimatedStyle(() => {
@@ -157,18 +216,23 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
     >
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Expand user input, ${questionCount} question${
-          questionCount === 1 ? "" : "s"
-        }`}
+        accessibilityLabel={
+          counter && activeQuestion
+            ? `Expand question ${questionIndex + 1} of ${questionCount}, ${activeQuestion.header}`
+            : `Expand question${activeQuestion ? `, ${activeQuestion.header}` : ""}`
+        }
         onPress={props.onToggleCollapsed}
         className="min-h-10 flex-1 flex-row items-center gap-2 active:opacity-70"
       >
-        <Text className="font-t3-bold text-2xs uppercase tracking-[1.1px] text-foreground-secondary">
-          User input needed
+        <Text
+          numberOfLines={1}
+          className="min-w-0 shrink font-t3-bold text-2xs uppercase tracking-[1.1px] text-foreground-secondary"
+        >
+          {activeQuestion?.header ?? "Question"}
         </Text>
-        <Text className="font-sans text-xs text-foreground-muted">
-          {questionCount} question{questionCount === 1 ? "" : "s"}
-        </Text>
+        {counter ? (
+          <Text className="font-sans text-xs text-foreground-muted">· {counter}</Text>
+        ) : null}
         <View className="flex-1" />
         <SymbolView
           name="chevron.up"
@@ -210,16 +274,22 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
     >
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Collapse user input"
+        accessibilityLabel="Collapse question"
         onPress={props.onToggleCollapsed}
-        className="flex-row items-start gap-2"
+        className="flex-row items-center gap-2"
       >
-        <View className="flex-1 gap-2.5">
-          <Text className="font-t3-bold text-2xs uppercase tracking-[1.1px] text-foreground-secondary">
-            User input needed
+        <View className="min-w-0 flex-1 justify-center self-stretch">
+          <Text
+            numberOfLines={1}
+            className="font-t3-bold text-2xs uppercase tracking-[1.1px] text-foreground-secondary"
+            style={proseDirectionStyle(activeQuestion?.header ?? "", setDirection)}
+          >
+            {activeQuestion?.header ?? "Question"}
           </Text>
-          <Text className="font-t3-bold text-lg text-foreground">Fill in the pending answers</Text>
         </View>
+        {counter ? (
+          <Text className="self-center font-sans text-xs text-foreground-muted">{counter}</Text>
+        ) : null}
         <View className="h-8 w-8 items-center justify-center rounded-full bg-subtle-strong">
           <SymbolView
             name="chevron.down"
@@ -244,93 +314,147 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
             run to continue.
           </Text>
         ) : null}
-        {props.pendingUserInput.questions.map((question) => {
-          const draft = props.drafts[question.id];
-          return (
-            <View key={question.id} className="gap-2 pt-1">
-              <Text
-                className="font-t3-bold text-xs uppercase tracking-[1px] text-foreground-muted"
-                style={proseDirectionStyle(question.header, setDirection)}
-              >
-                {question.header}
-              </Text>
-              <QuestionText
-                markdown={question.question}
-                environmentId={props.environmentId}
-                setDirection={setDirection}
-              />
-              <View className="gap-2">
-                {question.options.map((option) => {
-                  const optionValue = option.value ?? option.label.trim();
-                  const selected = isPendingUserInputOptionSelected(question, draft, optionValue);
-                  const description =
-                    option.description !== option.label ? option.description : undefined;
-                  return (
-                    <Pressable
-                      key={optionValue}
-                      accessibilityRole={question.multiSelect ? "checkbox" : "radio"}
-                      accessibilityState={{ checked: selected, disabled: responseDisabled }}
-                      disabled={responseDisabled}
+        {activeQuestion ? (
+          <Animated.View
+            key={activeQuestion.id}
+            entering={FadeIn.duration(QUESTION_SWITCH_DURATION_MS)}
+            className="gap-2 pt-1"
+          >
+            <QuestionText
+              markdown={activeQuestion.question}
+              environmentId={props.environmentId}
+              setDirection={setDirection}
+            />
+            {activeQuestion.multiSelect ? (
+              <Text className="font-sans text-xs text-foreground-muted">Select all that apply</Text>
+            ) : null}
+            <View className="gap-2">
+              {activeQuestion.options.map((option) => {
+                const optionValue = option.value ?? option.label.trim();
+                const selected = isPendingUserInputOptionSelected(
+                  activeQuestion,
+                  progress.activeDraft,
+                  optionValue,
+                );
+                const description =
+                  option.description !== option.label ? option.description : undefined;
+                return (
+                  <Pressable
+                    key={optionValue}
+                    accessibilityRole={activeQuestion.multiSelect ? "checkbox" : "radio"}
+                    accessibilityState={{ checked: selected, disabled: responseDisabled }}
+                    disabled={responseDisabled}
+                    className={cn(
+                      "min-h-12 w-full flex-row items-center gap-3 rounded-2xl border px-3.5 py-3",
+                      selected ? "border-primary bg-primary/10" : "border-border bg-input",
+                    )}
+                    onPress={() => handleSelectOption(activeQuestion, optionValue)}
+                  >
+                    <View
                       className={cn(
-                        "min-h-12 w-full rounded-2xl border px-3.5 py-3",
-                        selected ? "border-primary bg-primary/10" : "border-border bg-input",
+                        "h-5 w-5 items-center justify-center border",
+                        activeQuestion.multiSelect ? "rounded-md" : "rounded-full",
+                        selected ? "border-primary bg-primary" : "border-border",
                       )}
-                      onPress={() =>
-                        props.onSelectOption(
-                          props.pendingUserInput.requestId,
-                          question,
-                          optionValue,
-                        )
-                      }
                     >
-                      <View className="min-w-0 flex-1 gap-0.5">
+                      {selected ? (
+                        activeQuestion.multiSelect ? (
+                          <SymbolView
+                            name="checkmark"
+                            size={11}
+                            tintColorClassName="accent-primary-foreground"
+                            type="monochrome"
+                          />
+                        ) : (
+                          <View className="h-2 w-2 rounded-full bg-primary-foreground" />
+                        )
+                      ) : null}
+                    </View>
+                    <View className="min-w-0 flex-1 gap-0.5">
+                      <Text
+                        className={cn(
+                          "font-t3-bold text-sm",
+                          selected ? "text-foreground" : "text-foreground-secondary",
+                        )}
+                        style={proseDirectionStyle(option.label, setDirection)}
+                      >
+                        {option.label}
+                      </Text>
+                      {description ? (
                         <Text
-                          className={cn(
-                            "font-t3-bold text-sm",
-                            selected ? "text-foreground" : "text-foreground-secondary",
-                          )}
-                          style={proseDirectionStyle(option.label, setDirection)}
+                          className="font-sans text-sm leading-5 text-foreground-muted"
+                          style={proseDirectionStyle(description, setDirection)}
                         >
-                          {option.label}
+                          {description}
                         </Text>
-                        {description ? (
-                          <Text
-                            className="font-sans text-sm leading-5 text-foreground-muted"
-                            style={proseDirectionStyle(description, setDirection)}
-                          >
-                            {description}
-                          </Text>
-                        ) : null}
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              {question.allowCustomAnswer !== false ? (
-                <QuestionAttachments
-                  key={`${props.pendingUserInput.requestId}:${question.id}`}
-                  requestId={props.pendingUserInput.requestId}
-                  question={question}
-                  questions={props.pendingUserInput.questions}
-                  disabled={responseDisabled}
-                  value={draft?.customAnswer ?? ""}
-                  onChangeText={(value) =>
-                    props.onChangeCustomAnswer(props.pendingUserInput.requestId, question.id, value)
-                  }
-                  onInputFocusChange={props.onInputFocusChange}
-                />
-              ) : null}
+                      ) : null}
+                    </View>
+                  </Pressable>
+                );
+              })}
             </View>
-          );
-        })}
+            {activeQuestion.allowCustomAnswer !== false ? (
+              <QuestionAttachments
+                key={`${props.pendingUserInput.requestId}:${activeQuestion.id}`}
+                requestId={props.pendingUserInput.requestId}
+                question={activeQuestion}
+                questions={questions}
+                disabled={responseDisabled}
+                value={progress.customAnswer}
+                onChangeText={(value) =>
+                  props.onChangeCustomAnswer(
+                    props.pendingUserInput.requestId,
+                    activeQuestion.id,
+                    value,
+                  )
+                }
+                onInputFocusChange={props.onInputFocusChange}
+              />
+            ) : null}
+          </Animated.View>
+        ) : null}
       </ScrollView>
-      <Button
-        label="Submit answers"
-        fullWidth
-        tone={props.answers ? "primary" : "secondary"}
-        disabled={!props.canOperateThread || responseDisabled || props.answers === null}
-        onPress={() => void props.onSubmit()}
-      />
+      {questionCount > 1 && progress.isLastQuestion && props.answers === null ? (
+        firstUnansweredIndex >= 0 && firstUnansweredIndex !== questionIndex ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => goToQuestion(firstUnansweredIndex)}
+            className="active:opacity-70"
+          >
+            <Text className="font-sans text-xs text-foreground-muted">
+              Answer question {firstUnansweredIndex + 1} to submit
+            </Text>
+          </Pressable>
+        ) : null
+      ) : null}
+      {questionCount > 1 ? (
+        <View className="flex-row gap-2">
+          <View className="flex-1">
+            <Button
+              label="Back"
+              fullWidth
+              tone="text"
+              disabled={questionIndex === 0}
+              onPress={() => goToQuestion(questionIndex - 1)}
+            />
+          </View>
+          <View className="flex-1">
+            {progress.isLastQuestion ? (
+              submitButton
+            ) : (
+              <Button
+                label="Next"
+                fullWidth
+                tone={progress.canAdvance ? "primary" : "secondary"}
+                disabled={responseDisabled || !progress.canAdvance}
+                onPress={() => goToQuestion(questionIndex + 1)}
+              />
+            )}
+          </View>
+        </View>
+      ) : (
+        submitButton
+      )}
       {props.pendingUserInput.dismissible ? (
         <Button
           label="Dismiss without answering"
