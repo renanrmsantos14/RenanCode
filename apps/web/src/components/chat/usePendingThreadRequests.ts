@@ -12,13 +12,11 @@ import {
   derivePendingThreadRequests,
   onThreadRequestsResolved,
   pruneResolvedUserInputDrafts,
+  respondFailureMessage,
   seedUserInputDraftAnswers,
   userInputDraftKey,
 } from "@t3tools/client-runtime/state/thread-requests";
-import {
-  isAtomCommandInterrupted,
-  squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
 import { create } from "zustand";
 import { useRef, useState, type RefObject, type SetStateAction } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -47,12 +45,26 @@ import {
   type PendingUserInput,
 } from "../../session-logic";
 import { readEnvironmentScope } from "../../state/session";
-import { threadEnvironment } from "../../state/threads";
+import { appAtomRegistry } from "../../rpc/atomRegistry";
+import { environmentThreadDetails, threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import { toastManager } from "../ui/toast";
 
 import type { ChatComposerHandle } from "./ChatComposer";
+
+function respondFailure(
+  result: AtomCommandResult<unknown, unknown>,
+  environmentId: EnvironmentId,
+  threadId: ThreadId,
+  requestId: RuntimeRequestId,
+  fallback: string,
+) {
+  const current = appAtomRegistry.get(
+    environmentThreadDetails.pendingRequestsAtom({ environmentId, threadId }),
+  );
+  return respondFailureMessage(result, current, requestId, fallback);
+}
 
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
 const usePendingUserInputAnswers = create<
@@ -284,13 +296,14 @@ export function usePendingThreadRequests(input: {
         ...(feedback === undefined ? {} : { feedback }),
       },
     });
-    if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-      const error = squashAtomCommandFailure(result);
-      setThreadError(
-        activeThreadId,
-        error instanceof Error ? error.message : "Failed to submit approval decision.",
-      );
-    }
+    const failure = respondFailure(
+      result,
+      environmentId,
+      activeThreadId,
+      requestId,
+      "Failed to submit approval decision.",
+    );
+    if (failure !== null) setThreadError(activeThreadId, failure);
     setRespondingRequestIds((existing) => existing.filter((id) => id !== requestId));
     return result;
   };
@@ -349,13 +362,14 @@ export function usePendingThreadRequests(input: {
           : {}),
       },
     });
-    if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-      const error = squashAtomCommandFailure(result);
-      setThreadError(
-        activeThreadId,
-        error instanceof Error ? error.message : "Failed to submit user input.",
-      );
-    }
+    const failure = respondFailure(
+      result,
+      environmentId,
+      activeThreadId,
+      requestId,
+      "Failed to submit user input.",
+    );
+    if (failure !== null) setThreadError(activeThreadId, failure);
     userInputResponsesInFlight.current.delete(responseKey);
     setRespondingUserInputRequestIds((existing) => existing.filter((id) => id !== requestId));
     return result;
@@ -371,13 +385,14 @@ export function usePendingThreadRequests(input: {
       environmentId,
       input: { threadId: activeThreadId, requestId },
     });
-    if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-      const error = squashAtomCommandFailure(result);
-      setThreadError(
-        activeThreadId,
-        error instanceof Error ? error.message : "Failed to dismiss the question.",
-      );
-    }
+    const failure = respondFailure(
+      result,
+      environmentId,
+      activeThreadId,
+      requestId,
+      "Failed to dismiss the question.",
+    );
+    if (failure !== null) setThreadError(activeThreadId, failure);
     setRespondingUserInputRequestIds((existing) => existing.filter((id) => id !== requestId));
     return result;
   };

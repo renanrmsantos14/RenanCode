@@ -24,6 +24,9 @@ export interface PendingApprovalCardProps {
   ) => Promise<unknown>;
 }
 
+// A tap meant for the previous card lands on this one once it is replaced.
+const MOUNT_TAP_GUARD_MS = 400;
+
 const DEFAULT_APPROVAL_OPTIONS: ReadonlyArray<ProviderApprovalOption> = [
   { decision: "accept", label: "Allow once" },
   { decision: "acceptForSession", label: "Allow session" },
@@ -37,6 +40,7 @@ export function PendingApprovalCard(props: PendingApprovalCardProps) {
   const canRespond = props.approval.responseCapability === "live";
   const disabled = !canRespond || props.respondingApprovalId === props.approval.requestId;
   const [explanationOpen, setExplanationOpen] = useState(false);
+  const [mountedAt] = useState(() => Date.now());
   return (
     <View className="gap-2.5 rounded-[20px] border border-border bg-card-alt p-4">
       <Text className="font-t3-bold text-2xs uppercase tracking-[1.1px] text-foreground-secondary">
@@ -93,7 +97,10 @@ export function PendingApprovalCard(props: PendingApprovalCardProps) {
                   : "secondary"
             }
             disabled={disabled || !props.canOperateThread}
-            onPress={() => void props.onRespond(props.approval.requestId, option.decision)}
+            onPress={() => {
+              if (Date.now() - mountedAt < MOUNT_TAP_GUARD_MS) return;
+              void props.onRespond(props.approval.requestId, option.decision);
+            }}
           />
         ))}
       </View>

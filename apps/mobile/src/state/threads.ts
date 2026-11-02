@@ -32,13 +32,14 @@ export const olderSettledThreads = createOlderSettledThreadAtoms(
   connectionAtomRuntime,
   environmentShell.stateAtom,
 );
+export const environmentThreads = createEnvironmentThreadStateAtoms(connectionAtomRuntime);
 export const threadEnvironment = createThreadEnvironmentAtoms(
   connectionAtomRuntime,
   threadFamilies.snapshotAtom,
-);
-export const environmentThreads = createEnvironmentThreadStateAtoms(connectionAtomRuntime);
-export const environmentThreadDetails = createEnvironmentThreadDetailAtoms(
   environmentThreads.stateAtom,
+);
+export const environmentThreadDetails = createEnvironmentThreadDetailAtoms(
+  threadEnvironment.threadStateAtom,
 );
 export const environmentThreadShells = createEnvironmentThreadShellAtoms({
   catalogValueAtom: environmentCatalog.catalogValueAtom,
@@ -56,7 +57,11 @@ const OPENING_THREAD_HOLD_MS = 3_000;
  * Starts loading a thread being opened before its screen renders and subscribes, which
  * otherwise waits for navigation to commit.
  */
-export function startOpeningEnvironmentThread(environmentId: EnvironmentId, threadId: ThreadId) {
+export function startOpeningEnvironmentThread(
+  environmentId: EnvironmentId,
+  threadId: ThreadId,
+  holdMs = OPENING_THREAD_HOLD_MS,
+) {
   // A thread whose creation is still queued would load as not found and stay deleted;
   // the opened screen loads it once creation is delivered.
   const { detailRef } = selectThreadCreationDetail({
@@ -69,7 +74,7 @@ export function startOpeningEnvironmentThread(environmentId: EnvironmentId, thre
   });
   if (detailRef === null) return;
   const release = appAtomRegistry.mount(environmentThreads.stateAtom(environmentId, threadId));
-  setTimeout(release, OPENING_THREAD_HOLD_MS);
+  setTimeout(release, holdMs);
 }
 
 const EMPTY_THREAD_STATE_ATOM = Atom.make(AsyncResult.success(EMPTY_ENVIRONMENT_THREAD_STATE)).pipe(
