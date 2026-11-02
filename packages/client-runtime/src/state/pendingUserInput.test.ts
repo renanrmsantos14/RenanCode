@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   buildPendingUserInputAnswers,
+  derivePendingUserInputProgress,
   isPendingUserInputOptionSelected,
   resolvePendingUserInputAnswer,
   setPendingUserInputCustomAnswer,
@@ -175,6 +176,59 @@ describe("buildPendingUserInputAnswers", () => {
     ).toEqual({
       scope: "Orchestration-first",
       compat: "Keep the current envelope for one release window",
+    });
+  });
+});
+
+describe("pending user input question progress", () => {
+  const questions = [
+    singleSelectQuestion,
+    {
+      id: "compat",
+      header: "Compat",
+      question: "How strict should compatibility be?",
+      options: [
+        {
+          label: "Keep current envelope",
+          description: "Preserve current wire format",
+        },
+      ],
+      multiSelect: false,
+    },
+  ] as const;
+
+  it("counts a deliberately cleared answer as answered", () => {
+    const question = { ...singleSelectQuestion, initialAnswer: "  Proposed message\n" };
+    const drafts = { scope: { customAnswer: "" } };
+    expect(derivePendingUserInputProgress([question], drafts, 0)).toMatchObject({
+      customAnswer: "",
+      resolvedAnswer: "",
+      canAdvance: true,
+      isComplete: true,
+    });
+  });
+
+  it("derives the active question and advancement state", () => {
+    expect(
+      derivePendingUserInputProgress(
+        questions,
+        {
+          scope: {
+            selectedOptionValues: ["Orchestration-first"],
+          },
+        },
+        0,
+      ),
+    ).toMatchObject({
+      questionIndex: 0,
+      activeQuestion: questions[0],
+      selectedOptionValues: ["Orchestration-first"],
+      customAnswer: "",
+      resolvedAnswer: "Orchestration-first",
+      answeredQuestionCount: 1,
+      isLastQuestion: false,
+      isComplete: false,
+      canAdvance: true,
     });
   });
 });

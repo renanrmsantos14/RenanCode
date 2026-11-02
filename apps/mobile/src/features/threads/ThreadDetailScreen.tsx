@@ -1676,6 +1676,7 @@ function ThreadDetailBody(
                         ) : null}
                         {props.activePendingUserInput ? (
                           <PendingUserInputCard
+                            key={props.activePendingUserInput.requestId}
                             environmentId={props.environmentId}
                             canOperateThread={props.canOperateThread}
                             pendingUserInput={props.activePendingUserInput}

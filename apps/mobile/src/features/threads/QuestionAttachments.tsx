@@ -161,14 +161,6 @@ export function QuestionAttachments(props: {
   };
   return (
     <View className="gap-2">
-      {canAttach ? (
-        <ComposerAttachmentButton
-          disabled={props.disabled}
-          supportsFiles
-          onPickMedia={() => pick("media")}
-          onPickFiles={() => pick("files")}
-        />
-      ) : null}
       <ComposerAttachmentStrip
         environmentId={environmentId}
         attachments={attachments}
@@ -193,25 +185,37 @@ export function QuestionAttachments(props: {
       />
       <FilePreviewModal source={previewFile} onRequestClose={() => setPreviewFile(null)} />
       <VideoPreviewModal source={previewVideo} onRequestClose={() => setPreviewVideo(null)} />
-      <TextInputWrapper onPaste={paste}>
-        <TextInput
-          value={props.value}
-          multiline={props.question.initialAnswer !== undefined}
-          submitBehavior={props.question.initialAnswer !== undefined ? "newline" : undefined}
-          editable={!props.disabled}
-          onChangeText={props.onChangeText}
-          onFocus={() => {
-            focusedRef.current = true;
-            onInputFocusChange?.(true);
-          }}
-          onBlur={() => {
-            focusedRef.current = false;
-            onInputFocusChange?.(false);
-          }}
-          placeholder="Or type a custom answer"
-          className="min-h-[54px] rounded-2xl border border-input-border bg-input px-3.5 py-3 font-sans text-base text-foreground"
-        />
-      </TextInputWrapper>
+      <View className="flex-row items-center gap-1">
+        <View className="min-w-0 flex-1">
+          <TextInputWrapper onPaste={paste}>
+            <TextInput
+              value={props.value}
+              multiline={props.question.initialAnswer !== undefined}
+              submitBehavior={props.question.initialAnswer !== undefined ? "newline" : undefined}
+              editable={!props.disabled}
+              onChangeText={props.onChangeText}
+              onFocus={() => {
+                focusedRef.current = true;
+                onInputFocusChange?.(true);
+              }}
+              onBlur={() => {
+                focusedRef.current = false;
+                onInputFocusChange?.(false);
+              }}
+              placeholder="Or type a custom answer"
+              className="min-h-[54px] rounded-2xl border border-input-border bg-input px-3.5 py-3 font-sans text-base text-foreground"
+            />
+          </TextInputWrapper>
+        </View>
+        {canAttach ? (
+          <ComposerAttachmentButton
+            disabled={props.disabled}
+            supportsFiles
+            onPickMedia={() => pick("media")}
+            onPickFiles={() => pick("files")}
+          />
+        ) : null}
+      </View>
     </View>
   );
 }
