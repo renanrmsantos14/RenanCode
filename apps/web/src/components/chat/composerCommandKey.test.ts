@@ -21,7 +21,7 @@ function setup(input: { readonly prompt: string; readonly suggestion: string | n
     planModeUiEnabled: false,
     isLiteralPendingAnswer: false,
     pendingUserInputs: [],
-    promptHistoryMessages: [],
+    promptHistoryEntries: [],
     promptHistoryPositionRef: { current: null },
     composerDraftTarget: DraftId.make("draft"),
     promptRef,
