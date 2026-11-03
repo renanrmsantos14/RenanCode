@@ -23,10 +23,14 @@ import {
   formatReadToolLabel,
   formatSearchToolLabel,
 } from "@t3tools/shared/toolActivity";
-import type { HtmlRenderReference } from "@t3tools/shared/htmlRender";
+import type { HtmlRenderReference, HtmlVariantReference } from "@t3tools/shared/htmlRender";
 import { turnItemDetailRevision } from "@t3tools/client-runtime/work-log/item-detail";
 import type { McpAppReference } from "@t3tools/shared/mcpApp";
-import { htmlRenderFromToolItem, mcpAppFromToolItem } from "@t3tools/shared/toolOutput";
+import {
+  htmlRenderFromToolItem,
+  htmlVariantsFromToolItem,
+  mcpAppFromToolItem,
+} from "@t3tools/shared/toolOutput";
 import {
   contextCompactionLabel,
   workEntryIndicatesToolFailure,
@@ -132,6 +136,13 @@ export type TimelineEntry = (
       readonly createdAt: string;
       readonly runId: RunId | null;
       readonly htmlRender: HtmlRenderReference;
+    }
+  | {
+      readonly id: string;
+      readonly kind: "html-variants";
+      readonly createdAt: string;
+      readonly runId: RunId | null;
+      readonly htmlVariants: ReadonlyArray<HtmlVariantReference>;
     }
   | {
       readonly id: string;
@@ -692,6 +703,22 @@ export function deriveTimelineEntriesFromVisibleTurnItems(
         kind: "proposed-plan",
         createdAt,
         proposedPlan,
+        ...attemptMetadata,
+      });
+      continue;
+    }
+
+    const htmlVariants =
+      item.type === "dynamic_tool" && item.status === "completed"
+        ? htmlVariantsFromToolItem(item)
+        : undefined;
+    if (htmlVariants !== undefined) {
+      entries.push({
+        id: item.id,
+        kind: "html-variants",
+        createdAt,
+        runId: item.runId,
+        htmlVariants,
         ...attemptMetadata,
       });
       continue;
