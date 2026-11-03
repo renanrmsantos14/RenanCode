@@ -618,6 +618,47 @@ export function resolveSidebarRowThreadId(
 }
 
 /**
+ * Children by parent thread key, oldest first, for the nested sidebar list: subagents, and tasks
+ * linked environments delegated (`delegatedUnderParent`), which the thread list hides the same way.
+ */
+export function groupSidebarSubagents<
+  T extends Pick<
+    SidebarThreadSummary,
+    "archivedAt" | "createdAt" | "delegatedFrom" | "environmentId" | "id" | "lineage"
+  >,
+>(
+  threads: readonly T[],
+  delegatedUnderParent: ReadonlySet<string>,
+): ReadonlyMap<string, readonly T[]> {
+  const byParent = new Map<string, T[]>();
+  for (const thread of threads) {
+    if (thread.archivedAt !== null || thread.lineage.sideChat === true) continue;
+    const { parentThreadId, relationshipToParent } = thread.lineage;
+    const parent =
+      parentThreadId !== null && relationshipToParent === "subagent"
+        ? scopeThreadRef(thread.environmentId, parentThreadId)
+        : thread.delegatedFrom != null &&
+            delegatedUnderParent.has(
+              scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
+            )
+          ? thread.delegatedFrom
+          : null;
+    if (parent === null) continue;
+    const key = scopedThreadKey(parent);
+    const siblings = byParent.get(key);
+    if (siblings) siblings.push(thread);
+    else byParent.set(key, [thread]);
+  }
+  for (const siblings of byParent.values()) {
+    siblings.sort(
+      (left, right) =>
+        Date.parse(left.createdAt) - Date.parse(right.createdAt) || left.id.localeCompare(right.id),
+    );
+  }
+  return byParent;
+}
+
+/**
  * `delegatedUnderParent` holds the tasks linked environments run for a thread
  * the sidebar lists, by thread key; they show under that thread, as subagents do.
  */
