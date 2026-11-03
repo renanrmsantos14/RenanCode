@@ -89,10 +89,13 @@ const sessionToken = Effect.map(HttpServerRequest.HttpServerRequest, (request) =
   sessionFor(request, requestedShareId(request)),
 );
 
+const queryParam = (name: string) =>
+  Effect.map(HttpServerRequest.HttpServerRequest, (request) =>
+    new URLSearchParams(request.url.split("?", 2)[1] ?? "").get(name),
+  );
+
 /** The `?item=` a per-item route names. */
-const itemParam = Effect.map(HttpServerRequest.HttpServerRequest, (request) =>
-  new URLSearchParams(request.url.split("?", 2)[1] ?? "").get("item"),
-);
+const itemParam = queryParam("item");
 
 /** The `?variant=` a render request names: undefined when absent, null when not a variant index. */
 export const parseVariant = (value: string | null) =>
@@ -268,11 +271,7 @@ const renderRoute = HttpRouter.add(
   Effect.gen(function* () {
     const itemId = yield* itemParam;
     if (!itemId) return yield* badRequest;
-    const variant = parseVariant(
-      new URLSearchParams(
-        (yield* HttpServerRequest.HttpServerRequest).url.split("?", 2)[1] ?? "",
-      ).get("variant"),
-    );
+    const variant = parseVariant(yield* queryParam("variant"));
     if (variant === null) return yield* badRequest;
     const guestShares = yield* GuestShareService;
     return yield* guestShares.render(yield* sessionToken, itemId, variant).pipe(
