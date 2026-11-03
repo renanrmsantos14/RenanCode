@@ -56,6 +56,28 @@ it("shows a captured MCP app for a failed deferred write", () => {
   expect(buildThreadFeed([projected(item, 0)])).toMatchObject([{ type: "mcp-app", app: mcpApp }]);
 });
 
+it("shows completed html_variants as one side-by-side entry", () => {
+  const variants = [
+    { attachmentId: "v-1-html", title: "Home", height: 400, label: "Dense" },
+    { attachmentId: "v-2-html", title: "Home", height: 420, label: "Airy" },
+  ];
+  const item: OrchestrationV2TurnItem = {
+    ...base("variants", "2026-11-03T00:00:00.000Z", 1),
+    type: "dynamic_tool",
+    toolName: "t3-code.html_variants",
+    status: "completed",
+    input: {},
+    output: { structuredContent: { htmlRenders: variants } },
+  };
+  expect(buildThreadFeed([projected(item, 0)])).toMatchObject([
+    {
+      type: "html-variants",
+      id: `html-variants:${projected(item, 0).visibility}:${projected(item, 0).sourceThreadId}:variants`,
+      variants,
+    },
+  ]);
+});
+
 it("keeps historical plan detail accessible from its paged turn item", () => {
   const item = {
     ...base("historical-plan", "2026-08-29T00:00:00.000Z", 1),

@@ -1356,6 +1356,17 @@ function ThreadDetailBody(
     });
   };
 
+  const handleFollowHtmlVariant = (text: string) => {
+    const draftMessage =
+      props.composerDraftKey === null ? "" : getComposerDraftSnapshot(props.composerDraftKey).text;
+    const nextDraft = draftMessage ? `${draftMessage.trimEnd()} ${text}` : text;
+    props.onChangeDraftMessage(nextDraft);
+    requestAnimationFrame(() => {
+      composerEditorRef.current?.focus();
+      composerEditorRef.current?.setSelection({ start: nextDraft.length, end: nextDraft.length });
+    });
+  };
+
   const handleScrollToEnd = () => {
     void Haptics.selectionAsync();
     void scrollMessageToEnd({ animated: !reduceMotion, closeKeyboard: false }).catch(() => {
@@ -1486,6 +1497,7 @@ function ThreadDetailBody(
                 onEndFollowEnabledChange={handleEndFollowEnabledChange}
                 skills={selectedProviderSkills}
                 onUseArtifactTemplate={handleUseArtifactTemplate}
+                onFollowHtmlVariant={handleFollowHtmlVariant}
               />
             </WorkspaceMutationIdProvider>
           </RenderErrorBoundary>

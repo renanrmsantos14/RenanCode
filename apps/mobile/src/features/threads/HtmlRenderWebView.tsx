@@ -6,11 +6,24 @@ import {
   htmlRenderFrameHeight,
   htmlRenderThemeFragment,
   htmlRenderThemeMessage,
+  htmlVariantFollowUpText,
+  htmlVariantLetter,
+  htmlVariantsFrameHeight,
   type HtmlRenderReference,
   type HtmlRenderTheme,
+  type HtmlVariantReference,
 } from "@t3tools/shared/htmlRender";
 import { useEffect, useRef, useState } from "react";
-import { Platform, Pressable, View, type ColorValue } from "react-native";
+import {
+  Platform,
+  Pressable,
+  ScrollView,
+  View,
+  type ColorValue,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  type ScrollViewInstance,
+} from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 
 import { SymbolView } from "../../components/ui/AppSymbol";
@@ -22,9 +35,14 @@ import { useAppearancePreferences } from "../settings/appearance/AppearancePrefe
 
 const ROW_BOTTOM_MARGIN = 8;
 const FULL_SCREEN_GUTTER = 16;
+const VARIANTS_HEADER_HEIGHT = 40;
 
 export function htmlRenderRowHeight(frameHeight: number) {
   return frameHeight + ROW_BOTTOM_MARGIN;
+}
+
+export function htmlVariantsRowHeight(frameHeight: number) {
+  return htmlRenderRowHeight(frameHeight) + VARIANTS_HEADER_HEIGHT;
 }
 
 function useHtmlRenderTheme() {
@@ -174,11 +192,12 @@ export function ThreadHtmlRender(props: {
   readonly threadId: ThreadId;
   readonly render: HtmlRenderReference;
   readonly frameWidth: number;
+  readonly height?: number;
   readonly iconColor: ColorValue;
 }) {
   const navigation = useNavigation();
   const { attachmentId, title } = props.render;
-  const height = htmlRenderFrameHeight(props.render, props.frameWidth);
+  const height = props.height ?? htmlRenderFrameHeight(props.render, props.frameWidth);
   const fileName = htmlRenderFileName(title);
   const resource = {
     _tag: "attachment" as const,
@@ -264,6 +283,90 @@ export function ThreadHtmlRender(props: {
           </Pressable>
         ) : null}
       </View>
+    </View>
+  );
+}
+
+export function ThreadHtmlVariants(props: {
+  readonly environmentId: EnvironmentId;
+  readonly threadId: ThreadId;
+  readonly variants: ReadonlyArray<HtmlVariantReference>;
+  readonly frameWidth: number;
+  readonly iconColor: ColorValue;
+  readonly onFollow?: (text: string) => void;
+}) {
+  const scroll = useRef<ScrollViewInstance>(null);
+  const [active, setActive] = useState(0);
+  const height = htmlVariantsFrameHeight(props.variants, props.frameWidth);
+  const current = props.variants[active] ?? props.variants[0];
+  const select = (index: number) => {
+    setActive(index);
+    scroll.current?.scrollTo({ x: index * props.frameWidth, animated: true });
+  };
+  const handleScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    setActive(Math.round(event.nativeEvent.contentOffset.x / props.frameWidth));
+  };
+
+  return (
+    <View>
+      <View
+        className="flex-row items-center gap-2"
+        style={{ height: VARIANTS_HEADER_HEIGHT, width: props.frameWidth }}
+      >
+        <View className="min-w-0 flex-1 flex-row gap-1.5">
+          {props.variants.map((variant, index) => (
+            <Pressable
+              key={variant.attachmentId}
+              accessibilityRole="button"
+              accessibilityState={{ selected: index === active }}
+              accessibilityLabel={`Show variant ${htmlVariantLetter(index)}`}
+              hitSlop={4}
+              className={`min-w-0 shrink rounded-full border px-2.5 py-1 ${
+                index === active ? "border-foreground/40 bg-card" : "border-border/60"
+              }`}
+              onPress={() => select(index)}
+            >
+              <Text
+                numberOfLines={1}
+                className={`text-xs ${index === active ? "text-foreground" : "text-foreground-muted"}`}
+              >
+                {`${htmlVariantLetter(index)} · ${variant.label}`}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        {props.onFollow && current ? (
+          <Pressable
+            accessibilityRole="button"
+            hitSlop={4}
+            className="rounded-full bg-foreground px-3 py-1"
+            onPress={() => props.onFollow?.(htmlVariantFollowUpText(active, current.label))}
+          >
+            <Text className="text-xs font-medium text-background">{`Use ${htmlVariantLetter(active)}`}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <ScrollView
+        ref={scroll}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={handleScrollEnd}
+        style={{ width: props.frameWidth }}
+      >
+        {props.variants.map((variant) => (
+          <View key={variant.attachmentId} style={{ width: props.frameWidth }}>
+            <ThreadHtmlRender
+              environmentId={props.environmentId}
+              threadId={props.threadId}
+              render={variant}
+              frameWidth={props.frameWidth}
+              height={height}
+              iconColor={props.iconColor}
+            />
+          </View>
+        ))}
+      </ScrollView>
     </View>
   );
 }

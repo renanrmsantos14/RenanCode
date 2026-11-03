@@ -243,8 +243,13 @@ import {
 } from "./pending-thread-feed";
 import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
 import { resolveThreadFeedFixedItemSize } from "./thread-feed-item-size";
-import { htmlRenderFrameHeight } from "@t3tools/shared/htmlRender";
-import { htmlRenderRowHeight, ThreadHtmlRender } from "./HtmlRenderWebView";
+import { htmlRenderFrameHeight, htmlVariantsFrameHeight } from "@t3tools/shared/htmlRender";
+import {
+  htmlRenderRowHeight,
+  htmlVariantsRowHeight,
+  ThreadHtmlRender,
+  ThreadHtmlVariants,
+} from "./HtmlRenderWebView";
 import { ThreadMcpApp } from "./McpAppWebView";
 import { assetEnvironment, useAssetUrl, useRefreshAssetUrl } from "../../state/assets";
 import { useAtomQueryRunner } from "../../state/use-atom-query-runner";
@@ -381,6 +386,7 @@ export interface ThreadFeedProps {
   readonly onEndFollowEnabledChange?: (enabled: boolean) => void;
   readonly skills?: ReadonlyArray<SelectableMarkdownSkill>;
   readonly onUseArtifactTemplate?: (template: CodexArtifactTemplate) => void;
+  readonly onFollowHtmlVariant?: (text: string) => void;
 }
 
 async function waitForThreadShell(
@@ -1664,6 +1670,7 @@ function renderFeedEntry(
     ThreadFeedProps,
     | "environmentId"
     | "onUseArtifactTemplate"
+    | "onFollowHtmlVariant"
     | "skills"
     | "dispatchingMessageId"
     | "onEditPendingMessage"
@@ -1762,6 +1769,19 @@ function renderFeedEntry(
         render={entry.render}
         frameWidth={props.contentWidth}
         iconColor={iconSubtleColor}
+      />
+    );
+  }
+
+  if (entry.type === "html-variants") {
+    return (
+      <ThreadHtmlVariants
+        environmentId={props.environmentId}
+        threadId={props.threadId}
+        variants={entry.variants}
+        frameWidth={props.contentWidth}
+        iconColor={iconSubtleColor}
+        onFollow={props.onFollowHtmlVariant}
       />
     );
   }
@@ -3677,6 +3697,9 @@ export const ThreadFeed = memo(function ThreadFeed({
     if (entry.type === "html-render") {
       return htmlRenderRowHeight(htmlRenderFrameHeight(entry.render, contentWidth));
     }
+    if (entry.type === "html-variants") {
+      return htmlVariantsRowHeight(htmlVariantsFrameHeight(entry.variants, contentWidth));
+    }
     if (workRowSizing.fixedRowHeight === undefined || entry.checkpointSummary) {
       return undefined;
     }
@@ -3714,7 +3737,9 @@ export const ThreadFeed = memo(function ThreadFeed({
   // after the commit that hands it rows at the new geometry; clearing earlier
   // re-caches old sizes.
   const { textSizeKey } = workRowSizing;
-  const hasHtmlRenders = presentedFeed.some((entry) => entry.type === "html-render");
+  const hasHtmlRenders = presentedFeed.some(
+    (entry) => entry.type === "html-render" || entry.type === "html-variants",
+  );
   const previousRowGeometry = useRef({ textSizeKey, contentWidth });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- clears LegendList size caches and starts a reflow after the commit that brings new row geometry
   useLayoutEffect(() => {
@@ -3758,6 +3783,7 @@ export const ThreadFeed = memo(function ThreadFeed({
             dispatchingMessageId: props.dispatchingMessageId,
             onEditPendingMessage: props.onEditPendingMessage,
             onUseArtifactTemplate: props.onUseArtifactTemplate,
+            onFollowHtmlVariant: props.onFollowHtmlVariant,
             threadId: props.threadId,
             copiedRowId,
             expandedWorkRows,
