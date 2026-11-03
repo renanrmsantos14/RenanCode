@@ -1542,7 +1542,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                       <RelativeTimeLabel timestamp={threadTimeTimestamp(thread)} />
                     )}
                   </span>
-                  {props.settlementSupported || showSnoozeButton || hasUnsentDraft || (thread.testingAt == null && canOperateThread) ? (
+                  {props.settlementSupported ||
+                  showSnoozeButton ||
+                  hasUnsentDraft ||
+                  (thread.testingAt == null && canOperateThread) ? (
                     <span
                       className={cn(
                         // Mouse clicks leave Settle focused; focus-within would pin controls over
