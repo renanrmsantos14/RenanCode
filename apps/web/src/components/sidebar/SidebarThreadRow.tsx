@@ -37,6 +37,7 @@ import {
   CircleCheckIcon,
   CircleDashedIcon,
   CircleDotDashedIcon,
+  FlaskConicalIcon,
   ClockIcon,
   GitBranchIcon,
   MessageCircleQuestionIcon,
@@ -576,6 +577,7 @@ type SidebarThreadRowProps = {
   renamingTitle: string;
   onContextMenu: (threadRef: ScopedThreadRef, position: { x: number; y: number }) => void;
   onSettle: (threadRef: ScopedThreadRef) => void;
+  onTesting: (threadRef: ScopedThreadRef) => void;
   onActionSweepStart: (
     threadRef: ScopedThreadRef,
     action: SidebarSweepAction,
@@ -640,6 +642,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     onFileDropThreads,
     onRenameTitleChange,
     onSettle,
+    onTesting,
     onActionSweepStart,
     onSnooze,
     onStartRename,
@@ -895,6 +898,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     event.preventDefault();
     event.stopPropagation();
     onSettle(threadRef);
+  };
+  const handleTestingClick = (event: ReactMouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onTesting(threadRef);
   };
   const handleActionPointerDown = (event: ReactPointerEvent) => {
     if (!event.isPrimary || event.button !== 0) return;
@@ -1534,7 +1542,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                       <RelativeTimeLabel timestamp={threadTimeTimestamp(thread)} />
                     )}
                   </span>
-                  {props.settlementSupported || showSnoozeButton || hasUnsentDraft ? (
+                  {props.settlementSupported ||
+                  showSnoozeButton ||
+                  hasUnsentDraft ||
+                  (thread.testingAt == null && canOperateThread) ? (
                     <span
                       className={cn(
                         // Mouse clicks leave Settle focused; focus-within would pin controls over
@@ -1568,6 +1579,24 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                           timestampFormat={props.timestampFormat}
                           environmentId={thread.environmentId}
                         />
+                      ) : null}
+                      {thread.testingAt == null && canOperateThread ? (
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <button
+                                type="button"
+                                aria-label="Mark thread as testing"
+                                onClick={handleTestingClick}
+                                className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                              />
+                            }
+                          >
+                            <FlaskConicalIcon className="size-3.5" />
+                            Testing
+                          </TooltipTrigger>
+                          <TooltipPopup>Move to Testing</TooltipPopup>
+                        </Tooltip>
                       ) : null}
                       {props.settlementSupported ? (
                         <Tooltip>
