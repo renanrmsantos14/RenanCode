@@ -51,6 +51,24 @@ const handlers = {
       };
     }),
   ),
+  html_variants: McpToolAccess.actsAsCaller((input) =>
+    Effect.gen(function* () {
+      const scope = yield* McpInvocationContext.McpInvocationContext;
+      const { thread } = yield* McpInvocationContext.requireThreadScope(scope, "html_variants");
+      const htmlRender = yield* HtmlRender.HtmlRender;
+      const htmlRenders = yield* htmlRender
+        .publishVariants({
+          threadId: thread.threadId,
+          variants: input.variants.map((variant) => ({ ...variant, title: input.title })),
+        })
+        .pipe(Effect.mapError(toFailure));
+      return {
+        htmlRenders,
+        message:
+          "Shown to the reader side by side above your reply, lettered A, B, C. Don't describe them; say only how they differ if the labels don't.",
+      };
+    }),
+  ),
 } satisfies McpToolAccess.Handlers<typeof HtmlToolkit.tools>;
 
 export const layerPreview = McpToolAccess.toLayer(HtmlPreviewToolkit, {
@@ -59,4 +77,5 @@ export const layerPreview = McpToolAccess.toLayer(HtmlPreviewToolkit, {
 
 export const layerRender = McpToolAccess.toLayer(HtmlRenderToolkit, {
   html_render: handlers.html_render,
+  html_variants: handlers.html_variants,
 });

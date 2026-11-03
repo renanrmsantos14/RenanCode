@@ -289,6 +289,47 @@ describe("HtmlRender", () => {
     }),
   );
 
+  it.effect("leaves no page behind when one variant is invalid", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const config = yield* ServerConfig.ServerConfig;
+      const htmlRender = yield* HtmlRender.HtmlRender;
+      const threadId = ThreadId.make("thread-html-variants");
+      const storedPages = fileSystem
+        .readDirectory(config.attachmentsDir, { recursive: true })
+        .pipe(Effect.map((names) => names.filter((name) => name.endsWith("-html.html"))));
+      const error = yield* htmlRender
+        .publishVariants({
+          threadId,
+          variants: [
+            { html: "<p>Dense</p>", title: "Home", height: 200, label: "Dense" },
+            {
+              html: "<style>main{height:100vh}</style>",
+              title: "Home",
+              height: 200,
+              label: "Airy",
+            },
+          ],
+        })
+        .pipe(Effect.flip);
+      expect(error).toBeInstanceOf(HtmlRender.HtmlRenderViewportHeightError);
+      expect(yield* storedPages).toEqual([]);
+
+      const references = yield* htmlRender.publishVariants({
+        threadId,
+        variants: [
+          { html: "<p>Dense</p>", title: "Home", height: 200, label: "  Dense  " },
+          { html: "<p>Airy</p>", title: "Home", height: 220, label: "Airy" },
+        ],
+      });
+      expect(references).toMatchObject([
+        { label: "Dense", height: 200 },
+        { label: "Airy", height: 220 },
+      ]);
+      expect(yield* storedPages).toHaveLength(2);
+    }).pipe(Effect.provide(layerTest)),
+  );
+
   // Windows reports ENOENT asynchronously for this path instead of throwing ENOTDIR.
   describe.skipIf(HostProcess.Platform.defaultValue() === "win32")(
     "when the browser spawn throws synchronously",

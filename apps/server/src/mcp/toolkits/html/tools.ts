@@ -8,6 +8,10 @@ import {
   HTML_RENDER_MIN_HEIGHT,
   HTML_RENDER_THEME_GUIDE,
   HTML_RENDER_TOOL_NAME,
+  HTML_VARIANT_MAX_LABEL_LENGTH,
+  HTML_VARIANTS_MAX,
+  HTML_VARIANTS_MIN,
+  HTML_VARIANTS_TOOL_NAME,
 } from "@t3tools/shared/htmlRender";
 import * as Schema from "effect/Schema";
 import { Tool, Toolkit } from "effect/ai";
@@ -105,8 +109,54 @@ const HtmlRenderTool = Tool.make(HTML_RENDER_TOOL_NAME, {
   .annotate(Tool.Idempotent, false)
   .annotate(Tool.OpenWorld, true);
 
+const HtmlVariantsTool = Tool.make(HTML_VARIANTS_TOOL_NAME, {
+  description: `Show ${HTML_VARIANTS_MIN} to ${HTML_VARIANTS_MAX} alternative versions of one page side by side, when the user asks for options, alternatives, or variations of a visual. One page uses html_render. Check each page with html_preview first. Each label names what differs. Same page rules as html_render. ${HTML_RENDER_LAYOUT_GUIDE} ${HTML_RENDER_THEME_GUIDE}`,
+  parameters: Schema.Struct({
+    title: Schema.String.check(
+      Schema.isMinLength(1),
+      Schema.isMaxLength(HTML_RENDER_MAX_TITLE_LENGTH),
+    ),
+    variants: Schema.Array(
+      Schema.Struct({
+        html: Html,
+        label: Schema.String.check(
+          Schema.isMinLength(1),
+          Schema.isMaxLength(HTML_VARIANT_MAX_LABEL_LENGTH),
+        ).annotate({ description: "What this variant changes, such as Dense cards." }),
+        height: Schema.Int.annotate({
+          description: `Frame height in CSS pixels, ${HTML_RENDER_MIN_HEIGHT} to ${HTML_RENDER_MAX_HEIGHT}. Use the contentHeight from html_preview.`,
+        }),
+      }),
+    ).check(Schema.isMinLength(HTML_VARIANTS_MIN), Schema.isMaxLength(HTML_VARIANTS_MAX)),
+  }),
+  success: Schema.Struct({
+    htmlRenders: Schema.Array(
+      Schema.Struct({
+        attachmentId: Schema.String,
+        title: Schema.String,
+        label: Schema.String,
+        height: Schema.Number,
+        heights: Schema.optional(Schema.Array(Schema.Tuple([Schema.Int, Schema.Int]))),
+      }),
+    ),
+    message: Schema.String,
+  }),
+  failure: OrchestratorMcpFailure,
+  failureMode: "return",
+  dependencies: [
+    McpInvocationContext.McpInvocationContext,
+    ThreadManagementService.ThreadManagementService,
+    HtmlRender.HtmlRender,
+  ],
+})
+  .annotate(Tool.Title, "Render HTML variants")
+  .annotate(Tool.Readonly, true)
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.Idempotent, false)
+  .annotate(Tool.OpenWorld, true);
+
 export const HtmlPreviewToolkit = Toolkit.make(HtmlPreviewTool);
 
-export const HtmlRenderToolkit = Toolkit.make(HtmlRenderTool);
+export const HtmlRenderToolkit = Toolkit.make(HtmlRenderTool, HtmlVariantsTool);
 
-export const HtmlToolkit = Toolkit.make(HtmlPreviewTool, HtmlRenderTool);
+export const HtmlToolkit = Toolkit.make(HtmlPreviewTool, HtmlRenderTool, HtmlVariantsTool);

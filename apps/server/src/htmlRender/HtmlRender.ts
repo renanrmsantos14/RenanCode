@@ -7,10 +7,12 @@ import {
   HTML_RENDER_MAX_TITLE_LENGTH,
   HTML_RENDER_MEASURE_FONTS,
   HTML_RENDER_MEASURE_WIDTHS,
+  HTML_VARIANT_MAX_LABEL_LENGTH,
   htmlRenderTheme,
   htmlRenderThemeFragment,
   injectHtmlRenderBootstrap,
   type HtmlRenderReference,
+  type HtmlVariantReference,
 } from "@t3tools/shared/htmlRender";
 import {
   T3_CODE_DARK_THEME_COLORS,
@@ -127,6 +129,18 @@ export class HtmlRender extends Context.Service<
       readonly title: string;
       readonly height: number;
     }) => Effect.Effect<HtmlRenderReference, HtmlRenderPrepareError | HtmlRenderStoreError>;
+    readonly publishVariants: (input: {
+      readonly threadId: ThreadId;
+      readonly variants: ReadonlyArray<{
+        readonly html: string;
+        readonly title: string;
+        readonly height: number;
+        readonly label: string;
+      }>;
+    }) => Effect.Effect<
+      ReadonlyArray<HtmlVariantReference>,
+      HtmlRenderPrepareError | HtmlRenderStoreError
+    >;
     readonly preview: (input: {
       readonly html: string;
       readonly width?: number | undefined;
@@ -459,6 +473,53 @@ const make = Effect.gen(function* () {
     );
   });
 
+  const publishVariants = Effect.fn("HtmlRender.publishVariants")(function* (input: {
+    readonly threadId: ThreadId;
+    readonly variants: ReadonlyArray<{
+      readonly html: string;
+      readonly title: string;
+      readonly height: number;
+      readonly label: string;
+    }>;
+  }) {
+    // Validating every page first keeps an invalid one from leaving the others behind.
+    yield* Effect.forEach(input.variants, (variant) => prepare(variant.html), { discard: true });
+    const published: Array<string> = [];
+    return yield* Effect.forEach(input.variants, ({ label, ...page }) =>
+      publish({ threadId: input.threadId, ...page }).pipe(
+        Effect.tap((reference) => Effect.sync(() => published.push(reference.attachmentId))),
+        Effect.map((reference) => ({
+          ...reference,
+          label: label.trim().slice(0, HTML_VARIANT_MAX_LABEL_LENGTH),
+        })),
+      ),
+    ).pipe(
+      Effect.onError(() =>
+        Effect.forEach(
+          published,
+          (attachmentId) => {
+            const filePath = resolveAttachmentRelativePath({
+              attachmentsDir: config.attachmentsDir,
+              relativePath: `${attachmentId}.html`,
+            });
+            return Effect.all(
+              [
+                filePath === null
+                  ? Effect.void
+                  : fileSystem.remove(filePath, { force: true }).pipe(Effect.ignore),
+                mcpSessions
+                  .takeHtmlRender(input.threadId, {}, { attachmentId, title: "", height: 0 })
+                  .pipe(Effect.ignore),
+              ],
+              { discard: true },
+            );
+          },
+          { discard: true },
+        ),
+      ),
+    );
+  });
+
   const preview = Effect.fn("HtmlRender.preview")(function* (input: {
     readonly html: string;
     readonly width?: number | undefined;
@@ -494,7 +555,7 @@ const make = Effect.gen(function* () {
     } satisfies HtmlPreview;
   });
 
-  return HtmlRender.of({ prepare, publish, preview });
+  return HtmlRender.of({ prepare, publish, publishVariants, preview });
 });
 
 export const layer = Layer.effect(HtmlRender, make);

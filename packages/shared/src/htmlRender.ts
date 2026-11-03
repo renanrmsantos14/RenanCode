@@ -133,9 +133,9 @@ export function clampHtmlRenderHeight(height: number): number {
 }
 
 export const HTML_VARIANTS_TOOL_NAME = "html_variants";
-const HTML_VARIANTS_MIN = 2;
-const HTML_VARIANTS_MAX = 4;
-const HTML_VARIANT_MAX_LABEL_LENGTH = 40;
+export const HTML_VARIANTS_MIN = 2;
+export const HTML_VARIANTS_MAX = 4;
+export const HTML_VARIANT_MAX_LABEL_LENGTH = 40;
 
 export interface HtmlVariantReference extends HtmlRenderReference {
   readonly label: string;
