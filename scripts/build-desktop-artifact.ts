@@ -2893,6 +2893,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     const skipDeb = yield* Config.Boolean("T3CODE_DESKTOP_SKIP_DEB").pipe(
       Config.withDefault(false),
     );
+    buildConfig.afterPack = path.join(repoRoot, "scripts/linux-after-pack.ts");
     buildConfig.linux = {
       target: target === "AppImage" && !skipDeb ? [target, "deb"] : [target],
       executableName: "t3code",
