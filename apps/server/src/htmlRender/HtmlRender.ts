@@ -482,15 +482,18 @@ const make = Effect.gen(function* () {
       readonly label: string;
     }>;
   }) {
-    // Validating every page first keeps an invalid one from leaving the others behind.
-    yield* Effect.forEach(input.variants, (variant) => prepare(variant.html), { discard: true });
+    // The cheap check runs first; image inlining runs once per page in publish, and failures there roll back.
+    yield* Effect.forEach(input.variants, (variant) => rejectViewportHeight(variant.html), {
+      discard: true,
+    });
     const published: Array<string> = [];
-    return yield* Effect.forEach(input.variants, ({ label, ...page }) =>
+    return yield* Effect.forEach(input.variants, ({ label, ...page }, index) =>
       publish({ threadId: input.threadId, ...page }).pipe(
         Effect.tap((reference) => Effect.sync(() => published.push(reference.attachmentId))),
         Effect.map((reference) => ({
           ...reference,
-          label: label.trim().slice(0, HTML_VARIANT_MAX_LABEL_LENGTH),
+          // Readers drop the whole set when a label is blank.
+          label: label.trim().slice(0, HTML_VARIANT_MAX_LABEL_LENGTH) || `Variant ${index + 1}`,
         })),
       ),
     ).pipe(
