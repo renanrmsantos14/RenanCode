@@ -24,6 +24,7 @@ vi.mock("./DesktopStartupRecovery.ts", () => ({ listen: Effect.void }));
 
 import * as DesktopApp from "./DesktopApp.ts";
 import * as DesktopAppActivation from "./DesktopAppActivation.ts";
+import * as DesktopAssets from "./DesktopAssets.ts";
 import * as DesktopAppIdentity from "./DesktopAppIdentity.ts";
 import * as DesktopClerk from "./DesktopClerk.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
@@ -159,7 +160,16 @@ it.effect(
           Effect.provideService(DesktopState.DesktopState, {
             quitting,
           } as DesktopState.DesktopState["Service"]),
+          Effect.provideService(DesktopAssets.DesktopAssets, {
+            iconPaths: Effect.succeed({
+              png: Option.none(),
+              ico: Option.none(),
+              icns: Option.none(),
+            }),
+            resolveResourcePath: () => Effect.succeedNone,
+          } as DesktopAssets.DesktopAssets["Service"]),
           Effect.provideService(DesktopWindow.DesktopWindow, {
+            showConnectingSplash: Effect.void,
             ensureMain: record("window").pipe(
               Effect.andThen(Deferred.succeed(windowStarted, undefined)),
             ),
