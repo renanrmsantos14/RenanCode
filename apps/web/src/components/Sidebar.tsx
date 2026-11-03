@@ -1650,6 +1650,22 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         : () => void router.navigate({ to: "/" });
   };
 
+  const attemptTesting = (threadRef: ScopedThreadRef) => {
+    void (async () => {
+      const result = await setThreadTesting(threadRef, true);
+      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Failed to update test state",
+            description: error instanceof Error ? error.message : "An error occurred.",
+          }),
+        );
+      }
+    })();
+  };
+
   const attemptSettle = (
     threadRef: ScopedThreadRef,
     opts: { coSettlingKeys?: ReadonlySet<string> } = {},
@@ -3476,6 +3492,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             renamingTitle={renamingThreadKey === threadKey ? renamingTitle : ""}
                             onContextMenu={handleThreadContextMenu}
                             onSettle={attemptSettle}
+                            onTesting={attemptTesting}
                             onActionSweepStart={startActionSweep}
                             onUnsettle={attemptUnsettle}
                             onSnooze={attemptSnooze}
