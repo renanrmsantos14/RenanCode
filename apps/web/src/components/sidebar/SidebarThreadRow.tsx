@@ -1,3 +1,4 @@
+import { SidebarSubagentList, type SidebarSubagentsByParent } from "./SidebarSubagentList";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { ThreadTerminalStatusButton } from "../ThreadStatusIndicators";
 import { discardComposerDraft } from "../../lib/discardComposerDraft";
@@ -589,6 +590,8 @@ type SidebarThreadRowProps = {
   onUnpin: (threadRef: ScopedThreadRef) => void;
   onAcknowledgeWoke: (threadRef: ScopedThreadRef, visitedAt: string) => void;
   onFileDropThreads?: ((threadRef: ScopedThreadRef, files: File[]) => void) | undefined;
+  subagentsByParent: SidebarSubagentsByParent;
+  routeThreadKey: string | null;
 };
 
 // Mounted only while renaming, so each rename starts uncommitted.
@@ -823,6 +826,14 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const isRemote = thread.environmentId !== props.currentEnvironmentId;
   const showsScratchMachine = !thread.branch && props.scratchMachineLabel !== null;
 
+  const subagentList = (
+    <SidebarSubagentList
+      parentKey={threadKey}
+      subagentsByParent={props.subagentsByParent}
+      activeThreadKey={props.routeThreadKey}
+      onThreadActivate={onThreadActivate}
+    />
+  );
   const detailsTooltip = (
     <SidebarThreadTooltip
       thread={thread}
@@ -1415,6 +1426,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           </TooltipTrigger>
           {detailsTooltip}
         </Tooltip>
+        {subagentList}
       </li>
     );
   }
@@ -1638,6 +1650,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
         </TooltipTrigger>
         {detailsTooltip}
       </Tooltip>
+      {subagentList}
     </li>
   );
 });

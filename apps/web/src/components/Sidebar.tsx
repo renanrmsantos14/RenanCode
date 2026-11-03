@@ -189,6 +189,7 @@ import {
   belongsInSidebarWorkingShelf,
   isSidebarEnvironmentDisconnected,
   isSidebarNestedLinkClick,
+  groupSidebarSubagents,
   isTrailingDoubleClick,
   orderItemsByPreferredIds,
   planSidebarThreadDrop,
@@ -371,6 +372,7 @@ function threadShellKey(thread: Pick<SidebarThreadSummary, "environmentId" | "id
   return scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
 }
 
+const NO_SUBAGENTS: ReadonlyMap<string, readonly EnvironmentThreadShell[]> = new Map();
 const NO_DRAGGED_ORDER: readonly string[] = [];
 const NO_DRAGGED_ORDERS: {
   readonly settledOrder: readonly string[];
@@ -1148,6 +1150,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ),
         );
   const threads = useQuietThreadShells();
+  const subagentsByParent = groupSidebarSubagents(threads, delegatedUnderParent);
   const routeRowThreadKey =
     routeThreadRef === null
       ? null
@@ -3500,6 +3503,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             onUnpin={attemptUnpin}
                             onAcknowledgeWoke={acknowledgeWoke}
                             onFileDropThreads={handleThreadFileDrop}
+                            // Rows without subagents get constants so their memo holds.
+                            subagentsByParent={
+                              subagentsByParent.has(threadKey) ? subagentsByParent : NO_SUBAGENTS
+                            }
+                            routeThreadKey={
+                              subagentsByParent.has(threadKey) ? routeThreadKey : null
+                            }
                           />
                         );
                       };

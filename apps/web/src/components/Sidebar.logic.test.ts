@@ -11,6 +11,7 @@ import {
   getFallbackThreadIdAfterDelete,
   hasUnseenCompletion,
   resolveSidebarRowThreadId,
+  groupSidebarSubagents,
   belongsInSidebarWorkingShelf,
   isSidebarEnvironmentDisconnected,
   orderItemsByPreferredIds,
@@ -1620,5 +1621,63 @@ describe("shouldCreateNewThreadInCurrentProject", () => {
     expect(shouldCreateNewThreadInCurrentProject(false, 1, 3)).toBe(true);
     expect(shouldCreateNewThreadInCurrentProject(false, 0, 0)).toBe(true);
     expect(shouldCreateNewThreadInCurrentProject(true, 2, 2)).toBe(true);
+  });
+});
+
+describe("groupSidebarSubagents", () => {
+  it("groups direct subagents under their parent, oldest first, skipping archived and side chats", () => {
+    const environmentId = EnvironmentId.make("environment-group");
+    const root = makeThreadFixture({ id: ThreadId.make("g-root"), environmentId });
+    const child = (id: string, parent: ThreadId, extra: object = {}) =>
+      makeThreadFixture({
+        id: ThreadId.make(id),
+        environmentId,
+        lineage: {
+          rootThreadId: root.id,
+          parentThreadId: parent,
+          relationshipToParent: "subagent",
+        },
+        ...extra,
+      });
+    const late = child("g-late", root.id, { createdAt: "2026-03-09T10:05:00.000Z" });
+    const early = child("g-early", root.id, { createdAt: "2026-03-09T10:01:00.000Z" });
+    const nested = child("g-nested", early.id);
+    const archived = child("g-archived", root.id, { archivedAt: "2026-03-09T11:00:00.000Z" });
+    const sideChat = makeThreadFixture({
+      id: ThreadId.make("g-side"),
+      environmentId,
+      lineage: {
+        rootThreadId: root.id,
+        parentThreadId: root.id,
+        relationshipToParent: "subagent",
+        sideChat: true,
+      },
+    });
+    const groups = groupSidebarSubagents(
+      [root, late, early, nested, archived, sideChat],
+      new Set(),
+    );
+    const keyOf = (id: ThreadId) => `${environmentId}:${id}`;
+
+    expect(groups.get(keyOf(root.id))?.map((thread) => thread.id)).toEqual([early.id, late.id]);
+    expect(groups.get(keyOf(early.id))?.map((thread) => thread.id)).toEqual([nested.id]);
+  });
+
+  it("nests a delegated task under the thread that delegated it", () => {
+    const environmentId = EnvironmentId.make("environment-delegated");
+    const parent = makeThreadFixture({ id: ThreadId.make("d-parent"), environmentId });
+    const task = makeThreadFixture({
+      id: ThreadId.make("d-task"),
+      environmentId,
+      delegatedFrom: { environmentId, threadId: parent.id, title: "Pai" },
+    });
+    const taskKey = `${environmentId}:${task.id}`;
+
+    expect(
+      groupSidebarSubagents([parent, task], new Set([taskKey])).get(
+        `${environmentId}:${parent.id}`,
+      ),
+    ).toEqual([task]);
+    expect(groupSidebarSubagents([parent, task], new Set()).size).toBe(0);
   });
 });
