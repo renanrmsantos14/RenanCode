@@ -99,7 +99,7 @@ export function resolveModelPickerSelectedModel(input: {
   return input.options.find((option) => option.slug === input.model);
 }
 
-function shouldIncludeModelPickerOption(input: {
+export function shouldIncludeModelPickerOption(input: {
   readonly entry: ProviderInstanceEntry;
   readonly option: ModelEsque;
   readonly activeInstanceId: ProviderInstanceId;
