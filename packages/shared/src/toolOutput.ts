@@ -6,8 +6,11 @@ import * as Predicate from "effect/Predicate";
 
 import {
   HTML_RENDER_TOOL_NAME,
+  HTML_VARIANTS_TOOL_NAME,
   readHtmlRenderReference,
+  readHtmlVariantReferences,
   type HtmlRenderReference,
+  type HtmlVariantReference,
 } from "./htmlRender.ts";
 import { MCP_APP_OUTPUT_KEY, readMcpAppReference, type McpAppReference } from "./mcpApp.ts";
 import { resolveT3McpToolId } from "./t3McpToolPresentation.ts";
@@ -40,6 +43,7 @@ interface CompactToolOutput {
   scheduledTaskId?: string;
   status?: "rolled_back";
   htmlRender?: HtmlRenderReference;
+  htmlRenders?: ReadonlyArray<HtmlVariantReference>;
   [MCP_APP_OUTPUT_KEY]?: McpAppReference;
   thread?: { threadId: string };
   threads?: Array<{ threadId?: string; status?: "rolled_back" }>;
@@ -131,6 +135,8 @@ export function compactDynamicToolOutput(value: unknown): CompactToolOutput | un
     }
     const htmlRender = readHtmlRenderReference(data.htmlRender);
     if (htmlRender !== undefined) output.htmlRender = htmlRender;
+    const htmlRenders = readHtmlVariantReferences(data.htmlRenders);
+    if (htmlRenders !== undefined) output.htmlRenders = htmlRenders;
     const mcpApp = readMcpAppReference(data[MCP_APP_OUTPUT_KEY]);
     if (mcpApp !== undefined) output[MCP_APP_OUTPUT_KEY] = mcpApp;
     const nestedThreadId = Predicate.isObject(data.thread)
@@ -189,6 +195,15 @@ export function htmlRenderFromToolItem(item: {
   if (resolveT3McpToolId(item.toolName) !== HTML_RENDER_TOOL_NAME) return undefined;
   const output = compactDynamicToolOutput(item.output);
   return output?.isError ? undefined : output?.htmlRender;
+}
+
+export function htmlVariantsFromToolItem(item: {
+  readonly toolName: string | null | undefined;
+  readonly output?: unknown;
+}): ReadonlyArray<HtmlVariantReference> | undefined {
+  if (resolveT3McpToolId(item.toolName) !== HTML_VARIANTS_TOOL_NAME) return undefined;
+  const output = compactDynamicToolOutput(item.output);
+  return output?.isError ? undefined : output?.htmlRenders;
 }
 
 /** Accept app references only when server and tool match the item, so tools cannot impersonate another app source. */

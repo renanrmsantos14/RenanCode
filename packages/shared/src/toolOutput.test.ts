@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   compactDynamicToolOutput,
+  htmlVariantsFromToolItem,
   MAX_TOOL_OUTPUT_IMAGES,
   toolOutputImages,
   toolOutputIndicatesFailure,
@@ -202,5 +203,31 @@ describe("toolOutputImages", () => {
   it("stops after the first few images", () => {
     const images = toolOutputImages(Array.from({ length: 10_000 }, () => mcpImage));
     expect(images).toHaveLength(MAX_TOOL_OUTPUT_IMAGES);
+  });
+});
+
+describe("htmlVariantsFromToolItem", () => {
+  it("reads html_variants pages under either tool name and ignores errors", () => {
+    const htmlRenders = [
+      { attachmentId: "t-1-html", title: "Home", height: 400, label: "Dense" },
+      { attachmentId: "t-2-html", title: "Home", height: 420, label: "Airy" },
+    ];
+    for (const toolName of ["t3-code.html_variants", "mcp__t3-code__html_variants"]) {
+      expect(
+        htmlVariantsFromToolItem({ toolName, output: { structuredContent: { htmlRenders } } }),
+      ).toEqual(htmlRenders);
+    }
+    expect(
+      htmlVariantsFromToolItem({
+        toolName: "t3-code.html_render",
+        output: { structuredContent: { htmlRenders } },
+      }),
+    ).toBe(undefined);
+    expect(
+      htmlVariantsFromToolItem({
+        toolName: "t3-code.html_variants",
+        output: { isError: true, structuredContent: { htmlRenders } },
+      }),
+    ).toBe(undefined);
   });
 });

@@ -132,6 +132,47 @@ export function clampHtmlRenderHeight(height: number): number {
   return Math.min(HTML_RENDER_MAX_HEIGHT, Math.max(HTML_RENDER_MIN_HEIGHT, Math.round(height)));
 }
 
+export const HTML_VARIANTS_TOOL_NAME = "html_variants";
+const HTML_VARIANTS_MIN = 2;
+const HTML_VARIANTS_MAX = 4;
+const HTML_VARIANT_MAX_LABEL_LENGTH = 40;
+
+export interface HtmlVariantReference extends HtmlRenderReference {
+  readonly label: string;
+}
+
+export function readHtmlVariantReferences(
+  value: unknown,
+): ReadonlyArray<HtmlVariantReference> | undefined {
+  if (
+    !Array.isArray(value) ||
+    value.length < HTML_VARIANTS_MIN ||
+    value.length > HTML_VARIANTS_MAX
+  ) {
+    return undefined;
+  }
+  const variants = value.flatMap((entry) => {
+    const reference = readHtmlRenderReference(entry);
+    const label = (entry as { label?: unknown } | null)?.label;
+    const trimmed =
+      typeof label === "string" ? label.trim().slice(0, HTML_VARIANT_MAX_LABEL_LENGTH) : "";
+    return reference === undefined || trimmed === "" ? [] : [{ ...reference, label: trimmed }];
+  });
+  return variants.length === value.length ? variants : undefined;
+}
+
+const htmlVariantLetter = (index: number) => String.fromCharCode(65 + index);
+
+export const htmlVariantFollowUpText = (index: number, label: string) =>
+  `Continue with variant ${htmlVariantLetter(index)} (${label}): `;
+
+export function htmlVariantsFrameHeight(
+  variants: ReadonlyArray<HtmlRenderReference>,
+  width: number,
+) {
+  return Math.max(...variants.map((variant) => htmlRenderFrameHeight(variant, width)));
+}
+
 export interface HtmlRenderFonts {
   readonly sans: string;
   readonly mono: string;

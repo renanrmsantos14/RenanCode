@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  htmlVariantFollowUpText,
+  htmlVariantsFrameHeight,
   injectHtmlRenderBootstrap,
+  readHtmlVariantReferences,
   readHtmlRenderImageRequest,
   readHtmlRenderLinkRequest,
 } from "./htmlRender.ts";
@@ -131,4 +134,41 @@ describe("htmlRenderFromToolItem", () => {
       expect(htmlRenderFromToolItem({ toolName, output })).toEqual(reference);
     }
   });
+});
+
+describe("readHtmlVariantReferences", () => {
+  const page = (id: string, label: string) => ({
+    attachmentId: id,
+    title: "Home",
+    height: 400,
+    label,
+  });
+  it("accepts two to four labeled pages and trims labels", () => {
+    expect(readHtmlVariantReferences([page("a", " Dense "), page("b", "Airy")])).toMatchObject([
+      { attachmentId: "a", label: "Dense" },
+      { attachmentId: "b", label: "Airy" },
+    ]);
+  });
+  it("rejects one page, five pages, a bad page, or an empty label", () => {
+    expect(readHtmlVariantReferences([page("a", "A")])).toBe(undefined);
+    expect(readHtmlVariantReferences(["a", "b", "c", "d", "e"].map((id) => page(id, id)))).toBe(
+      undefined,
+    );
+    expect(readHtmlVariantReferences([page("a", "A"), { title: "x" }])).toBe(undefined);
+    expect(readHtmlVariantReferences([page("a", "A"), page("b", "  ")])).toBe(undefined);
+  });
+});
+
+describe("htmlVariantsFrameHeight", () => {
+  it("uses the tallest variant so the grid lines up", () => {
+    const variants = [
+      { attachmentId: "a", title: "x", height: 300, label: "A" },
+      { attachmentId: "b", title: "x", height: 520, label: "B" },
+    ];
+    expect(htmlVariantsFrameHeight(variants, 728)).toBe(520);
+  });
+});
+
+it("labels follow-ups by letter", () => {
+  expect(htmlVariantFollowUpText(1, "Dense cards")).toBe("Continue with variant B (Dense cards): ");
 });
