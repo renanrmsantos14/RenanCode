@@ -643,6 +643,21 @@ export default function ChatView(props: ChatViewProps) {
     return inserted;
   };
   const citeAssistantTextStable = useStableCallback(citeAssistantText);
+  const followHtmlVariant = (text: string) => {
+    const composer = composerRef.current;
+    const inserted = composer?.insertTextAtEnd(text, { ensureLeadingBoundary: true }) ?? false;
+    if (inserted) {
+      composer?.focusAtEnd();
+    } else {
+      toastManager.add({
+        type: "warning",
+        title: "The composer is not ready",
+        description: "Try again after the connection or pending input is resolved.",
+      });
+    }
+    return inserted;
+  };
+  const followHtmlVariantStable = useStableCallback(followHtmlVariant);
   const [isWorkspaceFileDragActive, setIsWorkspaceFileDragActive] = useState(false);
   const [optimisticBlobPreviews] = useState(createOptimisticBlobPreviews);
   const [heldOptimisticUserMessages, setHeldOptimisticUserMessages] = useState(() =>
@@ -3445,6 +3460,7 @@ export default function ChatView(props: ChatViewProps) {
                   citationRequest={citationRequest}
                   citationHistory={citationHistory}
                   onCiteAssistantText={citeAssistantTextStable}
+                  onFollowHtmlVariant={followHtmlVariantStable}
                   {...(activeProject
                     ? { onRunShellCommand: parentPanel?.runShellCommand ?? runShellCommandStable }
                     : {})}

@@ -23,10 +23,14 @@ export function GuestHtmlRender({
   itemId,
   reference,
   shareId,
+  variant,
+  minHeight,
 }: {
   readonly itemId: string;
   readonly reference: HtmlRenderReference;
   readonly shareId: string;
+  readonly variant?: number;
+  readonly minHeight?: number;
 }) {
   const theme = useHtmlRenderTheme();
   const boxRef = useRef<HTMLDivElement>(null);
@@ -36,7 +40,7 @@ export function GuestHtmlRender({
   // The theme rides in the fragment for the first paint; later changes are posted.
   const [src] = useState(
     () =>
-      `${GUEST_RENDER_ROUTE}?${GUEST_SHARE_PARAM}=${encodeURIComponent(shareId)}&item=${encodeURIComponent(itemId)}${htmlRenderThemeFragment(theme)}`,
+      `${GUEST_RENDER_ROUTE}?${GUEST_SHARE_PARAM}=${encodeURIComponent(shareId)}&item=${encodeURIComponent(itemId)}${variant === undefined ? "" : `&variant=${variant}`}${htmlRenderThemeFragment(theme)}`,
   );
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- measures the frame box and follows its width with a ResizeObserver before paint
   useLayoutEffect(() => {
@@ -81,7 +85,7 @@ export function GuestHtmlRender({
     <div
       ref={boxRef}
       style={{
-        height: htmlRenderFrameHeight(reference, width, contentHeight),
+        height: Math.max(minHeight ?? 0, htmlRenderFrameHeight(reference, width, contentHeight)),
       }}
     >
       <iframe

@@ -24,6 +24,7 @@ export function HtmlRenderFrame(props: {
   readonly environmentId: EnvironmentId;
   readonly htmlRender: HtmlRenderReference;
   readonly threadRef: ScopedThreadRef | undefined;
+  readonly minHeight?: number;
   readonly onFullscreenChange?: (fullscreen: boolean) => void;
 }) {
   const { attachmentId, title } = props.htmlRender;
@@ -36,7 +37,10 @@ export function HtmlRenderFrame(props: {
   };
   // Client fonts can exceed the server-measured height and cause nested scrolling.
   const [contentHeight, setContentHeight] = useState<number>();
-  const height = htmlRenderFrameHeight(props.htmlRender, width, contentHeight);
+  const height = Math.max(
+    props.minHeight ?? 0,
+    htmlRenderFrameHeight(props.htmlRender, width, contentHeight),
+  );
   const fileName = htmlRenderFileName(title);
   const resource = {
     _tag: "attachment" as const,

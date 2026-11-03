@@ -471,6 +471,17 @@ function GuestThread({
       <GuestHtmlRender itemId={row.id} reference={row.htmlRender} shareId={shareId} />
     ),
   );
+  const renderHtmlVariant = useStableCallback(
+    (row: Extract<TimelineRow, { kind: "html-variants" }>, index: number, minHeight: number) => (
+      <GuestHtmlRender
+        itemId={row.id}
+        reference={row.htmlVariants[index]!}
+        variant={index}
+        minHeight={minHeight}
+        shareId={shareId}
+      />
+    ),
+  );
   const unplaced = unplacedGuestMessages(messages, items, awaitingRowIds);
   // The guest's waiting messages sit in the list footer, which the list does not follow on its
   // own (the owner's view does the same in ChatView). A new one is the guest's own send, so it
@@ -523,6 +534,7 @@ function GuestThread({
             onFileOpen={openFile}
             onFileDownload={openFile}
             renderHtmlRender={renderHtmlRender}
+            renderHtmlVariant={renderHtmlVariant}
             turnItemSource={turnItemSource}
             historyControls={historyControls}
             activeThreadEnvironmentId={GUEST_ENVIRONMENT_ID}

@@ -161,7 +161,7 @@ export function readHtmlVariantReferences(
   return variants.length === value.length ? variants : undefined;
 }
 
-const htmlVariantLetter = (index: number) => String.fromCharCode(65 + index);
+export const htmlVariantLetter = (index: number) => String.fromCharCode(65 + index);
 
 export const htmlVariantFollowUpText = (index: number, label: string) =>
   `Continue with variant ${htmlVariantLetter(index)} (${label}): `;

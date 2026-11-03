@@ -126,6 +126,7 @@ import {
   HtmlRenderTimelineRow,
   McpAppTimelineRow,
 } from "./TimelineAssistantRows";
+import { HtmlVariantsTimelineRow } from "./HtmlVariantsTimelineRow";
 import { V2EventTimelineRow } from "./TimelineV2EventRow";
 import { startTimelinePositionRestore } from "./useTimelinePositionRestore";
 import {
@@ -259,6 +260,8 @@ interface MessagesTimelineProps {
   onOpenTurnDiff?: (runId: RunId, filePath?: string) => void;
   onOpenThread: (threadId: OrchestrationV2TurnItem["threadId"]) => void;
   renderHtmlRender?: TimelineRowSharedState["renderHtmlRender"];
+  onFollowHtmlVariant?: TimelineRowSharedState["onFollowHtmlVariant"];
+  renderHtmlVariant?: TimelineRowSharedState["renderHtmlVariant"];
   turnItemSource?: TimelineRowSharedState["turnItemSource"];
   /**
    * The thread this one is a subagent or side chat of; `open` is absent when it cannot be
@@ -373,6 +376,8 @@ const ConversationTimeline = memo(function ConversationTimeline({
   onOpenTurnDiff,
   onOpenThread,
   renderHtmlRender,
+  onFollowHtmlVariant,
+  renderHtmlVariant,
   turnItemSource,
   parentThreadLink = null,
   workflowOpening = null,
@@ -1040,6 +1045,8 @@ const ConversationTimeline = memo(function ConversationTimeline({
     onOpenTurnDiff,
     onOpenThread,
     renderHtmlRender,
+    onFollowHtmlVariant,
+    renderHtmlVariant,
     turnItemSource,
     workflowOpening,
     onForkFromRun,
@@ -1458,6 +1465,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
                   row.kind === "event" ||
                   row.kind === "attempt-fold" ||
                   row.kind === "html-render" ||
+                  row.kind === "html-variants" ||
                   row.kind === "mcp-app"
                 ? "pb-2"
                 : "pb-4",
@@ -1507,6 +1515,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
       {row.kind === "assistant-meta" ? <AssistantMetaTimelineRow row={row} /> : null}
       {row.kind === "proposed-plan" ? <ProposedPlanTimelineRow row={row} /> : null}
       {row.kind === "html-render" ? <HtmlRenderTimelineRow row={row} /> : null}
+      {row.kind === "html-variants" ? <HtmlVariantsTimelineRow row={row} /> : null}
       {row.kind === "mcp-app" ? <McpAppTimelineRow row={row} /> : null}
       {row.kind === "working" ? <WorkingTimelineRow row={row} /> : null}
       {row.kind === "worktree-setup" ? <WorktreeSetupTimelineRow row={row} /> : null}
