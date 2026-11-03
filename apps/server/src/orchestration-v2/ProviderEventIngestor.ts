@@ -721,8 +721,7 @@ export const layer: Layer.Layer<
                   if (
                     storedEvents.length === 0 ||
                     input.event.type !== "turn.terminal" ||
-                    input.event.status !== "failed" ||
-                    input.event.failure.class !== "usage_limit"
+                    (input.event.status === "failed" && input.event.failure.class !== "usage_limit")
                   )
                     return;
                   const instance = yield* instances.getInstance(input.providerInstanceId);
