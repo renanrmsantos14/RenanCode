@@ -173,8 +173,13 @@ const COLUMN_ROW =
   "flex h-8 w-full shrink-0 cursor-pointer items-center gap-2 rounded-sm px-2 text-left text-sm text-foreground outline-none hover:bg-foreground/[0.09] focus-visible:bg-foreground/[0.09] disabled:cursor-not-allowed disabled:opacity-64";
 const COLUMN_LABEL = "px-2 pt-1.5 pb-1 font-medium text-muted-foreground text-xs";
 
+const STRIP_SEGMENT =
+  "flex h-8 min-w-fit flex-1 cursor-pointer items-center justify-center rounded-lg px-2 text-sm font-semibold whitespace-nowrap text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-64 aria-checked:bg-foreground aria-checked:font-bold aria-checked:text-background";
+
 function ColumnRow(props: {
+  strip?: boolean;
   label: string;
+  glyph?: { count: number; filled: number } | null;
   /** Shown on hover; the column is too narrow to print it under the label. */
   description?: string | undefined;
   selected: boolean;
@@ -194,10 +199,15 @@ function ColumnRow(props: {
     "data-effort-level": true,
     // Up and Down move between rows.
     tabIndex: props.tabStop ? 0 : -1,
-    className: COLUMN_ROW,
+    className: props.strip ? cn(STRIP_SEGMENT, "gap-1.5") : COLUMN_ROW,
     onClick: props.onPick,
   } as const;
-  const content = (
+  const content = props.strip ? (
+    <>
+      {props.glyph ? <EffortGlyph count={props.glyph.count} filled={props.glyph.filled} /> : null}
+      <span>{props.label}</span>
+    </>
+  ) : (
     <>
       <span className="min-w-0 flex-1 truncate">{props.label}</span>
       {props.selected ? (
@@ -222,7 +232,10 @@ function ColumnRow(props: {
 }
 
 function moveBetweenRows(event: KeyboardEvent<HTMLElement>) {
-  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+  const horizontal =
+    (event.key === "ArrowRight" || event.key === "ArrowLeft") &&
+    (event.target as HTMLElement).getAttribute("role") === "radio";
+  if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && !horizontal) return;
   // An option's side menu is a React child here, but it moves through its own items.
   if (!event.currentTarget.contains(event.target as Node)) return;
   const rows = Array.from(
@@ -230,7 +243,12 @@ function moveBetweenRows(event: KeyboardEvent<HTMLElement>) {
   );
   const index = rows.findIndex((row) => row === document.activeElement);
   const next =
-    rows[Math.min(rows.length - 1, Math.max(0, index + (event.key === "ArrowDown" ? 1 : -1)))];
+    rows[
+      Math.min(
+        rows.length - 1,
+        Math.max(0, index + (event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : -1)),
+      )
+    ];
   if (!next) return;
   event.preventDefault();
   event.stopPropagation();
@@ -296,15 +314,20 @@ function EffortLevels(props: { traits: TraitsSelectionInput }) {
 
 type TraitsSelection = ReturnType<typeof useTraitsSelection>;
 
+const STRIP_GROUP = "flex flex-wrap gap-0.5 rounded-xl border border-border/70 bg-accent/50 p-0.5";
+
 function EffortRows(props: { control: ColumnControl; traits: TraitsSelection; locked: boolean }) {
   const { control, traits } = props;
+  const { strip } = use(DockedPickerContext);
+  const groupClass = strip ? STRIP_GROUP : "flex flex-col gap-0.5";
   const { descriptor } = control;
   if (control.kind === "boolean") {
     return (
-      <div role="radiogroup" aria-label={descriptor.label} className="flex flex-col gap-0.5">
+      <div role="radiogroup" aria-label={descriptor.label} className={groupClass}>
         {([true, false] as const).map((value) => (
           <ColumnRow
             key={String(value)}
+            strip={strip}
             label={value ? "On" : "Off"}
             selected={(control.descriptor.currentValue === true) === value}
             tabStop={(control.descriptor.currentValue === true) === value}
@@ -320,7 +343,7 @@ function EffortRows(props: { control: ColumnControl; traits: TraitsSelection; lo
   // An "Ultrathink:" prefix selects a level the column does not offer.
   const shown = choices.some((option) => option.id === value);
   return (
-    <div role="radiogroup" aria-label={descriptor.label} className="flex flex-col gap-0.5">
+    <div role="radiogroup" aria-label={descriptor.label} className={groupClass}>
       {locked ? (
         <div className="px-2 pb-1.5 text-muted-foreground/80 text-xs">
           {ULTRATHINK_IN_BODY_NOTE}
@@ -329,7 +352,9 @@ function EffortRows(props: { control: ColumnControl; traits: TraitsSelection; lo
       {choices.map((option, index) => (
         <ColumnRow
           key={option.id}
+          strip={strip}
           label={option.label}
+          glyph={strip ? resolveEffortGlyph(control.descriptor, option.id) : null}
           selected={option.id === value}
           tabStop={shown ? option.id === value : index === 0}
           description={option.description}
@@ -498,6 +523,13 @@ export function ComposerEffortColumn(props: { traits: TraitsSelectionInput | nul
           visibility.booleanDescriptors,
         )
       : null;
+  if (picker.strip) {
+    return (
+      <div className="flex flex-col gap-1.5" onKeyDownCapture={moveBetweenRows}>
+        {props.traits ? <EffortLevels traits={props.traits} /> : <NoEffortRow />}
+      </div>
+    );
+  }
   return (
     <>
       {/* Matches the search row's box, so one rule runs across the top of the popup. */}
