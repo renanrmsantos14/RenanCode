@@ -110,7 +110,7 @@ const HtmlRenderTool = Tool.make(HTML_RENDER_TOOL_NAME, {
   .annotate(Tool.OpenWorld, true);
 
 const HtmlVariantsTool = Tool.make(HTML_VARIANTS_TOOL_NAME, {
-  description: `Show ${HTML_VARIANTS_MIN} to ${HTML_VARIANTS_MAX} alternative versions of one page side by side, when the user asks for options, alternatives, or variations of a visual. One page uses html_render. Check each page with html_preview first. Each label names what differs. ${PAGE_RULES} Theme and layout rules are in html_render.`,
+  description: `Show ${HTML_VARIANTS_MIN} to ${HTML_VARIANTS_MAX} alternative versions of one page side by side, when the user asks for options, alternatives, or variations of a visual. One page uses html_render. Check each page with html_preview first. Each label names what differs, without a letter prefix (A, B, C are added). ${PAGE_RULES} Theme and layout rules are in html_render.`,
   parameters: Schema.Struct({
     title: Schema.String.check(
       Schema.isMinLength(1),
