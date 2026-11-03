@@ -40,7 +40,7 @@ import {
   ComboboxItem,
   ComboboxListVirtualized,
 } from "../ui/combobox";
-import { ModelEsque } from "./providerIconUtils";
+import { ModelEsque, getClaudeTierName, sortClaudeModelsByTier } from "./providerIconUtils";
 import { isCommandPaletteOpen } from "../../commandPaletteBus";
 import { registerModelPickerContent } from "../../modelPickerVisibility";
 import { primaryServerKeybindingsAtom } from "../../state/server";
@@ -552,7 +552,9 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       if (!entry) {
         continue;
       }
-      for (const model of models) {
+      const orderedModels =
+        entry.driverKind === "claudeAgent" ? sortClaudeModelsByTier(models) : models;
+      for (const model of orderedModels) {
         if (
           !shouldIncludeModelPickerOption({
             entry,
@@ -565,7 +567,10 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
         }
         out.push({
           slug: model.slug,
-          name: model.name,
+          name:
+            entry.driverKind === "claudeAgent" && !model.isLegacy
+              ? getClaudeTierName(model.name)
+              : model.name,
           ...(model.shortName ? { shortName: model.shortName } : {}),
           ...(model.subProvider ? { subProvider: model.subProvider } : {}),
           ...(model.badge ? { badge: model.badge } : {}),
