@@ -94,6 +94,10 @@ const itemParam = Effect.map(HttpServerRequest.HttpServerRequest, (request) =>
   new URLSearchParams(request.url.split("?", 2)[1] ?? "").get("item"),
 );
 
+/** The `?variant=` a render request names: undefined when absent, null when not a variant index. */
+export const parseVariant = (value: string | null) =>
+  value === null ? undefined : /^[0-3]$/.test(value) ? Number(value) : null;
+
 /** Server-sent events with a heartbeat, never cached or buffered on the way. */
 const eventStreamResponse = <A>(
   events: Stream.Stream<A>,
@@ -264,8 +268,14 @@ const renderRoute = HttpRouter.add(
   Effect.gen(function* () {
     const itemId = yield* itemParam;
     if (!itemId) return yield* badRequest;
+    const variant = parseVariant(
+      new URLSearchParams(
+        (yield* HttpServerRequest.HttpServerRequest).url.split("?", 2)[1] ?? "",
+      ).get("variant"),
+    );
+    if (variant === null) return yield* badRequest;
     const guestShares = yield* GuestShareService;
-    return yield* guestShares.render(yield* sessionToken, itemId).pipe(
+    return yield* guestShares.render(yield* sessionToken, itemId, variant).pipe(
       Effect.flatMap(({ path, title }) =>
         assetFileResponse({ path, mimeType: "text/html", fileName: htmlRenderFileName(title) }),
       ),
