@@ -1183,6 +1183,18 @@ export const t3Default = (
         htmlRender: { attachmentId: "att-1", title: input.title ?? "Visual", height: 560 },
         message: HTML_RENDERED,
       };
+    case "html_variants":
+      return {
+        htmlRenders: (Array.isArray(input.variants) ? input.variants : []).map(
+          (variant: { label?: string }, index: number) => ({
+            attachmentId: `att-v${index + 1}`,
+            title: input.title ?? "Visual",
+            label: variant?.label ?? `Option ${index + 1}`,
+            height: 560,
+          }),
+        ),
+        message: "Shown to the reader side by side above your reply, lettered A, B, C.",
+      };
     case "preview_status":
       return {
         available: false,
