@@ -139,7 +139,7 @@ describe("v2 thread shell lists", () => {
     expect(
       registry.get(threads.threadShellAtom({ environmentId, threadId: root.id }))
         ?.pendingSubagentRequest,
-    ).toBeNull();
+    ).toBe("user_input");
     registry.set(snapshotAtom(environmentId), {
       ...v2ShellSnapshot,
       threads: [root, { ...child, status: "queued" as const }],
@@ -377,7 +377,9 @@ describe("v2 thread shell lists", () => {
         { ...helper, pendingRuntimeRequest: { ...approval, kind: "user_input" as const } },
       ],
     });
-    expect(registry.get(threads.threadShellAtom(parentRef))?.pendingSubagentRequest).toBeNull();
+    expect(registry.get(threads.threadShellAtom(parentRef))?.pendingSubagentRequest).toBe(
+      "user_input",
+    );
     expect(registry.get(inputs).map((thread) => thread.id)).toEqual([helper.id]);
 
     // A task whose parent is gone there is listed on its own, as is one whose
