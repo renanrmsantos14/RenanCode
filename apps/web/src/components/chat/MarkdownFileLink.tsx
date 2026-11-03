@@ -39,6 +39,7 @@ interface MarkdownFileLinkProps {
   onOpen?: (() => Promise<AtomCommandResult<unknown, unknown>>) | undefined;
   onOpenInPanel: (panelPath: string, line: number | undefined) => void;
   resolveCopyPaths: () => Promise<ReturnType<typeof markdownFileCopyPaths>>;
+  readContents?: (() => Promise<string>) | undefined;
   openInEditorMenuLabel: string;
   onOpenInBrowser?: (() => Promise<AtomCommandResult<unknown, unknown>>) | undefined;
   onOpenMedia?: (() => void) | undefined;
@@ -68,6 +69,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
   onReveal,
   revealLabel,
   resolveCopyPaths,
+  readContents,
 }: MarkdownFileLinkProps) {
   const handleOpenInEditor = () => {
     if (!onOpen) {
@@ -207,7 +209,9 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
       return;
     }
 
-    const value = resolveValue().then((text) => formatFilePathForClipboard(text, targetPath));
+    const value = resolveValue().then((text) =>
+      title === "File contents" ? text : formatFilePathForClipboard(text, targetPath),
+    );
     // Start the write before workspace lookup finishes so Safari retains the user gesture.
     const write =
       typeof navigator.clipboard.write === "function" && typeof ClipboardItem !== "undefined"
@@ -222,7 +226,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
         toastManager.add({
           type: "success",
           title: `${title} copied`,
-          description: text,
+          description: title === "File contents" ? `${text.length} characters` : text,
         });
       },
       (error) => {
@@ -256,6 +260,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
             : []),
           ...(onReveal && revealLabel ? ([{ id: "reveal", label: revealLabel }] as const) : []),
           ...copyItems.map(({ id, label }) => ({ id, label })),
+          ...(readContents ? ([{ id: "copy-contents", label: "Copy file contents" }] as const) : []),
         ] as const,
         position,
       );
@@ -274,6 +279,10 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
       }
       if (clicked === "reveal") {
         handleRevealInFileManager();
+        return;
+      }
+      if (clicked === "copy-contents" && readContents) {
+        handleCopy(readContents, "File contents");
         return;
       }
       if (clicked === "copy-relative" || clicked === "copy-full") {
@@ -410,6 +419,7 @@ function areMarkdownFileLinkPropsEqual(
     previous.onOpenMedia === next.onOpenMedia &&
     previous.onReveal === next.onReveal &&
     previous.resolveCopyPaths === next.resolveCopyPaths &&
+    previous.readContents === next.readContents &&
     previous.revealLabel === next.revealLabel
   );
 }

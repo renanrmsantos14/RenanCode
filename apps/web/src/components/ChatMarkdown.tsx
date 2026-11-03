@@ -6,7 +6,7 @@ import {
   extractMarkdownLinkHrefs,
   inlineCodeFilePathCandidate,
 } from "@t3tools/shared/markdownLinks";
-import { isHostPath, resolveWorkspaceFilePath } from "@t3tools/shared/path";
+import { isHostPath, resolveWorkspaceFilePath, workspaceRelativeFilePath } from "@t3tools/shared/path";
 import { usePullRequestLinking } from "~/hooks/usePullRequestLinking";
 import {
   AuthFilesystemReadScope,
@@ -546,6 +546,10 @@ function useChatMarkdownState({
   const searchProjectEntries = useAtomQueryRunner(projectEnvironment.searchEntries, {
     reportFailure: false,
   });
+  const readProjectFile = useAtomQueryRunner(projectEnvironment.readFile, {
+    reportFailure: false,
+    refresh: true,
+  });
   const getFilesystemMetadata = useAtomQueryRunner(filesystemEnvironment.getMetadata, {
     reportFailure: false,
     refresh: true,
@@ -866,6 +870,24 @@ function useChatMarkdownState({
         }
         resolveCopyPaths={async () =>
           markdownFileCopyPaths(fileLinkMeta, await resolveHostPath(), cwd)
+        }
+        readContents={
+          cwd && environmentId !== null && readEnvironmentScope(environmentId, AuthFilesystemReadScope)
+            ? async () => {
+                const relativePath = workspaceRelativeFilePath(
+                  (await resolveHostPath()).absolutePath,
+                  cwd,
+                );
+                if (relativePath === null) throw new Error("File is outside the workspace.");
+                const result = await readProjectFile({
+                  environmentId,
+                  input: { cwd, relativePath },
+                });
+                if (result._tag !== "Success") throw squashAtomCommandFailure(result);
+                if (result.value.truncated) throw new Error("File is too large to copy.");
+                return result.value.contents;
+              }
+            : undefined
         }
         onOpenInPanel={(path) => openFileInPanel(fileLinkMeta, path)}
         onOpenMedia={
