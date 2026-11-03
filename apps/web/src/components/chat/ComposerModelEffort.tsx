@@ -314,8 +314,7 @@ function EffortLevels(props: { traits: TraitsSelectionInput }) {
 
 type TraitsSelection = ReturnType<typeof useTraitsSelection>;
 
-const STRIP_GROUP =
-  "flex gap-0.5 overflow-x-auto [scrollbar-width:none] rounded-xl border border-border/70 bg-accent/50 p-0.5";
+const STRIP_GROUP = "flex flex-wrap gap-0.5 rounded-xl border border-border/70 bg-accent/50 p-0.5";
 
 function EffortRows(props: { control: ColumnControl; traits: TraitsSelection; locked: boolean }) {
   const { control, traits } = props;
