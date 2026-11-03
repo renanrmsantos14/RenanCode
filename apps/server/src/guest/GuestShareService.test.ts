@@ -416,6 +416,41 @@ it.effect("serves no render for an item outside the shared thread", () =>
   }).pipe(Effect.provide(layerTest)),
 );
 
+it.effect("opens each variation of an html_variants item by its index", () =>
+  Effect.gen(function* () {
+    const { guestShares, credential } = yield* shareThread;
+    const { token: session } = yield* guestShares.redeem({ credential, name: "Sam" });
+    const { attachmentsDir } = yield* ServerConfig.ServerConfig;
+    const fileSystem = yield* FileSystem.FileSystem;
+    const attachmentIds = [
+      createAttachmentId(threadId, "html")!,
+      createAttachmentId(threadId, "html")!,
+    ];
+    for (const attachmentId of attachmentIds) {
+      yield* fileSystem.writeFileString(`${attachmentsDir}/${attachmentId}.html`, "<p>variant</p>");
+    }
+    const htmlRenders = [
+      { attachmentId: attachmentIds[0], title: "Cards", height: 400, label: "Cards" },
+      { attachmentId: attachmentIds[1], title: "Table", height: 400, label: "Table" },
+    ];
+    const variants = yield* writeItem("item:variants", {
+      type: "dynamic_tool",
+      status: "completed",
+      toolName: "mcp__t3-code__html_variants",
+      input: {},
+      output: { structuredContent: { htmlRenders } },
+    });
+
+    const second = yield* guestShares.render(session, variants, 1);
+    assert.deepEqual(second, {
+      path: resolveAttachmentPathById({ attachmentsDir, attachmentId: attachmentIds[1]! }),
+      title: "Table",
+    });
+    assert.isTrue(Exit.isFailure(yield* Effect.exit(guestShares.render(session, variants, 2))));
+    assert.isTrue(Exit.isFailure(yield* Effect.exit(guestShares.render(session, variants))));
+  }).pipe(Effect.provide(layerTest)),
+);
+
 const ownerRun = Effect.gen(function* () {
   const orchestrator = yield* Orchestrator.OrchestratorV2;
   yield* orchestrator.dispatch({
@@ -444,6 +479,10 @@ const writeItem = (
     | Pick<
         Extract<OrchestrationV2TurnItem, { type: "file_change" }>,
         "type" | "status" | "fileName" | "diffStr" | "oldStr" | "newStr"
+      >
+    | Pick<
+        Extract<OrchestrationV2TurnItem, { type: "dynamic_tool" }>,
+        "type" | "status" | "toolName" | "input" | "output"
       >,
 ) =>
   Effect.gen(function* () {

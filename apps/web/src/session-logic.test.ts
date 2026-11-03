@@ -1288,6 +1288,31 @@ describe("HTML renders in the timeline", () => {
     ]);
   });
 
+  it("shows completed html_variants as a variants entry and keeps a running call in the work log", () => {
+    const htmlVariants = [
+      { attachmentId: "render-thread-a.html", title: "Home", height: 420, label: "Dense" },
+      { attachmentId: "render-thread-b.html", title: "Home", height: 420, label: "Airy" },
+    ];
+    const call = (status: "completed" | "running", output?: unknown) => {
+      const item = renderCall(status, output);
+      return item.type === "dynamic_tool"
+        ? { ...item, toolName: "mcp__t3-code__html_variants" }
+        : item;
+    };
+    const entries = turn(
+      call("completed", { structuredContent: { htmlRenders: htmlVariants }, content: [] }),
+    );
+    expect(entries.find((entry) => entry.kind === "html-variants")).toMatchObject({
+      id: "render",
+      runId,
+      htmlVariants,
+    });
+    expect(rowsFor(entries, false)).toEqual(["message", "turn-fold", "html-variants", "message"]);
+    const running = turn(call("running"));
+    expect(running.some((entry) => entry.kind === "html-variants")).toBe(false);
+    expect(running.find((entry) => entry.id === "render")?.kind).toBe("work");
+  });
+
   it("hosts a captured MCP app in place, from any provider's tool", () => {
     const mcpApp = {
       attachmentId: "render-thread-app-html",

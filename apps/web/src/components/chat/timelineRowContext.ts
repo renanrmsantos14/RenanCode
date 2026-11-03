@@ -77,6 +77,15 @@ export interface TimelineRowSharedState {
    * loads it through its own route.
    */
   renderHtmlRender: ((row: Extract<TimelineRow, { kind: "html-render" }>) => ReactNode) | undefined;
+  onFollowHtmlVariant: ((text: string) => boolean) | undefined;
+  /** Draws one published variant; unset, the row loads it from the environment. */
+  renderHtmlVariant:
+    | ((
+        row: Extract<TimelineRow, { kind: "html-variants" }>,
+        index: number,
+        minHeight: number,
+      ) => ReactNode)
+    | undefined;
   /** Unset, expanded rows read detail and command output from the environment. */
   turnItemSource: TurnItemSource | undefined;
   onOpenThread: (threadId: OrchestrationV2TurnItem["threadId"]) => void;

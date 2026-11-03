@@ -70,7 +70,7 @@ const declaredFailure = (result: McpSchema.CallToolResult) => {
   const text = result.content[0];
   return result.isError === true && text?.type === "text" ? JSON.parse(text.text) : undefined;
 };
-import { htmlRenderFromToolItem } from "@t3tools/shared/toolOutput";
+import { htmlRenderFromToolItem, htmlVariantsFromToolItem } from "@t3tools/shared/toolOutput";
 
 const decodeMcpAttachmentInput = Schema.decodeUnknownEffect(McpAttachmentInput);
 const decodeThreadReadResult = Schema.decodeUnknownEffect(OrchestratorMcpThreadReadResult);
@@ -271,6 +271,63 @@ it.effect("returns an HTML render reference that Codex and Claude tool rows both
     expect(
       htmlRenderFromToolItem({ toolName: "mcp__t3-code__html_render", output: result.content }),
     ).toEqual(reference);
+  }).pipe(
+    Effect.provide(
+      McpHttpServer.layerHtmlToolkit.pipe(
+        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+        Layer.provide(McpProviderSessions.layer),
+        Layer.provide(PreviewBrowser.layer),
+        Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-html-render-" })),
+        Layer.provide(
+          DocumentText.layer.pipe(
+            Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+          ),
+        ),
+        Layer.provide(FetchHttpClient.layer),
+        Layer.provide(
+          Layer.mock(ThreadManagement.ThreadManagementService)({
+            getThreadShell: () =>
+              Effect.succeed({
+                id: threadId,
+                deletedAt: null,
+                archivedAt: null,
+                activeRunId: RunId.make("mcp-core-run"),
+                providerInstanceId: ProviderInstanceId.make("codex"),
+              } as OrchestrationV2ThreadShell),
+          }),
+        ),
+      ),
+    ),
+  ),
+);
+
+it.effect("returns one labeled reference per html_variants page", () =>
+  Effect.gen(function* () {
+    const server = yield* McpServer.McpServer;
+    const result = yield* server
+      .callTool({
+        name: "html_variants",
+        arguments: {
+          title: "Home",
+          variants: [
+            { html: "<p>Dense</p>", label: "Dense", height: 240 },
+            { html: "<p>Airy</p>", label: "Airy", height: 260 },
+          ],
+        },
+      })
+      .pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, scope),
+        Effect.provideService(McpSchema.McpServerClient, client),
+      );
+    const variants = htmlVariantsFromToolItem({
+      toolName: "t3-code.html_variants",
+      output: result.structuredContent,
+    });
+    expect(variants).toMatchObject([
+      { label: "Dense", height: 240 },
+      { label: "Airy", height: 260 },
+    ]);
+    expect(new Set(variants?.map((variant) => variant.attachmentId)).size).toBe(2);
   }).pipe(
     Effect.provide(
       McpHttpServer.layerHtmlToolkit.pipe(

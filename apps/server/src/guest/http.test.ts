@@ -3,7 +3,7 @@ import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import { HttpServerRequest } from "effect/http";
 
-import { readSubmission } from "./http.ts";
+import { parseVariant, readSubmission } from "./http.ts";
 
 it.effect("keeps a JSON file a guest attaches as a file, not a form field", () =>
   Effect.gen(function* () {
@@ -26,3 +26,12 @@ it.effect("keeps a JSON file a guest attaches as a file, not a form field", () =
     );
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
+
+it("reads the variant a render request names", () => {
+  assert.strictEqual(parseVariant(null), undefined);
+  assert.strictEqual(parseVariant("0"), 0);
+  assert.strictEqual(parseVariant("3"), 3);
+  for (const invalid of ["abc", "", "-1", "4", "1.5", "1e0"]) {
+    assert.strictEqual(parseVariant(invalid), null, invalid);
+  }
+});

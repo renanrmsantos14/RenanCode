@@ -176,6 +176,26 @@ describe("threadHtmlRenderAttachmentIds", () => {
     ).toEqual([own]);
   });
 
+  it("includes every variation page this thread published from html_variants", () => {
+    const first = createAttachmentId("thread-a", "html")!;
+    const second = createAttachmentId("thread-a", "html")!;
+    const other = createAttachmentId("thread-b", "html")!;
+    const htmlRenders = [first, second, other].map((attachmentId, index) => ({
+      attachmentId,
+      title: "x",
+      height: 300,
+      label: `V${index}`,
+    }));
+    expect(
+      threadHtmlRenderAttachmentIds("thread-a", [
+        {
+          toolName: "mcp__t3-code__html_variants",
+          output: [{ type: "text", text: JSON.stringify({ htmlRenders }) }],
+        },
+      ]),
+    ).toEqual([first, second]);
+  });
+
   it("includes captured MCP App documents from any tool", () => {
     const app = createAttachmentId("thread-a", "html")!;
     expect(

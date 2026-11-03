@@ -21,7 +21,7 @@ import {
   TurnItemId,
 } from "@t3tools/contracts";
 import { chatMarkdownImageSources } from "@t3tools/shared/markdownPipeline";
-import { htmlRenderFromToolItem } from "@t3tools/shared/toolOutput";
+import { htmlRenderFromToolItem, htmlVariantsFromToolItem } from "@t3tools/shared/toolOutput";
 import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
@@ -176,10 +176,11 @@ export class GuestShareService extends Context.Service<
     readonly stream: (
       session: string,
     ) => Effect.Effect<Stream.Stream<GuestStreamEvent>, GuestShareAccessError>;
-    /** The file of an HTML render in the shared thread, and its title. */
+    /** The file of an HTML render, or of one variation of an html_variants item, and its title. */
     readonly render: (
       session: string,
       itemId: string,
+      variant?: number,
     ) => Effect.Effect<{ readonly path: string; readonly title: string }, GuestShareAccessError>;
     /** One item of the shared thread, as the owner's expanded row loads it, without file diffs. */
     readonly item: (
@@ -648,11 +649,23 @@ const make = Effect.gen(function* () {
     return item === null ? yield* unavailable : { thread, item };
   });
 
-  const render = Effect.fn("GuestShareService.render")(function* (session: string, itemId: string) {
+  const render = Effect.fn("GuestShareService.render")(function* (
+    session: string,
+    itemId: string,
+    variant?: number,
+  ) {
     const { thread, item } = yield* threadItem(session, itemId);
     if (item.type !== "dynamic_tool") return yield* unavailable;
-    const reference = htmlRenderFromToolItem(item);
-    const [attachmentId] = threadHtmlRenderAttachmentIds(thread.id, [item]);
+    const variants = htmlVariantsFromToolItem(item);
+    const reference =
+      variants === undefined
+        ? htmlRenderFromToolItem(item)
+        : variant === undefined
+          ? undefined
+          : variants[variant];
+    const attachmentId = threadHtmlRenderAttachmentIds(thread.id, [item]).find(
+      (id) => id === reference?.attachmentId,
+    );
     const path =
       attachmentId === undefined
         ? null
