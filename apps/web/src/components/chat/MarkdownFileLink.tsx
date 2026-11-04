@@ -260,7 +260,9 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
             : []),
           ...(onReveal && revealLabel ? ([{ id: "reveal", label: revealLabel }] as const) : []),
           ...copyItems.map(({ id, label }) => ({ id, label })),
-          ...(readContents ? ([{ id: "copy-contents", label: "Copy file contents" }] as const) : []),
+          ...(readContents
+            ? ([{ id: "copy-contents", label: "Copy file contents" }] as const)
+            : []),
         ] as const,
         position,
       );

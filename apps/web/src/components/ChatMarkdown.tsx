@@ -6,7 +6,11 @@ import {
   extractMarkdownLinkHrefs,
   inlineCodeFilePathCandidate,
 } from "@t3tools/shared/markdownLinks";
-import { isHostPath, resolveWorkspaceFilePath, workspaceRelativeFilePath } from "@t3tools/shared/path";
+import {
+  isHostPath,
+  resolveWorkspaceFilePath,
+  workspaceRelativeFilePath,
+} from "@t3tools/shared/path";
 import { usePullRequestLinking } from "~/hooks/usePullRequestLinking";
 import {
   AuthFilesystemReadScope,
@@ -872,7 +876,9 @@ function useChatMarkdownState({
           markdownFileCopyPaths(fileLinkMeta, await resolveHostPath(), cwd)
         }
         readContents={
-          cwd && environmentId !== null && readEnvironmentScope(environmentId, AuthFilesystemReadScope)
+          cwd &&
+          environmentId !== null &&
+          readEnvironmentScope(environmentId, AuthFilesystemReadScope)
             ? async () => {
                 const relativePath = workspaceRelativeFilePath(
                   (await resolveHostPath()).absolutePath,
