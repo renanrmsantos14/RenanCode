@@ -11,7 +11,8 @@ import {
   getFallbackThreadIdAfterDelete,
   hasUnseenCompletion,
   resolveSidebarRowThreadId,
-  groupSidebarSubagents,
+  nestSidebarSubsessions,
+  filterSidebarV2VisibleThreads,
   belongsInSidebarWorkingShelf,
   isSidebarEnvironmentDisconnected,
   orderItemsByPreferredIds,
@@ -1659,60 +1660,80 @@ describe("shouldCreateNewThreadInCurrentProject", () => {
   });
 });
 
-describe("groupSidebarSubagents", () => {
-  it("groups direct subagents under their parent, oldest first, skipping archived and side chats", () => {
-    const environmentId = EnvironmentId.make("environment-group");
-    const root = makeThreadFixture({ id: ThreadId.make("g-root"), environmentId });
-    const child = (id: string, parent: ThreadId, extra: object = {}) =>
-      makeThreadFixture({
-        id: ThreadId.make(id),
-        environmentId,
-        lineage: {
-          rootThreadId: root.id,
-          parentThreadId: parent,
-          relationshipToParent: "subagent",
-        },
-        ...extra,
-      });
-    const late = child("g-late", root.id, { createdAt: "2026-03-09T10:05:00.000Z" });
-    const early = child("g-early", root.id, { createdAt: "2026-03-09T10:01:00.000Z" });
-    const nested = child("g-nested", early.id);
-    const archived = child("g-archived", root.id, { archivedAt: "2026-03-09T11:00:00.000Z" });
-    const sideChat = makeThreadFixture({
-      id: ThreadId.make("g-side"),
-      environmentId,
-      lineage: {
-        rootThreadId: root.id,
-        parentThreadId: root.id,
-        relationshipToParent: "subagent",
-        sideChat: true,
-      },
-    });
-    const groups = groupSidebarSubagents(
-      [root, late, early, nested, archived, sideChat],
-      new Set(),
-    );
-    const keyOf = (id: ThreadId) => `${environmentId}:${id}`;
+describe("nestSidebarSubsessions", () => {
+  const environmentId = EnvironmentId.make("environment-nest");
+  const keyOf = (id: ThreadId) => `${environmentId}:${id}`;
+  const make = (id: string, extra: ThreadFixtureOverrides = {}) =>
+    makeThreadFixture({ id: ThreadId.make(id), environmentId, ...extra });
+  const launched = (id: string, parent: ThreadId, extra: ThreadFixtureOverrides = {}) =>
+    make(id, { launchedFrom: parent, creationSource: "mcp", ...extra });
+  const nest = (threads: ReturnType<typeof make>[], delegated: string[] = []) => {
+    const visible = filterSidebarV2VisibleThreads(threads, null, new Set(delegated));
+    return nestSidebarSubsessions(threads, visible, new Set(delegated));
+  };
 
-    expect(groups.get(keyOf(root.id))?.map((thread) => thread.id)).toEqual([early.id, late.id]);
-    expect(groups.get(keyOf(early.id))?.map((thread) => thread.id)).toEqual([nested.id]);
+  it("nests launched threads under a visible parent, oldest first, recursively", () => {
+    const root = make("n-root");
+    const late = launched("n-late", root.id, { createdAt: "2026-03-09T10:05:00.000Z" });
+    const early = launched("n-early", root.id, { createdAt: "2026-03-09T10:01:00.000Z" });
+    const deep = launched("n-deep", early.id);
+    const { subsessionsByParent, parentKeyByChild } = nest([root, late, early, deep]);
+
+    expect(subsessionsByParent.get(keyOf(root.id))?.map((thread) => thread.id)).toEqual([
+      early.id,
+      late.id,
+    ]);
+    expect(subsessionsByParent.get(keyOf(early.id))?.map((thread) => thread.id)).toEqual([deep.id]);
+    expect([...parentKeyByChild.keys()].toSorted()).toEqual(
+      [early, late, deep].map((thread) => keyOf(thread.id)).toSorted(),
+    );
   });
 
-  it("nests a delegated task under the thread that delegated it", () => {
-    const environmentId = EnvironmentId.make("environment-delegated");
-    const parent = makeThreadFixture({ id: ThreadId.make("d-parent"), environmentId });
-    const task = makeThreadFixture({
-      id: ThreadId.make("d-task"),
-      environmentId,
-      delegatedFrom: { environmentId, threadId: parent.id, title: "Pai" },
-    });
-    const taskKey = `${environmentId}:${task.id}`;
+  it("keeps a launched thread top-level when its parent is archived, elsewhere or missing", () => {
+    const archived = make("n-archived", { archivedAt: "2026-03-09T11:00:00.000Z" });
+    const otherProject = make("n-other", { projectId: ProjectId.make("project-other") });
+    const orphan = launched("n-orphan", ThreadId.make("n-gone"));
+    const underArchived = launched("n-under-archived", archived.id);
+    const crossProject = launched("n-cross", otherProject.id);
 
     expect(
-      groupSidebarSubagents([parent, task], new Set([taskKey])).get(
-        `${environmentId}:${parent.id}`,
-      ),
-    ).toEqual([task]);
-    expect(groupSidebarSubagents([parent, task], new Set()).size).toBe(0);
+      nest([archived, otherProject, orphan, underArchived, crossProject]).parentKeyByChild.size,
+    ).toBe(0);
+  });
+
+  it("hides a delegate_task child only while its parent is shown, and skips native subagents", () => {
+    const root = make("n-parent");
+    const task = make("n-task", {
+      creationSource: "mcp",
+      lineage: { rootThreadId: root.id, parentThreadId: root.id, relationshipToParent: "subagent" },
+    });
+    const native = make("n-native", {
+      creationSource: "provider",
+      lineage: { rootThreadId: root.id, parentThreadId: root.id, relationshipToParent: "subagent" },
+    });
+    const { subsessionsByParent } = nest([root, task, native]);
+    expect(subsessionsByParent.get(keyOf(root.id))?.map((thread) => thread.id)).toEqual([task.id]);
+    expect(nest([task, native]).subsessionsByParent.size).toBe(0);
+  });
+
+  it("nests a delegated task from a linked environment under its parent", () => {
+    const root = make("n-delegator");
+    const task = make("n-delegated", {
+      environmentId: EnvironmentId.make("environment-linked"),
+      projectId: ProjectId.make("project-linked"),
+      delegatedFrom: { environmentId, threadId: root.id, title: "Pai" },
+    });
+    const taskKey = `environment-linked:${task.id}`;
+
+    expect(nest([root, task], [taskKey]).subsessionsByParent.get(keyOf(root.id))).toEqual([task]);
+    expect(nest([root, task]).subsessionsByParent.size).toBe(0);
+  });
+
+  it("lists one of two threads that launched each other", () => {
+    const a = make("n-a", { launchedFrom: ThreadId.make("n-b") });
+    const b = make("n-b", { launchedFrom: ThreadId.make("n-a") });
+    const { parentKeyByChild } = nest([a, b]);
+
+    expect(parentKeyByChild.size).toBe(1);
   });
 });

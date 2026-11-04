@@ -70,6 +70,7 @@ import {
   SettingsIcon,
 } from "lucide-react";
 import {
+  Fragment,
   useEffect,
   useLayoutEffect,
   useReducer,
@@ -190,7 +191,6 @@ import {
   belongsInSidebarWorkingShelf,
   isSidebarEnvironmentDisconnected,
   isSidebarNestedLinkClick,
-  groupSidebarSubagents,
   isTrailingDoubleClick,
   orderItemsByPreferredIds,
   planSidebarThreadDrop,
@@ -215,6 +215,10 @@ import {
   type SidebarListItem,
   type SidebarSection,
   resolveSidebarRowThreadId,
+  listSubsessionDescendants,
+  nestSidebarSubsessions,
+  resolveSubsessionDot,
+  subsessionsExpansionKey,
 } from "./Sidebar.logic";
 import {
   createSidebarCollisionDetection,
@@ -369,11 +373,17 @@ function scrollSidebarToTop(content: HTMLElement | null) {
   content?.closest("[data-slot=scroll-area-viewport]")?.scrollTo({ top: 0 });
 }
 
+function toggleSubsessions(threadKey: string) {
+  const { projectExpandedById, setProjectExpanded } = useUiStateStore.getState();
+  const key = subsessionsExpansionKey(threadKey);
+  setProjectExpanded(key, projectExpandedById[key] === false);
+}
+
 function threadShellKey(thread: Pick<SidebarThreadSummary, "environmentId" | "id">): string {
   return scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
 }
 
-const NO_SUBAGENTS: ReadonlyMap<string, readonly EnvironmentThreadShell[]> = new Map();
+const NO_SUBSESSIONS: readonly EnvironmentThreadShell[] = [];
 const NO_DRAGGED_ORDER: readonly string[] = [];
 const NO_DRAGGED_ORDERS: {
   readonly settledOrder: readonly string[];
@@ -573,7 +583,22 @@ function useSidebarThreads(input: {
               : EMPTY_THREADS,
           };
         });
-  const orderedThreads = [
+  const { subsessionsByParent } = partition;
+  const isSubsessionsOpen = (key: string) =>
+    projectExpandedById[subsessionsExpansionKey(key)] !== false;
+  // Open subsessions follow their parent, so jump hints, range selection and row actions reach them.
+  const withOpenSubsessions = (list: readonly EnvironmentThreadShell[]) =>
+    subsessionsByParent.size === 0
+      ? list
+      : list.flatMap((thread) => [
+          thread,
+          ...listSubsessionDescendants(
+            subsessionsByParent,
+            threadShellKey(thread),
+            isSubsessionsOpen,
+          ),
+        ]);
+  const orderedThreads = withOpenSubsessions([
     ...pinnedThreads,
     ...(projectFolders === null
       ? activeThreads
@@ -582,7 +607,7 @@ function useSidebarThreads(input: {
     ...visibleWorkingThreads,
     ...visibleSnoozedThreads,
     ...renderedSettledThreads,
-  ];
+  ]);
   const sectionByThreadKey = new Map<string, SidebarSection>();
   for (const [list, section] of [
     [pinnedThreads, "pinned"],
@@ -605,7 +630,9 @@ function useSidebarThreads(input: {
       ...workingThreads,
       ...snoozedThreads,
       ...settledThreads,
+      ...[...subsessionsByParent.values()].flat(),
     ],
+    subsessionsByParent,
     settledVisibleCount,
     settledCount,
     olderSettledShelf,
@@ -624,6 +651,7 @@ function useSidebarThreads(input: {
     workingShelfExpanded,
     toggleWorkingShelf: () => setWorkingShelfExpanded((value) => !value),
     projectFolders,
+    isSubsessionsOpen,
     toggleProjectFolder: (group: SidebarProjectSnapshot) => {
       const keys = sidebarFolderExpansionKeys(group);
       setProjectExpanded(keys, !resolveProjectExpanded(projectExpandedById, keys));
@@ -660,7 +688,18 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
     disconnectedEnvironmentIds,
   } = input;
   const preciseNow = new Date().toISOString();
-  const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys, delegatedUnderParent);
+  const visibleThreads = filterSidebarV2VisibleThreads(
+    threads,
+    scopedProjectKeys,
+    delegatedUnderParent,
+  );
+  const { subsessionsByParent, parentKeyByChild } = nestSidebarSubsessions(
+    threads,
+    visibleThreads,
+    delegatedUnderParent,
+  );
+  // Subsessions list under their parent, so only the other threads take part in sections.
+  const visible = visibleThreads.filter((thread) => !parentKeyByChild.has(threadShellKey(thread)));
   const inboxObservation = inboxReturns.observe(workingShelfEnabled ? threads : null);
   const pinned: EnvironmentThreadShell[] = [];
   const active: EnvironmentThreadShell[] = [];
@@ -758,7 +797,8 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
         firstValidTimestampMs(right.snoozedUntil ?? null),
     ),
     settledThreads: sortSettledThreads(settled),
-    visibleThreads: visible,
+    visibleThreads,
+    subsessionsByParent,
     snoozeNow: preciseNow,
   };
 }
@@ -1151,7 +1191,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ),
         );
   const threads = useQuietThreadShells();
-  const subagentsByParent = groupSidebarSubagents(threads, delegatedUnderParent);
   const routeRowThreadKey =
     routeThreadRef === null
       ? null
@@ -1353,6 +1392,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     settledThreads,
     snoozeNow,
     searchableThreads,
+    subsessionsByParent,
+    isSubsessionsOpen,
     settledVisibleCount,
     settledCount,
     olderSettledShelf,
@@ -3388,15 +3429,35 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                         section: SidebarSection,
                         // The tree row of the project folder this row sits in.
                         folderRow?: string,
-                      ) => {
+                        // The thread key of the parent whose subsession this row is.
+                        parentKey?: string,
+                        depth = 0,
+                      ): ReactNode => {
                         const threadKey = scopedThreadKey(
                           scopeThreadRef(thread.environmentId, thread.id),
                         );
+                        const subsessions = subsessionsByParent.get(threadKey) ?? NO_SUBSESSIONS;
+                        const subsessionsOpen = isSubsessionsOpen(threadKey);
+                        // A subsession sits in the section its own state puts it in, as a slim row.
+                        const rowSection: SidebarSection =
+                          parentKey === undefined
+                            ? section
+                            : resolveSidebarThreadSection({
+                                snoozed:
+                                  serverConfigs.has(thread.environmentId) &&
+                                  effectiveSnoozed(thread, { now: snoozeNow }),
+                                settled:
+                                  serverConfigs.has(thread.environmentId) &&
+                                  thread.settledOverride === "settled",
+                                testing: false,
+                                pinned: false,
+                              });
                         const isCard =
-                          section === "active" ||
-                          section === "pinned" ||
-                          section === "testing" ||
-                          section === "working";
+                          parentKey === undefined &&
+                          (section === "active" ||
+                            section === "pinned" ||
+                            section === "testing" ||
+                            section === "working");
                         const rowVariant = folderRow
                           ? folderRowsMultiline
                             ? "folder-multiline"
@@ -3404,7 +3465,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           : isCard
                             ? "card"
                             : "slim";
-                        return (
+                        const row = (
                           <SortableThreadRow
                             key={threadKey}
                             sortableId={threadKey}
@@ -3418,6 +3479,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             thread={thread}
                             variant={rowVariant}
                             navigationParent={
+                              parentKey ??
                               folderRow ??
                               (section === "testing" ||
                               section === "working" ||
@@ -3427,9 +3489,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                 : undefined)
                             }
                             variantAction={
-                              section === "snoozed"
+                              rowSection === "snoozed"
                                 ? "unsnooze"
-                                : section === "settled"
+                                : rowSection === "settled"
                                   ? "unsettle"
                                   : "settle"
                             }
@@ -3449,7 +3511,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               actionSweep?.keys.has(threadKey) ? actionSweep.action : null
                             }
                             snoozeWakeLabelText={
-                              section === "snoozed" && thread.snoozedUntil != null
+                              rowSection === "snoozed" && thread.snoozedUntil != null
                                 ? snoozeWakeLabel(thread.snoozedUntil, {
                                     now: new Date().toISOString(),
                                   })
@@ -3505,14 +3567,42 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             onUnpin={attemptUnpin}
                             onAcknowledgeWoke={acknowledgeWoke}
                             onFileDropThreads={handleThreadFileDrop}
-                            // Rows without subagents get constants so their memo holds.
-                            subagentsByParent={
-                              subagentsByParent.has(threadKey) ? subagentsByParent : NO_SUBAGENTS
+                            // Rows without subsessions get constants so their memo holds.
+                            subsessionCount={subsessions.length}
+                            subsessionsCollapsed={!subsessionsOpen}
+                            subsessionDot={
+                              subsessions.length > 0 && !subsessionsOpen
+                                ? resolveSubsessionDot(subsessionsByParent, threadKey)
+                                : null
                             }
-                            routeThreadKey={
-                              subagentsByParent.has(threadKey) ? routeThreadKey : null
-                            }
+                            onToggleSubsessions={toggleSubsessions}
                           />
+                        );
+                        return (
+                          <Fragment key={threadKey}>
+                            {row}
+                            {subsessionsOpen && subsessions.length > 0 ? (
+                              <li className="list-none">
+                                <ul
+                                  className={cn(
+                                    "flex flex-col gap-px",
+                                    // Past three levels the rows stop stepping in.
+                                    depth < 3 && "ms-4 border-s border-border/60 ps-1.5",
+                                  )}
+                                >
+                                  {subsessions.map((child) =>
+                                    renderThreadRow(
+                                      child,
+                                      section,
+                                      folderRow,
+                                      threadKey,
+                                      depth + 1,
+                                    ),
+                                  )}
+                                </ul>
+                              </li>
+                            ) : null}
+                          </Fragment>
                         );
                       };
                       const from = isContextDrag ? null : (dragState?.activeSection ?? null);
