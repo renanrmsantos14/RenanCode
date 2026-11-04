@@ -219,6 +219,9 @@ import { threadWorkspaceRoot } from "./project/threadWorkspaceRoot.ts";
 import * as ManagedProjectFolders from "./project/ManagedProjectFolders.ts";
 import * as ScratchThreadPromotion from "./project/ScratchThreadPromotion.ts";
 import * as NextActionSuggestionService from "./orchestration-v2/NextActionSuggestionService.ts";
+import * as CacheKeepWarmService from "./orchestration-v2/CacheKeepWarmService.ts";
+import { KEEP_WARM_DEFAULT_HOURS } from "@t3tools/shared/promptCache";
+import * as ThreadHandoffService from "./orchestration-v2/ThreadHandoffService.ts";
 import { mutateProjectWithClone } from "./project/ProjectMutation.ts";
 import * as ProjectCloneTracker from "./project/ProjectCloneTracker.ts";
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
@@ -1370,6 +1373,8 @@ export const layerWsRpc = (
       const managedFolders = yield* ManagedProjectFolders.ManagedProjectFolders;
       const scratchThreadPromotion = yield* ScratchThreadPromotion.ScratchThreadPromotion;
       const nextActionSuggestions = yield* NextActionSuggestionService.NextActionSuggestionService;
+      const cacheKeepWarm = yield* CacheKeepWarmService.CacheKeepWarmService;
+      const threadHandoff = yield* ThreadHandoffService.ThreadHandoffService;
       const eventLoopMonitor = yield* EventLoopMonitor.EventLoopMonitor;
       const threadSearch = yield* ThreadSearch.ThreadSearch;
 
@@ -2650,6 +2655,10 @@ export const layerWsRpc = (
           }),
         [WS_METHODS.serverGetProcessDiagnostics]: (_input) => processDiagnostics.read,
         [WS_METHODS.serverGetHostResources]: (_input) => hostResources.read,
+        [WS_METHODS.serverEstimateInputCost]: (input) =>
+          usage
+            .estimateInputCost(input.model, input.tokens)
+            .pipe(Effect.map((costUsd) => ({ costUsd }))),
         [WS_METHODS.serverGetProcessResourceHistory]: (input) =>
           processResourceMonitor.readHistory(input),
         [WS_METHODS.serverGetResourceTelemetryHistory]: (input) =>
@@ -2859,6 +2868,13 @@ export const layerWsRpc = (
               ),
             ),
         [WS_METHODS.threadsSuggestNextAction]: (input) => nextActionSuggestions.suggest(input),
+        [WS_METHODS.threadsCacheKeepWarm]: (input) =>
+          input.action === "start"
+            ? cacheKeepWarm.start(input.threadId, input.hours ?? KEEP_WARM_DEFAULT_HOURS)
+            : input.action === "stop"
+              ? cacheKeepWarm.stop(input.threadId)
+              : cacheKeepWarm.status(input.threadId),
+        [WS_METHODS.threadsHandoff]: (input) => threadHandoff.handoff(input),
         [WS_METHODS.projectCloneCancel]: (input) =>
           projectCloneTracker.cancel(input.projectId).pipe(Effect.map((applied) => ({ applied }))),
         [WS_METHODS.projectCloneRetry]: (input) =>

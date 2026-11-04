@@ -46,7 +46,12 @@ describe("RPC authorization scopes", () => {
   });
 
   it("keeps methods that run an agent or model on this environment behind operate scope", () => {
-    for (const method of [WS_METHODS.serverPrepareTriage, WS_METHODS.threadsSuggestNextAction]) {
+    for (const method of [
+      WS_METHODS.serverPrepareTriage,
+      WS_METHODS.threadsSuggestNextAction,
+      WS_METHODS.threadsCacheKeepWarm,
+      WS_METHODS.threadsHandoff,
+    ]) {
       expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationOperateScope);
     }
   });

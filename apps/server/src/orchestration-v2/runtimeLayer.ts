@@ -38,6 +38,8 @@ import * as ProviderContinuationRequests from "@t3tools/provider-core/server/Pro
 import * as ProviderContinuationService from "./ProviderContinuationService.ts";
 import * as ThreadTitleRegenerationService from "./ThreadTitleRegenerationService.ts";
 import * as NextActionSuggestionService from "./NextActionSuggestionService.ts";
+import * as CacheKeepWarmService from "./CacheKeepWarmService.ts";
+import * as ThreadHandoffService from "./ThreadHandoffService.ts";
 import * as ProviderEventIngestor from "./ProviderEventIngestor.ts";
 import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
@@ -320,6 +322,14 @@ const layerNextActionSuggestionProvided = NextActionSuggestionService.layer.pipe
     Layer.mergeAll(layerThreadManagementProvided, ProjectStore.layer, TextGeneration.layer),
   ),
 );
+const layerCacheKeepWarmProvided = CacheKeepWarmService.layer.pipe(
+  Layer.provide(Layer.merge(layerOrchestratorProvided, ProjectionStore.layer)),
+);
+const layerThreadHandoffProvided = ThreadHandoffService.layer.pipe(
+  Layer.provide(
+    Layer.mergeAll(layerOrchestratorProvided, ProjectionStore.layer, layerThreadLaunchProvided),
+  ),
+);
 const layerEffectExecutorProvided = EffectWorker.layerExecutor.pipe(
   Layer.provide(
     Layer.mergeAll(
@@ -381,6 +391,8 @@ export const layerProduction = Layer.mergeAll(
   layerScheduledTaskProvided,
   layerScratchThreadPromotionProvided,
   layerNextActionSuggestionProvided,
+  layerCacheKeepWarmProvided,
+  layerThreadHandoffProvided,
   layerSecretRequestsProvided,
   GuestShareService.layer.pipe(
     Layer.provide(Layer.merge(layerOrchestratorProvided, layerCommandOutputHubProvided)),

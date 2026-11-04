@@ -1,3 +1,4 @@
+import { dispatchCacheAction } from "./chat/cacheActionBus";
 import { threadPullRequestLinkMode } from "@t3tools/client-runtime/thread-pull-request-compatibility";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
 
@@ -1570,6 +1571,31 @@ function OpenCommandPaletteDialog(props: {
         await navigate({ to: "/pull-requests", search: readPullRequestListPreferences() });
       },
     });
+  }
+
+  if (activeThread) {
+    for (const [action, title, shortcutCommand, terms] of [
+      [
+        "keep-warm-toggle",
+        "Toggle keep prompt cache warm",
+        "cache.keepWarmToggle",
+        ["cache", "warm", "ping", "ttl"],
+      ],
+      ["compact", "Compact context", "cache.compact", ["compact", "context", "summarize"]],
+      ["handoff", "Hand off to a new thread", "cache.handoff", ["handoff", "summary", "continue"]],
+    ] as const) {
+      actionItems.push({
+        kind: "action",
+        value: `action:cache:${action}`,
+        searchTerms: [title, ...terms],
+        title,
+        icon: <MonitorIcon className={ITEM_ICON_CLASS} />,
+        shortcutCommand,
+        run: async () => {
+          dispatchCacheAction(action);
+        },
+      });
+    }
   }
 
   actionItems.push({

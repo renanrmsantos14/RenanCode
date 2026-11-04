@@ -5,6 +5,11 @@ import {
   isClaudeResumeCompactionQuestion,
 } from "@t3tools/shared/claudeCompaction";
 import {
+  COLD_CACHE_WARNING_MIN_TOKENS,
+  fallbackPromptCacheTtlMs,
+  supportsPromptCacheFeatures,
+} from "@t3tools/shared/promptCache";
+import {
   resolveSelectableProviderInstanceEntry,
   type ProviderInstanceEntry,
 } from "../../providerInstances";
@@ -82,6 +87,44 @@ export function shouldOfferResumeCompaction(input: {
     Number.isFinite(now) &&
     now - updatedAt >= (input.promptCacheTtlMs ?? CLAUDE_RESUME_COMPACTION_FALLBACK_MS)
   );
+}
+
+/**
+ * The pre-send warning for a large thread whose prompt cache expired, or null when the cache is
+ * warm, the thread is small, the provider reports no cache data, or it has no cache to lose.
+ */
+export function coldCacheWarning(input: {
+  readonly driver: string | null | undefined;
+  readonly usage:
+    | {
+        readonly usedTokens: number;
+        readonly cachedInputTokens?: number | undefined;
+        readonly promptCacheTtlMs?: number | undefined;
+        readonly promptCacheExpiresAt?: string | undefined;
+        readonly updatedAt: string;
+      }
+    | null
+    | undefined;
+  readonly now: string;
+}): { readonly usedTokens: number } | null {
+  const { driver, usage } = input;
+  if (!driver || !usage || !supportsPromptCacheFeatures(driver)) return null;
+  if (usage.usedTokens < COLD_CACHE_WARNING_MIN_TOKENS) return null;
+  if (
+    usage.promptCacheExpiresAt === undefined &&
+    usage.promptCacheTtlMs === undefined &&
+    usage.cachedInputTokens === undefined
+  ) {
+    return null;
+  }
+  const expiresAt =
+    usage.promptCacheExpiresAt === undefined
+      ? Date.parse(usage.updatedAt) + (usage.promptCacheTtlMs ?? fallbackPromptCacheTtlMs(driver))
+      : Date.parse(usage.promptCacheExpiresAt);
+  const now = Date.parse(input.now);
+  return Number.isFinite(expiresAt) && Number.isFinite(now) && now >= expiresAt
+    ? { usedTokens: usage.usedTokens }
+    : null;
 }
 
 export function resolveContextWindowModelDisplayName(

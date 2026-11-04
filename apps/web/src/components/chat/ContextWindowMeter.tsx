@@ -6,6 +6,7 @@ import {
   formatContextWindowCost,
 } from "./ContextWindowMeter.logic";
 import { Minimize2Icon } from "lucide-react";
+import type { ReactNode } from "react";
 import { composerFloatingLayerProps } from "./composerEventScope";
 
 function formatPercentage(value: number | null): string | null {
@@ -24,6 +25,7 @@ export function ContextWindowMeter(props: {
   onCompact?: (() => void) | undefined;
   compactDisabled?: boolean | undefined;
   compactDisabledReason?: string | null | undefined;
+  cacheControl?: ReactNode;
 }) {
   const { usage, modelDisplayName, onCompact, compactDisabled, compactDisabledReason } = props;
   const usedPercentage = formatPercentage(usage.usedPercentage);
@@ -168,6 +170,7 @@ export function ContextWindowMeter(props: {
               ) : null}
             </>
           ) : null}
+          {props.cacheControl}
         </div>
       </PopoverPopup>
     </Popover>

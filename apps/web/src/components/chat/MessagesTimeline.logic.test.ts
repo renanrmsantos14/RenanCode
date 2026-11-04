@@ -20,6 +20,7 @@ import {
 } from "../../session-logic";
 import { makeStreamingTimelineFixture } from "../../test-fixtures";
 import type { TurnDiffSummary } from "../../types";
+import { KEEP_WARM_PING_TEXT } from "@t3tools/shared/promptCache";
 import { describe, expect, it } from "vite-plus/test";
 import { EnvironmentId, MessageId, RunId } from "@t3tools/contracts";
 import { serializeAssistantCitation } from "@t3tools/shared/assistantCitations";
@@ -54,6 +55,44 @@ describe("resolveAssistantMessageCopyState", () => {
 });
 
 describe("deriveMessagesTimelineRows", () => {
+  it("hides keep-warm ping turns but keeps ordinary turns", () => {
+    const at = "2026-10-01T06:19:10Z";
+    const message = (
+      id: string,
+      role: "user" | "assistant",
+      text: string,
+      runId: string,
+      creationSource?: "server",
+    ): TimelineEntry => ({
+      kind: "message",
+      id,
+      createdAt: at,
+      message: {
+        id: MessageId.make(id),
+        role,
+        text,
+        runId: RunId.make(runId),
+        streaming: false,
+        ...(creationSource ? { creationSource } : {}),
+        createdAt: at,
+        updatedAt: at,
+      },
+    });
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: [
+        message("u1", "user", "real question", "r1"),
+        message("a1", "assistant", "real answer", "r1"),
+        message("u2", "user", KEEP_WARM_PING_TEXT, "r2", "server"),
+        message("a2", "assistant", "ok", "r2"),
+      ],
+      isWorking: false,
+      turnDiffSummaries: [],
+      supportsConversationRollback: false,
+    });
+    const ids = rows.flatMap((row) => (row.kind === "message" ? [row.message.id] : []));
+    expect(ids).toEqual(["u1", "a1"]);
+  });
+
   it("stops stranded thinking after a steer and follows the next thought or tool", () => {
     const runId = RunId.make("steered-run");
     const at = "2026-10-01T06:19:10Z";

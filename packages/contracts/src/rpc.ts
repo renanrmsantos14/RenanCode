@@ -175,6 +175,15 @@ import {
 import { PullRequestReviewGuideResult } from "./pullRequestReviewGuide.ts";
 import { NextActionSuggestionInput, NextActionSuggestionResult } from "./nextActionSuggestion.ts";
 import {
+  CacheKeepWarmInput,
+  CacheKeepWarmStatus,
+  EstimateInputCostInput,
+  EstimateInputCostResult,
+  ThreadHandoffError,
+  ThreadHandoffInput,
+  ThreadHandoffResult,
+} from "./promptCache.ts";
+import {
   PullRequestActionInput,
   PullRequestActivity,
   PullRequestChangeBreakdown,
@@ -420,6 +429,8 @@ export const WS_METHODS = {
   projectsCreateNew: "projects.createNew",
   projectsCreateFromThread: "projects.createFromThread",
   threadsSuggestNextAction: "threads.suggestNextAction",
+  threadsCacheKeepWarm: "threads.cacheKeepWarm",
+  threadsHandoff: "threads.handoff",
 
   shellOpenInEditor: "shell.openInEditor",
 
@@ -533,6 +544,7 @@ export const WS_METHODS = {
   serverGetTraceDiagnostics: "server.getTraceDiagnostics",
   serverGetProcessDiagnostics: "server.getProcessDiagnostics",
   serverGetHostResources: "server.getHostResources",
+  serverEstimateInputCost: "server.estimateInputCost",
   serverGetProcessResourceHistory: "server.getProcessResourceHistory",
   serverGetResourceTelemetryHistory: "server.getResourceTelemetryHistory",
   serverRetryResourceTelemetry: "server.retryResourceTelemetry",
@@ -1367,6 +1379,24 @@ const WsThreadsSuggestNextActionRpc = Rpc.make(WS_METHODS.threadsSuggestNextActi
   error: EnvironmentAuthorizationError,
 });
 
+const WsThreadsCacheKeepWarmRpc = Rpc.make(WS_METHODS.threadsCacheKeepWarm, {
+  payload: CacheKeepWarmInput,
+  success: CacheKeepWarmStatus,
+  error: EnvironmentAuthorizationError,
+});
+
+const WsThreadsHandoffRpc = Rpc.make(WS_METHODS.threadsHandoff, {
+  payload: ThreadHandoffInput,
+  success: ThreadHandoffResult,
+  error: Schema.Union([ThreadHandoffError, EnvironmentAuthorizationError]),
+});
+
+const WsServerEstimateInputCostRpc = Rpc.make(WS_METHODS.serverEstimateInputCost, {
+  payload: EstimateInputCostInput,
+  success: EstimateInputCostResult,
+  error: EnvironmentAuthorizationError,
+});
+
 const WsShellOpenInEditorRpc = Rpc.make(WS_METHODS.shellOpenInEditor, {
   payload: LaunchEditorInput,
   error: Schema.Union([ExternalLauncherError, EnvironmentAuthorizationError]),
@@ -2129,6 +2159,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsCreateNewRpc,
   WsProjectsCreateFromThreadRpc,
   WsThreadsSuggestNextActionRpc,
+  WsThreadsCacheKeepWarmRpc,
+  WsThreadsHandoffRpc,
+  WsServerEstimateInputCostRpc,
   WsProjectsWriteFileRpc,
   WsProjectsMutateRpc,
   WsShellOpenInEditorRpc,

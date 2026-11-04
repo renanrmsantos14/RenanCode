@@ -40,7 +40,12 @@ import type {
   UsageRecord,
 } from "@t3tools/provider-core/server/usage";
 import { canonicalModelFilter, resolveModelAliases, UsageAggregator } from "./usageAggregation.ts";
-import { createOverrideRateTable, parseRateTable, type RateTable } from "./usagePricing.ts";
+import {
+  createOverrideRateTable,
+  lookupRate,
+  parseRateTable,
+  type RateTable,
+} from "./usagePricing.ts";
 import {
   listTranscriptFiles,
   readDirectoryVolumeId,
@@ -144,6 +149,8 @@ export class UsageService extends Context.Service<
   {
     readonly readSummary: (input: UsageSummaryInput) => Effect.Effect<UsageSummary, UsageReadError>;
     readonly refreshRates: Effect.Effect<UsagePricing>;
+    /** Estimated USD to read `tokens` as fresh input for `model`; null when no rate is known. */
+    readonly estimateInputCost: (model: string, tokens: number) => Effect.Effect<number | null>;
   }
 >()("t3/usage/UsageService") {}
 
@@ -935,7 +942,20 @@ export const make = Effect.gen(function* () {
     return yield* Deferred.await(deferred);
   });
 
-  return { readSummary, refreshRates, awaitPersisted } as const;
+  const estimateInputCost = Effect.fn("UsageService.estimateInputCost")(function* (
+    model: string,
+    tokens: number,
+  ) {
+    const settings = yield* settingsService.getSettings.pipe(Effect.option);
+    const overrides =
+      settings._tag === "Some" ? createOverrideRateTable(settings.value.usagePriceOverrides) : null;
+    const override = overrides === null ? null : lookupRate(overrides, model);
+    if (override === null) yield* ensureRates(false);
+    const rate = override ?? lookupRate(rates, model);
+    return rate === null ? null : rate.inputCostPerToken * tokens;
+  });
+
+  return { readSummary, refreshRates, estimateInputCost, awaitPersisted } as const;
 });
 
 export const layer = Layer.effect(UsageService, make);
