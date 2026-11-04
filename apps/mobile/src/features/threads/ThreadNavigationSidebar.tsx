@@ -277,6 +277,8 @@ function ThreadNavigationSidebarPane(
     snoozedShelfExpanded,
     workingShelfEnabled,
     workingShelfExpanded,
+    collapsedSubsessions,
+    toggleSubsessions,
     toggleSettledShelf,
     toggleSnoozedShelf,
     toggleWorkingShelf,
@@ -322,6 +324,7 @@ function ThreadNavigationSidebarPane(
     workingShelfExpanded,
     snoozedShelfExpanded,
     settledShelfExpanded,
+    collapsedSubsessions,
     selectedThreadKey: props.selectedThreadKey ?? null,
   });
   const listItems: readonly SidebarListItem[] =
@@ -545,6 +548,9 @@ function ThreadNavigationSidebarPane(
             onNewThreadOnBranch={props.onNewThreadOnBranch}
             thread={thread}
             variant={item.item.variant}
+            depth={item.item.depth}
+            subsessions={item.item.subsessions}
+            onToggleSubsessions={toggleSubsessions}
             hasQueuedMessages={item.hasQueuedMessages}
             snoozed={item.item.snoozed}
             pinned={item.item.pinned}

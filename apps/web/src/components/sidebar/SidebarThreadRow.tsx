@@ -1,4 +1,4 @@
-import { SidebarSubagentList, type SidebarSubagentsByParent } from "./SidebarSubagentList";
+import { SubsessionToggle, type SubsessionDot } from "./SubsessionToggle";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { ThreadTerminalStatusButton } from "../ThreadStatusIndicators";
 import { discardComposerDraft } from "../../lib/discardComposerDraft";
@@ -590,8 +590,11 @@ type SidebarThreadRowProps = {
   onUnpin: (threadRef: ScopedThreadRef) => void;
   onAcknowledgeWoke: (threadRef: ScopedThreadRef, visitedAt: string) => void;
   onFileDropThreads?: ((threadRef: ScopedThreadRef, files: File[]) => void) | undefined;
-  subagentsByParent: SidebarSubagentsByParent;
-  routeThreadKey: string | null;
+  // Zero for a row with no subsessions, so such rows keep constant props.
+  subsessionCount: number;
+  subsessionsCollapsed: boolean;
+  subsessionDot: SubsessionDot | null;
+  onToggleSubsessions: (threadKey: string) => void;
 };
 
 // Mounted only while renaming, so each rename starts uncommitted.
@@ -826,14 +829,16 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const isRemote = thread.environmentId !== props.currentEnvironmentId;
   const showsScratchMachine = !thread.branch && props.scratchMachineLabel !== null;
 
-  const subagentList = (
-    <SidebarSubagentList
-      parentKey={threadKey}
-      subagentsByParent={props.subagentsByParent}
-      activeThreadKey={props.routeThreadKey}
-      onThreadActivate={onThreadActivate}
-    />
-  );
+  const subsessionToggle =
+    props.subsessionCount > 0 ? (
+      <SubsessionToggle
+        threadKey={threadKey}
+        count={props.subsessionCount}
+        collapsed={props.subsessionsCollapsed}
+        dot={props.subsessionDot}
+        onToggle={props.onToggleSubsessions}
+      />
+    ) : null;
   const detailsTooltip = (
     <SidebarThreadTooltip
       thread={thread}
@@ -1293,6 +1298,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               {title}
               {multiline ? titleLineIcons : null}
               {pinIndicator}
+              {subsessionToggle}
               {multiline ? null : terminalStatusIcon}
               {isRegeneratingTitle ? (
                 <span role="status" className="sr-only">
@@ -1426,7 +1432,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           </TooltipTrigger>
           {detailsTooltip}
         </Tooltip>
-        {subagentList}
       </li>
     );
   }
@@ -1644,13 +1649,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 </span>
               ) : null}
               {titleLineIcons}
+              {subsessionToggle}
             </div>
             {metaLine}
           </div>
         </TooltipTrigger>
         {detailsTooltip}
       </Tooltip>
-      {subagentList}
     </li>
   );
 });

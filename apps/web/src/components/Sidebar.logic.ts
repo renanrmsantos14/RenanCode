@@ -1,6 +1,10 @@
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
+import {
+  groupSubsessionsByParent,
+  subsessionParentRef,
+} from "@t3tools/client-runtime/state/subsessions";
 import { isShownUnderParent } from "@t3tools/client-runtime/state/threads";
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import { threadPullRequestSearchTerms } from "@t3tools/shared/threadPullRequests";
@@ -617,45 +621,122 @@ export function resolveSidebarRowThreadId(
   return thread?.id ?? threadId;
 }
 
+type SubsessionNestingThread = Pick<
+  SidebarThreadSummary,
+  | "archivedAt"
+  | "createdAt"
+  | "creationSource"
+  | "delegatedFrom"
+  | "environmentId"
+  | "id"
+  | "launchedFrom"
+  | "lineage"
+> & { projectId: string };
+
 /**
- * Children by parent thread key, oldest first, for the nested sidebar list: subagents, and tasks
- * linked environments delegated (`delegatedUnderParent`), which the thread list hides the same way.
+ * Threads that nest under a parent row instead of listing on their own, by parent thread key
+ * (children oldest first), and the parent of each nested thread. A thread nests when its
+ * `subsessionParentRef` is a thread the sidebar shows, in the same project; a delegated task
+ * may sit in another environment. Any other thread keeps its place in `visibleThreads`.
  */
-export function groupSidebarSubagents<
-  T extends Pick<
-    SidebarThreadSummary,
-    "archivedAt" | "createdAt" | "delegatedFrom" | "environmentId" | "id" | "lineage"
-  >,
->(
+export function nestSidebarSubsessions<T extends SubsessionNestingThread>(
   threads: readonly T[],
+  visibleThreads: readonly T[],
   delegatedUnderParent: ReadonlySet<string>,
-): ReadonlyMap<string, readonly T[]> {
-  const byParent = new Map<string, T[]>();
+): {
+  readonly subsessionsByParent: ReadonlyMap<string, readonly T[]>;
+  readonly parentKeyByChild: ReadonlyMap<string, string>;
+} {
+  const keyOf = (thread: Pick<T, "environmentId" | "id">) =>
+    scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
+  const live = new Map<string, T>();
   for (const thread of threads) {
-    if (thread.archivedAt !== null || thread.lineage.sideChat === true) continue;
-    const { parentThreadId, relationshipToParent } = thread.lineage;
-    const parent =
-      parentThreadId !== null && relationshipToParent === "subagent"
-        ? scopeThreadRef(thread.environmentId, parentThreadId)
-        : thread.delegatedFrom != null &&
-            delegatedUnderParent.has(
-              scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
-            )
-          ? thread.delegatedFrom
-          : null;
-    if (parent === null) continue;
-    const key = scopedThreadKey(parent);
-    const siblings = byParent.get(key);
-    if (siblings) siblings.push(thread);
-    else byParent.set(key, [thread]);
+    if (thread.archivedAt === null) live.set(keyOf(thread), thread);
   }
-  for (const siblings of byParent.values()) {
-    siblings.sort(
-      (left, right) =>
-        Date.parse(left.createdAt) - Date.parse(right.createdAt) || left.id.localeCompare(right.id),
-    );
+  const listedKeys = new Set(visibleThreads.map(keyOf));
+  const candidateParentKey = new Map<string, string>();
+  for (const [key, thread] of live) {
+    const ref = subsessionParentRef(thread);
+    if (ref === null) continue;
+    const parentKey = scopedThreadKey(ref);
+    const parent = live.get(parentKey);
+    if (parent === undefined) continue;
+    const sameProject =
+      parent.environmentId === thread.environmentId && parent.projectId === thread.projectId;
+    if (sameProject || (thread.delegatedFrom != null && delegatedUnderParent.has(key))) {
+      candidateParentKey.set(key, parentKey);
+    }
   }
-  return byParent;
+  // A cycle is cut where the walk returns to a thread already on its path.
+  const isShown = (key: string, path: ReadonlySet<string>): boolean => {
+    if (path.has(key)) return false;
+    const parentKey = candidateParentKey.get(key);
+    if (parentKey !== undefined && isShown(parentKey, new Set(path).add(key))) return true;
+    return listedKeys.has(key);
+  };
+  const nested: T[] = [];
+  const parentKeyByChild = new Map<string, string>();
+  // Two threads that launched each other would both nest and vanish; the first edge wins.
+  const closesLoop = (key: string, parentKey: string) => {
+    for (let at: string | undefined = parentKey; at !== undefined; at = parentKeyByChild.get(at)) {
+      if (at === key) return true;
+    }
+    return false;
+  };
+  for (const [key, parentKey] of candidateParentKey) {
+    if (closesLoop(key, parentKey) || !isShown(parentKey, new Set([key]))) continue;
+    nested.push(live.get(key)!);
+    parentKeyByChild.set(key, parentKey);
+  }
+  // groupSubsessionsByParent keys by its own separator; re-key by the sidebar's thread key.
+  const subsessionsByParent = new Map<string, readonly T[]>();
+  for (const siblings of groupSubsessionsByParent(nested).values()) {
+    subsessionsByParent.set(parentKeyByChild.get(keyOf(siblings[0]!))!, siblings);
+  }
+  return { subsessionsByParent, parentKeyByChild };
+}
+
+/** The persisted fold state of a thread's subsessions lives beside the project folders' open state. */
+export function subsessionsExpansionKey(threadKey: string): string {
+  return `subsessions:${threadKey}`;
+}
+
+/** The thread's subsessions at every depth, in tree order. */
+export function listSubsessionDescendants<
+  T extends Pick<SidebarThreadSummary, "environmentId" | "id">,
+>(
+  subsessionsByParent: ReadonlyMap<string, readonly T[]>,
+  threadKey: string,
+  isOpen: (threadKey: string) => boolean = () => true,
+): T[] {
+  const out: T[] = [];
+  const seen = new Set([threadKey]);
+  const visit = (key: string) => {
+    if (!isOpen(key)) return;
+    for (const child of subsessionsByParent.get(key) ?? []) {
+      const childKey = scopedThreadKey(scopeThreadRef(child.environmentId, child.id));
+      if (seen.has(childKey)) continue;
+      seen.add(childKey);
+      out.push(child);
+      visit(childKey);
+    }
+  };
+  visit(threadKey);
+  return out;
+}
+
+/** The dot a closed parent shows for work in its subsessions; a finished one stays quiet. */
+export function resolveSubsessionDot(
+  subsessionsByParent: ReadonlyMap<
+    string,
+    readonly (ThreadStatusInput &
+      SidebarThreadStatusInput &
+      Pick<SidebarThreadSummary, "environmentId" | "id">)[]
+  >,
+  threadKey: string,
+): "attention" | "failed" | "working" | null {
+  const dot = resolveSidebarFolderDot(listSubsessionDescendants(subsessionsByParent, threadKey));
+  return dot === "unread" ? null : dot;
 }
 
 /**

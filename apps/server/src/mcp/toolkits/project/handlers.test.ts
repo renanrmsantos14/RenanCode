@@ -53,6 +53,8 @@ const clientLaunchHarness = (input: {
   readonly hostedAppUrl?: string;
   /** The orchestrator refuses the new thread's mode, as under a managed ceiling. */
   readonly refusedByCeiling?: true;
+  /** The launch comes from this thread's agent instead of a client. */
+  readonly callerThreadId?: ThreadId;
 }) => {
   const projectId = ProjectId.make("project:client-target");
   const modelSelection = {
@@ -84,7 +86,14 @@ const clientLaunchHarness = (input: {
     Layer.succeed(McpInvocationContext.McpInvocationContext, {
       environmentId: EnvironmentId.make("environment"),
       requestNamespace: "client:session-1",
-      thread: undefined,
+      thread:
+        input.callerThreadId === undefined
+          ? undefined
+          : {
+              threadId: input.callerThreadId,
+              providerSessionId: "provider-session",
+              providerInstanceId: ProviderInstanceId.make("codex"),
+            },
       client: {
         sessionId: "session-1",
         label: "Claude Code",
@@ -97,6 +106,18 @@ const clientLaunchHarness = (input: {
     Layer.mock(ThreadManagement.ThreadManagementService)({
       // A thread exists once a launch started it.
       getThreadShell: (threadId) => {
+        if (threadId === input.callerThreadId) {
+          return Effect.succeed({
+            id: threadId,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            deletedAt: null,
+            archivedAt: null,
+            activeRunId: "run:launcher",
+            modelSelection,
+            providerInstanceId: ProviderInstanceId.make("codex"),
+          } as unknown as OrchestrationV2ThreadShell);
+        }
         const launch = input.launched.find((candidate) => candidate.threadId === threadId);
         return Effect.succeed(
           launch === undefined
@@ -662,5 +683,26 @@ it.effect("deleting a project through MCP also discards its clone record", () =>
       .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(dependencies));
 
     expect(discarded).toEqual([harness.projectId]);
+  }),
+);
+
+it.effect("a thread's agent stamps the thread it launches with itself", () =>
+  Effect.gen(function* () {
+    const callerThreadId = ThreadId.make("thread:launcher");
+    const launched: Array<ThreadLaunch.ThreadLaunchInput> = [];
+    const { projectId, dependencies } = clientLaunchHarness({
+      runtimeModeCeiling: "full-access",
+      launched,
+      callerThreadId,
+    });
+    const toolkit = yield* ProjectToolkit.pipe(
+      Effect.provide(
+        McpToolAccess.HandlersLayer.layer(ProjectHandlers.layer).pipe(Layer.provide(dependencies)),
+      ),
+    );
+    yield* toolkit
+      .handle("t3_thread_launch", { title: "Child", projectId })
+      .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(dependencies));
+    expect(launched[0]?.launchedFrom).toBe(callerThreadId);
   }),
 );

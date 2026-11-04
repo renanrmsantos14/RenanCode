@@ -331,6 +331,10 @@
       "types": "./src/state/subagentRuntime.ts",
       "default": "./src/state/subagentRuntime.ts"
     },
+    "./state/subsessions": {
+      "types": "./src/state/subsessions.ts",
+      "default": "./src/state/subsessions.ts"
+    },
     "./state/thread-sort": {
       "types": "./src/state/threadSort.ts",
       "default": "./src/state/threadSort.ts"
