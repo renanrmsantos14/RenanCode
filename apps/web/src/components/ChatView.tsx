@@ -2952,6 +2952,8 @@ export default function ChatView(props: ChatViewProps) {
     canCompact: !compactDisabled && !hasHeldQueuedRuns && multipleModelSelections === null,
     onCompact: onCompactContext,
   });
+  // The cold-cache dialog already offers compaction; keep the inline offer out of its way.
+  const inlineCompactionTokens = coldCache.warning === null ? resumeCompactionTokens : null;
   const { onSend } = useComposerSend({
     confirmColdCache: coldCache.confirmColdCache,
     environmentId,
@@ -2993,7 +2995,7 @@ export default function ChatView(props: ChatViewProps) {
     panelAnimationsActive,
     panelAnimationDurationMs,
     keepFullHistory,
-    resumeCompactionTokens,
+    resumeCompactionTokens: inlineCompactionTokens,
     showPlanFollowUpPrompt,
     usageLimitsKey,
     usageLimitsOffered,
@@ -3708,7 +3710,7 @@ export default function ChatView(props: ChatViewProps) {
                                   ? EMPTY_COMPOSER_BANNER_ITEMS
                                   : composerBannerItems
                               }
-                              resumeCompactionTokens={resumeCompactionTokens}
+                              resumeCompactionTokens={inlineCompactionTokens}
                               keepFullHistory={keepFullHistory}
                               onToggleKeepFullHistory={toggleKeepFullHistoryStable}
                               sideChatAvailable={sideChat.available}

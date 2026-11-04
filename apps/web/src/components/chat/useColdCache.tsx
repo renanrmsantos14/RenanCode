@@ -175,5 +175,5 @@ export function useColdCache(input: {
       </div>
     ) : null;
 
-  return { confirmColdCache, dialog, control };
+  return { warning, confirmColdCache, dialog, control };
 }
