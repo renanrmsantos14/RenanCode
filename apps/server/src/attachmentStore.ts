@@ -8,6 +8,7 @@ import {
   htmlRenderFromToolItem,
   htmlVariantsFromToolItem,
   mcpAppFromToolItem,
+  previewRecordingIdFromToolItem,
 } from "@t3tools/shared/toolOutput";
 
 import {
@@ -17,7 +18,7 @@ import {
 import { inferImageExtension, SAFE_IMAGE_FILE_EXTENSIONS } from "./imageMime.ts";
 
 const ATTACHMENT_FILENAME_EXTENSIONS = [...SAFE_IMAGE_FILE_EXTENSIONS, ".bin"];
-const ATTACHMENT_ID_THREAD_SEGMENT_MAX_CHARS = 80;
+export const ATTACHMENT_ID_THREAD_SEGMENT_MAX_CHARS = 80;
 const ATTACHMENT_ID_THREAD_SEGMENT_PATTERN = "[a-z0-9_]+(?:-[a-z0-9_]+)*";
 const ATTACHMENT_ID_UUID_PATTERN = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const ATTACHMENT_ID_FILE_EXTENSION_PATTERN = "[a-z0-9]{1,10}";
@@ -138,7 +139,11 @@ export function threadHtmlRenderAttachmentIds(
   return Array.from(items).flatMap((item) => {
     const attachmentIds = htmlVariantsFromToolItem(item)?.map(
       (variant) => variant.attachmentId,
-    ) ?? [htmlRenderFromToolItem(item)?.attachmentId ?? mcpAppFromToolItem(item)?.attachmentId];
+    ) ?? [
+      htmlRenderFromToolItem(item)?.attachmentId ??
+        mcpAppFromToolItem(item)?.attachmentId ??
+        previewRecordingIdFromToolItem(item),
+    ];
     return attachmentIds.filter(
       (attachmentId): attachmentId is string =>
         attachmentId !== undefined && parseThreadSegmentFromAttachmentId(attachmentId) === segment,
