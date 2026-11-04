@@ -40,6 +40,7 @@ import { Link as LinkIconNode } from "lucide";
 import { Button, InlineButton } from "../ui/button";
 import { ModelSwitchRow } from "./V2LifecycleRow";
 import { useAssetUrlRefresh, useAssetUrls, useAssetUrlState } from "../../assets/assetUrls";
+import { useFileDrag } from "../../assets/useFileDrag";
 import { AttachmentImage } from "../media/AttachmentImage";
 import { MediaVideoPlayer } from "../media/MediaVideoPlayer";
 import {
@@ -106,6 +107,20 @@ function UserFileCard({
   readonly copyMarkdown: string | undefined;
 }) {
   const ctx = use(TimelineRowCtx);
+  const dragProps = useFileDrag(
+    ctx.activeThreadEnvironmentId,
+    file.downloadable === false
+      ? null
+      : {
+          _tag: "attachment",
+          attachmentId: file.id,
+          fileName: file.name,
+          mimeType: file.mimeType,
+          disposition: "attachment",
+        },
+    file.name,
+    file.sizeBytes,
+  );
   const pastedText = file.source?._tag === "pasted-text";
   const label = userMessageFileLabel(file);
   const extension = /\.([a-z0-9]{1,8})$/i.exec(file.name)?.[1]?.toUpperCase() ?? "File";
@@ -134,6 +149,7 @@ function UserFileCard({
   return (
     <div
       data-markdown-copy={copyMarkdown}
+      {...dragProps}
       className="flex w-64 max-w-full items-center gap-1 rounded-2xl bg-message py-2 ps-2 pe-1 text-message-foreground"
     >
       {file.downloadable === false ? (

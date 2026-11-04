@@ -250,6 +250,19 @@ export class AssetAttachmentNotFoundError extends Schema.TaggedError<AssetAttach
   }
 }
 
+export class AssetDownloadTooLargeError extends Schema.TaggedError<AssetDownloadTooLargeError>()(
+  "AssetDownloadTooLargeError",
+  {
+    resource: AssetResource,
+    sizeBytes: Schema.Number,
+    maxBytes: Schema.Number,
+  },
+) {
+  override get message(): string {
+    return `File is larger than ${Math.round(this.maxBytes / (1024 * 1024))} MB and can't be downloaded.`;
+  }
+}
+
 export class AssetProjectFaviconResolutionError extends Schema.TaggedError<AssetProjectFaviconResolutionError>()(
   "AssetProjectFaviconResolutionError",
   {
@@ -317,6 +330,7 @@ export const AssetAccessError = Schema.Union([
   AssetWorkspaceAssetNotFoundError,
   AssetWorkspaceResolutionError,
   AssetAttachmentNotFoundError,
+  AssetDownloadTooLargeError,
   AssetProjectFaviconResolutionError,
   AssetProjectFaviconInspectionError,
   AssetProjectFaviconNotFoundError,

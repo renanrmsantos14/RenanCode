@@ -4,8 +4,13 @@ import {
   squashAtomCommandFailure,
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
-import type { EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
+import type { AssetResource, EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
+import { DownloadIcon } from "lucide-react";
 import { memo, type MouseEvent as ReactMouseEvent } from "react";
+
+import { useAssetUrlRefresh } from "../../assets/assetUrls";
+import { saveAssetFile } from "../../assets/saveAssetFile";
+import { useFileDrag } from "../../assets/useFileDrag";
 
 import { readLocalApi } from "../../localApi";
 import { cn } from "../../lib/utils";
@@ -13,6 +18,7 @@ import { shouldOpenMarkdownFileLinkInEditor } from "../../markdown-links";
 import type { markdownFileCopyPaths } from "../../markdownFileHostPath";
 import { documentChipKindForFileName } from "../../pierre-icons";
 import { ContextChip } from "../ContextChip";
+import { Button } from "../ui/button";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { FileTagChipContent } from "./FileTagChip";
@@ -45,6 +51,7 @@ interface MarkdownFileLinkProps {
   onOpenMedia?: (() => void) | undefined;
   onReveal?: (() => Promise<AtomCommandResult<unknown, unknown>>) | undefined;
   revealLabel?: string | undefined;
+  downloadPath?: string | undefined;
 }
 
 const MARKDOWN_FILE_LINK_CLASS_NAME = "chat-markdown-file-link";
@@ -70,7 +77,23 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
   revealLabel,
   resolveCopyPaths,
   readContents,
+  downloadPath,
 }: MarkdownFileLinkProps) {
+  const downloadResource: AssetResource | null =
+    threadRef && downloadPath
+      ? {
+          _tag: "media-file",
+          threadId: threadRef.threadId,
+          path: downloadPath,
+          disposition: "attachment",
+        }
+      : null;
+  const downloadName = iconPath.slice(iconPath.lastIndexOf("/") + 1) || label;
+  const prepareDownload = useAssetUrlRefresh(environmentId, downloadResource);
+  const dragProps = useFileDrag(environmentId, downloadResource, downloadName);
+  const canDownload = downloadResource !== null && environmentId !== null;
+  const handleDownload = () => void downloadCitedFile(prepareDownload, downloadName);
+
   const handleOpenInEditor = () => {
     if (!onOpen) {
       return;
@@ -259,6 +282,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
             ? ([{ id: "open-in-browser", label: "Open in integrated browser" }] as const)
             : []),
           ...(onReveal && revealLabel ? ([{ id: "reveal", label: revealLabel }] as const) : []),
+          ...(canDownload ? ([{ id: "download", label: "Download" }] as const) : []),
           ...copyItems.map(({ id, label }) => ({ id, label })),
           ...(readContents
             ? ([{ id: "copy-contents", label: "Copy file contents" }] as const)
@@ -281,6 +305,10 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
       }
       if (clicked === "reveal") {
         handleRevealInFileManager();
+        return;
+      }
+      if (clicked === "download") {
+        handleDownload();
         return;
       }
       if (clicked === "copy-contents" && readContents) {
@@ -334,7 +362,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
   });
   const chipKind = documentChipKindForFileName(iconPath) ?? "mention";
 
-  return (
+  const chip = (
     <Tooltip>
       <TooltipTrigger
         render={
@@ -359,6 +387,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
                 handleOpenInFilePreview();
               }}
               onContextMenu={handleContextMenu}
+              {...dragProps}
             >
               <FileTagChipContent
                 path={iconPath}
@@ -378,6 +407,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
               data-markdown-copy={copyMarkdown}
               onClick={handleContextMenu}
               onContextMenu={handleContextMenu}
+              {...dragProps}
             >
               <FileTagChipContent
                 path={iconPath}
@@ -395,6 +425,26 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
         </div>
       </TooltipPopup>
     </Tooltip>
+  );
+
+  if (!canDownload) return chip;
+  return (
+    <span className="group/file-link inline-flex max-w-full items-center gap-0.5">
+      {chip}
+      <span className="opacity-0 transition-opacity group-focus-within/file-link:opacity-100 group-hover/file-link:opacity-100">
+        <Button
+          size="icon-xs"
+          variant="ghost-muted"
+          aria-label={`Download ${label}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            handleDownload();
+          }}
+        >
+          <DownloadIcon />
+        </Button>
+      </span>
+    </span>
   );
 }, areMarkdownFileLinkPropsEqual);
 
@@ -424,4 +474,18 @@ function areMarkdownFileLinkPropsEqual(
     previous.readContents === next.readContents &&
     previous.revealLabel === next.revealLabel
   );
+}
+
+async function downloadCitedFile(prepare: () => Promise<string | null>, name: string) {
+  try {
+    const url = await prepare();
+    if (url === null) throw new Error("Reconnect to the environment and try again.");
+    await saveAssetFile({ name, url });
+  } catch (cause) {
+    toastManager.add({
+      type: "error",
+      title: "Could not download file",
+      description: cause instanceof Error ? cause.message : "Please try again.",
+    });
+  }
 }

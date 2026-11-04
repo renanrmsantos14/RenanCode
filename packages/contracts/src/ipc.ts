@@ -1026,6 +1026,8 @@ export interface DesktopBridge {
   getAppBranding: () => DesktopAppBranding | null;
   getRelayTelemetryEnabled: () => boolean;
   getPathForFile: (file: File) => string;
+  prepareFileDrag: (input: { name: string; bytes: ArrayBuffer }) => Promise<{ token: string }>;
+  startFileDrag: (token: string) => void;
   getClientPlatform: () => string;
   setNotificationBadge: (badge: { count: number; image: string | null }) => Promise<void>;
   onNotificationBadgeClear: (listener: () => void) => () => void;

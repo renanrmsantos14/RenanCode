@@ -83,6 +83,9 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   getRelayTelemetryEnabled: () =>
     ipcRenderer.sendSync(IpcChannels.GET_RELAY_TELEMETRY_ENABLED_CHANNEL) === true,
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
+  prepareFileDrag: (input) => ipcRenderer.invoke(IpcChannels.PREPARE_FILE_DRAG_CHANNEL, input),
+  // Fire-and-forget: startDrag must run synchronously inside the renderer's dragstart.
+  startFileDrag: (token) => ipcRenderer.send(IpcChannels.START_FILE_DRAG_CHANNEL, token),
   getClientPlatform: () => clientPlatform,
   setNotificationBadge: (badge) =>
     ipcRenderer.invoke(IpcChannels.SET_NOTIFICATION_BADGE_CHANNEL, badge),
