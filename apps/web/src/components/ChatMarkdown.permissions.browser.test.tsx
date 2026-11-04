@@ -185,11 +185,17 @@ it("removes host actions after revocation while keeping file preview and copying
   using _setup = setup();
   await using screen = await renderMarkdown("[Readme](docs/readme.md)");
   await screen.openContextMenu();
-  expect(offeredActions()).toEqual(["open", "reveal", "copy-relative", "copy-full"]);
+  expect(offeredActions()).toEqual([
+    "open",
+    "reveal",
+    "copy-relative",
+    "copy-full",
+    "copy-contents",
+  ]);
   await setAllowed(false);
   state.choose.mockResolvedValue("copy-full");
   await screen.openContextMenu();
-  expect(offeredActions()).toEqual(["copy-relative", "copy-full"]);
+  expect(offeredActions()).toEqual(["copy-relative", "copy-full", "copy-contents"]);
   await vi.waitFor(() => expect(state.copy).toHaveBeenCalledWith("/work/docs/readme.md"));
   await act(async () => screen.anchor().click());
   expect(state.openFile).toHaveBeenCalledWith(threadRef, "docs/readme.md", undefined);
