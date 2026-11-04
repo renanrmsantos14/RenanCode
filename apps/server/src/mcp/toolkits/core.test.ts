@@ -20,9 +20,11 @@ import {
   type OrchestrationV2ProjectedTurnItem,
   type OrchestrationV2ThreadShell,
 } from "@t3tools/contracts";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as TestClock from "effect/testing/TestClock";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -36,6 +38,7 @@ import {
   OrchestratorProjectionError,
 } from "../../orchestration-v2/Orchestrator.ts";
 
+import * as Upload from "../../assets/AttachmentUpload.ts";
 import * as ServerSecretStore from "../../auth/ServerSecretStore.ts";
 import * as ServerConfig from "../../config.ts";
 import * as ProviderAdapterRegistry from "../../orchestration-v2/ProviderAdapterRegistry.ts";
@@ -1079,6 +1082,90 @@ it.effect("only the caller that prepared a pending upload can discard it", () =>
           ),
         ),
         Layer.provide(NodeCrypto.layer),
+      ),
+    ),
+  ),
+);
+
+it.effect("saves a pending upload to Downloads for its owner only, without overwriting", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const home = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-downloads-" });
+      const server = yield* McpServer.McpServer;
+      const call = (
+        name: string,
+        args: Record<string, unknown>,
+        invocation: McpInvocationContext.McpInvocationScope = scope,
+      ) =>
+        server
+          .callTool({ name, arguments: args })
+          .pipe(
+            Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+            Effect.provideService(McpSchema.McpServerClient, client),
+            Effect.provideService(HostProcess.HomeDirectory, home),
+          );
+      const upload = Effect.fn(function* (invocation: McpInvocationContext.McpInvocationScope) {
+        const bytes = new TextEncoder().encode("hello");
+        const prepared = yield* call(
+          "t3_attachment_prepare_upload",
+          { upload: { type: "file", name: "report.txt", mimeType: "text/plain", sizeBytes: 5 } },
+          invocation,
+        );
+        const { attachmentId, relativeUrl } = prepared.structuredContent as {
+          readonly attachmentId: string;
+          readonly relativeUrl: string;
+        };
+        const claims = yield* Upload.validateAttachmentUploadToken(
+          relativeUrl.slice(`${Upload.ATTACHMENT_UPLOAD_ROUTE_PREFIX}/`.length),
+        );
+        yield* Upload.storeAttachmentUpload(claims!, bytes);
+        return attachmentId;
+      });
+      const save = (
+        attachmentId: string,
+        fileName: string,
+        invocation?: McpInvocationContext.McpInvocationScope,
+      ) => call("t3_attachment_save_to_downloads", { attachmentId, fileName }, invocation);
+
+      const first = yield* save(yield* upload(scope), "../../report.txt");
+      expect(first.structuredContent).toEqual({ path: `${home}/Downloads/report.txt` });
+      expect(yield* fileSystem.readFileString(`${home}/Downloads/report.txt`)).toBe("hello");
+
+      const second = yield* save(yield* upload(scope), "report.txt");
+      expect(second.structuredContent).toEqual({ path: `${home}/Downloads/report (1).txt` });
+
+      const owned = yield* upload(scope);
+      const otherThread = { ...scope, requestNamespace: "other-session", thread: undefined };
+      expect(declaredFailure(yield* save(owned, "stolen.txt", otherThread))).toMatchObject({
+        code: "invalid_request",
+      });
+      expect(yield* fileSystem.exists(`${home}/Downloads/stolen.txt`)).toBe(false);
+
+      const fenced = clientScope("approval-required");
+      const fencedLink = {
+        ...fenced,
+        client: { ...fenced.client!, linked: true },
+      };
+      const fencedUpload = yield* upload(fencedLink);
+      expect(declaredFailure(yield* save(fencedUpload, "leak.txt", fencedLink))).toMatchObject({
+        code: "capability_denied",
+      });
+      expect(yield* fileSystem.exists(`${home}/Downloads/leak.txt`)).toBe(false);
+    }),
+  ).pipe(
+    Effect.provide(
+      McpHttpServer.layerAttachmentToolkit.pipe(
+        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+        Layer.provide(McpToolAccessTestkit.liveThreadsLayer),
+        Layer.provideMerge(ServerSecretStore.layer),
+        Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-downloads-" })),
+        Layer.provideMerge(
+          DocumentText.layer.pipe(
+            Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+          ),
+        ),
+        Layer.provideMerge(NodeCrypto.layer),
       ),
     ),
   ),

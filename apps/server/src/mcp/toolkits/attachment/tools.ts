@@ -3,6 +3,7 @@ import {
   AttachmentCreateUploadUrlInput,
   AttachmentCreateUploadUrlResult,
   AttachmentDeleteInput,
+  EnvironmentId,
   MessageId,
   RunId,
   ThreadId,
@@ -11,6 +12,7 @@ import {
 } from "@t3tools/contracts";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { Tool, Toolkit } from "effect/ai";
 import * as ServerSecretStore from "../../../auth/ServerSecretStore.ts";
@@ -28,22 +30,49 @@ const shared = {
     ServerConfig.ServerConfig,
     ServerSecretStore.ServerSecretStore,
     FileSystem.FileSystem,
+    Path.Path,
     SecureRandom.SecureRandom,
   ],
 };
-const AttachmentUploadTool = Tool.make("t3_attachment_prepare_upload", {
+export const AttachmentUploadTool = Tool.make("t3_attachment_prepare_upload", {
   ...shared,
   description:
     "Get an upload URL. POST the file's exact bytes to `relativeUrl` on this MCP server's HTTP origin, then send via `t3_thread_send_attachments` with the returned `attachmentId`.",
   parameters: Schema.Struct({ upload: AttachmentCreateUploadUrlInput }),
   success: AttachmentCreateUploadUrlResult,
 }).annotate(Tool.Destructive, true);
-const AttachmentDiscardTool = Tool.make("t3_attachment_discard", {
+export const AttachmentDiscardTool = Tool.make("t3_attachment_discard", {
   ...shared,
   description: "Discard a pending upload (not a sent attachment).",
   parameters: AttachmentDeleteInput,
   success: Schema.Struct({}),
 }).annotate(Tool.Destructive, true);
+export const AttachmentSaveToDownloadsTool = Tool.make("t3_attachment_save_to_downloads", {
+  ...shared,
+  description:
+    "Save a pending upload you prepared into this machine's Downloads folder as `fileName`, then discard it. Never overwrites. Returns the saved path.",
+  parameters: Schema.Struct({
+    attachmentId: AttachmentDeleteInput.fields.attachmentId,
+    fileName: Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(255)),
+  }),
+  success: Schema.Struct({ path: Schema.String }),
+}).annotate(Tool.Destructive, true);
+const FileSendTool = Tool.make("t3_file_send", {
+  ...shared,
+  description:
+    "Copy a file from this environment to the Downloads folder of a linked environment. Max 50 MB. Returns the saved path there.",
+  parameters: Schema.Struct({
+    toEnvironmentId: EnvironmentId,
+    path: Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(4096)),
+  }),
+  success: Schema.Struct({
+    environmentId: EnvironmentId,
+    path: Schema.String,
+    sizeBytes: Schema.Number,
+  }),
+})
+  .annotate(Tool.Destructive, true)
+  .annotate(Tool.OpenWorld, true);
 const AttachmentSendTool = Tool.make("t3_thread_send_attachments", {
   ...shared,
   dependencies: [...shared.dependencies, DocumentText.DocumentText],
@@ -69,5 +98,7 @@ const AttachmentSendTool = Tool.make("t3_thread_send_attachments", {
 export const AttachmentToolkit = Toolkit.make(
   AttachmentUploadTool,
   AttachmentDiscardTool,
+  AttachmentSaveToDownloadsTool,
   AttachmentSendTool,
+  FileSendTool,
 );

@@ -355,6 +355,10 @@ and the access, then approve.
   removes it here.
 - Links last 30 days. Link again with a new pairing code to renew one.
 
+An agent can also send a file (up to 50 MB) from this machine to a linked
+machine's Downloads folder. A link below full access cannot do this, and it
+never overwrites a file already there.
+
 An agent can also hand a task to a linked machine with `delegate_task`: it runs
 there as an ordinary thread, in the project with the same repository (or the
 one `target.projectId` names), and this thread wakes with its result when it

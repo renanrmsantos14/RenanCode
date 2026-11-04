@@ -382,6 +382,16 @@ export function summarizeT3ToolCalls(
         quantity(countEntities(entityIds("attachmentId")), "pending attachment"),
       );
       break;
+    case "attachment-save":
+      label = phrase("Saved", "save", `${quantity(selected.length, "file")} to Downloads`);
+      break;
+    case "file-send":
+      label = phrase(
+        "Sent",
+        "send",
+        `${quantity(selected.length, "file")} to a linked environment`,
+      );
+      break;
     case "attachment-send": {
       const messages = new Map<string, (typeof selected)[number]>();
       selected.forEach((call, index) =>
