@@ -109,7 +109,6 @@ import { offersLinkedEnvironments } from "@t3tools/client-runtime/link-request";
 import {
   ComposerDictationCancelAction,
   ComposerDictationDraftContent,
-  ComposerDictationError,
   ComposerDictationPrimaryAction,
   ComposerDictationStartAction,
   ComposerDictationStatus,
@@ -587,7 +586,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     voiceInput.state,
     voiceInput.elapsedSeconds,
   );
-  const isVoiceInputPresented = voicePresentation.statusKind === "active";
+  const isVoiceInputPresented = voicePresentation.statusLabel !== null;
   const isExpanded = isFocused || settingsSheetPresentation.keepsComposerExpanded;
   const { layout, setComposerEditing } = useAdaptiveWorkspaceLayout();
   const floatingSidebarComposer = useAndroidFloatingTabs() && layout.usesSplitView;
@@ -920,10 +919,6 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
             paddingVertical: surfacePaddingVertical,
           }}
         >
-          <ComposerDictationError
-            error={voiceInput.state.phase === "error" ? voiceInput.state.error : null}
-            onDismiss={voiceInput.cancel}
-          />
           {isExpanded ? editingAttachments : null}
           <View
             onLayout={(event) => {
@@ -1188,6 +1183,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                   elapsedSeconds={voiceInput.elapsedSeconds}
                   phase={voiceInput.state.phase}
                   presentation={voicePresentation}
+                  onDismissError={voiceInput.cancel}
                 />
                 <View className="shrink-0 flex-row items-center">
                   <ComposerDictationPrimaryAction
