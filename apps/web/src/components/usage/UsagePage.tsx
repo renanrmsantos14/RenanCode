@@ -340,7 +340,10 @@ export function UsagePage() {
   });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- refreshes provider limits from the server when the connected environment set changes
   useEffect(() => {
-    if (showingLimits && connectedLimitsEnvironments) autoRefreshLimits();
+    if (!showingLimits || !connectedLimitsEnvironments) return;
+    autoRefreshLimits();
+    const timer = setInterval(autoRefreshLimits, 60_000);
+    return () => clearInterval(timer);
   }, [showingLimits, connectedLimitsEnvironments]);
 
   const days = enumerateDays(shownWindow.sinceDay, shownWindow.untilDay);
