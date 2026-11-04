@@ -58,6 +58,8 @@ import * as HostResources from "./resourceTelemetry/HostResources.ts";
 import * as ManagedProjectFolders from "./project/ManagedProjectFolders.ts";
 import * as ScratchThreadPromotion from "./project/ScratchThreadPromotion.ts";
 import * as NextActionSuggestionService from "./orchestration-v2/NextActionSuggestionService.ts";
+import * as CacheKeepWarmService from "./orchestration-v2/CacheKeepWarmService.ts";
+import * as ThreadHandoffService from "./orchestration-v2/ThreadHandoffService.ts";
 import * as McpAppRequests from "./mcpApps/McpAppRequests.ts";
 import * as ModelManifest from "./provider/ModelManifest.ts";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
@@ -835,6 +837,8 @@ it.effect.each([
         Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
         Layer.mock(NextActionSuggestionService.NextActionSuggestionService)({}),
         Layer.mock(NextActionSuggestionService.NextActionSuggestionService)({}),
+        Layer.mock(CacheKeepWarmService.CacheKeepWarmService)({}),
+        Layer.mock(ThreadHandoffService.ThreadHandoffService)({}),
         Layer.mock(ServerEnvironment.ServerEnvironment)({
           getDescriptor: Effect.succeed({
             environmentId: EnvironmentId.make("config-test"),
@@ -1067,6 +1071,8 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
       }),
       Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
       Layer.mock(NextActionSuggestionService.NextActionSuggestionService)({}),
+      Layer.mock(CacheKeepWarmService.CacheKeepWarmService)({}),
+      Layer.mock(ThreadHandoffService.ThreadHandoffService)({}),
       Layer.mock(ServerEnvironment.ServerEnvironment)({
         getDescriptor: Effect.succeed({
           environmentId: EnvironmentId.make("config-test"),

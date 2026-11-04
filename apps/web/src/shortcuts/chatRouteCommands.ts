@@ -1,6 +1,7 @@
 import { AuthPreviewOperateScope, type EnvironmentId } from "@t3tools/contracts";
 import type { AnyRouter } from "@tanstack/react-router";
 
+import { dispatchCacheAction, type CacheAction } from "~/components/chat/cacheActionBus";
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
 import { isPreviewAvailableFor } from "../browser/previewRuntime";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
@@ -110,8 +111,19 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
       if (threadRef && canOperatePreview(threadRef.environmentId)) dispatchPreviewAction(action);
     };
 
+  const cacheCommand =
+    (action: CacheAction): CommandHandler =>
+    (event) => {
+      if (!readRouteThreadRef()) return false;
+      claim(event);
+      dispatchCacheAction(action);
+    };
+
   return registerCommands(
     {
+      "cache.keepWarmToggle": cacheCommand("keep-warm-toggle"),
+      "cache.compact": cacheCommand("compact"),
+      "cache.handoff": cacheCommand("handoff"),
       "chat.newLocal": startNewLocal,
       "chat.newWithoutProject": (event) => {
         const { activeThread, activeDraftThread } = readThreadContext();

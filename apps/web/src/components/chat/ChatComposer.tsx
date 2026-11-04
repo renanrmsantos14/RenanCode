@@ -449,6 +449,7 @@ export interface ChatComposerProps {
   compactThreadUnavailable: boolean;
   compactDisabled: boolean;
   compactDisabledReason: string | null;
+  cacheControl?: React.ReactNode;
 
   resolvedTheme: "light" | "dark";
   settings: UnifiedSettings;
@@ -3626,6 +3627,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     onToggleKeepFullHistory={props.onToggleKeepFullHistory}
                     compactDisabled={compactDisabled || noProviderAvailable || isSendBusy}
                     compactDisabledReason={resolvedCompactDisabledReason}
+                    cacheControl={props.cacheControl}
                     {...(compactCommandAvailable
                       ? { onCompactContext: compactThreadContextStable }
                       : {})}

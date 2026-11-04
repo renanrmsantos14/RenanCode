@@ -78,6 +78,31 @@ import {
   formatSearchToolLabel,
 } from "@t3tools/shared/toolActivity";
 import { isWindowsAbsolutePath } from "@t3tools/shared/path";
+import { KEEP_WARM_PING_TEXT } from "@t3tools/shared/promptCache";
+
+/** Keep-warm pings are real turns, but they stay out of the conversation view. */
+function withoutKeepWarmPings(entries: ReadonlyArray<TimelineEntry>): ReadonlyArray<TimelineEntry> {
+  const pingRunIds = new Set<RunId>();
+  for (const entry of entries) {
+    if (
+      entry.kind === "message" &&
+      entry.message.role === "user" &&
+      entry.message.creationSource === "server" &&
+      entry.message.runId !== null &&
+      entry.message.text === KEEP_WARM_PING_TEXT
+    ) {
+      pingRunIds.add(entry.message.runId);
+    }
+  }
+  if (pingRunIds.size === 0) return entries;
+  return entries.filter((entry) => {
+    const runId =
+      entry.kind === "message" && entry.message.role === "user"
+        ? entry.message.runId
+        : timelineEntryRunId(entry);
+    return runId === null || !pingRunIds.has(runId);
+  });
+}
 
 function timelineEntryRunId(entry: TimelineEntry): RunId | null {
   if (entry.kind === "message") {
@@ -1375,7 +1400,7 @@ function settleSupersededReasoning(entries: ReadonlyArray<TimelineEntry>) {
 }
 
 function timelineRowEntries(entries: ReadonlyArray<TimelineEntry>) {
-  return withoutSubagentDelegationRows(settleSupersededReasoning(entries));
+  return withoutSubagentDelegationRows(settleSupersededReasoning(withoutKeepWarmPings(entries)));
 }
 
 function deriveTimelineTurnFolds(

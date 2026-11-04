@@ -206,6 +206,7 @@ import {
   useEnvironmentSettings,
 } from "../hooks/useSettings";
 import { useNowMinute } from "../hooks/useNowMinute";
+import { useColdCache } from "./chat/useColdCache";
 import { usePanelAnimationSettings, usePanelPresence } from "../panelAnimations";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
@@ -2940,7 +2941,21 @@ export default function ChatView(props: ChatViewProps) {
     activeEnvironmentUnavailable,
     defaultRuntimeMode,
   });
+  const coldCache = useColdCache({
+    environmentId,
+    threadId: isServerThread ? threadId : null,
+    driver: selectedProvider,
+    model: activeThread?.modelSelection.model,
+    usage: activeThreadLiveTokenUsage,
+    nowMinute,
+    isWorking,
+    canCompact: !compactDisabled && !hasHeldQueuedRuns && multipleModelSelections === null,
+    onCompact: onCompactContext,
+  });
+  // The cold-cache dialog already offers compaction; keep the inline offer out of its way.
+  const inlineCompactionTokens = coldCache.warning === null ? resumeCompactionTokens : null;
   const { onSend } = useComposerSend({
+    confirmColdCache: coldCache.confirmColdCache,
     environmentId,
     routeThreadKey,
     currentRouteThreadKeyRef,
@@ -2980,7 +2995,7 @@ export default function ChatView(props: ChatViewProps) {
     panelAnimationsActive,
     panelAnimationDurationMs,
     keepFullHistory,
-    resumeCompactionTokens,
+    resumeCompactionTokens: inlineCompactionTokens,
     showPlanFollowUpPrompt,
     usageLimitsKey,
     usageLimitsOffered,
@@ -3695,7 +3710,7 @@ export default function ChatView(props: ChatViewProps) {
                                   ? EMPTY_COMPOSER_BANNER_ITEMS
                                   : composerBannerItems
                               }
-                              resumeCompactionTokens={resumeCompactionTokens}
+                              resumeCompactionTokens={inlineCompactionTokens}
                               keepFullHistory={keepFullHistory}
                               onToggleKeepFullHistory={toggleKeepFullHistoryStable}
                               sideChatAvailable={sideChat.available}
@@ -3769,6 +3784,7 @@ export default function ChatView(props: ChatViewProps) {
                               onPageScrollKeyUp={onComposerPageScrollKeyUpStable}
                               onPageScrollRelease={onComposerPageScrollReleaseStable}
                               onCompactContext={onComposerCompactContextStable}
+                              cacheControl={coldCache.control}
                               onSend={onComposerSendStable}
                               onResume={onComposerResumeStable}
                               onInterrupt={onInterruptStable}
@@ -4082,6 +4098,7 @@ export default function ChatView(props: ChatViewProps) {
       checkpoints={serverProjection?.checkpoints}
     >
       {content}
+      {coldCache.dialog}
     </FileMetadataThreadProvider>
   );
 }

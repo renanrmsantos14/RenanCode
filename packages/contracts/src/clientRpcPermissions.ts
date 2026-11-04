@@ -37,6 +37,9 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.projectsCreateFromThread]: AuthOrchestrationOperateScope,
   // Suggesting a next message runs a model on this environment's providers.
   [WS_METHODS.threadsSuggestNextAction]: AuthOrchestrationOperateScope,
+  // Keep-warm pings and handoff summaries are real billed turns on this environment's providers.
+  [WS_METHODS.threadsCacheKeepWarm]: AuthOrchestrationOperateScope,
+  [WS_METHODS.threadsHandoff]: AuthOrchestrationOperateScope,
   [WS_METHODS.sourceControlCloneRepository]: AuthSourceControlWriteScope,
   [WS_METHODS.sourceControlPublishRepository]: AuthSourceControlWriteScope,
   [WS_METHODS.sourceControlStar]: AuthSourceControlWriteScope,

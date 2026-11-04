@@ -837,6 +837,7 @@ export function shouldShowPlanFollowUpPrompt(input: {
 // A typed `/compact`, with or without instructions, is already the compaction. Queueing a
 // bare one ahead of it would run an uninstructed compaction first and charge for two.
 const COMPACT_COMMAND_PATTERN = /^\/compact(?:\s|$)/i;
+const isCompactCommand = (text: string) => COMPACT_COMMAND_PATTERN.test(text);
 
 const sessionDismissedBranchMismatchKeys = new Set<string>();
 
@@ -1412,6 +1413,8 @@ export function planComposerTurn(input: {
   readonly activeThreadBranch: string | null;
   readonly resumeCompactionTokens: number | null;
   readonly keepFullHistory: boolean;
+  /** What the user chose in the cold-cache dialog; overrides the implicit resume compaction. */
+  readonly compactChoice?: "compact" | "send" | null;
   readonly phase: SessionPhase;
   readonly dispatchMode: ComposerDispatchMode;
 }) {
@@ -1423,9 +1426,12 @@ export function planComposerTurn(input: {
   // old history. The message queues behind the /compact run, since steering into it is
   // rejected.
   const compactBeforeSend =
-    input.resumeCompactionTokens !== null &&
-    !input.keepFullHistory &&
-    !COMPACT_COMMAND_PATTERN.test(input.messageText);
+    input.compactChoice === "compact"
+      ? !isCompactCommand(input.messageText)
+      : input.compactChoice !== "send" &&
+        input.resumeCompactionTokens !== null &&
+        !input.keepFullHistory &&
+        !isCompactCommand(input.messageText);
   return {
     // In worktree mode, require an explicit base branch so we don't silently
     // fall back to local execution when branch selection is missing.

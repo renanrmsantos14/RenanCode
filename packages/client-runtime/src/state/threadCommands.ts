@@ -406,6 +406,18 @@ export function createThreadEnvironmentAtoms<R, E, StateError>(
       label: "environment-data:commands:thread:suggest-next-action",
       tag: WS_METHODS.threadsSuggestNextAction,
     }),
+    cacheKeepWarm: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:commands:thread:cache-keep-warm",
+      tag: WS_METHODS.threadsCacheKeepWarm,
+    }),
+    handoff: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:commands:thread:handoff",
+      tag: WS_METHODS.threadsHandoff,
+    }),
+    estimateInputCost: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:commands:thread:estimate-input-cost",
+      tag: WS_METHODS.serverEstimateInputCost,
+    }),
   };
   const optimistic = createOptimisticThreadLifecycle(snapshotAtom);
   const responses = createOptimisticRuntimeResponses(threadStateAtom);

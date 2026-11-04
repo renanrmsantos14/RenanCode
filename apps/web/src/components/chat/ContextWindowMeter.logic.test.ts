@@ -2,6 +2,7 @@ import { ProviderDriverKind, ProviderInstanceId, type ServerProvider } from "@t3
 import { describe, expect, it } from "vite-plus/test";
 import { deriveProviderInstanceEntries } from "../../providerInstances";
 import {
+  coldCacheWarning,
   hasAvailableCompactionProvider,
   hasDismissedResumeCompaction,
   resolveContextWindowModelDisplayName,
@@ -155,5 +156,53 @@ describe("shouldReserveContextWindowMeter", () => {
         providerReportsContextWindow: null,
       }),
     ).toBe(true);
+  });
+});
+
+describe("coldCacheWarning", () => {
+  const usage = {
+    usedTokens: 150_000,
+    cachedInputTokens: 140_000,
+    updatedAt: "2026-08-24T12:00:00.000Z",
+  };
+  const minutesLater = (minutes: number) =>
+    new Date(Date.parse(usage.updatedAt) + minutes * 60_000).toISOString();
+
+  it.each([
+    { name: "expired, unreported TTL falls back per provider", driver: "codex", usage, at: 6 },
+    { name: "still warm", driver: "codex", usage, at: 4, expected: null },
+    {
+      name: "reported TTL outlasts the fallback",
+      driver: "claudeAgent",
+      usage: { ...usage, promptCacheTtlMs: 3_600_000 },
+      at: 30,
+      expected: null,
+    },
+    {
+      name: "reported expiry has passed",
+      driver: "claudeAgent",
+      usage: { ...usage, promptCacheExpiresAt: minutesLater(10) },
+      at: 11,
+    },
+    {
+      name: "small thread",
+      driver: "codex",
+      usage: { ...usage, usedTokens: 99_999 },
+      at: 60,
+      expected: null,
+    },
+    {
+      name: "no cache data reported",
+      driver: "codex",
+      usage: { usedTokens: 150_000, updatedAt: usage.updatedAt },
+      at: 60,
+      expected: null,
+    },
+    { name: "cursor is account-level only", driver: "cursor", usage, at: 60, expected: null },
+    { name: "kiro reports nothing", driver: "kiro", usage, at: 60, expected: null },
+  ])("$name", ({ driver, usage: input, at, expected }) => {
+    expect(coldCacheWarning({ driver, usage: input, now: minutesLater(at) })).toEqual(
+      expected === null ? null : { usedTokens: input.usedTokens },
+    );
   });
 });

@@ -208,6 +208,8 @@ interface ComposerSendInput {
   readonly panelAnimationDurationMs: number;
   readonly keepFullHistory: boolean;
   readonly resumeCompactionTokens: number | null;
+  /** Resolves null when sending needs no cold-cache warning. */
+  readonly confirmColdCache: (text: string) => Promise<"send" | "compact" | "cancel" | null>;
   readonly showPlanFollowUpPrompt: boolean;
   readonly usageLimitsKey: string | null;
   readonly usageLimitsOffered: boolean;
@@ -303,6 +305,7 @@ export function useComposerSend(input: ComposerSendInput) {
     panelAnimationDurationMs,
     keepFullHistory,
     resumeCompactionTokens,
+    confirmColdCache,
     showPlanFollowUpPrompt,
     usageLimitsKey,
     usageLimitsOffered,
@@ -468,6 +471,8 @@ export function useComposerSend(input: ComposerSendInput) {
       });
       return;
     }
+    const compactChoice = await confirmColdCache(promptRef.current);
+    if (compactChoice === "cancel") return;
     if (activeEnvironmentUnavailable) {
       const toastSlot = environmentUnavailableSendToastSlotRef.current;
       environmentUnavailableSendToastSlotRef.current =
@@ -879,6 +884,7 @@ export function useComposerSend(input: ComposerSendInput) {
       activeThreadBranch,
       resumeCompactionTokens,
       keepFullHistory,
+      compactChoice,
       phase,
       dispatchMode,
     });
