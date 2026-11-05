@@ -1384,6 +1384,8 @@ export const ServerSettings = Schema.Struct({
   claudeCloudSessionsEnabled: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
+  /** Beta: new Claude drafts go to a cloud session when the task does not need this machine. */
+  claudeCloudAutoRouting: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   sidebarAutoSettleKeepPullRequests: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
@@ -1774,6 +1776,7 @@ export const ServerSettingsPatch = Schema.Struct({
   guestSharingEnabled: Schema.optionalKey(Schema.Boolean),
   linkedEnvironmentsEnabled: Schema.optionalKey(Schema.Boolean),
   claudeCloudSessionsEnabled: Schema.optionalKey(Schema.Boolean),
+  claudeCloudAutoRouting: Schema.optionalKey(Schema.Boolean),
   backgroundActivity: Schema.optionalKey(
     Schema.Struct({
       schemaVersion: Schema.optionalKey(Schema.Literal(1)),

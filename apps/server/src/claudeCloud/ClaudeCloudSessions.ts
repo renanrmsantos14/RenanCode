@@ -18,8 +18,12 @@ import {
   type OrchestrationV2TurnItem,
   type ProjectId,
   ClaudeCloudStartSessionError,
+  type ClaudeCloudPlacementInput,
+  type ClaudeCloudPlacementResult,
   type ClaudeCloudStartSessionInput,
 } from "@t3tools/contracts";
+import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
+import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -41,12 +45,16 @@ import * as ProjectService from "../project/ProjectService.ts";
 import { resolveClaudeHomePath } from "../provider/Drivers/ClaudeHome.ts";
 import { forkParked } from "../serverActivation.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import * as TextGeneration from "../textGeneration/TextGeneration.ts";
+import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsStatusBroadcaster from "../vcs/VcsStatusBroadcaster.ts";
 
 // Internal claude.ai/code endpoints, read from the Claude Code CLI (2.1.318). Undocumented.
 const API_ROOT = "https://api.anthropic.com";
 const API_BASE = `${API_ROOT}/v1/code/sessions`;
 const IDLE_INTERVAL = Duration.seconds(60);
+// Covers a cold provider CLI start; the client classifies while the user types.
+const PLACEMENT_TIMEOUT = Duration.seconds(20);
 const BUSY_INTERVAL = Duration.seconds(5);
 const SESSION_PAGE_LIMIT = 50;
 const EVENT_PAGE_LIMIT = 200;
@@ -159,6 +167,30 @@ function cloudSessionIdOf(threadId: string): string | null {
 
 function isCloudSessionBusy(session: CloudSession): boolean {
   return session.worker_status === "running";
+}
+
+interface PlacementStatus {
+  readonly refName: string | null;
+  readonly isDefaultRef: boolean;
+  readonly hasWorkingTreeChanges: boolean;
+  readonly hasUpstream: boolean;
+  readonly aheadCount: number;
+}
+
+/** GitHub lacks some of the branch, so a cloud session would clone an older copy. */
+export function branchNeedsPush(status: PlacementStatus): boolean {
+  return !status.hasUpstream || status.aheadCount > 0;
+}
+
+/** Checks that need no model. A reason keeps the task on this machine; null asks the classifier. */
+export function localOnlyReason(status: PlacementStatus): string | null {
+  if (status.refName === null) return "No branch is checked out";
+  if (status.hasWorkingTreeChanges) return "Uncommitted changes exist only on this machine";
+  // Pushing for the user is fine on a feature branch, never straight onto the default branch.
+  if (status.isDefaultRef && branchNeedsPush(status)) {
+    return "Unpushed commits on the default branch stay local";
+  }
+  return null;
 }
 
 function gitHubRepository(url: string | undefined): CloudRepository | null {
@@ -322,6 +354,8 @@ const make = Effect.gen(function* () {
   const settings = yield* ServerSettings.ServerSettingsService;
   const projects = yield* ProjectService.ProjectService;
   const vcsStatus = yield* VcsStatusBroadcaster.VcsStatusBroadcaster;
+  const git = yield* GitVcsDriver.GitVcsDriver;
+  const textGeneration = yield* TextGeneration.TextGeneration;
   const orchestrator = yield* Orchestrator.OrchestratorV2;
   const eventSink = yield* EventSink.EventSinkV2;
   const fileSystem = yield* FileSystem.FileSystem;
@@ -690,30 +724,96 @@ const make = Effect.gen(function* () {
     "list-environments",
   ).pipe(Effect.map(({ environments }) => chooseCloudEnvironment(environments)));
 
+  const findGitHubProject = Effect.fn("ClaudeCloudSessions.findGitHubProject")(function* (
+    projectId: ProjectId,
+  ) {
+    const project = (yield* projects
+      .listPage({ cursor: 0, limit: 1000 })
+      .pipe(Effect.orDie)).projects.find((candidate) => candidate.id === projectId);
+    const identity = project?.repositoryIdentity;
+    // The fork's origin, when there is one, is where its branches get pushed.
+    const repository = gitHubRepository(identity?.origin?.remoteUrl ?? identity?.locator.remoteUrl);
+    return project === undefined || repository === null ? null : { project, repository };
+  });
+
+  const suggestPlacement = Effect.fn("ClaudeCloudSessions.suggestPlacement")(function* (
+    input: ClaudeCloudPlacementInput,
+  ) {
+    const local = (reason: string): ClaudeCloudPlacementResult => ({
+      placement: "local",
+      reason,
+      pushRequired: false,
+    });
+    return yield* Effect.gen(function* () {
+      const current = yield* settings.getSettings;
+      if (!current.claudeCloudSessionsEnabled || !current.claudeCloudAutoRouting) {
+        return local("Automatic cloud routing is off");
+      }
+      const found = yield* findGitHubProject(input.projectId);
+      if (found === null) return local("The project has no GitHub remote");
+      const status = yield* vcsStatus.getStatus({ cwd: found.project.workspaceRoot });
+      const reason = localOnlyReason(status);
+      if (reason !== null) return local(reason);
+      const generated = yield* textGeneration
+        .generateTaskPlacement({
+          cwd: found.project.workspaceRoot,
+          message: input.text,
+          modelSelection: resolveProjectSettings(current, found.project.id).settings
+            .textGenerationModelSelection,
+        })
+        .pipe(Effect.timeout(PLACEMENT_TIMEOUT));
+      return {
+        placement: generated.placement,
+        reason:
+          generated.reason ||
+          (generated.placement === "cloud"
+            ? "The task does not need this machine"
+            : "The task needs this machine"),
+        pushRequired: generated.placement === "cloud" && branchNeedsPush(status),
+      } satisfies ClaudeCloudPlacementResult;
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Effect.interrupt
+          : Effect.logWarning("Claude cloud placement failed", { cause }).pipe(
+              Effect.as(local("Could not classify the task")),
+            ),
+      ),
+    );
+  });
+
   const start = Effect.fn("ClaudeCloudSessions.start")(function* (
     input: ClaudeCloudStartSessionInput,
   ) {
     if (!(yield* settings.getSettings.pipe(Effect.orDie)).claudeCloudSessionsEnabled) {
       return yield* startError("disabled", "Turn on Claude cloud sessions in Settings > Labs.");
     }
-    const project = (yield* projects
-      .listPage({ cursor: 0, limit: 1000 })
-      .pipe(Effect.orDie)).projects.find((candidate) => candidate.id === input.projectId);
-    const identity = project?.repositoryIdentity;
-    // The fork's origin, when there is one, is where its branches get pushed.
-    const repository = gitHubRepository(identity?.origin?.remoteUrl ?? identity?.locator.remoteUrl);
-    if (project === undefined || repository === null) {
+    const found = yield* findGitHubProject(input.projectId);
+    if (found === null) {
       return yield* startError("not-github", "Cloud sessions need a project with a GitHub remote.");
     }
+    const { project, repository } = found;
     const status = yield* vcsStatus
       .getStatus({ cwd: project.workspaceRoot })
       .pipe(Effect.mapError((cause) => startError("unavailable", cause.message)));
     const branch = status.refName;
-    if (branch === null || !status.hasUpstream || status.aheadCount > 0) {
-      return yield* startError(
-        "branch-not-pushed",
-        `Push ${branch ?? "this branch"} first: the cloud session clones it from GitHub.`,
-      );
+    if (branch === null) {
+      return yield* startError("branch-not-pushed", "Check out a branch first.");
+    }
+    if (branchNeedsPush(status)) {
+      if (input.pushBranch !== true || status.isDefaultRef) {
+        return yield* startError(
+          "branch-not-pushed",
+          `Push ${branch} first: the cloud session clones it from GitHub.`,
+        );
+      }
+      yield* git
+        .pushCurrentBranch(project.workspaceRoot, branch)
+        .pipe(
+          Effect.mapError((cause) =>
+            startError("branch-not-pushed", `Could not push ${branch}: ${cause.message}`),
+          ),
+        );
     }
     const environment = yield* pickEnvironment.pipe(
       Effect.mapError((cause) => startError("unavailable", cause.message)),
@@ -783,7 +883,7 @@ const make = Effect.gen(function* () {
     return { threadId: cloudThreadId(sessionId) };
   });
 
-  return { send, archive, start };
+  return { send, archive, start, suggestPlacement };
 });
 
 export class ClaudeCloudSessions extends Context.Service<

@@ -1827,6 +1827,9 @@ export default function ChatView(props: ChatViewProps) {
     autoEnvironmentLabel,
     onClaudeCloudStable,
     claudeCloudSelected,
+    taskRoutingOffered,
+    taskRoutedToCloud,
+    classifyTaskPlacement,
     isEnvironmentChanging,
     readPendingEnvironmentChange,
     onEnvironmentChangeStable,
@@ -3012,6 +3015,7 @@ export default function ChatView(props: ChatViewProps) {
     needsLoadBalancing,
     loadBalancing,
     readPendingEnvironmentChange,
+    classifyTaskPlacement,
     pendingApprovals,
     respondingRequestIds,
     activePendingProgress,
@@ -3840,6 +3844,7 @@ export default function ChatView(props: ChatViewProps) {
                               <BranchToolbar
                                 onClaudeCloud={onClaudeCloudStable}
                                 claudeCloudSelected={claudeCloudSelected}
+                                autoEnvironmentCloud={taskRoutedToCloud}
                                 forceNewWorktree={multipleModelSelections !== null}
                                 ref={branchToolbarRef}
                                 environmentId={activeThread.environmentId}
@@ -3865,15 +3870,16 @@ export default function ChatView(props: ChatViewProps) {
                                 {...(canCheckoutPullRequestIntoThread
                                   ? { onCheckoutPullRequestRequest: openPullRequestDialogStable }
                                   : {})}
-                                {...(canChangeEnvironment
+                                {...(canChangeEnvironment || taskRoutingOffered
                                   ? { onEnvironmentChange: onEnvironmentChangeStable }
                                   : {})}
                                 autoEnvironmentLabel={autoEnvironmentLabel}
                                 onAutoEnvironment={
                                   draftId &&
                                   !envLocked &&
-                                  canAutoBalanceEnvironments &&
-                                  loadBalancingSettings.loadBalancingEnabled
+                                  ((canAutoBalanceEnvironments &&
+                                    loadBalancingSettings.loadBalancingEnabled) ||
+                                    taskRoutingOffered)
                                     ? onAutoEnvironmentStable
                                     : undefined
                                 }
@@ -3966,12 +3972,12 @@ export default function ChatView(props: ChatViewProps) {
                   onAutoEnvironment={
                     draftId &&
                     !envLocked &&
-                    canAutoBalanceEnvironments &&
-                    loadBalancingSettings.loadBalancingEnabled
+                    ((canAutoBalanceEnvironments && loadBalancingSettings.loadBalancingEnabled) ||
+                      taskRoutingOffered)
                       ? onAutoEnvironmentStable
                       : undefined
                   }
-                  {...(canChangeEnvironment
+                  {...(canChangeEnvironment || taskRoutingOffered
                     ? { onEnvironmentChange: onEnvironmentChangeStable }
                     : {})}
                   onEnvModeChange={onEnvModeChangeStable}

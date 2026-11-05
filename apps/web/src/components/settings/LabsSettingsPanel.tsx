@@ -25,6 +25,7 @@ export function LabsSettingsPanel() {
         {hasCloudPublicConfig() ? <GuestLinksRowWithSignIn /> : <GuestLinksRow />}
         <LinkedEnvironmentsRow />
         <ClaudeCloudSessionsRow />
+        <ClaudeCloudAutoRoutingRow />
         <SimlockHostsRow />
       </SettingsSection>
       <LegacyFeaturesSection />
@@ -150,6 +151,30 @@ function ClaudeCloudSessionsRow() {
             updateSettings({ claudeCloudSessionsEnabled: Boolean(checked) })
           }
           aria-label="Claude cloud sessions"
+        />
+      }
+    />
+  );
+}
+
+function ClaudeCloudAutoRoutingRow() {
+  const settings = useScopedSettings();
+  const updateSettings = useUpdateScopedSettings();
+  if (!settings.claudeCloudSessionsEnabled) return null;
+  return (
+    <SettingsRow
+      serverScoped
+      {...searchableSetting("claude-cloud-auto-routing-beta")}
+      settingKeys={["claudeCloudAutoRouting"]}
+      description="New Claude drafts on this machine go to a Claude cloud session when the task does not need this machine (its running services, devices, uncommitted files or attachments). A short classification runs on the text generation model as you type; unpushed commits on the branch are pushed when the task goes to the cloud. Pick a machine in Run on to keep a task local."
+      control={
+        <ScopedSwitch
+          settingKeys={["claudeCloudAutoRouting"]}
+          checked={settings.claudeCloudAutoRouting}
+          onCheckedChange={(checked) =>
+            updateSettings({ claudeCloudAutoRouting: Boolean(checked) })
+          }
+          aria-label="Send tasks to the cloud automatically"
         />
       }
     />

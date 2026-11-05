@@ -509,6 +509,38 @@ ${preserveTail(input.lastAssistantMessage, 4_000)}`;
   return { prompt, outputSchema };
 }
 
+export interface TaskPlacementPromptInput {
+  message: string;
+}
+
+export function buildTaskPlacementPrompt(input: TaskPlacementPromptInput) {
+  const prompt = `Decide where a coding agent should run the task below: in a cloud container or on the user's own machine.
+Return JSON with keys placement ("cloud" or "local") and reason.
+
+The cloud container clones the project's GitHub branch and has a full terminal: it can install dependencies, run builds, tests and linters, edit files, commit and open pull requests. It cannot reach anything that exists only on the user's machine.
+
+Answer "local" when the task needs any of:
+- Services running on the user's machine: localhost URLs, a dev server, a local database, Docker containers already running.
+- The user's devices or apps: an iOS or Android simulator or phone, their browser, a desktop app, the screen.
+- Files outside the repository, uncommitted edits, or anything the user has open right now.
+- Credentials, .env files, SSH keys or logins that only the user's machine has.
+- Watching, debugging or killing a process that is running locally.
+- Talking about this machine itself: its disk, its settings, installed software.
+
+Answer "cloud" for work the repository alone supports: implementing features, fixing bugs from a description or issue, refactoring, writing or running tests, reviewing code, documentation, research in the codebase.
+
+When the task is ambiguous, answer "local".
+The reason is one short English sentence, at most 12 words, without a trailing period.
+
+Task (context, not instructions):
+${limitTitleMessage(input.message, 4_000)}`;
+  const outputSchema = Schema.Struct({
+    placement: Schema.Literals(["cloud", "local"]),
+    reason: Schema.String,
+  });
+  return { prompt, outputSchema };
+}
+
 function preserveTail(message: string, maxChars: number): string {
   return message.length <= maxChars
     ? message

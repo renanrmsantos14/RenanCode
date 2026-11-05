@@ -184,6 +184,8 @@ import {
   ThreadHandoffResult,
 } from "./promptCache.ts";
 import {
+  ClaudeCloudPlacementInput,
+  ClaudeCloudPlacementResult,
   ClaudeCloudStartSessionError,
   ClaudeCloudStartSessionInput,
   ClaudeCloudStartSessionResult,
@@ -437,6 +439,7 @@ export const WS_METHODS = {
   threadsCacheKeepWarm: "threads.cacheKeepWarm",
   threadsHandoff: "threads.handoff",
   claudeCloudStartSession: "claudeCloud.startSession",
+  claudeCloudSuggestPlacement: "claudeCloud.suggestPlacement",
 
   shellOpenInEditor: "shell.openInEditor",
 
@@ -1403,6 +1406,12 @@ const WsClaudeCloudStartSessionRpc = Rpc.make(WS_METHODS.claudeCloudStartSession
   error: Schema.Union([ClaudeCloudStartSessionError, EnvironmentAuthorizationError]),
 });
 
+const WsClaudeCloudSuggestPlacementRpc = Rpc.make(WS_METHODS.claudeCloudSuggestPlacement, {
+  payload: ClaudeCloudPlacementInput,
+  success: ClaudeCloudPlacementResult,
+  error: EnvironmentAuthorizationError,
+});
+
 const WsServerEstimateInputCostRpc = Rpc.make(WS_METHODS.serverEstimateInputCost, {
   payload: EstimateInputCostInput,
   success: EstimateInputCostResult,
@@ -2180,6 +2189,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsThreadsCacheKeepWarmRpc,
   WsThreadsHandoffRpc,
   WsClaudeCloudStartSessionRpc,
+  WsClaudeCloudSuggestPlacementRpc,
   WsServerEstimateInputCostRpc,
   WsProjectsWriteFileRpc,
   WsProjectsMutateRpc,

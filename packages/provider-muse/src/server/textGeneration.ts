@@ -27,6 +27,7 @@ import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildNextActionPrompt,
+  buildTaskPlacementPrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
 } from "@t3tools/provider-core/server/textGenerationPrompts";
@@ -361,6 +362,16 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
     });
     return { suggestion: sanitizeNextAction(generated.suggestion) };
   });
+  const generateTaskPlacement: ProviderTextGeneration["generateTaskPlacement"] = Effect.fn(
+    "MuseTextGeneration.generateTaskPlacement",
+  )(function* (input) {
+    const generated = yield* runMuseJson({
+      operation: "generateTaskPlacement",
+      ...buildTaskPlacementPrompt(input),
+      modelSelection: input.modelSelection,
+    });
+    return { placement: generated.placement, reason: generated.reason.trim() };
+  });
   return {
     generateCommitMessage,
     generatePrContent,
@@ -368,5 +379,6 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
     generateThreadTitle,
     generateReviewGuide,
     generateNextAction,
+    generateTaskPlacement,
   } satisfies ProviderTextGeneration;
 });

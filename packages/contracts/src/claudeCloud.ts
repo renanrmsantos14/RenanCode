@@ -7,8 +7,25 @@ export const ClaudeCloudStartSessionInput = Schema.Struct({
   messageId: MessageId,
   text: TrimmedNonEmptyString,
   model: Schema.optional(TrimmedNonEmptyString),
+  /** Push the branch's local commits first instead of failing with `branch-not-pushed`. */
+  pushBranch: Schema.optional(Schema.Boolean),
 });
 export type ClaudeCloudStartSessionInput = typeof ClaudeCloudStartSessionInput.Type;
+
+export const ClaudeCloudPlacementInput = Schema.Struct({
+  projectId: ProjectId,
+  text: TrimmedNonEmptyString,
+});
+export type ClaudeCloudPlacementInput = typeof ClaudeCloudPlacementInput.Type;
+
+/** Where a new task should run. Anything uncertain answers `local`. */
+export const ClaudeCloudPlacementResult = Schema.Struct({
+  placement: Schema.Literals(["cloud", "local"]),
+  reason: Schema.String,
+  /** The branch has commits GitHub lacks; starting in the cloud pushes them. */
+  pushRequired: Schema.Boolean,
+});
+export type ClaudeCloudPlacementResult = typeof ClaudeCloudPlacementResult.Type;
 
 export const ClaudeCloudStartSessionResult = Schema.Struct({ threadId: ThreadId });
 export type ClaudeCloudStartSessionResult = typeof ClaudeCloudStartSessionResult.Type;

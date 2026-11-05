@@ -291,6 +291,7 @@ function createTextGeneration(
       }),
     generateReviewGuide: () => Effect.succeed({ stops: [] }),
     generateNextAction: () => Effect.succeed({ suggestion: "" }),
+    generateTaskPlacement: () => Effect.succeed({ placement: "local", reason: "" }),
     ...overrides,
   };
 
@@ -341,6 +342,7 @@ function createTextGeneration(
       ),
     generateReviewGuide: (input) => implementation.generateReviewGuide(input),
     generateNextAction: (input) => implementation.generateNextAction(input),
+    generateTaskPlacement: (input) => implementation.generateTaskPlacement(input),
   };
 }
 

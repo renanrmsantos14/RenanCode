@@ -20,6 +20,7 @@ import { useComposerDraftStore, DraftId } from "../../composerDraftStore";
 import { type EnvironmentPresentation, useEnvironmentProviders } from "../../state/environments";
 import { useProjects } from "../../state/entities";
 import type { DraftSessionState } from "../../composerDraftStore";
+import { useTaskCloudPlacement } from "./useTaskCloudPlacement";
 
 interface DraftEnvironmentRoutingInput {
   readonly draftId: DraftId | null;
@@ -155,7 +156,7 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
     });
   };
   const onAutoEnvironmentStable = useStableCallback(onAutoEnvironment);
-  const autoEnvironmentLabel = automaticEnvironment
+  const balanceLabel = automaticEnvironment
     ? draftThread?.loadBalancedEnvironmentId
       ? "Auto balance"
       : loadBalancing.pending
@@ -286,8 +287,42 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
   };
   const onClaudeCloudStable = useStableCallback(onClaudeCloud);
 
+  const taskRoutingOffered =
+    draftThread !== null &&
+    draftThread !== undefined &&
+    claudeCloudAvailable &&
+    !envLocked &&
+    environmentById.get(draftThread.environmentId)?.serverConfig?.settings
+      .claudeCloudAutoRouting === true;
+  // A machine or "Claude cloud" picked in Run on overrides the automatic choice.
+  const taskRoutingAuto =
+    taskRoutingOffered && draftThread.environmentSelection !== "manual" && !claudeCloudSelected;
+  const taskRoutingActive =
+    taskRoutingAuto &&
+    selectedProvider === "claudeAgent" &&
+    !composerHasAttachments &&
+    referencedThreadContexts.length === 0 &&
+    !draftThread.worktreePath;
+  const taskPlacement = useTaskCloudPlacement({
+    active: taskRoutingActive,
+    environmentId: draftThread?.environmentId ?? null,
+    projectId: draftThread?.projectId ?? null,
+    draftId,
+  });
+
+  const taskRoutedToCloud = taskPlacement.placement?.placement === "cloud";
+  const autoEnvironmentLabel = taskRoutedToCloud
+    ? "Auto: Claude cloud"
+    : taskRoutingAuto
+      ? (balanceLabel ?? "Auto")
+      : balanceLabel;
+
   return {
     claudeCloudSelected,
+    taskRoutingOffered,
+    taskRoutedToCloud,
+    taskPlacement: taskPlacement.placement,
+    classifyTaskPlacement: taskPlacement.classify,
     onClaudeCloudStable: claudeCloudAvailable ? onClaudeCloudStable : undefined,
     needsLoadBalancing,
     loadBalancing,
