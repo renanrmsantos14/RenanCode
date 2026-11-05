@@ -1176,12 +1176,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     )
   ) : null;
 
-  const remoteMachineIcon =
-    isRemote && !showsScratchMachine ? (
-      <span className="inline-flex shrink-0 items-center text-sidebar-muted-foreground/70">
-        <EnvironmentMachineIcon aria-hidden kind={props.environmentMachine} className="size-3.5" />
-      </span>
-    ) : null;
+  const machineIcon = isRemote ? (
+    <span className="inline-flex shrink-0 items-center text-sidebar-muted-foreground/70">
+      <EnvironmentMachineIcon aria-hidden kind={props.environmentMachine} className="size-3.5" />
+    </span>
+  ) : null;
+  // The meta line already names the scratch machine, so the trailing icon would repeat it.
+  const remoteMachineIcon = showsScratchMachine ? null : machineIcon;
   const diff = latestRunDiff(thread);
   // Only the trailing icons would remain, so the row moves them to the title line instead.
   const metaLineEmpty =
@@ -1301,7 +1302,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               )}
               {draftIndicator}
               {title}
-              {multiline ? titleLineIcons : null}
+              {multiline ? titleLineIcons : machineIcon}
               {pinIndicator}
               {subsessionToggle}
               {multiline ? null : terminalStatusIcon}
