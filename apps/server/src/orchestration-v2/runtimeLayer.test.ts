@@ -980,6 +980,66 @@ it.layer(layerTest)("OrchestrationV2LayerLive", (it) => {
     }),
   );
 
+  it.effect("hands Claude cloud prompts and archives to the cloud session, not a provider", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const outbox = yield* EffectOutbox.EffectOutboxV2;
+      const threadId = ThreadId.make("claude-cloud:runtime-session");
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make("runtime-cloud-create"),
+        threadId,
+        projectId: ProjectId.make("runtime-cloud-project"),
+        title: "Cloud session",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+      });
+      const sendCommandId = CommandId.make("runtime-cloud-message");
+      const sent = yield* orchestrator.dispatch({
+        type: "message.dispatch",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: sendCommandId,
+        threadId,
+        messageId: MessageId.make("4f6c9a52-6a4e-4d0b-9a4b-3c2f1e0d9b7a"),
+        text: "Keep going.",
+        attachments: [],
+        dispatchMode: { type: "start_immediately" },
+      });
+      assert.deepEqual(
+        sent.storedEvents.map((stored) => stored.event.type),
+        ["message.updated", "turn-item.updated"],
+      );
+      assert.deepEqual(
+        (yield* outbox.listByCommandId(sendCommandId)).map((effect) => effect.request),
+        [
+          {
+            type: "claude-cloud.send",
+            messageId: MessageId.make("4f6c9a52-6a4e-4d0b-9a4b-3c2f1e0d9b7a"),
+            text: "Keep going.",
+          },
+        ],
+      );
+      assert.deepEqual((yield* orchestrator.getThreadProjection(threadId)).runs, []);
+
+      const archiveCommandId = CommandId.make("runtime-cloud-archive");
+      yield* orchestrator.dispatch({
+        type: "thread.archive",
+        commandId: archiveCommandId,
+        threadId,
+      });
+      assert.deepEqual(
+        (yield* outbox.listByCommandId(archiveCommandId)).map((effect) => effect.request.type),
+        ["claude-cloud.archive", "terminal.cleanup"],
+      );
+    }),
+  );
+
   it.effect("rejects non-ready rollback targets before persisting events or effects", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;

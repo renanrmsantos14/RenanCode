@@ -214,6 +214,7 @@ import {
   type SidebarSection,
   resolveSidebarRowThreadId,
   listSubsessionDescendants,
+  dedupeClaudeCloudThreads,
   nestSidebarSubsessions,
   resolveSubsessionDot,
   subsessionsExpansionKey,
@@ -1182,7 +1183,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         );
   const { threads, nativeParentKeyByChild } = useSidebarNativeSubagents(
     routeThreadRef,
-    useQuietThreadShells(),
+    dedupeClaudeCloudThreads(useQuietThreadShells(), primaryEnvironmentId),
   );
   // A listed native subagent is its own row; other hidden threads show as their parent's.
   const routeRowThreadKey =

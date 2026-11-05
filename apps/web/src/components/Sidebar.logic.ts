@@ -18,6 +18,7 @@ import {
 } from "@t3tools/client-runtime/state/thread-search";
 import { foldSearchQuery, rankSearchItems, scoreThreadSearch } from "@t3tools/shared/paletteSearch";
 import {
+  isClaudeCloudThreadId,
   isListedThreadLineage,
   isProviderNativeSubagentThread,
   type ContextMenuItem,
@@ -1500,5 +1501,26 @@ export function sortScopedProjectsForSidebar<
       left.title.localeCompare(right.title) ||
       left.environmentId.localeCompare(right.environmentId) ||
       left.id.localeCompare(right.id),
+  );
+}
+
+/** Every environment logged into the same Claude account mirrors the same cloud session; show it once. */
+export function dedupeClaudeCloudThreads<
+  T extends { readonly id: string; readonly environmentId: EnvironmentId },
+>(threads: readonly T[], preferredEnvironmentId: EnvironmentId | null): readonly T[] {
+  const chosen = new Map<string, T>();
+  let hasDuplicate = false;
+  for (const thread of threads) {
+    if (!isClaudeCloudThreadId(thread.id)) continue;
+    if (!chosen.has(thread.id)) {
+      chosen.set(thread.id, thread);
+      continue;
+    }
+    hasDuplicate = true;
+    if (thread.environmentId === preferredEnvironmentId) chosen.set(thread.id, thread);
+  }
+  if (!hasDuplicate) return threads;
+  return threads.filter(
+    (thread) => !isClaudeCloudThreadId(thread.id) || chosen.get(thread.id) === thread,
   );
 }

@@ -372,7 +372,13 @@ function BrowserMiniPlayer({ threadRef, tabId, miniPlayer }: Props & { readonly 
               </TooltipTrigger>
               <TooltipPopup side="top">Device size</TooltipPopup>
             </Tooltip>
-            <MenuPopup side="bottom" align="end" className="max-h-80">
+            {/* Portaled, but React still bubbles pointerdown to the drag handle, which captures it. */}
+            <MenuPopup
+              side="bottom"
+              align="end"
+              className="max-h-80"
+              onPointerDown={(event) => event.stopPropagation()}
+            >
               <MenuRadioGroup
                 value={
                   viewport._tag === "preset"

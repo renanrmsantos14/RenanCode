@@ -23,6 +23,7 @@ import {
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import {
   AuthOrchestrationOperateScope,
+  isClaudeCloudThreadId,
   type EnvironmentId,
   type EnvironmentMachineKind,
   isProviderNativeSubagentThread,
@@ -1217,11 +1218,17 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     )
   ) : null;
 
-  const machineIcon = isRemote ? (
-    <span className="inline-flex shrink-0 items-center text-sidebar-muted-foreground/70">
-      <EnvironmentMachineIcon aria-hidden kind={props.environmentMachine} className="size-3.5" />
-    </span>
-  ) : null;
+  const isCloudSession = isClaudeCloudThreadId(thread.id);
+  const machineIcon =
+    isRemote || isCloudSession ? (
+      <span className="inline-flex shrink-0 items-center text-sidebar-muted-foreground/70">
+        <EnvironmentMachineIcon
+          aria-hidden
+          kind={isCloudSession ? "cloud" : props.environmentMachine}
+          className="size-3.5"
+        />
+      </span>
+    ) : null;
   // The meta line already names the scratch machine, so the trailing icon would repeat it.
   const remoteMachineIcon = showsScratchMachine ? null : machineIcon;
   const diff = latestRunDiff(thread);

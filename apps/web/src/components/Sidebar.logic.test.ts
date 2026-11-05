@@ -7,6 +7,7 @@ import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
 import {
   shouldCreateNewThreadInCurrentProject,
+  dedupeClaudeCloudThreads,
   deleteSelectedThreadEntries,
   getFallbackThreadIdAfterDelete,
   hasUnseenCompletion,
@@ -195,6 +196,27 @@ function makeLatestRun(overrides?: {
       overrides?.completedAt !== undefined ? overrides.completedAt : "2026-03-09T10:05:00.000Z",
   };
 }
+
+describe("dedupeClaudeCloudThreads", () => {
+  it("shows a cloud session once, from the preferred environment", () => {
+    const local = EnvironmentId.make("local");
+    const other = EnvironmentId.make("other");
+    const threads = [
+      { id: "claude-cloud:s1", environmentId: other },
+      { id: "plain", environmentId: other },
+      { id: "claude-cloud:s1", environmentId: local },
+      { id: "plain", environmentId: local },
+    ];
+    expect(dedupeClaudeCloudThreads(threads, local)).toEqual([
+      { id: "plain", environmentId: other },
+      { id: "claude-cloud:s1", environmentId: local },
+      { id: "plain", environmentId: local },
+    ]);
+    expect(dedupeClaudeCloudThreads(threads, null)[0]).toBe(threads[0]);
+    const unique = threads.slice(0, 2);
+    expect(dedupeClaudeCloudThreads(unique, local)).toBe(unique);
+  });
+});
 
 describe("orderItemsByPreferredIds", () => {
   it("resolves legacy preference aliases without materializing project state", () => {
