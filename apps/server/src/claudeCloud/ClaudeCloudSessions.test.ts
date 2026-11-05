@@ -2,10 +2,12 @@ import { describe, expect, it } from "@effect/vitest";
 import type { OrchestrationProjectShell } from "@t3tools/contracts";
 
 import {
+  branchNeedsPush,
   chooseCloudEnvironment,
   cloudMessages,
   cloudSessionRepository,
   isMirroredCloudSession,
+  localOnlyReason,
   projectForRepository,
   type CloudSession,
 } from "./ClaudeCloudSessions.ts";
@@ -30,6 +32,25 @@ describe("Claude cloud session mirroring", () => {
       "y",
     );
     expect(chooseCloudEnvironment([env("b", "bridge")])).toBeUndefined();
+  });
+
+  it("keeps tasks local when GitHub cannot hold the work, pushing only feature branches", () => {
+    const status = {
+      refName: "feature/x",
+      isDefaultRef: false,
+      hasWorkingTreeChanges: false,
+      hasUpstream: true,
+      aheadCount: 0,
+    };
+    expect(localOnlyReason(status)).toBeNull();
+    expect(branchNeedsPush(status)).toBe(false);
+    // Unpushed commits on a feature branch go up with the task.
+    expect(localOnlyReason({ ...status, aheadCount: 2 })).toBeNull();
+    expect(branchNeedsPush({ ...status, hasUpstream: false })).toBe(true);
+    expect(localOnlyReason({ ...status, hasWorkingTreeChanges: true })).not.toBeNull();
+    expect(localOnlyReason({ ...status, refName: null })).not.toBeNull();
+    expect(localOnlyReason({ ...status, isDefaultRef: true })).toBeNull();
+    expect(localOnlyReason({ ...status, isDefaultRef: true, aheadCount: 1 })).not.toBeNull();
   });
 
   it("skips Remote Control bridges but keeps archived sessions so the archive syncs", () => {

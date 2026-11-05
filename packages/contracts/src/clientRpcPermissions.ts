@@ -42,6 +42,8 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.threadsHandoff]: AuthOrchestrationOperateScope,
   // Starts a billed Claude Code cloud session with this environment's Claude login.
   [WS_METHODS.claudeCloudStartSession]: AuthOrchestrationOperateScope,
+  // Runs a billed classification turn on the text generation model.
+  [WS_METHODS.claudeCloudSuggestPlacement]: AuthOrchestrationOperateScope,
   [WS_METHODS.sourceControlCloneRepository]: AuthSourceControlWriteScope,
   [WS_METHODS.sourceControlPublishRepository]: AuthSourceControlWriteScope,
   [WS_METHODS.sourceControlStar]: AuthSourceControlWriteScope,

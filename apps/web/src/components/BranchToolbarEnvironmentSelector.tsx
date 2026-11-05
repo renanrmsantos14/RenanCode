@@ -22,6 +22,8 @@ import {
 
 interface BranchToolbarEnvironmentSelectorProps {
   autoEnvironmentLabel?: string | undefined;
+  /** The automatic choice for the typed task is a Claude cloud session. */
+  autoEnvironmentCloud?: boolean;
   onAutoEnvironment?: (() => void) | undefined;
   envLocked: boolean;
   environmentId: EnvironmentId;
@@ -42,6 +44,7 @@ const environmentValue = (id: EnvironmentId) => `env:${id}`;
 
 export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvironmentSelector({
   autoEnvironmentLabel,
+  autoEnvironmentCloud = false,
   onAutoEnvironment,
   envLocked,
   environmentId,
@@ -134,7 +137,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
             />
           }
         >
-          {claudeCloudSelected ? (
+          {claudeCloudSelected || (autoEnvironmentLabel && autoEnvironmentCloud) ? (
             <EnvironmentMachineIcon kind="cloud" className="size-3 shrink-0" />
           ) : autoEnvironmentLabel ? (
             <ScaleIcon className="size-3 shrink-0" aria-hidden="true" />

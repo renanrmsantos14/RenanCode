@@ -33,6 +33,8 @@ export type {
   ReviewGuideGenerationResult,
   NextActionGenerationInput,
   NextActionGenerationResult,
+  TaskPlacementGenerationInput,
+  TaskPlacementGenerationResult,
   ThreadTitleGenerationInput,
   ThreadTitleGenerationResult,
 } from "@t3tools/provider-core/server/textGeneration";
@@ -47,7 +49,8 @@ type TextGenerationOp =
   | "generateBranchName"
   | "generateThreadTitle"
   | "generateReviewGuide"
-  | "generateNextAction";
+  | "generateNextAction"
+  | "generateTaskPlacement";
 
 const resolveInstance = (
   registry: ProviderInstanceRegistry.ProviderInstanceRegistry["Service"],
@@ -153,6 +156,11 @@ export const make = Effect.gen(function* () {
     generateNextAction: Effect.fn("TextGeneration.generateNextAction")(function (input) {
       return generate("generateNextAction", input.modelSelection, (service, modelSelection) =>
         service.generateNextAction({ ...input, modelSelection }),
+      );
+    }),
+    generateTaskPlacement: Effect.fn("TextGeneration.generateTaskPlacement")(function (input) {
+      return generate("generateTaskPlacement", input.modelSelection, (service, modelSelection) =>
+        service.generateTaskPlacement({ ...input, modelSelection }),
       );
     }),
     generateThreadTitle: Effect.fn("TextGeneration.generateThreadTitle")(function (input) {

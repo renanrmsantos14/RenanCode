@@ -2911,6 +2911,14 @@ export const layerWsRpc = (
                   detail: "Claude cloud sessions are not available on this server.",
                 }),
               ),
+        [WS_METHODS.claudeCloudSuggestPlacement]: (input) =>
+          Option.isSome(claudeCloudSessions)
+            ? claudeCloudSessions.value.suggestPlacement(input)
+            : Effect.succeed({
+                placement: "local" as const,
+                reason: "Claude cloud sessions are not available on this server",
+                pushRequired: false,
+              }),
         [WS_METHODS.projectCloneCancel]: (input) =>
           projectCloneTracker.cancel(input.projectId).pipe(Effect.map((applied) => ({ applied }))),
         [WS_METHODS.projectCloneRetry]: (input) =>

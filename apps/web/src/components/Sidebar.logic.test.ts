@@ -14,6 +14,7 @@ import {
   resolveSidebarRowThreadId,
   nestSidebarSubsessions,
   resolveSubsessionsOpen,
+  sidebarSubagentOwners,
   filterSidebarV2VisibleThreads,
   orderItemsByPreferredIds,
   pinOrderKeyBetween,
@@ -54,6 +55,7 @@ import {
   type Project,
   type Thread,
 } from "../types";
+import { threadKey as runtimeThreadKey } from "@t3tools/client-runtime/state/entities";
 import { makeThreadFixture, type ThreadFixtureOverrides } from "../test-fixtures";
 import {
   completeSidebarRouteReveal,
@@ -1738,7 +1740,8 @@ describe("nestSidebarSubsessions", () => {
       projectId: ProjectId.make("project-linked"),
       delegatedFrom: { environmentId, threadId: root.id, title: "Pai" },
     });
-    const taskKey = `environment-linked:${task.id}`;
+    // The client runtime's key, as delegatedUnderParentAtom builds it.
+    const taskKey = runtimeThreadKey({ environmentId: task.environmentId, threadId: task.id });
 
     expect(nest([root, task], [taskKey]).subsessionsByParent.get(keyOf(root.id))).toEqual([task]);
     expect(nest([root, task]).subsessionsByParent.size).toBe(0);
@@ -1763,6 +1766,63 @@ describe("nestSidebarSubsessions", () => {
     expect(resolveSubsessionsOpen(undefined, launchedSix)).toBe(true);
     expect(resolveSubsessionsOpen(true, six)).toBe(true);
     expect(resolveSubsessionsOpen(false, five)).toBe(false);
+  });
+
+  it("reads subagent records up the open thread's chain and from its running subsessions", () => {
+    const remote = EnvironmentId.make("environment-remote");
+    const running = {
+      status: "running" as const,
+      activeRunId: null,
+      providerInstanceId: ProviderInstanceId.make("claudeAgent"),
+      providerName: "Claude",
+      lastError: null,
+      updatedAt: "2026-03-09T10:00:00.000Z",
+    };
+    const parent = make("o-parent");
+    const delegateChild = (id: string, extra: ThreadFixtureOverrides = {}) =>
+      make(id, {
+        creationSource: "mcp",
+        lineage: {
+          rootThreadId: parent.id,
+          parentThreadId: parent.id,
+          relationshipToParent: "subagent",
+        },
+        ...extra,
+      });
+    const liveLocal = delegateChild("o-live", { runtime: running });
+    const doneLocal = delegateChild("o-done");
+    const liveRemote = makeThreadFixture({
+      id: ThreadId.make("o-remote"),
+      environmentId: remote,
+      projectId: ProjectId.make("project-remote"),
+      delegatedFrom: { environmentId, threadId: parent.id, title: "Mãe" },
+      runtime: running,
+    });
+    const native = make("o-native", {
+      creationSource: "provider",
+      lineage: {
+        rootThreadId: parent.id,
+        parentThreadId: doneLocal.id,
+        relationshipToParent: "subagent",
+      },
+    });
+    const threads = [parent, liveLocal, doneLocal, liveRemote, native];
+    const owners = (threadId: ThreadId, routeNativeParent: ThreadId | null = null) =>
+      sidebarSubagentOwners({ route: { environmentId, threadId }, routeNativeParent, threads }).map(
+        (owner) => `${owner.environmentId}:${owner.threadId}`,
+      );
+
+    // The parent row, then its running subsessions in either environment; finished ones wait to be opened.
+    expect(owners(parent.id)).toEqual([
+      keyOf(parent.id),
+      keyOf(liveLocal.id),
+      `${remote}:${liveRemote.id}`,
+    ]);
+    // An open delegate_task child keeps its own records, though its row nests under the parent.
+    expect(owners(doneLocal.id).slice(0, 2)).toEqual([keyOf(doneLocal.id), keyOf(parent.id)]);
+    // A native subagent has no records: its launcher's do, even before its shell loads.
+    expect(owners(native.id)[0]).toBe(keyOf(doneLocal.id));
+    expect(owners(ThreadId.make("o-unloaded"), doneLocal.id)[0]).toBe(keyOf(doneLocal.id));
   });
 
   it("lists one of two threads that launched each other", () => {

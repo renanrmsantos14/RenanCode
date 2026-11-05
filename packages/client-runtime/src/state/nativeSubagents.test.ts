@@ -1,7 +1,8 @@
-import { NodeId, ThreadId, type OrchestrationV2Subagent } from "@t3tools/contracts";
+import { EnvironmentId, NodeId, ThreadId, type OrchestrationV2Subagent } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { nativeSubagentRows } from "./nativeSubagents.ts";
+import { threadKey } from "./entities.ts";
+import { nativeSubagentRows, remoteTaskRows } from "./nativeSubagents.ts";
 
 const tid = ThreadId.make;
 const record = (
@@ -48,5 +49,27 @@ describe("nativeSubagentRows", () => {
       record("pending", { childThreadId: null }),
     ]);
     expect(rows.size).toBe(0);
+  });
+});
+
+describe("remoteTaskRows", () => {
+  const remote = (threadId: string) => ({
+    environmentId: EnvironmentId.make("other-machine"),
+    threadId: tid(threadId),
+    label: "Other machine",
+  });
+  const task = (id: string, remoteChild?: ReturnType<typeof remote>) => ({
+    id: NodeId.make(id),
+    title: id,
+    status: "running" as const,
+    remoteChild,
+  });
+
+  it("lists delegated tasks, except one whose thread there already nests here", () => {
+    const rows = remoteTaskRows(
+      [task("local"), task("unreachable", remote("t1")), task("connected", remote("t2"))],
+      new Set([threadKey(remote("t2"))]),
+    );
+    expect(rows.map((row) => row.id)).toEqual([NodeId.make("unreachable")]);
   });
 });

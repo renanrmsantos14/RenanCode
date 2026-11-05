@@ -60,6 +60,7 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import type { OlderSettledScope } from "@t3tools/client-runtime/state/threads";
+import type { RemoteTaskRow } from "@t3tools/client-runtime/state/nativeSubagents";
 
 import {
   CheckIcon,
@@ -270,6 +271,8 @@ import {
 } from "./sidebar/SidebarThreadRow";
 import { SidebarDraftBlock } from "./sidebar/SidebarDraftBlock";
 import { useSidebarNativeSubagents } from "./sidebar/useSidebarNativeSubagents";
+import { SubsessionBranch } from "./sidebar/SubsessionBranch";
+import { SidebarRemoteTaskRow } from "./sidebar/SidebarRemoteTaskRow";
 import {
   SidebarProjectFolderHeader,
   sidebarFolderRowId,
@@ -379,6 +382,7 @@ function threadShellKey(thread: Pick<SidebarThreadSummary, "environmentId" | "id
 }
 
 const NO_SUBSESSIONS: readonly EnvironmentThreadShell[] = [];
+const NO_REMOTE_TASKS: readonly RemoteTaskRow[] = [];
 const NO_DRAGGED_ORDER: readonly string[] = [];
 const NO_DRAGGED_ORDERS: {
   readonly settledOrder: readonly string[];
@@ -1181,7 +1185,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             ),
           ),
         );
-  const { threads, nativeParentKeyByChild } = useSidebarNativeSubagents(
+  const { threads, nativeParentKeyByChild, remoteTasksByParent } = useSidebarNativeSubagents(
     routeThreadRef,
     dedupeClaudeCloudThreads(useQuietThreadShells(), primaryEnvironmentId),
   );
@@ -3452,6 +3456,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           scopeThreadRef(thread.environmentId, thread.id),
                         );
                         const subsessions = subsessionsByParent.get(threadKey) ?? NO_SUBSESSIONS;
+                        const remoteTasks = remoteTasksByParent.get(threadKey) ?? NO_REMOTE_TASKS;
+                        const childCount = subsessions.length + remoteTasks.length;
                         // A native subagent is read-only: nothing to settle, snooze or pin.
                         const threadActionsSupported =
                           serverConfigs.has(thread.environmentId) &&
@@ -3587,10 +3593,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             onAcknowledgeWoke={acknowledgeWoke}
                             onFileDropThreads={handleThreadFileDrop}
                             // Rows without subsessions get constants so their memo holds.
-                            subsessionCount={subsessions.length}
+                            subsessionCount={childCount}
                             subsessionsCollapsed={!subsessionsOpen}
                             subsessionDot={
-                              subsessions.length > 0 && !subsessionsOpen
+                              childCount > 0 && !subsessionsOpen
                                 ? resolveSubsessionDot(subsessionsByParent, threadKey)
                                 : null
                             }
@@ -3600,24 +3606,41 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                         return (
                           <Fragment key={threadKey}>
                             {row}
-                            {subsessionsOpen && subsessions.length > 0 ? (
+                            {subsessionsOpen && childCount > 0 ? (
                               <li className="list-none">
-                                <ul
-                                  className={cn(
-                                    "flex flex-col gap-px",
-                                    // Past three levels the rows stop stepping in.
-                                    depth < 3 && "ms-4 border-s border-border/60 ps-1.5",
-                                  )}
-                                >
-                                  {subsessions.map((child) =>
-                                    renderThreadRow(
-                                      child,
-                                      section,
-                                      folderRow,
-                                      threadKey,
-                                      depth + 1,
-                                    ),
-                                  )}
+                                <ul className="flex flex-col gap-px">
+                                  {subsessions.map((child, index) => (
+                                    <SubsessionBranch
+                                      key={scopedThreadKey(
+                                        scopeThreadRef(child.environmentId, child.id),
+                                      )}
+                                      last={index === childCount - 1}
+                                      folder={folderRow !== undefined}
+                                      // Past three levels the rows stop stepping in.
+                                      indent={depth < 3}
+                                    >
+                                      {renderThreadRow(
+                                        child,
+                                        section,
+                                        folderRow,
+                                        threadKey,
+                                        depth + 1,
+                                      )}
+                                    </SubsessionBranch>
+                                  ))}
+                                  {remoteTasks.map((task, index) => (
+                                    <SubsessionBranch
+                                      key={task.id}
+                                      last={subsessions.length + index === childCount - 1}
+                                      folder={folderRow !== undefined}
+                                      indent={depth < 3}
+                                    >
+                                      <SidebarRemoteTaskRow
+                                        task={task}
+                                        folder={folderRow !== undefined}
+                                      />
+                                    </SubsessionBranch>
+                                  ))}
                                 </ul>
                               </li>
                             ) : null}

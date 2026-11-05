@@ -220,6 +220,7 @@ interface ComposerSendInput {
   readonly needsLoadBalancing: boolean;
   readonly loadBalancing: DraftEnvironmentRouting["loadBalancing"];
   readonly readPendingEnvironmentChange: DraftEnvironmentRouting["readPendingEnvironmentChange"];
+  readonly classifyTaskPlacement: DraftEnvironmentRouting["classifyTaskPlacement"];
   readonly pendingApprovals: PendingThreadRequests["pendingApprovals"];
   readonly respondingRequestIds: PendingThreadRequests["respondingRequestIds"];
   readonly activePendingProgress: PendingThreadRequests["activePendingProgress"];
@@ -316,6 +317,7 @@ export function useComposerSend(input: ComposerSendInput) {
     needsLoadBalancing,
     loadBalancing,
     readPendingEnvironmentChange,
+    classifyTaskPlacement,
     pendingApprovals,
     respondingRequestIds,
     activePendingProgress,
@@ -493,8 +495,17 @@ export function useComposerSend(input: ComposerSendInput) {
       return;
     }
     const sendCtx = composerRef.current?.getSendContext();
-    if (isLocalDraftThread && draftId && draftThread?.environmentSelection === "claude-cloud") {
-      const text = promptAtSend.trim();
+    const cloudText = promptAtSend.trim();
+    const pickedCloud = draftThread?.environmentSelection === "claude-cloud";
+    let autoCloud: { readonly pushBranch: boolean } | null = null;
+    if (isLocalDraftThread && draftId && !pickedCloud && cloudText.length > 0) {
+      sendInFlightRef.current = true;
+      const placement = await classifyTaskPlacement(cloudText);
+      sendInFlightRef.current = false;
+      if (placement?.placement === "cloud") autoCloud = { pushBranch: placement.pushRequired };
+    }
+    if (isLocalDraftThread && draftId && draftThread && (pickedCloud || autoCloud !== null)) {
+      const text = cloudText;
       if (text.length === 0) return;
       sendInFlightRef.current = true;
       const result = await startClaudeCloudSession({
@@ -511,10 +522,22 @@ export function useComposerSend(input: ComposerSendInput) {
                 providerInstanceId: sendCtx.selectedModelSelection.instanceId,
               }
             : {}),
+          ...(autoCloud?.pushBranch ? { pushBranch: true } : {}),
         },
       });
       sendInFlightRef.current = false;
-      if (result._tag === "Failure") {
+      if (result._tag === "Failure" && autoCloud !== null) {
+        if (isAtomCommandInterrupted(result)) return;
+        const error = squashAtomCommandFailure(result);
+        toastManager.add(
+          stackedThreadToast({
+            type: "warning",
+            title: "Running on this machine instead",
+            description:
+              error instanceof Error ? error.message : "The Claude cloud session did not start.",
+          }),
+        );
+      } else if (result._tag === "Failure") {
         if (!isAtomCommandInterrupted(result)) {
           const error = squashAtomCommandFailure(result);
           toastManager.add(
@@ -528,13 +551,15 @@ export function useComposerSend(input: ComposerSendInput) {
         }
         return;
       }
-      promptRef.current = "";
-      clearComposerDraftContent(composerDraftTarget);
-      void navigate({
-        to: "/$environmentId/$threadId",
-        params: buildThreadRouteParams(scopeThreadRef(environmentId, result.value.threadId)),
-      });
-      return;
+      if (result._tag === "Success") {
+        promptRef.current = "";
+        clearComposerDraftContent(composerDraftTarget);
+        void navigate({
+          to: "/$environmentId/$threadId",
+          params: buildThreadRouteParams(scopeThreadRef(environmentId, result.value.threadId)),
+        });
+        return;
+      }
     }
     // `/side` beats an open question and a plan follow-up, which would send the text to main.
     const sideChatCommand =

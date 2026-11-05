@@ -13,5 +13,9 @@ export function createClaudeCloudEnvironmentAtoms<R, E>(
       label: "environment-data:claude-cloud:start-session",
       tag: WS_METHODS.claudeCloudStartSession,
     }),
+    suggestPlacement: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:claude-cloud:suggest-placement",
+      tag: WS_METHODS.claudeCloudSuggestPlacement,
+    }),
   };
 }
