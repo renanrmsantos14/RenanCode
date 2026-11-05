@@ -70,6 +70,25 @@ export const SidebarThreadSortOrder = Schema.Literals(["updated_at", "created_at
 export type SidebarThreadSortOrder = typeof SidebarThreadSortOrder.Type;
 const DEFAULT_SIDEBAR_THREAD_SORT_ORDER: SidebarThreadSortOrder = "updated_at";
 
+export const SidebarTreeChildren = Schema.Literals(["subsessions_and_subagents", "subsessions"]);
+export type SidebarTreeChildren = typeof SidebarTreeChildren.Type;
+
+export const SidebarTreeIndent = Schema.Literals([0, 8, 16, 24]);
+export type SidebarTreeIndent = typeof SidebarTreeIndent.Type;
+
+export const SidebarTreeLineColor = Schema.Literals([
+  "border",
+  "muted",
+  "primary",
+  "info",
+  "success",
+  "warning",
+]);
+export type SidebarTreeLineColor = typeof SidebarTreeLineColor.Type;
+
+export const SidebarTreeLineWidth = Schema.Literals([1, 2, 3, 4]);
+export type SidebarTreeLineWidth = typeof SidebarTreeLineWidth.Type;
+
 export const SidebarProjectGroupingMode = Schema.Literals([
   "repository",
   "repository_path",
@@ -508,6 +527,16 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   sidebarThreadSortOrder: SidebarThreadSortOrder.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_THREAD_SORT_ORDER)),
+  ),
+  sidebarTreeChildren: SidebarTreeChildren.pipe(
+    Schema.withDecodingDefault(Effect.succeed("subsessions_and_subagents" as const)),
+  ),
+  sidebarTreeIndent: SidebarTreeIndent.pipe(Schema.withDecodingDefault(Effect.succeed(8 as const))),
+  sidebarTreeLineColor: SidebarTreeLineColor.pipe(
+    Schema.withDecodingDefault(Effect.succeed("border" as const)),
+  ),
+  sidebarTreeLineWidth: SidebarTreeLineWidth.pipe(
+    Schema.withDecodingDefault(Effect.succeed(2 as const)),
   ),
   timestampFormat: TimestampFormat.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_TIMESTAMP_FORMAT)),
@@ -1956,6 +1985,10 @@ export const ClientSettingsPatch = Schema.Struct({
   ),
   sidebarProjectSortOrder: Schema.optionalKey(SidebarProjectSortOrder),
   sidebarThreadSortOrder: Schema.optionalKey(SidebarThreadSortOrder),
+  sidebarTreeChildren: Schema.optionalKey(SidebarTreeChildren),
+  sidebarTreeIndent: Schema.optionalKey(SidebarTreeIndent),
+  sidebarTreeLineColor: Schema.optionalKey(SidebarTreeLineColor),
+  sidebarTreeLineWidth: Schema.optionalKey(SidebarTreeLineWidth),
   timestampFormat: Schema.optionalKey(TimestampFormat),
   snapShotEnabled: Schema.optionalKey(Schema.Boolean),
   snapShotIncludeAccessibility: Schema.optionalKey(Schema.Boolean),
