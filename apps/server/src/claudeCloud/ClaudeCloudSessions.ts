@@ -87,6 +87,22 @@ const CloudSession = Schema.Struct({
           }),
         ),
       ),
+      outcomes: Schema.optional(
+        Schema.NullOr(
+          Schema.Array(
+            Schema.Struct({
+              type: Schema.optional(Schema.String),
+              git_info: Schema.optional(
+                Schema.NullOr(
+                  Schema.Struct({
+                    branches: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
+                  }),
+                ),
+              ),
+            }),
+          ),
+        ),
+      ),
     }),
   ),
 });
@@ -213,6 +229,12 @@ export function cloudSessionRepository(session: CloudSession): CloudRepository |
     if (repository !== null) return repository;
   }
   return null;
+}
+
+/** The cloud suffixes the branch T3 requests, so only the session knows the name its PR uses. */
+export function cloudSessionBranch(session: CloudSession): string | null {
+  const outcome = session.config?.outcomes?.find(({ type }) => type === "git_repository");
+  return outcome?.git_info?.branches?.[0]?.trim() || null;
 }
 
 type MatchableProject = Pick<OrchestrationProjectShell, "id" | "archivedAt" | "repositoryIdentity">;
@@ -476,10 +498,20 @@ const make = Effect.gen(function* () {
       known !== undefined &&
       Option.isSome(existing) &&
       existing.value.thread.title === title &&
+      (cloudSessionBranch(session) ?? existing.value.thread.branch) ===
+        existing.value.thread.branch &&
       DateTime.formatIso(existing.value.thread.updatedAt) ===
         DateTime.formatIso(DateTime.makeUnsafe(session.last_event_at ?? session.created_at));
     if (unchanged) return;
 
+    // The CLI's teleport reads the branch from a single session; the list may leave it out.
+    const branch =
+      cloudSessionBranch(session) ??
+      (yield* getJson(account, `${API_BASE}/${session.id}`, CloudSession, "read-session").pipe(
+        Effect.map(cloudSessionBranch),
+        Effect.orElseSucceed(() => null),
+      )) ??
+      (Option.isSome(existing) ? existing.value.thread.branch : null);
     const events = yield* listEventsAfter(account, session.id, afterSequence);
     const sentFromT3 = new Set(
       Option.isSome(existing)
@@ -499,7 +531,12 @@ const make = Effect.gen(function* () {
     );
     const updatedAt = DateTime.makeUnsafe(session.last_event_at ?? session.created_at);
     // A prompt sent from T3 moves the thread's updatedAt without new cloud content; nothing to write.
-    if (messages.length === 0 && Option.isSome(existing) && existing.value.thread.title === title) {
+    if (
+      messages.length === 0 &&
+      Option.isSome(existing) &&
+      existing.value.thread.title === title &&
+      existing.value.thread.branch === branch
+    ) {
       syncedSequence.set(session.id, lastSequence);
       return;
     }
@@ -511,12 +548,12 @@ const make = Effect.gen(function* () {
     const threadEvent: OrchestrationV2DomainEvent = Option.isSome(existing)
       ? {
           id: EventId.make(
-            `${EVENT_ID_PREFIX}:thread:${threadId}:updated:${lastSequence}:${DateTime.toEpochMillis(updatedAt)}`,
+            `${EVENT_ID_PREFIX}:thread:${threadId}:updated:${lastSequence}:${DateTime.toEpochMillis(updatedAt)}:${branch ?? ""}`,
           ),
           type: "thread.metadata-updated",
           threadId,
           occurredAt: updatedAt,
-          payload: { ...existing.value.thread, title, updatedAt },
+          payload: { ...existing.value.thread, title, branch, updatedAt },
         }
       : {
           id: EventId.make(`${EVENT_ID_PREFIX}:thread:${threadId}:created`),
@@ -537,7 +574,7 @@ const make = Effect.gen(function* () {
             },
             runtimeMode: DEFAULT_RUNTIME_MODE,
             interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
-            branch: null,
+            branch,
             worktreePath: null,
             linkedPullRequest: null,
             branchPullRequest: null,

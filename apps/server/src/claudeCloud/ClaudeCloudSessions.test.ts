@@ -5,6 +5,7 @@ import {
   branchNeedsPush,
   chooseCloudEnvironment,
   cloudMessages,
+  cloudSessionBranch,
   cloudSessionRepository,
   isMirroredCloudSession,
   localOnlyReason,
@@ -57,6 +58,19 @@ describe("Claude cloud session mirroring", () => {
     expect(isMirroredCloudSession(session())).toBe(true);
     expect(isMirroredCloudSession(session({ environment_kind: "bridge" }))).toBe(false);
     expect(isMirroredCloudSession(session({ status: "archived" }))).toBe(true);
+  });
+
+  it("reads the branch the cloud really used, tolerating sessions without one", () => {
+    const outcome = (git_info: { branches?: ReadonlyArray<string> | null } | null) =>
+      session({ config: { outcomes: [{ type: "git_repository", git_info }] } });
+    expect(cloudSessionBranch(outcome({ branches: ["claude/ea32b06c-idhsub"] }))).toBe(
+      "claude/ea32b06c-idhsub",
+    );
+    expect(cloudSessionBranch(outcome({ branches: [] }))).toBeNull();
+    expect(cloudSessionBranch(outcome({ branches: null }))).toBeNull();
+    expect(cloudSessionBranch(outcome(null))).toBeNull();
+    expect(cloudSessionBranch(session({ config: { outcomes: null } }))).toBeNull();
+    expect(cloudSessionBranch(session())).toBeNull();
   });
 
   it("matches the session repository to a project case-insensitively", () => {
