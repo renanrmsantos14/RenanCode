@@ -15205,7 +15205,10 @@ describe("ClaudeAdapterV2 background wake turns", () => {
                   type: "tool_result",
                   tool_use_id: SUBAGENT_TOOL_USE_ID,
                   content: [
-                    { type: "text", text: "First line." },
+                    {
+                      type: "text",
+                      text: "<tools-used-before-summary>Bash</tools-used-before-summary>\n\nFirst line.",
+                    },
                     { type: "text", text: "Second line." },
                   ],
                 },

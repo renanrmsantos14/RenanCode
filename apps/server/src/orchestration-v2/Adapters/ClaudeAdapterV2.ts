@@ -3464,8 +3464,19 @@ function claudeHandbackReportText(report: unknown): string | undefined {
   return warning === undefined ? reportText : `${warning}\n\n${reportText}`;
 }
 
+// Claude Code opens a subagent's result with the tools it used, for the model only.
+const CLAUDE_TOOLS_USED_PREAMBLE =
+  /^\s*<((?:unreadable-)?tools-used-before-summary)\b[^>]*>[\s\S]*?<\/\1>\s*/u;
+
+function withoutClaudeToolsUsedPreamble(result: string): string {
+  return result.replace(CLAUDE_TOOLS_USED_PREAMBLE, "");
+}
+
 function claudeTaskNotificationResult(message: { readonly summary: string }): string {
-  return claudeHandbackReportText(field(message, "handback_report")) ?? message.summary;
+  return (
+    claudeHandbackReportText(field(message, "handback_report")) ??
+    withoutClaudeToolsUsedPreamble(message.summary)
+  );
 }
 
 function claudeSubagentResultText(output: ClaudeNativeToolOutput): string {
@@ -3494,10 +3505,10 @@ function claudeSubagentResultText(output: ClaudeNativeToolOutput): string {
       )
       .join("\n");
     if (text.length > 0) {
-      return text;
+      return withoutClaudeToolsUsedPreamble(text);
     }
   }
-  return claudeNativeToolOutputText(output);
+  return withoutClaudeToolsUsedPreamble(claudeNativeToolOutputText(output));
 }
 
 function isClaudeSubagentAsyncLaunchAck(output: ClaudeNativeToolOutput): boolean {
