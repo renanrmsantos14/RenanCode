@@ -25,6 +25,7 @@ import {
   AuthOrchestrationOperateScope,
   type EnvironmentId,
   type EnvironmentMachineKind,
+  isProviderNativeSubagentThread,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
 
@@ -45,6 +46,7 @@ import {
   PinIcon,
   PinOffIcon,
   ShieldQuestionIcon,
+  BotIcon,
   SquarePenIcon,
   TerminalIcon,
   Undo2Icon,
@@ -673,6 +675,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     return leaseRowRef(row);
   };
   const isRegeneratingTitle = thread.titleRegeneration != null;
+  const isNativeSubagent = isProviderNativeSubagentThread(thread);
   const localLastVisitedAt = useUiStateStore((state) => state.threadLastVisitedAtById[threadKey]);
   const lastVisitedAt = resolveThreadLastVisitedAt(thread.lastVisitedAt, localLastVisitedAt);
   const isSelected = useThreadSelectionStore((state) => state.selectedThreadKeys.has(threadKey));
@@ -1045,7 +1048,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     ) : null;
 
   const accessibility = resolveSidebarRowAccessibility({
-    title: thread.title,
+    title: isNativeSubagent ? `Subagent: ${thread.title}` : thread.title,
     statusLabel: topStatus?.label ?? null,
     projectDisplayName: props.projectDisplayName,
     isActive: props.isActive,
@@ -1092,10 +1095,22 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           className={cn("me-1.5 inline-block size-2 rounded-full align-middle", unreadDotClassName)}
         />
       ) : null}
+      {isNativeSubagent ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={<span className="me-1 inline-flex align-[-2px] text-muted-foreground/60" />}
+          >
+            <BotIcon className="size-3.5" />
+          </TooltipTrigger>
+          <TooltipPopup>Subagent</TooltipPopup>
+        </Tooltip>
+      ) : null}
       {thread.title}
     </span>
   );
-  const accessibleTitle = isRenaming ? null : <span className="sr-only">{thread.title}</span>;
+  const accessibleTitle = isRenaming ? null : (
+    <span className="sr-only">{isNativeSubagent ? `Subagent: ${thread.title}` : thread.title}</span>
+  );
 
   const prBadgeShape = supportsMultiplePullRequests
     ? resolveThreadPullRequestBadge(thread.pullRequests)

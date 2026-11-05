@@ -266,6 +266,7 @@ import {
   type SidebarSweepAction,
 } from "./sidebar/SidebarThreadRow";
 import { SidebarDraftBlock } from "./sidebar/SidebarDraftBlock";
+import { useSidebarNativeSubagents } from "./sidebar/useSidebarNativeSubagents";
 import {
   SidebarProjectFolderHeader,
   sidebarFolderRowId,
@@ -353,6 +354,7 @@ interface SidebarThreadPartitionInput {
   readonly scopedProjectKeys: ReadonlySet<string> | null;
   /** Tasks linked environments run for a listed thread; they show under it. */
   readonly delegatedUnderParent: ReadonlySet<string>;
+  readonly nativeParentKeyByChild: ReadonlyMap<string, string>;
   readonly serverConfigs: ReadonlyMap<EnvironmentId, EnvironmentServerConfig>;
   readonly connectedEnvironmentIds: readonly EnvironmentId[];
   readonly optimisticDrop: SidebarOptimisticDrop | null;
@@ -430,6 +432,7 @@ function useSidebarThreads(input: {
   readonly optimisticDrop: SidebarOptimisticDrop | null;
   readonly threads: readonly EnvironmentThreadShell[];
   readonly delegatedUnderParent: ReadonlySet<string>;
+  readonly nativeParentKeyByChild: ReadonlyMap<string, string>;
   readonly routeRowThreadKey: string | null;
   // Set in boring mode: the project groups to fold active threads into, in order.
   readonly folderGroups: readonly SidebarProjectSnapshot[] | null;
@@ -444,6 +447,7 @@ function useSidebarThreads(input: {
     optimisticDrop,
     threads,
     delegatedUnderParent,
+    nativeParentKeyByChild,
     routeRowThreadKey,
     folderGroups,
     keepEmptyFolders: keepEmpty,
@@ -495,6 +499,7 @@ function useSidebarThreads(input: {
     threads,
     scopedProjectKeys,
     delegatedUnderParent,
+    nativeParentKeyByChild,
     serverConfigs,
     connectedEnvironmentIds,
     optimisticDrop,
@@ -664,6 +669,7 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
     threads,
     scopedProjectKeys,
     delegatedUnderParent,
+    nativeParentKeyByChild,
     serverConfigs,
     optimisticDrop,
     workingShelfEnabled,
@@ -679,6 +685,7 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
     threads,
     visibleThreads,
     delegatedUnderParent,
+    nativeParentKeyByChild,
   );
   // Subsessions list under their parent, so only the other threads take part in sections.
   const visible = visibleThreads.filter((thread) => !parentKeyByChild.has(threadShellKey(thread)));
@@ -1169,20 +1176,26 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             ),
           ),
         );
-  const threads = useQuietThreadShells();
+  const { threads, nativeParentKeyByChild } = useSidebarNativeSubagents(
+    routeThreadRef,
+    useQuietThreadShells(),
+  );
+  // A listed native subagent is its own row; other hidden threads show as their parent's.
   const routeRowThreadKey =
     routeThreadRef === null
       ? null
-      : scopedThreadKey(
-          scopeThreadRef(
-            routeThreadRef.environmentId,
-            resolveSidebarRowThreadId(
-              routeThreadRef.threadId,
+      : routeThreadKey !== null && nativeParentKeyByChild.has(routeThreadKey)
+        ? routeThreadKey
+        : scopedThreadKey(
+            scopeThreadRef(
               routeThreadRef.environmentId,
-              threads,
+              resolveSidebarRowThreadId(
+                routeThreadRef.threadId,
+                routeThreadRef.environmentId,
+                threads,
+              ),
             ),
-          ),
-        );
+          );
   const isSearchingThreads = threadSearchQuery.trim().length > 0;
 
   // History, the palette and links can open a thread the scope hides or the list
@@ -1409,6 +1422,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     optimisticDrop,
     threads,
     delegatedUnderParent,
+    nativeParentKeyByChild,
     routeRowThreadKey,
     folderGroups: boringSidebarEnabled
       ? scopedProjectGroups.length === 0

@@ -1639,9 +1639,13 @@ describe("nestSidebarSubsessions", () => {
     makeThreadFixture({ id: ThreadId.make(id), environmentId, ...extra });
   const launched = (id: string, parent: ThreadId, extra: ThreadFixtureOverrides = {}) =>
     make(id, { launchedFrom: parent, creationSource: "mcp", ...extra });
-  const nest = (threads: ReturnType<typeof make>[], delegated: string[] = []) => {
+  const nest = (
+    threads: ReturnType<typeof make>[],
+    delegated: string[] = [],
+    nativeParents: ReadonlyMap<string, string> = new Map(),
+  ) => {
     const visible = filterSidebarV2VisibleThreads(threads, null, new Set(delegated));
-    return nestSidebarSubsessions(threads, visible, new Set(delegated));
+    return nestSidebarSubsessions(threads, visible, new Set(delegated), nativeParents);
   };
 
   it("nests launched threads under a visible parent, oldest first, recursively", () => {
@@ -1673,7 +1677,7 @@ describe("nestSidebarSubsessions", () => {
     ).toBe(0);
   });
 
-  it("hides a delegate_task child only while its parent is shown, and skips native subagents", () => {
+  it("hides a delegate_task child only while its parent is shown, and nests native subagents only where placed", () => {
     const root = make("n-parent");
     const task = make("n-task", {
       creationSource: "mcp",
@@ -1681,11 +1685,27 @@ describe("nestSidebarSubsessions", () => {
     });
     const native = make("n-native", {
       creationSource: "provider",
+      createdAt: "2026-03-09T10:09:00.000Z",
       lineage: { rootThreadId: root.id, parentThreadId: root.id, relationshipToParent: "subagent" },
     });
-    const { subsessionsByParent } = nest([root, task, native]);
+    const nested = make("n-native-nested", {
+      creationSource: "provider",
+      lineage: { rootThreadId: root.id, parentThreadId: root.id, relationshipToParent: "subagent" },
+    });
+    const { subsessionsByParent } = nest([root, task, native, nested]);
     expect(subsessionsByParent.get(keyOf(root.id))?.map((thread) => thread.id)).toEqual([task.id]);
     expect(nest([task, native]).subsessionsByParent.size).toBe(0);
+
+    const placed = nest(
+      [root, task, native, nested],
+      [],
+      new Map([
+        [keyOf(native.id), keyOf(root.id)],
+        [keyOf(nested.id), keyOf(native.id)],
+      ]),
+    ).subsessionsByParent;
+    expect(placed.get(keyOf(root.id))?.map((thread) => thread.id)).toEqual([task.id, native.id]);
+    expect(placed.get(keyOf(native.id))?.map((thread) => thread.id)).toEqual([nested.id]);
   });
 
   it("nests a delegated task from a linked environment under its parent", () => {
