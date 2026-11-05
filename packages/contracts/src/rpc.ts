@@ -184,6 +184,11 @@ import {
   ThreadHandoffResult,
 } from "./promptCache.ts";
 import {
+  ClaudeCloudStartSessionError,
+  ClaudeCloudStartSessionInput,
+  ClaudeCloudStartSessionResult,
+} from "./claudeCloud.ts";
+import {
   PullRequestActionInput,
   PullRequestActivity,
   PullRequestChangeBreakdown,
@@ -431,6 +436,7 @@ export const WS_METHODS = {
   threadsSuggestNextAction: "threads.suggestNextAction",
   threadsCacheKeepWarm: "threads.cacheKeepWarm",
   threadsHandoff: "threads.handoff",
+  claudeCloudStartSession: "claudeCloud.startSession",
 
   shellOpenInEditor: "shell.openInEditor",
 
@@ -1391,6 +1397,12 @@ const WsThreadsHandoffRpc = Rpc.make(WS_METHODS.threadsHandoff, {
   error: Schema.Union([ThreadHandoffError, EnvironmentAuthorizationError]),
 });
 
+const WsClaudeCloudStartSessionRpc = Rpc.make(WS_METHODS.claudeCloudStartSession, {
+  payload: ClaudeCloudStartSessionInput,
+  success: ClaudeCloudStartSessionResult,
+  error: Schema.Union([ClaudeCloudStartSessionError, EnvironmentAuthorizationError]),
+});
+
 const WsServerEstimateInputCostRpc = Rpc.make(WS_METHODS.serverEstimateInputCost, {
   payload: EstimateInputCostInput,
   success: EstimateInputCostResult,
@@ -2167,6 +2179,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsThreadsSuggestNextActionRpc,
   WsThreadsCacheKeepWarmRpc,
   WsThreadsHandoffRpc,
+  WsClaudeCloudStartSessionRpc,
   WsServerEstimateInputCostRpc,
   WsProjectsWriteFileRpc,
   WsProjectsMutateRpc,

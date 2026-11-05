@@ -28,11 +28,16 @@ interface BranchToolbarEnvironmentSelectorProps {
   availableEnvironments: readonly EnvironmentOption[];
   onEnvironmentChange?: (environmentId: EnvironmentId) => void;
   onAddToMachine?: (() => void) | undefined;
+  /** Set when this environment can start Claude Code cloud sessions. */
+  onClaudeCloud?: (() => void) | undefined;
+  claudeCloudSelected?: boolean;
 }
 
 // Action values cannot collide with server-minted environment IDs.
 const AUTO_VALUE = "action:auto";
 const ADD_MACHINE_VALUE = "action:add-machine";
+const CLAUDE_CLOUD_VALUE = "action:claude-cloud";
+const CLAUDE_CLOUD_LABEL = "Claude cloud";
 const environmentValue = (id: EnvironmentId) => `env:${id}`;
 
 export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvironmentSelector({
@@ -43,6 +48,8 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   availableEnvironments,
   onEnvironmentChange,
   onAddToMachine,
+  onClaudeCloud,
+  claudeCloudSelected = false,
 }: BranchToolbarEnvironmentSelectorProps) {
   const composerFloatingLayerProps = useComposerMenuProps();
   const shortcutLabel = shortcutLabelForCommand(
@@ -60,6 +67,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       value: environmentValue(env.environmentId),
       label: env.label,
     })),
+    ...(onClaudeCloud ? [{ value: CLAUDE_CLOUD_VALUE, label: CLAUDE_CLOUD_LABEL }] : []),
     ...(onAddToMachine ? [{ value: ADD_MACHINE_VALUE, label: "Add to another machine" }] : []),
   ];
 
@@ -89,10 +97,18 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   return (
     <Select
       modal={false}
-      value={autoEnvironmentLabel ? AUTO_VALUE : environmentValue(environmentId)}
+      value={
+        claudeCloudSelected
+          ? CLAUDE_CLOUD_VALUE
+          : autoEnvironmentLabel
+            ? AUTO_VALUE
+            : environmentValue(environmentId)
+      }
       onValueChange={(value) => {
         if (value === ADD_MACHINE_VALUE) {
           onAddToMachine?.();
+        } else if (value === CLAUDE_CLOUD_VALUE) {
+          onClaudeCloud?.();
         } else if (value === AUTO_VALUE) {
           onAutoEnvironment?.();
         } else if (value?.startsWith("env:")) {
@@ -113,7 +129,9 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
             />
           }
         >
-          {autoEnvironmentLabel ? (
+          {claudeCloudSelected ? (
+            <EnvironmentMachineIcon kind="cloud" className="size-3 shrink-0" />
+          ) : autoEnvironmentLabel ? (
             <ScaleIcon className="size-3 shrink-0" aria-hidden="true" />
           ) : (
             <EnvironmentMachineIcon
@@ -126,7 +144,9 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
           </ComposerContextLabel>
         </TooltipTrigger>
         <TooltipPopup>
-          {autoEnvironmentLabel ?? activeEnvironment?.label ?? "Run on"}
+          {claudeCloudSelected
+            ? CLAUDE_CLOUD_LABEL
+            : (autoEnvironmentLabel ?? activeEnvironment?.label ?? "Run on")}
           {shortcutLabel ? ` · ${shortcutLabel}` : null}
         </TooltipPopup>
       </Tooltip>
@@ -158,6 +178,14 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
               </span>
             </SelectItem>
           ))}
+          {onClaudeCloud ? (
+            <SelectItem value={CLAUDE_CLOUD_VALUE}>
+              <span className="inline-flex items-center gap-1.5">
+                <EnvironmentMachineIcon kind="cloud" className="size-3" />
+                {CLAUDE_CLOUD_LABEL}
+              </span>
+            </SelectItem>
+          ) : null}
           {onAddToMachine ? (
             <SelectItem value={ADD_MACHINE_VALUE}>
               <span className={ADD_TO_MACHINE_LABEL_CLASS}>

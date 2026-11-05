@@ -1285,6 +1285,7 @@ export default function ChatView(props: ChatViewProps) {
     canAutoBalanceEnvironments &&
     loadBalancingSettings.loadBalancingEnabled &&
     draftThread?.environmentSelection !== "manual" &&
+    draftThread?.environmentSelection !== "claude-cloud" &&
     (!composerHasAttachments || Boolean(draftThread?.loadBalancedEnvironmentId)) &&
     (!draftThread?.branch || draftThread.environmentSelection === "auto") &&
     !draftThread?.worktreePath,
@@ -1818,6 +1819,8 @@ export default function ChatView(props: ChatViewProps) {
     loadBalancing,
     onAutoEnvironmentStable,
     autoEnvironmentLabel,
+    onClaudeCloudStable,
+    claudeCloudSelected,
     isEnvironmentChanging,
     readPendingEnvironmentChange,
     onEnvironmentChangeStable,
@@ -3829,6 +3832,8 @@ export default function ChatView(props: ChatViewProps) {
                           {showComposerContextStrip && (
                             <div className="pointer-events-auto">
                               <BranchToolbar
+                                onClaudeCloud={onClaudeCloudStable}
+                                claudeCloudSelected={claudeCloudSelected}
                                 forceNewWorktree={multipleModelSelections !== null}
                                 ref={branchToolbarRef}
                                 environmentId={activeThread.environmentId}

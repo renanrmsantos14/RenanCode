@@ -88,6 +88,8 @@ import {
 } from "../../lib/composerContextRecords";
 import { environmentServerConfigsAtom } from "../../state/server";
 import { threadEnvironment } from "../../state/threads";
+import { claudeCloudEnvironment } from "../../state/claudeCloud";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { runMobileComposerTransition } from "./draftHeroTransition";
 import { useClientSettingsHydrated, useEnvironmentSettings } from "../../hooks/useSettings";
 import { environmentPresentations } from "../../state/presentation";
@@ -346,6 +348,9 @@ export function useComposerSend(input: ComposerSendInput) {
   const startThreadTurn = useOrchestrationCommand(threadEnvironment.startTurn, {
     reportFailure: false,
   });
+  const startClaudeCloudSession = useAtomCommand(claudeCloudEnvironment.startSession, {
+    reportFailure: false,
+  });
   const uploadThreadFeedback = useOrchestrationCommand(threadEnvironment.uploadFeedback, {
     reportFailure: false,
   });
@@ -488,6 +493,42 @@ export function useComposerSend(input: ComposerSendInput) {
       return;
     }
     const sendCtx = composerRef.current?.getSendContext();
+    if (isLocalDraftThread && draftId && draftThread?.environmentSelection === "claude-cloud") {
+      const text = promptAtSend.trim();
+      if (text.length === 0) return;
+      sendInFlightRef.current = true;
+      const result = await startClaudeCloudSession({
+        environmentId,
+        input: {
+          projectId: draftThread.projectId,
+          messageId: newMessageId(),
+          text,
+          ...(sendCtx?.selectedModel ? { model: sendCtx.selectedModel } : {}),
+        },
+      });
+      sendInFlightRef.current = false;
+      if (result._tag === "Failure") {
+        if (!isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not start the cloud session",
+              description:
+                error instanceof Error ? error.message : "The Claude cloud session did not start.",
+            }),
+          );
+        }
+        return;
+      }
+      promptRef.current = "";
+      clearComposerDraftContent(composerDraftTarget);
+      void navigate({
+        to: "/$environmentId/$threadId",
+        params: buildThreadRouteParams(scopeThreadRef(environmentId, result.value.threadId)),
+      });
+      return;
+    }
     // `/side` beats an open question and a plan follow-up, which would send the text to main.
     const sideChatCommand =
       sendCtx && !directAnnotation && !queuedRunEdit.isEditing

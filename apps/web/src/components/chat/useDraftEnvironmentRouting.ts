@@ -259,7 +259,36 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
   };
   const onEnvironmentChangeStable = useStableCallback(onEnvironmentChange);
 
+  const claudeCloudSelected = draftThread?.environmentSelection === "claude-cloud";
+  // The draft's machine starts the session with its own Claude login, so it must opt in.
+  const claudeCloudAvailable =
+    draftThread !== null &&
+    draftThread !== undefined &&
+    environmentById.get(draftThread.environmentId)?.serverConfig?.settings
+      .claudeCloudSessionsEnabled === true;
+  const onClaudeCloud = () => {
+    if (envLocked || !draftId || sendInFlightRef.current) return;
+    if (composerHasAttachments) {
+      toastManager.add({
+        type: "warning",
+        id: "claude-cloud-attachments",
+        title: "Cloud sessions take text only",
+        description: "Remove attachments before sending this to a Claude cloud session.",
+      });
+      return;
+    }
+    setDraftThreadContext(draftId, {
+      environmentSelection: "claude-cloud",
+      loadBalancedEnvironmentId: null,
+      branch: null,
+      worktreePath: null,
+    });
+  };
+  const onClaudeCloudStable = useStableCallback(onClaudeCloud);
+
   return {
+    claudeCloudSelected,
+    onClaudeCloudStable: claudeCloudAvailable ? onClaudeCloudStable : undefined,
     needsLoadBalancing,
     loadBalancing,
     onAutoEnvironmentStable,

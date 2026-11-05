@@ -1,4 +1,7 @@
-import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
+import {
+  ClaudeCloudStartSessionError,
+  OrchestrationDispatchCommandError,
+} from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
@@ -222,6 +225,7 @@ import * as NextActionSuggestionService from "./orchestration-v2/NextActionSugge
 import * as CacheKeepWarmService from "./orchestration-v2/CacheKeepWarmService.ts";
 import { KEEP_WARM_DEFAULT_HOURS } from "@t3tools/shared/promptCache";
 import * as ThreadHandoffService from "./orchestration-v2/ThreadHandoffService.ts";
+import * as ClaudeCloudSessions from "./claudeCloud/ClaudeCloudSessions.ts";
 import { mutateProjectWithClone } from "./project/ProjectMutation.ts";
 import * as ProjectCloneTracker from "./project/ProjectCloneTracker.ts";
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
@@ -1384,6 +1388,10 @@ export const layerWsRpc = (
       const nextActionSuggestions = yield* NextActionSuggestionService.NextActionSuggestionService;
       const cacheKeepWarm = yield* CacheKeepWarmService.CacheKeepWarmService;
       const threadHandoff = yield* ThreadHandoffService.ThreadHandoffService;
+      // Optional so test servers need not build the Claude cloud client.
+      const claudeCloudSessions = yield* Effect.serviceOption(
+        ClaudeCloudSessions.ClaudeCloudSessions,
+      );
       const eventLoopMonitor = yield* EventLoopMonitor.EventLoopMonitor;
       const threadSearch = yield* ThreadSearch.ThreadSearch;
 
@@ -2894,6 +2902,15 @@ export const layerWsRpc = (
               ? cacheKeepWarm.stop(input.threadId)
               : cacheKeepWarm.status(input.threadId),
         [WS_METHODS.threadsHandoff]: (input) => threadHandoff.handoff(input),
+        [WS_METHODS.claudeCloudStartSession]: (input) =>
+          Option.isSome(claudeCloudSessions)
+            ? claudeCloudSessions.value.start(input)
+            : Effect.fail(
+                new ClaudeCloudStartSessionError({
+                  reason: "unavailable",
+                  detail: "Claude cloud sessions are not available on this server.",
+                }),
+              ),
         [WS_METHODS.projectCloneCancel]: (input) =>
           projectCloneTracker.cancel(input.projectId).pipe(Effect.map((applied) => ({ applied }))),
         [WS_METHODS.projectCloneRetry]: (input) =>

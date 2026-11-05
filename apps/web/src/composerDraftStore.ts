@@ -310,7 +310,7 @@ const PersistedDraftThreadState = Schema.Struct({
   environmentId: Schema.String,
   projectId: ProjectId,
   logicalProjectKey: Schema.optionalKey(Schema.String),
-  environmentSelection: Schema.optionalKey(Schema.Literals(["auto", "manual"])),
+  environmentSelection: Schema.optionalKey(Schema.Literals(["auto", "manual", "claude-cloud"])),
   loadBalancedEnvironmentId: Schema.optionalKey(Schema.NullOr(Schema.String)),
   createdAt: Schema.String,
   runtimeMode: RuntimeMode,
@@ -398,12 +398,15 @@ export function composerDraftHasUserContent(
   );
 }
 
+/** "claude-cloud" sends the first prompt to a new Claude Code cloud session, not to a machine. */
+export type DraftEnvironmentSelection = "auto" | "manual" | "claude-cloud";
+
 export interface DraftSessionState {
   threadId: ThreadId;
   environmentId: EnvironmentId;
   projectId: ProjectId;
   logicalProjectKey: string;
-  environmentSelection?: "auto" | "manual";
+  environmentSelection?: DraftEnvironmentSelection;
   loadBalancedEnvironmentId?: EnvironmentId | null;
   createdAt: string;
   runtimeMode: RuntimeMode;
@@ -464,7 +467,7 @@ interface ComposerDraftStoreState {
       startFromOrigin?: boolean;
       runtimeMode?: RuntimeMode;
       interactionMode?: ProviderInteractionMode;
-      environmentSelection?: "auto" | "manual";
+      environmentSelection?: DraftEnvironmentSelection;
       loadBalancedEnvironmentId?: EnvironmentId | null;
     },
   ) => void;
@@ -480,7 +483,7 @@ interface ComposerDraftStoreState {
       startFromOrigin?: boolean;
       runtimeMode?: RuntimeMode;
       interactionMode?: ProviderInteractionMode;
-      environmentSelection?: "auto" | "manual";
+      environmentSelection?: DraftEnvironmentSelection;
       loadBalancedEnvironmentId?: EnvironmentId | null;
     },
   ) => void;
@@ -495,7 +498,7 @@ interface ComposerDraftStoreState {
       startFromOrigin?: boolean;
       runtimeMode?: RuntimeMode;
       interactionMode?: ProviderInteractionMode;
-      environmentSelection?: "auto" | "manual";
+      environmentSelection?: DraftEnvironmentSelection;
       loadBalancedEnvironmentId?: EnvironmentId | null;
     },
   ) => void;
@@ -1479,7 +1482,7 @@ function createDraftThreadState(
     startFromOrigin?: boolean;
     runtimeMode?: RuntimeMode;
     interactionMode?: ProviderInteractionMode;
-    environmentSelection?: "auto" | "manual";
+    environmentSelection?: DraftEnvironmentSelection;
     loadBalancedEnvironmentId?: EnvironmentId | null;
   },
 ): DraftThreadState {
