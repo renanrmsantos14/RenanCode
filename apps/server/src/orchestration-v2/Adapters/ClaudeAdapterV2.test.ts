@@ -15241,6 +15241,121 @@ describe("ClaudeAdapterV2 background wake turns", () => {
     ),
   );
 
+  it.effect("shows a SubagentHandback report instead of its placeholder result", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const PLACEHOLDER =
+          'This agent\'s report was delivered to you as a message from "a1" (its SubagentHandback call). Read it there; it is not repeated here.';
+        const harness = yield* makeWakeHarness;
+        const settledResult = Effect.fnUntraced(function* (taskId: string) {
+          let receipt = yield* Queue.take(harness.subagentReceipts);
+          while (
+            receipt.subagent.nativeTaskRef?.nativeId !== taskId ||
+            receipt.subagent.status === "running"
+          ) {
+            receipt = yield* Queue.take(harness.subagentReceipts);
+          }
+          return receipt.subagent;
+        });
+        yield* harness.runtime.startTurn(
+          makeClaudeTestTurnInput({
+            threadId: harness.threadId,
+            providerThread: harness.providerThread,
+            now: yield* DateTime.now,
+            attemptId: RunAttemptId.make("attempt-claude-handback"),
+            text: "Delegate both reviews.",
+            attachments: [],
+          }),
+        );
+
+        // Foreground: the report rides on the Agent result's tool_use_result.
+        yield* harness.offerAndWait(
+          claudeSdkFrame({
+            type: "system",
+            subtype: "task_started",
+            task_id: "agent-handback-fg",
+            tool_use_id: "toolu-handback-fg",
+            description: "Review reuse",
+            subagent_type: "general-purpose",
+            task_type: "local_agent",
+            prompt: "Review the diff for reuse.",
+            uuid: "00000000-0000-4000-8000-000000000a01",
+            session_id: WAKE_NATIVE_SESSION,
+          }),
+        );
+        yield* harness.offerAndWait(
+          claudeSdkFrame({
+            type: "user",
+            message: {
+              role: "user",
+              content: [
+                {
+                  type: "tool_result",
+                  tool_use_id: "toolu-handback-fg",
+                  content: [{ type: "text", text: PLACEHOLDER }],
+                },
+              ],
+            },
+            parent_tool_use_id: null,
+            tool_use_result: {
+              status: "completed",
+              handback: "flagged",
+              handbackReport: { text: "FG_REPORT", warning: "SECURITY WARNING: review it." },
+              content: [{ type: "text", text: PLACEHOLDER }],
+            },
+            uuid: "00000000-0000-4000-8000-000000000a02",
+            session_id: WAKE_NATIVE_SESSION,
+          }),
+        );
+        const foreground = yield* settledResult("agent-handback-fg");
+        assert.equal(foreground.result, "SECURITY WARNING: review it.\n\nFG_REPORT");
+
+        // Background: the report rides on the task_notification beside its summary.
+        yield* harness.offerAndWait(
+          makeSubagentTaskStartedFrame({
+            taskId: "agent-handback-bg",
+            toolUseId: "toolu-handback-bg",
+            uuid: "00000000-0000-4000-8000-000000000a03",
+          }),
+        );
+        yield* harness.offerAndWait(
+          claudeSdkFrame({
+            ...makeSubagentNotificationFrame({
+              taskId: "agent-handback-bg",
+              toolUseId: "toolu-handback-bg",
+              summary: PLACEHOLDER,
+              uuid: "00000000-0000-4000-8000-000000000a04",
+            }),
+            handback: "send",
+            handback_report: { text: "BG_REPORT" },
+          }),
+        );
+        const background = yield* settledResult("agent-handback-bg");
+        assert.equal(background.result, "BG_REPORT");
+
+        const childTexts = harness.events.flatMap((event) =>
+          event.type === "message.updated" &&
+          (event.message.threadId === foreground.childThreadId ||
+            event.message.threadId === background.childThreadId)
+            ? [event.message.text]
+            : [],
+        );
+        assert.include(childTexts, "SECURITY WARNING: review it.\n\nFG_REPORT");
+        assert.include(childTexts, "BG_REPORT");
+        assert.notInclude(childTexts, PLACEHOLDER);
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            IdAllocator.layer,
+            McpProviderSessions.layer,
+            NodeServices.layer,
+            NodeCrypto.layer,
+          ),
+        ),
+      ),
+    ),
+  );
+
   it.effect("keeps a foreground fork running past the placeholder result for its own launch", () =>
     Effect.scoped(
       Effect.gen(function* () {
