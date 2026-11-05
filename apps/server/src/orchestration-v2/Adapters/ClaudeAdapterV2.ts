@@ -571,10 +571,6 @@ export interface ClaudeAgentSdkQuerySession {
   readonly backgroundTasks: (
     toolUseId: string,
   ) => Effect.Effect<boolean, ClaudeAgentSdkQueryRunnerError>;
-  readonly mcpServerStatus: Effect.Effect<
-    ReadonlyArray<ClaudeMcpServerStatus>,
-    ClaudeAgentSdkQueryRunnerError
-  >;
   readonly readMcpResource: (input: {
     readonly server: string;
     readonly uri: string;
@@ -1546,10 +1542,6 @@ export const layerQueryRunner: Layer.Layer<
                   }),
                 ),
               ),
-            mcpServerStatus: Effect.tryPromise({
-              try: () => queryRuntime.mcpServerStatus(),
-              catch: (cause) => queryRunnerError(cause, "mcpServerStatus"),
-            }),
             readMcpResource: ({ server, uri }) =>
               Effect.tryPromise({
                 try: () => queryRuntime.readMcpResource(server, uri),
