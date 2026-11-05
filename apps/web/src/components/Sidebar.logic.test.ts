@@ -12,6 +12,7 @@ import {
   hasUnseenCompletion,
   resolveSidebarRowThreadId,
   nestSidebarSubsessions,
+  resolveSubsessionsOpen,
   filterSidebarV2VisibleThreads,
   orderItemsByPreferredIds,
   pinOrderKeyBetween,
@@ -1719,6 +1720,27 @@ describe("nestSidebarSubsessions", () => {
 
     expect(nest([root, task], [taskKey]).subsessionsByParent.get(keyOf(root.id))).toEqual([task]);
     expect(nest([root, task]).subsessionsByParent.size).toBe(0);
+  });
+
+  it("folds a thread's subsessions by default only when native subagents crowd them", () => {
+    const native = (id: string) =>
+      make(id, {
+        creationSource: "provider",
+        lineage: {
+          rootThreadId: ThreadId.make("n-busy"),
+          parentThreadId: ThreadId.make("n-busy"),
+          relationshipToParent: "subagent",
+        },
+      });
+    const five = ["a", "b", "c", "d", "e"].map((id) => native(`n-native-${id}`));
+    const six = [...five, native("n-native-f")];
+    const launchedSix = six.map((thread) => launched(`${thread.id}-mcp`, ThreadId.make("n-busy")));
+
+    expect(resolveSubsessionsOpen(undefined, five)).toBe(true);
+    expect(resolveSubsessionsOpen(undefined, six)).toBe(false);
+    expect(resolveSubsessionsOpen(undefined, launchedSix)).toBe(true);
+    expect(resolveSubsessionsOpen(true, six)).toBe(true);
+    expect(resolveSubsessionsOpen(false, five)).toBe(false);
   });
 
   it("lists one of two threads that launched each other", () => {

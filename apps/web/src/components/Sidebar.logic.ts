@@ -19,6 +19,7 @@ import {
 import { foldSearchQuery, rankSearchItems, scoreThreadSearch } from "@t3tools/shared/paletteSearch";
 import {
   isListedThreadLineage,
+  isProviderNativeSubagentThread,
   type ContextMenuItem,
   type EnvironmentId,
   type ThreadId,
@@ -682,6 +683,21 @@ export function nestSidebarSubsessions<T extends SubsessionNestingThread>(
 /** The persisted fold state of a thread's subsessions lives beside the project folders' open state. */
 export function subsessionsExpansionKey(threadKey: string): string {
   return `subsessions:${threadKey}`;
+}
+
+const NATIVE_SUBAGENTS_OPEN_LIMIT = 5;
+
+/** A saved fold state wins; otherwise subsessions start open unless native subagents crowd them. */
+export function resolveSubsessionsOpen(
+  stored: boolean | undefined,
+  subsessions: readonly Pick<SidebarThreadSummary, "lineage" | "creationSource">[],
+): boolean {
+  if (stored !== undefined) return stored;
+  let native = 0;
+  for (const thread of subsessions) {
+    if (isProviderNativeSubagentThread(thread)) native += 1;
+  }
+  return native <= NATIVE_SUBAGENTS_OPEN_LIMIT;
 }
 
 /** The thread's subsessions at every depth, in tree order. */

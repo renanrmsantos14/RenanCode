@@ -54,6 +54,7 @@ import {
 } from "@t3tools/client-runtime/environment";
 import {
   AuthOrchestrationOperateScope,
+  isProviderNativeSubagentThread,
   ProjectId,
   type ScopedThreadRef,
   type ThreadId,
@@ -216,6 +217,7 @@ import {
   nestSidebarSubsessions,
   resolveSubsessionDot,
   subsessionsExpansionKey,
+  resolveSubsessionsOpen,
 } from "./Sidebar.logic";
 import {
   createSidebarCollisionDetection,
@@ -369,12 +371,6 @@ interface SidebarThreadPartitionInput {
 
 function scrollSidebarToTop(content: HTMLElement | null) {
   content?.closest("[data-slot=scroll-area-viewport]")?.scrollTo({ top: 0 });
-}
-
-function toggleSubsessions(threadKey: string) {
-  const { projectExpandedById, setProjectExpanded } = useUiStateStore.getState();
-  const key = subsessionsExpansionKey(threadKey);
-  setProjectExpanded(key, projectExpandedById[key] === false);
 }
 
 function threadShellKey(thread: Pick<SidebarThreadSummary, "environmentId" | "id">): string {
@@ -573,7 +569,14 @@ function useSidebarThreads(input: {
         });
   const { subsessionsByParent } = partition;
   const isSubsessionsOpen = (key: string) =>
-    projectExpandedById[subsessionsExpansionKey(key)] !== false;
+    resolveSubsessionsOpen(
+      projectExpandedById[subsessionsExpansionKey(key)],
+      subsessionsByParent.get(key) ?? EMPTY_THREADS,
+    );
+  // Stable, so memoized rows keep their props while the fold state changes.
+  const toggleSubsessions = useStableCallback((threadKey: string) =>
+    setProjectExpanded(subsessionsExpansionKey(threadKey), !isSubsessionsOpen(threadKey)),
+  );
   // Open subsessions follow their parent, so jump hints, range selection and row actions reach them.
   const withOpenSubsessions = (list: readonly EnvironmentThreadShell[]) =>
     subsessionsByParent.size === 0
@@ -640,6 +643,7 @@ function useSidebarThreads(input: {
     toggleWorkingShelf: () => setWorkingShelfExpanded((value) => !value),
     projectFolders,
     isSubsessionsOpen,
+    toggleSubsessions,
     toggleProjectFolder: (group: SidebarProjectSnapshot) => {
       const keys = sidebarFolderExpansionKeys(group);
       setProjectExpanded(keys, !resolveProjectExpanded(projectExpandedById, keys));
@@ -1386,6 +1390,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     searchableThreads,
     subsessionsByParent,
     isSubsessionsOpen,
+    toggleSubsessions,
     settledVisibleCount,
     settledCount,
     olderSettledShelf,
@@ -3446,6 +3451,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           scopeThreadRef(thread.environmentId, thread.id),
                         );
                         const subsessions = subsessionsByParent.get(threadKey) ?? NO_SUBSESSIONS;
+                        // A native subagent is read-only: nothing to settle, snooze or pin.
+                        const threadActionsSupported =
+                          serverConfigs.has(thread.environmentId) &&
+                          !isProviderNativeSubagentThread(thread);
                         const subsessionsOpen = isSubsessionsOpen(threadKey);
                         // A subsession sits in the section its own state puts it in, as a slim row.
                         const rowSection: SidebarSection =
@@ -3504,9 +3513,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                   ? "unsettle"
                                   : "settle"
                             }
-                            settlementSupported={serverConfigs.has(thread.environmentId)}
-                            snoozeSupported={serverConfigs.has(thread.environmentId)}
-                            pinningSupported={serverConfigs.has(thread.environmentId)}
+                            settlementSupported={threadActionsSupported}
+                            snoozeSupported={threadActionsSupported}
+                            pinningSupported={threadActionsSupported}
                             isPinned={thread.pinnedAt != null}
                             dropVerb={
                               dragState?.activeKey === threadKey
