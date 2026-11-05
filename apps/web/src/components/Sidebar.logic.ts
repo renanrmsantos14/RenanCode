@@ -1,5 +1,6 @@
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { threadKey } from "@t3tools/client-runtime/state/entities";
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
 import { subsessionParentRef } from "@t3tools/client-runtime/state/subsessions";
 import { isShownUnderParent } from "@t3tools/client-runtime/state/threads";
@@ -640,7 +641,13 @@ export function nestSidebarSubsessions<T extends SubsessionNestingThread>(
     if (parent === undefined) continue;
     const sameProject =
       parent.environmentId === thread.environmentId && parent.projectId === thread.projectId;
-    if (sameProject || (thread.delegatedFrom != null && delegatedUnderParent.has(key))) {
+    // `delegatedUnderParent` is keyed by `threadKey`, not the scoped keys used here.
+    const delegatedHere =
+      thread.delegatedFrom != null &&
+      delegatedUnderParent.has(
+        threadKey({ environmentId: thread.environmentId, threadId: thread.id }),
+      );
+    if (sameProject || delegatedHere) {
       candidateParentKey.set(key, parentKey);
     }
   }

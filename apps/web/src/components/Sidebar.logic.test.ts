@@ -1,3 +1,4 @@
+import { threadKey } from "@t3tools/client-runtime/state/entities";
 import { presentThreadShell } from "@t3tools/client-runtime/state/models";
 import { isThreadWorking as isSidebarThreadWorking } from "@t3tools/client-runtime/state/thread-inbox";
 import * as DateTime from "effect/DateTime";
@@ -1738,7 +1739,7 @@ describe("nestSidebarSubsessions", () => {
       projectId: ProjectId.make("project-linked"),
       delegatedFrom: { environmentId, threadId: root.id, title: "Pai" },
     });
-    const taskKey = `environment-linked:${task.id}`;
+    const taskKey = threadKey({ environmentId: task.environmentId, threadId: task.id });
 
     expect(nest([root, task], [taskKey]).subsessionsByParent.get(keyOf(root.id))).toEqual([task]);
     expect(nest([root, task]).subsessionsByParent.size).toBe(0);
