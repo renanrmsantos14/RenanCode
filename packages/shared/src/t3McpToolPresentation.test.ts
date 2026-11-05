@@ -22,6 +22,7 @@ describe("resolveT3McpToolPresentation", () => {
         "t3_code/",
         "t3code:",
         "mcp_t3-code_",
+        "T3 Code ",
         "RenanCode ",
         "t3-code · ",
       ]) {
