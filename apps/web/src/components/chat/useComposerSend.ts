@@ -503,9 +503,13 @@ export function useComposerSend(input: ComposerSendInput) {
           projectId: draftThread.projectId,
           messageId: newMessageId(),
           text,
-          // Only a Claude model means anything to the cloud; otherwise it uses its default.
-          ...(sendCtx?.selectedProvider === "claudeAgent" && sendCtx.selectedModel
-            ? { model: sendCtx.selectedModel }
+          // A Claude pick also picks the account: each Claude instance is its own claude.ai login.
+          // Any other provider leaves the cloud's default model on the default account.
+          ...(sendCtx?.selectedProvider === "claudeAgent"
+            ? {
+                ...(sendCtx.selectedModel ? { model: sendCtx.selectedModel } : {}),
+                providerInstanceId: sendCtx.selectedModelSelection.instanceId,
+              }
             : {}),
         },
       });
