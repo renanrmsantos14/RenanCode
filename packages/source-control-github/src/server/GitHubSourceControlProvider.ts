@@ -539,9 +539,16 @@ export const make = Effect.gen(function* () {
     readonly limit: number;
     readonly context?: SourceControlProvider.SourceControlProviderContext | undefined;
     readonly host?: string | undefined;
+    readonly repository?: string | undefined;
     readonly allowReserve: boolean;
   }) {
-    const locator = yield* resolveRepository(input);
+    const locator =
+      (input.repository === undefined
+        ? null
+        : parseGitHubRepositorySelector(
+            input.repository,
+            (input.host ?? environment.GH_HOST ?? "github.com").toLowerCase(),
+          )) ?? (yield* resolveRepository(input));
     const limit = Math.min(Math.max(Math.trunc(input.limit), 1), 100);
     const ownerMatch = /^([^:/\s]+):(.+)$/u.exec(input.headSelector.trim());
     const headRefName = ownerMatch?.[2] ?? input.headSelector.trim();
@@ -943,6 +950,7 @@ export const make = Effect.gen(function* () {
               limit: input.limit ?? (input.state === "open" ? 1 : 20),
               host: contextHost(input.context),
               context: input.context,
+              repository: input.repository,
               allowReserve,
             }),
           ),

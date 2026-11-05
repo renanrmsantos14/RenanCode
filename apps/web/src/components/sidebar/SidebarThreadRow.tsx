@@ -842,6 +842,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const showUnreadDot = unreadDotClassName !== null;
 
   const branchMismatch = resolveLocalCheckoutBranchMismatch({
+    threadId: thread.id,
     effectiveEnvMode: thread.worktreePath === null ? "local" : "worktree",
     activeWorktreePath: thread.worktreePath,
     activeThreadBranch: thread.branch,
@@ -1773,6 +1774,7 @@ export const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props
     gitStatus.data,
   );
   const branchMismatch = resolveLocalCheckoutBranchMismatch({
+    threadId: thread.id,
     effectiveEnvMode: thread.worktreePath === null ? "local" : "worktree",
     activeWorktreePath: thread.worktreePath,
     activeThreadBranch: thread.branch,

@@ -1,9 +1,10 @@
-import type {
-  EnvironmentId,
-  EnvironmentMachineKind,
-  VcsRef,
-  ProjectId,
-  WorktreeSubmodules,
+import {
+  isClaudeCloudThreadId,
+  type EnvironmentId,
+  type EnvironmentMachineKind,
+  type VcsRef,
+  type ProjectId,
+  type WorktreeSubmodules,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { sanitizeNewRefName } from "@t3tools/shared/git";
@@ -231,13 +232,19 @@ export function resolveBranchToolbarPrBranch(input: {
 }
 
 export function resolveLocalCheckoutBranchMismatch(input: {
+  threadId: string;
   effectiveEnvMode: EnvMode;
   activeWorktreePath: string | null;
   activeThreadBranch: string | null;
   currentGitBranch: string | null;
 }): { threadBranch: string; currentBranch: string } | null {
   const { effectiveEnvMode, activeWorktreePath, activeThreadBranch, currentGitBranch } = input;
-  if (effectiveEnvMode !== "local" || activeWorktreePath !== null) {
+  // A cloud session's branch lives in the cloud and says nothing about this checkout.
+  if (
+    effectiveEnvMode !== "local" ||
+    activeWorktreePath !== null ||
+    isClaudeCloudThreadId(input.threadId)
+  ) {
     return null;
   }
   if (!activeThreadBranch || !currentGitBranch || activeThreadBranch === currentGitBranch) {

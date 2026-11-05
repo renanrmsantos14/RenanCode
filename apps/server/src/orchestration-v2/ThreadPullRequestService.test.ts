@@ -423,6 +423,112 @@ describe("ThreadPullRequestServiceV2 reads", () => {
     ),
   );
 
+  it.effect("stores a pull request found in a fork under the fork's repository", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const thread = {
+          ...threadShell("fork-thread"),
+          settledOverride: "settled" as const,
+          settledAt: NOW,
+          branch: "claude/fork-work",
+        };
+        const project: OrchestrationProjectShell = {
+          id: thread.projectId,
+          title: "Project",
+          workspaceRoot: "/workspace/project",
+          defaultModelSelection: null,
+          scripts: [],
+          createdAt: "2026-08-01T00:00:00.000Z",
+          updatedAt: "2026-08-01T00:00:00.000Z",
+        };
+        const activation = yield* Deferred.make<void>();
+        const sweepStarted = yield* Deferred.make<void>();
+        const commands: Array<OrchestrationV2ServerCommand> = [];
+        const url = "https://github.com/contributor/Project/pull/7";
+        const dependencies = Layer.mergeAll(
+          Layer.mock(Orchestrator.OrchestratorV2)({
+            streamDomainEvents: Stream.never,
+            getPullRequestSnapshot: () =>
+              Deferred.succeed(sweepStarted, undefined).pipe(
+                Effect.as({
+                  schemaVersion: 2,
+                  snapshotSequence: 1,
+                  threads: [thread],
+                  archivedThreads: [],
+                }),
+              ),
+            dispatch: (command) =>
+              Effect.sync(() => {
+                commands.push(command);
+                return { sequence: 2, storedEvents: [] };
+              }),
+          }),
+          Layer.mock(ProjectStore.ProjectStoreV2)({
+            listShells: () => Effect.succeed([project]),
+            getShell: () => Effect.succeedSome(project),
+          }),
+          Layer.mock(GitManager.GitManager)({
+            branchPullRequest: () =>
+              Effect.succeed({
+                number: 7,
+                title: "Fork work",
+                url,
+                baseBranch: "main",
+                headBranch: thread.branch,
+                state: "merged" as const,
+                closedAt: null,
+                mergedAt: null,
+                headSha: null,
+                repositoryKey: "github.com/contributor/project",
+              }),
+          }),
+          Layer.mock(PullRequestService.PullRequestService)({}),
+          Layer.mock(RepositoryIdentityResolver.RepositoryIdentityResolver)({
+            resolve: () =>
+              Effect.succeed({
+                canonicalKey: "github.com/acme/project",
+                locator: {
+                  source: "git-remote" as const,
+                  remoteName: "upstream",
+                  remoteUrl: "git@github.com:acme/project.git",
+                },
+                provider: SourceControlProviderKind.make("github"),
+                owner: "acme",
+                name: "project",
+                origin: { canonicalKey: "github.com/contributor/project" },
+              }),
+          }),
+          Layer.mock(BackgroundPolicy.BackgroundPolicy)({}),
+          Layer.succeed(ServerActivation.ServerActivation, Deferred.await(activation)),
+          Layer.succeed(
+            SecureRandom.SecureRandom,
+            SecureRandom.make((size) => new Uint8Array(size).fill(1)),
+          ),
+          FileSystem.layerNoop({}),
+          Path.layer,
+        );
+        yield* Effect.gen(function* () {
+          const service = yield* ThreadPullRequestService.make;
+          yield* service.start();
+          yield* Deferred.succeed(activation, undefined);
+          yield* Deferred.await(sweepStarted);
+          yield* service.drain;
+        }).pipe(Effect.provide(dependencies));
+
+        expect(commands).toHaveLength(1);
+        expect(commands[0]).toMatchObject({
+          type: "thread.pull-request.sync",
+          branchPullRequest: {
+            projectId: project.id,
+            repository: "contributor/Project",
+            number: 7,
+            url,
+          },
+        });
+      }),
+    ),
+  );
+
   it.effect.each([
     { state: "closed", sameBranch: false },
     { state: "merged", sameBranch: false },

@@ -2291,6 +2291,7 @@ export default function ChatView(props: ChatViewProps) {
   });
   const localCheckoutBranchMismatch = isServerThread
     ? resolveLocalCheckoutBranchMismatch({
+        threadId,
         effectiveEnvMode: envMode,
         activeWorktreePath,
         activeThreadBranch,

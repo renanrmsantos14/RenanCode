@@ -973,6 +973,24 @@ export const make = Effect.gen(function* () {
         if (own !== undefined && own.repository.toLowerCase() === repository.toLowerCase()) {
           if (host === undefined || host === own.host) return Effect.succeed(own);
         }
+        // Stored branch references carry no host, and a fork's may name its own `origin`.
+        const originKey = own?.project.repositoryIdentity?.origin?.canonicalKey;
+        if (
+          own !== undefined &&
+          host === undefined &&
+          originKey !== undefined &&
+          sourceControlDefinitions.canonicalRepositoryKey(
+            `${own.host}/${repository}`.toLowerCase(),
+          ) === sourceControlDefinitions.canonicalRepositoryKey(originKey.toLowerCase())
+        ) {
+          return Effect.succeed({
+            ...own,
+            repository,
+            remote: sourceControlDefinitions.repositoryKeyFromRemote(
+              `https://${own.host}/${repository}`,
+            ),
+          });
+        }
         if (host === undefined) {
           if (own === undefined) {
             return Effect.fail(new PullRequestUnavailableError({ reason: "provider-unsupported" }));
