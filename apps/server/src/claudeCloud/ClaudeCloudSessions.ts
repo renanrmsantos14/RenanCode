@@ -17,6 +17,8 @@ import {
   type OrchestrationV2DomainEvent,
   type OrchestrationV2TurnItem,
   type ProjectId,
+  ClaudeCloudStartSessionError,
+  type ClaudeCloudStartSessionInput,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -39,9 +41,11 @@ import * as ProjectService from "../project/ProjectService.ts";
 import { resolveClaudeHomePath } from "../provider/Drivers/ClaudeHome.ts";
 import { forkParked } from "../serverActivation.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import * as VcsStatusBroadcaster from "../vcs/VcsStatusBroadcaster.ts";
 
 // Internal claude.ai/code endpoints, read from the Claude Code CLI (2.1.318). Undocumented.
-const API_BASE = "https://api.anthropic.com/v1/code/sessions";
+const API_ROOT = "https://api.anthropic.com";
+const API_BASE = `${API_ROOT}/v1/code/sessions`;
 const IDLE_INTERVAL = Duration.seconds(60);
 const BUSY_INTERVAL = Duration.seconds(5);
 const SESSION_PAGE_LIMIT = 50;
@@ -82,6 +86,25 @@ const CloudEvent = Schema.Struct({
   payload: Schema.optional(Schema.Unknown),
 });
 type CloudEvent = typeof CloudEvent.Type;
+
+const EnvironmentProviderPage = Schema.Struct({
+  environments: Schema.Array(Schema.Struct({ environment_id: Schema.String, kind: Schema.String })),
+});
+
+/** Same order as the Claude CLI: Anthropic's cloud first, then anything that is not a bridge. */
+export function chooseCloudEnvironment<E extends { readonly kind: string }>(
+  environments: ReadonlyArray<E>,
+): E | undefined {
+  return (
+    environments.find((environment) => environment.kind === "anthropic_cloud") ??
+    environments.find((environment) => environment.kind !== "bridge")
+  );
+}
+
+const CreatedSession = Schema.Struct({
+  id: Schema.optional(Schema.String),
+  session: Schema.optional(Schema.Struct({ id: Schema.String })),
+});
 
 const CloudEventPage = Schema.Struct({
   data: Schema.Array(CloudEvent),
@@ -298,6 +321,7 @@ function cloudThreadTitle(session: CloudSession): string {
 const make = Effect.gen(function* () {
   const settings = yield* ServerSettings.ServerSettingsService;
   const projects = yield* ProjectService.ProjectService;
+  const vcsStatus = yield* VcsStatusBroadcaster.VcsStatusBroadcaster;
   const orchestrator = yield* Orchestrator.OrchestratorV2;
   const eventSink = yield* EventSink.EventSinkV2;
   const fileSystem = yield* FileSystem.FileSystem;
@@ -574,7 +598,7 @@ const make = Effect.gen(function* () {
     ),
   );
 
-  const post = (url: string, body: unknown, operation: string) =>
+  const postRaw = (url: string, body: unknown) =>
     authHeaders.pipe(
       Effect.flatMap((headers) =>
         HttpClientRequest.post(url).pipe(
@@ -583,13 +607,27 @@ const make = Effect.gen(function* () {
           httpClient.execute,
         ),
       ),
+    );
+  const toCloudError = (operation: string) => (cause: unknown) =>
+    isClaudeCloudSessionsError(cause) ? cause : new ClaudeCloudSessionsError({ operation, cause });
+
+  const post = (url: string, body: unknown, operation: string) =>
+    postRaw(url, body).pipe(
       Effect.timeout(Duration.seconds(30)),
       Effect.asVoid,
-      Effect.mapError((cause) =>
-        isClaudeCloudSessionsError(cause)
-          ? cause
-          : new ClaudeCloudSessionsError({ operation, cause }),
-      ),
+      Effect.mapError(toCloudError(operation)),
+    );
+
+  const postJson = <S extends Schema.Top>(
+    url: string,
+    body: unknown,
+    schema: S,
+    operation: string,
+  ) =>
+    postRaw(url, body).pipe(
+      Effect.flatMap(HttpClientResponse.schemaBodyJson(schema)),
+      Effect.timeout(Duration.seconds(30)),
+      Effect.mapError(toCloudError(operation)),
     );
 
   const requireSessionId = (threadId: ThreadId) => {
@@ -641,7 +679,111 @@ const make = Effect.gen(function* () {
     );
   });
 
-  return { send, archive };
+  const startError = (
+    reason: ClaudeCloudStartSessionError["reason"],
+    detail: string,
+  ): ClaudeCloudStartSessionError => new ClaudeCloudStartSessionError({ reason, detail });
+
+  const pickEnvironment = getJson(
+    `${API_ROOT}/v1/environment_providers?limit=100`,
+    EnvironmentProviderPage,
+    "list-environments",
+  ).pipe(Effect.map(({ environments }) => chooseCloudEnvironment(environments)));
+
+  const start = Effect.fn("ClaudeCloudSessions.start")(function* (
+    input: ClaudeCloudStartSessionInput,
+  ) {
+    if (!(yield* settings.getSettings.pipe(Effect.orDie)).claudeCloudSessionsEnabled) {
+      return yield* startError("disabled", "Turn on Claude cloud sessions in Settings > Labs.");
+    }
+    const project = (yield* projects
+      .listPage({ cursor: 0, limit: 1000 })
+      .pipe(Effect.orDie)).projects.find((candidate) => candidate.id === input.projectId);
+    const identity = project?.repositoryIdentity;
+    // The fork's origin, when there is one, is where its branches get pushed.
+    const repository = gitHubRepository(identity?.origin?.remoteUrl ?? identity?.locator.remoteUrl);
+    if (project === undefined || repository === null) {
+      return yield* startError("not-github", "Cloud sessions need a project with a GitHub remote.");
+    }
+    const status = yield* vcsStatus
+      .getStatus({ cwd: project.workspaceRoot })
+      .pipe(Effect.mapError((cause) => startError("unavailable", cause.message)));
+    const branch = status.refName;
+    if (branch === null || !status.hasUpstream || status.aheadCount > 0) {
+      return yield* startError(
+        "branch-not-pushed",
+        `Push ${branch ?? "this branch"} first: the cloud session clones it from GitHub.`,
+      );
+    }
+    const environment = yield* pickEnvironment.pipe(
+      Effect.mapError((cause) => startError("unavailable", cause.message)),
+    );
+    if (environment === undefined) {
+      return yield* startError(
+        "unavailable",
+        "No Claude cloud environment is set up on claude.ai.",
+      );
+    }
+    const repo = `${repository.owner}/${repository.name}`;
+    const title = input.text.split("\n")[0]!.slice(0, 80);
+    const created = yield* postJson(
+      API_BASE,
+      {
+        title,
+        environment_id: environment.environment_id,
+        events: [
+          {
+            payload: {
+              ...(UUID_PATTERN.test(input.messageId) ? { uuid: input.messageId } : {}),
+              session_id: "",
+              type: "user",
+              parent_tool_use_id: null,
+              message: { role: "user", content: input.text },
+            },
+          },
+        ],
+        config: {
+          sources: [
+            { type: "git_repository", url: `https://github.com/${repo}`, revision: branch },
+          ],
+          outcomes: [
+            {
+              type: "git_repository",
+              git_info: {
+                type: "github",
+                repo,
+                branches: [`claude/${input.messageId.slice(0, 8)}`],
+              },
+            },
+          ],
+          ...(input.model === undefined ? {} : { model: input.model }),
+        },
+      },
+      CreatedSession,
+      "create-session",
+    ).pipe(Effect.mapError((cause) => startError("unavailable", cause.message)));
+    const sessionId = created.session?.id ?? created.id;
+    if (sessionId === undefined) {
+      return yield* startError("unavailable", "claude.ai did not return a session id.");
+    }
+    projectBySession.set(sessionId, project.id);
+    const now = DateTime.formatIso(yield* DateTime.now);
+    // Mirror right away so the client can open the thread; the poller fills in the rest.
+    yield* syncSession(
+      {
+        id: sessionId,
+        title,
+        created_at: now,
+        last_event_at: now,
+        ...(input.model === undefined ? {} : { config: { model: input.model } }),
+      },
+      project.id,
+    ).pipe(Effect.mapError((cause) => startError("unavailable", cause.message)));
+    yield* Queue.offer(wakeups, undefined);
+    return { threadId: cloudThreadId(sessionId) };
+  });
+
+  return { send, archive, start };
 });
 
 export class ClaudeCloudSessions extends Context.Service<

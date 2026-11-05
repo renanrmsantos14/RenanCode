@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import type { OrchestrationProjectShell } from "@t3tools/contracts";
 
 import {
+  chooseCloudEnvironment,
   cloudMessages,
   cloudSessionRepository,
   isMirroredCloudSession,
@@ -19,6 +20,18 @@ const session = (overrides: Partial<CloudSession> = {}): CloudSession => ({
 });
 
 describe("Claude cloud session mirroring", () => {
+  it("starts new sessions on Anthropic's cloud, never on a Remote Control bridge", () => {
+    const env = (environment_id: string, kind: string) => ({ environment_id, kind });
+    expect(
+      chooseCloudEnvironment([env("b", "bridge"), env("y", "byoc"), env("c", "anthropic_cloud")])
+        ?.environment_id,
+    ).toBe("c");
+    expect(chooseCloudEnvironment([env("b", "bridge"), env("y", "byoc")])?.environment_id).toBe(
+      "y",
+    );
+    expect(chooseCloudEnvironment([env("b", "bridge")])).toBeUndefined();
+  });
+
   it("skips Remote Control bridges but keeps archived sessions so the archive syncs", () => {
     expect(isMirroredCloudSession(session())).toBe(true);
     expect(isMirroredCloudSession(session({ environment_kind: "bridge" }))).toBe(false);

@@ -75,6 +75,8 @@ export interface BranchToolbarHandle {
 }
 
 interface BranchToolbarProps {
+  onClaudeCloud?: (() => void) | undefined;
+  claudeCloudSelected?: boolean;
   layout?: "composer" | "panel";
   panelSection?: "all" | "workspace" | "branch";
   forceNewWorktree?: boolean;
@@ -593,6 +595,8 @@ function useLabelsOverflow(): readonly [
 }
 
 export const BranchToolbar = memo(function BranchToolbar({
+  onClaudeCloud,
+  claudeCloudSelected,
   layout = "composer",
   panelSection = "all",
   forceNewWorktree = false,
@@ -682,7 +686,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   // matching the strip visibility ChatView computes from the same inputs.
   const showEnvironmentIndicator = shouldShowEnvironmentIndicator({
     activeEnvironment: activeEnvironmentOption,
-    canPickEnvironment: hasMultipleEnvironments,
+    canPickEnvironment: hasMultipleEnvironments || onClaudeCloud !== undefined,
   });
   const [attachStrip, labelsOverflow] = useLabelsOverflow();
 
@@ -779,6 +783,8 @@ export const BranchToolbar = memo(function BranchToolbar({
               <BranchToolbarEnvironmentSelector
                 autoEnvironmentLabel={autoEnvironmentLabel}
                 onAutoEnvironment={onAutoEnvironment}
+                onClaudeCloud={onClaudeCloud}
+                claudeCloudSelected={claudeCloudSelected ?? false}
                 envLocked={envLocked}
                 environmentId={environmentId}
                 availableEnvironments={availableEnvironments}
