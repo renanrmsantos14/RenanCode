@@ -3,7 +3,9 @@ import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environ
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import {
   nativeSubagentRows,
+  remoteTaskRows,
   type NativeSubagentRow,
+  type RemoteTaskRow,
 } from "@t3tools/client-runtime/state/nativeSubagents";
 import {
   isProviderNativeSubagentThread,
@@ -15,6 +17,7 @@ import { Atom } from "effect/reactivity";
 import { useEffect } from "react";
 
 import { appAtomRegistry } from "~/rpc/atomRegistry";
+import { useDelegatedUnderParent } from "~/state/entities";
 import {
   nativeSubagentParentAtom,
   subagentRecordsOfThreadsAtom,
@@ -23,6 +26,7 @@ import {
 import { sidebarSubagentOwners } from "../Sidebar.logic";
 
 const NO_NATIVE_PARENTS: ReadonlyMap<string, string> = new Map();
+const NO_REMOTE_TASKS: ReadonlyMap<string, readonly RemoteTaskRow[]> = new Map();
 const NO_ROUTE_PARENT = Atom.make<ThreadId | null>(null).pipe(
   Atom.withLabel("web-native-subagent-parent:none"),
 );
@@ -52,6 +56,8 @@ export function useSidebarNativeSubagents(
 ): {
   readonly threads: readonly EnvironmentThreadShell[];
   readonly nativeParentKeyByChild: ReadonlyMap<string, string>;
+  /** Tasks an owner delegated to linked environments, by the owner's thread key. */
+  readonly remoteTasksByParent: ReadonlyMap<string, readonly RemoteTaskRow[]>;
 } {
   const routeNativeParent = useAtomValue(
     routeThreadRef === null
@@ -70,8 +76,17 @@ export function useSidebarNativeSubagents(
     ),
   );
 
+  const delegatedUnderParent = useDelegatedUnderParent();
+
   const keyOf = (environmentId: EnvironmentId, threadId: ThreadId) =>
     scopedThreadKey(scopeThreadRef(environmentId, threadId));
+  const remoteTasksByParent = new Map<string, readonly RemoteTaskRow[]>();
+  owners.forEach((owner, index) => {
+    const tasks = remoteTaskRows(records[index] ?? [], delegatedUnderParent);
+    if (tasks.length > 0)
+      remoteTasksByParent.set(keyOf(owner.environmentId, owner.threadId), tasks);
+  });
+  const remoteTasks = remoteTasksByParent.size === 0 ? NO_REMOTE_TASKS : remoteTasksByParent;
   const rowByChildKey = new Map<string, NativeSubagentRow>();
   const nativeParentKeyByChild = new Map<string, string>();
   const familyOwners: Array<[EnvironmentId, ThreadId]> = [];
@@ -98,7 +113,7 @@ export function useSidebarNativeSubagents(
   }, [familyKey]);
 
   if (rowByChildKey.size === 0) {
-    return { threads, nativeParentKeyByChild: NO_NATIVE_PARENTS };
+    return { threads, nativeParentKeyByChild: NO_NATIVE_PARENTS, remoteTasksByParent: remoteTasks };
   }
   const overlaid = threads.map((thread) => {
     const row = isProviderNativeSubagentThread(thread)
@@ -106,5 +121,5 @@ export function useSidebarNativeSubagents(
       : undefined;
     return row === undefined ? thread : { ...thread, runtime: nativeSubagentRuntime(thread, row) };
   });
-  return { threads: overlaid, nativeParentKeyByChild };
+  return { threads: overlaid, nativeParentKeyByChild, remoteTasksByParent: remoteTasks };
 }
