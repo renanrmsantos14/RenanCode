@@ -108,6 +108,17 @@ export interface NextActionGenerationResult {
   suggestion: string;
 }
 
+export interface TaskPlacementGenerationInput {
+  cwd: string;
+  message: string;
+  modelSelection: ModelSelection;
+}
+
+export interface TaskPlacementGenerationResult {
+  placement: "cloud" | "local";
+  reason: string;
+}
+
 export interface ProviderTextGeneration {
   readonly generateCommitMessage: (
     input: CommitMessageGenerationInput,
@@ -132,4 +143,8 @@ export interface ProviderTextGeneration {
   readonly generateNextAction: (
     input: NextActionGenerationInput,
   ) => Effect.Effect<NextActionGenerationResult, TextGenerationError>;
+
+  readonly generateTaskPlacement: (
+    input: TaskPlacementGenerationInput,
+  ) => Effect.Effect<TaskPlacementGenerationResult, TextGenerationError>;
 }

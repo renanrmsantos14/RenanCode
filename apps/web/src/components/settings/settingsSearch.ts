@@ -494,6 +494,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["beta claude code web cloud remote sessions claude.ai sidebar"],
   },
   {
+    id: "claude-cloud-auto-routing-beta",
+    title: "Send tasks to the cloud automatically",
+    to: "/settings/labs",
+    scope: "environment",
+    searchTerms: ["beta claude cloud auto route task local machine resources push"],
+  },
+  {
     id: "simlock-hosts",
     title: "Simlock device hosts (alpha)",
     to: "/settings/labs",
