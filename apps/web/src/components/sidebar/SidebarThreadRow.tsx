@@ -26,6 +26,7 @@ import {
   isClaudeCloudThreadId,
   type EnvironmentId,
   type EnvironmentMachineKind,
+  isProviderNativeSubagentThread,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
 
@@ -46,6 +47,7 @@ import {
   PinIcon,
   PinOffIcon,
   ShieldQuestionIcon,
+  BotIcon,
   SquarePenIcon,
   TerminalIcon,
   Undo2Icon,
@@ -480,9 +482,16 @@ export function SortableThreadRow(
   };
   // The sidebar arranges rows from quiet shells, which hold still while a
   // thread streams; reading the live shell here re-renders only this row.
+  const liveThread = useThreadShell(
+    scopeThreadRef(rowProps.thread.environmentId, rowProps.thread.id),
+  );
+  // A native subagent has no runs; its status comes from its parent's records, on rowProps.
   const thread =
-    useThreadShell(scopeThreadRef(rowProps.thread.environmentId, rowProps.thread.id)) ??
-    rowProps.thread;
+    liveThread === null
+      ? rowProps.thread
+      : isProviderNativeSubagentThread(liveThread)
+        ? { ...liveThread, runtime: rowProps.thread.runtime }
+        : liveThread;
   // Keyed by variant so a card/slim switch remounts the row.
   return <SidebarThreadRow key={rowProps.variant} {...rowProps} thread={thread} sortable={bag} />;
 }
@@ -530,6 +539,22 @@ const TOP_STATUS_ICONS = {
   done: CircleCheckIcon,
   woke: AlarmClockIcon,
 } as const;
+
+// A native subagent shows its own outcome, which its parent's records give; it has no runs.
+function nativeSubagentTopStatus(status: string | undefined) {
+  switch (status) {
+    case "running":
+      return { label: "Working", icon: "working" as const, className: "text-info-foreground" };
+    case "completed":
+      return { label: "Done", icon: "done" as const, className: "text-success-foreground" };
+    case "failed":
+      return { label: "Failed", icon: "failed" as const, className: "text-error-foreground" };
+    case "cancelled":
+      return { label: "Stopped", icon: "waiting" as const, className: "text-muted-foreground" };
+    default:
+      return null;
+  }
+}
 
 function TopStatusIcon(props: { icon: keyof typeof TOP_STATUS_ICONS; className: string }) {
   const Icon = TOP_STATUS_ICONS[props.icon];
@@ -674,6 +699,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     return leaseRowRef(row);
   };
   const isRegeneratingTitle = thread.titleRegeneration != null;
+  const isNativeSubagent = isProviderNativeSubagentThread(thread);
   const localLastVisitedAt = useUiStateStore((state) => state.threadLastVisitedAtById[threadKey]);
   const lastVisitedAt = resolveThreadLastVisitedAt(thread.lastVisitedAt, localLastVisitedAt);
   const isSelected = useThreadSelectionStore((state) => state.selectedThreadKeys.has(threadKey));
@@ -732,7 +758,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     isActive: props.isActive,
     isSelected,
   });
-  const topStatus =
+  const threadTopStatus =
     status === "preparing" || status === "working"
       ? {
           label:
@@ -793,6 +819,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                           className: "text-success-foreground",
                         }
                       : null;
+  const topStatus = isNativeSubagent
+    ? nativeSubagentTopStatus(thread.runtime?.status)
+    : threadTopStatus;
   const isWokeStatus = topStatus?.icon === "woke";
   const visiblePullRequests = visibleThreadPullRequests(thread.pullRequests ?? []);
   const allPullRequestsMerged =
@@ -1046,7 +1075,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     ) : null;
 
   const accessibility = resolveSidebarRowAccessibility({
-    title: thread.title,
+    title: isNativeSubagent ? `Subagent: ${thread.title}` : thread.title,
     statusLabel: topStatus?.label ?? null,
     projectDisplayName: props.projectDisplayName,
     isActive: props.isActive,
@@ -1093,10 +1122,22 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           className={cn("me-1.5 inline-block size-2 rounded-full align-middle", unreadDotClassName)}
         />
       ) : null}
+      {isNativeSubagent ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={<span className="me-1 inline-flex align-[-2px] text-muted-foreground/60" />}
+          >
+            <BotIcon className="size-3.5" />
+          </TooltipTrigger>
+          <TooltipPopup>Subagent</TooltipPopup>
+        </Tooltip>
+      ) : null}
       {thread.title}
     </span>
   );
-  const accessibleTitle = isRenaming ? null : <span className="sr-only">{thread.title}</span>;
+  const accessibleTitle = isRenaming ? null : (
+    <span className="sr-only">{isNativeSubagent ? `Subagent: ${thread.title}` : thread.title}</span>
+  );
 
   const prBadgeShape = supportsMultiplePullRequests
     ? resolveThreadPullRequestBadge(thread.pullRequests)
@@ -1357,8 +1398,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                         />
                         <TooltipPopup side="top">Dismiss Woke notification</TooltipPopup>
                       </Tooltip>
-                    ) : inFolder && topStatus ? (
-                      // Folder rows have no status line, so the status takes the time slot.
+                    ) : (inFolder || isNativeSubagent) && topStatus ? (
+                      // Folder and subagent rows have no status line, so the status takes the time slot.
                       <span
                         className={cn(
                           "inline-flex items-center gap-1 text-xs font-medium",

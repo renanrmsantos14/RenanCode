@@ -1,10 +1,7 @@
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
-import {
-  groupSubsessionsByParent,
-  subsessionParentRef,
-} from "@t3tools/client-runtime/state/subsessions";
+import { subsessionParentRef } from "@t3tools/client-runtime/state/subsessions";
 import { isShownUnderParent } from "@t3tools/client-runtime/state/threads";
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import { threadPullRequestSearchTerms } from "@t3tools/shared/threadPullRequests";
@@ -23,6 +20,7 @@ import { foldSearchQuery, rankSearchItems, scoreThreadSearch } from "@t3tools/sh
 import {
   isClaudeCloudThreadId,
   isListedThreadLineage,
+  isProviderNativeSubagentThread,
   type ContextMenuItem,
   type EnvironmentId,
   type ThreadId,
@@ -574,6 +572,8 @@ export async function deleteSelectedThreadEntries<
   return { deletedThreadKeys, firstFailure };
 }
 
+const NO_NATIVE_PARENTS: ReadonlyMap<string, string> = new Map();
+
 export function isSidebarHiddenThread(thread: Pick<SidebarThreadSummary, "lineage">): boolean {
   return !isListedThreadLineage(thread.lineage);
 }
@@ -611,15 +611,15 @@ type SubsessionNestingThread = Pick<
 > & { projectId: string };
 
 /**
- * Threads that nest under a parent row instead of listing on their own, by parent thread key
- * (children oldest first), and the parent of each nested thread. A thread nests when its
- * `subsessionParentRef` is a thread the sidebar shows, in the same project; a delegated task
- * may sit in another environment. Any other thread keeps its place in `visibleThreads`.
+ * Threads nested under a shown parent (oldest first) and each one's parent: a thread whose
+ * `subsessionParentRef` is shown in the same project (a delegated task may sit elsewhere), or a
+ * provider-native subagent where `nativeParentKeyByChild` places it. Others stay top-level.
  */
 export function nestSidebarSubsessions<T extends SubsessionNestingThread>(
   threads: readonly T[],
   visibleThreads: readonly T[],
   delegatedUnderParent: ReadonlySet<string>,
+  nativeParentKeyByChild: ReadonlyMap<string, string> = NO_NATIVE_PARENTS,
 ): {
   readonly subsessionsByParent: ReadonlyMap<string, readonly T[]>;
   readonly parentKeyByChild: ReadonlyMap<string, string>;
@@ -634,8 +634,8 @@ export function nestSidebarSubsessions<T extends SubsessionNestingThread>(
   const candidateParentKey = new Map<string, string>();
   for (const [key, thread] of live) {
     const ref = subsessionParentRef(thread);
-    if (ref === null) continue;
-    const parentKey = scopedThreadKey(ref);
+    const parentKey = ref === null ? nativeParentKeyByChild.get(key) : scopedThreadKey(ref);
+    if (parentKey === undefined) continue;
     const parent = live.get(parentKey);
     if (parent === undefined) continue;
     const sameProject =
@@ -665,10 +665,18 @@ export function nestSidebarSubsessions<T extends SubsessionNestingThread>(
     nested.push(live.get(key)!);
     parentKeyByChild.set(key, parentKey);
   }
-  // groupSubsessionsByParent keys by its own separator; re-key by the sidebar's thread key.
-  const subsessionsByParent = new Map<string, readonly T[]>();
-  for (const siblings of groupSubsessionsByParent(nested).values()) {
-    subsessionsByParent.set(parentKeyByChild.get(keyOf(siblings[0]!))!, siblings);
+  const subsessionsByParent = new Map<string, T[]>();
+  for (const thread of nested) {
+    const parentKey = parentKeyByChild.get(keyOf(thread))!;
+    const siblings = subsessionsByParent.get(parentKey);
+    if (siblings) siblings.push(thread);
+    else subsessionsByParent.set(parentKey, [thread]);
+  }
+  for (const siblings of subsessionsByParent.values()) {
+    siblings.sort(
+      (left, right) =>
+        Date.parse(left.createdAt) - Date.parse(right.createdAt) || left.id.localeCompare(right.id),
+    );
   }
   return { subsessionsByParent, parentKeyByChild };
 }
@@ -676,6 +684,21 @@ export function nestSidebarSubsessions<T extends SubsessionNestingThread>(
 /** The persisted fold state of a thread's subsessions lives beside the project folders' open state. */
 export function subsessionsExpansionKey(threadKey: string): string {
   return `subsessions:${threadKey}`;
+}
+
+const NATIVE_SUBAGENTS_OPEN_LIMIT = 5;
+
+/** A saved fold state wins; otherwise subsessions start open unless native subagents crowd them. */
+export function resolveSubsessionsOpen(
+  stored: boolean | undefined,
+  subsessions: readonly Pick<SidebarThreadSummary, "lineage" | "creationSource">[],
+): boolean {
+  if (stored !== undefined) return stored;
+  let native = 0;
+  for (const thread of subsessions) {
+    if (isProviderNativeSubagentThread(thread)) native += 1;
+  }
+  return native <= NATIVE_SUBAGENTS_OPEN_LIMIT;
 }
 
 /** The thread's subsessions at every depth, in tree order. */
