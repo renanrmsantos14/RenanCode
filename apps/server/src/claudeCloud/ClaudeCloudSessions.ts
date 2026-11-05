@@ -24,16 +24,12 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientError from "effect/http/HttpClientError";
-import * as HttpClientRequest from "effect/http/HttpClientRequest";
-import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as Path from "effect/Path";
 
 import * as EventSink from "../orchestration-v2/EventSink.ts";
@@ -43,15 +39,26 @@ import { resolveClaudeHomePath } from "../provider/Drivers/ClaudeHome.ts";
 import { forkParked } from "../serverActivation.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as VcsStatusBroadcaster from "../vcs/VcsStatusBroadcaster.ts";
+import {
+  API_BASE,
+  API_ROOT,
+  ClaudeCloudSessionsError,
+  makeClaudeCloudHttp,
+  type ClaudeAccountRef,
+} from "./ClaudeCloudHttp.ts";
 
-// Internal claude.ai/code endpoints, read from the Claude Code CLI (2.1.318). Undocumented.
-const API_ROOT = "https://api.anthropic.com";
-const API_BASE = `${API_ROOT}/v1/code/sessions`;
 const IDLE_INTERVAL = Duration.seconds(60);
 const BUSY_INTERVAL = Duration.seconds(5);
 const SESSION_PAGE_LIMIT = 50;
 const EVENT_PAGE_LIMIT = 200;
 const EVENT_ID_PREFIX = "claude-cloud";
+const TERMINAL_RUN_STATUSES = new Set([
+  "completed",
+  "interrupted",
+  "failed",
+  "cancelled",
+  "rolled_back",
+]);
 
 const CloudSession = Schema.Struct({
   id: Schema.String,
@@ -92,10 +99,8 @@ const EnvironmentProviderPage = Schema.Struct({
   environments: Schema.Array(Schema.Struct({ environment_id: Schema.String, kind: Schema.String })),
 });
 
-interface ClaudeAccountRef {
+interface CloudAccount extends ClaudeAccountRef {
   readonly instanceId: ProviderInstanceId;
-  readonly configDir: string;
-  readonly accountFile: string;
 }
 
 function claudeHomePathOf(config: unknown): string {
@@ -125,21 +130,6 @@ const CloudEventPage = Schema.Struct({
   data: Schema.Array(CloudEvent),
   next_cursor: Schema.optional(Schema.NullOr(Schema.String)),
 });
-
-const ClaudeCredentials = Schema.Struct({
-  claudeAiOauth: Schema.Struct({ accessToken: Schema.String }),
-});
-const ClaudeAccount = Schema.Struct({
-  oauthAccount: Schema.optional(
-    Schema.Struct({ organizationUuid: Schema.optional(Schema.String) }),
-  ),
-});
-
-class ClaudeCloudSessionsError extends Schema.TaggedError<ClaudeCloudSessionsError>()(
-  "ClaudeCloudSessionsError",
-  { operation: Schema.String, cause: Schema.Defect() },
-) {}
-const isClaudeCloudSessionsError = Schema.is(ClaudeCloudSessionsError);
 
 interface CloudRepository {
   readonly owner: string;
@@ -339,9 +329,8 @@ const make = Effect.gen(function* () {
   const vcsStatus = yield* VcsStatusBroadcaster.VcsStatusBroadcaster;
   const orchestrator = yield* Orchestrator.OrchestratorV2;
   const eventSink = yield* EventSink.EventSinkV2;
-  const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const httpClient = (yield* HttpClient.HttpClient).pipe(HttpClient.filterStatusOk);
+  const { getJson, post, postJson, toCloudError } = yield* makeClaudeCloudHttp;
 
   // Last event sequence written per session; rebuilt from the projection after a restart.
   const syncedSequence = new Map<string, number>();
@@ -374,7 +363,7 @@ const make = Effect.gen(function* () {
             homePath === ""
               ? path.join(path.dirname(configDir), ".claude.json")
               : path.join(configDir, ".claude.json"),
-        } satisfies ClaudeAccountRef;
+        } satisfies CloudAccount;
       }),
     );
   });
@@ -386,53 +375,8 @@ const make = Effect.gen(function* () {
       ),
     );
 
-  // Read on every request so the CLI stays the only writer and refresher of the token.
-  const authHeaders = Effect.fn("ClaudeCloudSessions.authHeaders")(
-    function* (account: ClaudeAccountRef) {
-      const credentials = yield* fileSystem
-        .readFileString(path.join(account.configDir, ".credentials.json"))
-        .pipe(Effect.flatMap(Schema.decodeEffect(Schema.fromJsonString(ClaudeCredentials))));
-      const metadata = yield* fileSystem
-        .readFileString(account.accountFile)
-        .pipe(
-          Effect.flatMap(Schema.decodeEffect(Schema.fromJsonString(ClaudeAccount))),
-          Effect.option,
-        );
-      const organization = Option.flatMap(metadata, (value) =>
-        Option.fromNullishOr(value.oauthAccount?.organizationUuid),
-      );
-      return {
-        Authorization: `Bearer ${credentials.claudeAiOauth.accessToken}`,
-        "anthropic-version": "2023-06-01",
-        ...(Option.isSome(organization) ? { "x-organization-uuid": organization.value } : {}),
-      };
-    },
-    Effect.mapError(
-      (cause) => new ClaudeCloudSessionsError({ operation: "read-credentials", cause }),
-    ),
-  );
-
-  const getJson = <S extends Schema.Top>(
-    account: ClaudeAccountRef,
-    url: string,
-    schema: S,
-    operation: string,
-  ) =>
-    authHeaders(account).pipe(
-      Effect.flatMap((headers) =>
-        HttpClientRequest.get(url).pipe(HttpClientRequest.setHeaders(headers), httpClient.execute),
-      ),
-      Effect.flatMap(HttpClientResponse.schemaBodyJson(schema)),
-      Effect.timeout(Duration.seconds(30)),
-      Effect.mapError((cause) =>
-        isClaudeCloudSessionsError(cause)
-          ? cause
-          : new ClaudeCloudSessionsError({ operation, cause }),
-      ),
-    );
-
   const listEventsAfter = Effect.fn("ClaudeCloudSessions.listEventsAfter")(function* (
-    account: ClaudeAccountRef,
+    account: CloudAccount,
     sessionId: string,
     afterSequence: number,
   ) {
@@ -462,12 +406,25 @@ const make = Effect.gen(function* () {
   });
 
   const syncSession = Effect.fn("ClaudeCloudSessions.syncSession")(function* (
-    account: ClaudeAccountRef,
+    account: CloudAccount,
     session: CloudSession,
     projectId: ProjectId,
   ) {
     const threadId = cloudThreadId(session.id);
-    const existing = yield* Effect.option(orchestrator.getThreadRecords(threadId, ["turnItems"]));
+    const existing = yield* Effect.option(
+      orchestrator.getThreadRecords(threadId, ["turnItems", "runs"]),
+    );
+    const runs = Option.isSome(existing) ? existing.value.runs : [];
+    // While T3 runs a turn here the Claude adapter streams it; the mirror would only duplicate it.
+    if (runs.some((run) => !TERMINAL_RUN_STATUSES.has(run.status))) return;
+    // Turns T3 ran are already shown; only later ones, started on claude.ai, need mirroring.
+    const lastRunEndedAt = runs.reduce(
+      (latest, run) =>
+        run.completedAt === null
+          ? latest
+          : Math.max(latest, DateTime.toEpochMillis(run.completedAt)),
+      0,
+    );
     const known = syncedSequence.get(session.id);
     const afterSequence =
       known ??
@@ -498,7 +455,9 @@ const make = Effect.gen(function* () {
         : [],
     );
     const messages = cloudMessages(events).filter(
-      (message) => message.uuid === null || !sentFromT3.has(message.uuid),
+      (message) =>
+        (message.uuid === null || !sentFromT3.has(message.uuid)) &&
+        Date.parse(message.createdAt) > lastRunEndedAt,
     );
     const lastSequence = Math.max(
       afterSequence,
@@ -610,7 +569,7 @@ const make = Effect.gen(function* () {
   });
 
   const syncAccount = Effect.fn("ClaudeCloudSessions.syncAccount")(function* (
-    account: ClaudeAccountRef,
+    account: CloudAccount,
   ) {
     const page = yield* getJson(
       account,
@@ -679,39 +638,6 @@ const make = Effect.gen(function* () {
     ),
   );
 
-  const postRaw = (account: ClaudeAccountRef, url: string, body: unknown) =>
-    authHeaders(account).pipe(
-      Effect.flatMap((headers) =>
-        HttpClientRequest.post(url).pipe(
-          HttpClientRequest.setHeaders(headers),
-          HttpClientRequest.bodyJsonUnsafe(body),
-          httpClient.execute,
-        ),
-      ),
-    );
-  const toCloudError = (operation: string) => (cause: unknown) =>
-    isClaudeCloudSessionsError(cause) ? cause : new ClaudeCloudSessionsError({ operation, cause });
-
-  const post = (account: ClaudeAccountRef, url: string, body: unknown, operation: string) =>
-    postRaw(account, url, body).pipe(
-      Effect.timeout(Duration.seconds(30)),
-      Effect.asVoid,
-      Effect.mapError(toCloudError(operation)),
-    );
-
-  const postJson = <S extends Schema.Top>(
-    account: ClaudeAccountRef,
-    url: string,
-    body: unknown,
-    schema: S,
-    operation: string,
-  ) =>
-    postRaw(account, url, body).pipe(
-      Effect.flatMap(HttpClientResponse.schemaBodyJson(schema)),
-      Effect.timeout(Duration.seconds(30)),
-      Effect.mapError(toCloudError(operation)),
-    );
-
   // A cloud thread is pinned to the login that owns its session, recorded as its provider instance.
   const resolveThreadSession = Effect.fn("ClaudeCloudSessions.resolveThreadSession")(function* (
     threadId: ThreadId,
@@ -728,35 +654,6 @@ const make = Effect.gen(function* () {
       return yield* new ClaudeCloudSessionsError({ operation: "resolve-account", cause: threadId });
     }
     return { sessionId, account };
-  });
-
-  const send = Effect.fn("ClaudeCloudSessions.send")(function* (
-    threadId: ThreadId,
-    messageId: MessageId,
-    text: string,
-  ) {
-    const { sessionId, account } = yield* resolveThreadSession(threadId);
-    // The cloud echoes this uuid back, which is how the mirror skips the prompt T3 already shows.
-    // It needs a UUID; for other ids the API assigns one and the echo shows as a second copy.
-    yield* post(
-      account,
-      `${API_BASE}/${encodeURIComponent(sessionId)}/events`,
-      {
-        events: [
-          {
-            payload: {
-              ...(UUID_PATTERN.test(messageId) ? { uuid: messageId } : {}),
-              session_id: sessionId,
-              type: "user",
-              parent_tool_use_id: null,
-              message: { role: "user", content: text },
-            },
-          },
-        ],
-      },
-      "send-message",
-    );
-    yield* Queue.offer(wakeups, undefined);
   });
 
   const archive = Effect.fn("ClaudeCloudSessions.archive")(function* (threadId: ThreadId) {
@@ -783,7 +680,7 @@ const make = Effect.gen(function* () {
     detail: string,
   ): ClaudeCloudStartSessionError => new ClaudeCloudStartSessionError({ reason, detail });
 
-  const pickEnvironment = (account: ClaudeAccountRef) =>
+  const pickEnvironment = (account: CloudAccount) =>
     getJson(
       account,
       `${API_ROOT}/v1/environment_providers?limit=100`,
@@ -890,7 +787,7 @@ const make = Effect.gen(function* () {
     return { threadId: cloudThreadId(sessionId) };
   });
 
-  return { send, archive, start };
+  return { archive, start };
 });
 
 export class ClaudeCloudSessions extends Context.Service<

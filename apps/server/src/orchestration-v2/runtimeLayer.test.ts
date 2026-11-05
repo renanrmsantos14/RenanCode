@@ -36,6 +36,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
@@ -980,7 +981,7 @@ it.layer(layerTest)("OrchestrationV2LayerLive", (it) => {
     }),
   );
 
-  it.effect("hands Claude cloud prompts and archives to the cloud session, not a provider", () =>
+  it.effect("runs Claude cloud prompts as normal turns on the thread's own account", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;
       const outbox = yield* EffectOutbox.EffectOutboxV2;
@@ -997,35 +998,39 @@ it.layer(layerTest)("OrchestrationV2LayerLive", (it) => {
         runtimeMode: "full-access",
         interactionMode: "default",
         branch: null,
-        worktreePath: null,
+        worktreePath: process.cwd(),
       });
-      const sendCommandId = CommandId.make("runtime-cloud-message");
-      const sent = yield* orchestrator.dispatch({
-        type: "message.dispatch",
-        createdBy: "user",
-        creationSource: "web",
-        commandId: sendCommandId,
+      const message = (suffix: string, extra: object = {}) => ({
+        type: "message.dispatch" as const,
+        createdBy: "user" as const,
+        creationSource: "web" as const,
+        commandId: CommandId.make(`runtime-cloud-message-${suffix}`),
         threadId,
-        messageId: MessageId.make("4f6c9a52-6a4e-4d0b-9a4b-3c2f1e0d9b7a"),
+        messageId: MessageId.make(`runtime-cloud-message-${suffix}`),
         text: "Keep going.",
         attachments: [],
-        dispatchMode: { type: "start_immediately" },
+        dispatchMode: { type: "start_immediately" as const },
+        ...extra,
       });
-      assert.deepEqual(
+      const switched = yield* Effect.exit(
+        orchestrator.dispatch(
+          message("switch", {
+            modelSelection: { ...modelSelection, instanceId: ProviderInstanceId.make("other") },
+          }),
+        ),
+      );
+      assert.isTrue(Exit.isFailure(switched));
+      const sent = yield* orchestrator.dispatch(message("plain"));
+      assert.include(
         sent.storedEvents.map((stored) => stored.event.type),
-        ["message.updated", "turn-item.updated"],
+        "run.created",
       );
       assert.deepEqual(
-        (yield* outbox.listByCommandId(sendCommandId)).map((effect) => effect.request),
-        [
-          {
-            type: "claude-cloud.send",
-            messageId: MessageId.make("4f6c9a52-6a4e-4d0b-9a4b-3c2f1e0d9b7a"),
-            text: "Keep going.",
-          },
-        ],
+        (yield* outbox.listByCommandId(CommandId.make("runtime-cloud-message-plain"))).map(
+          (effect) => effect.request.type,
+        ),
+        ["provider-turn.start"],
       );
-      assert.deepEqual((yield* orchestrator.getThreadProjection(threadId)).runs, []);
 
       const archiveCommandId = CommandId.make("runtime-cloud-archive");
       yield* orchestrator.dispatch({

@@ -5575,73 +5575,20 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   ) {
     let projection = yield* getProjectionWithPendingEvents(command.threadId, events);
     if (isClaudeCloudThreadId(command.threadId)) {
-      // The cloud session runs the turn; T3 records the prompt and hands it over after commit.
-      if (command.attachments.length > 0 || command.dispatchMode.type !== "start_immediately") {
+      // The Claude adapter runs cloud turns through the session's login; it cannot upload files
+      // there or hand the session to another provider or account.
+      const switchesAccount =
+        command.modelSelection !== undefined &&
+        command.modelSelection.instanceId !== projection.thread.providerInstanceId;
+      if (command.attachments.length > 0 || switchesAccount) {
         return yield* new OrchestratorDispatchError({
           commandId: command.commandId,
           commandType: command.type,
-          cause: "Claude cloud sessions take plain text messages only.",
+          cause: switchesAccount
+            ? "A Claude cloud session stays on its Claude account. Pick a model from the same account."
+            : "Claude cloud sessions take text messages only.",
         });
       }
-      const now = yield* DateTime.now;
-      const emitEvent = emit(events, command);
-      const turnItemId = TurnItemId.make(`claude-cloud:turn-item:${command.messageId}`);
-      yield* emitEvent({
-        type: "message.updated",
-        threadId: command.threadId,
-        occurredAt: now,
-        payload: {
-          createdBy: "user",
-          creationSource: command.creationSource,
-          id: command.messageId,
-          threadId: command.threadId,
-          runId: null,
-          nodeId: null,
-          role: "user",
-          text: command.text,
-          attachments: [],
-          streaming: false,
-          createdAt: now,
-          updatedAt: now,
-        },
-      });
-      yield* emitEvent({
-        type: "turn-item.updated",
-        threadId: command.threadId,
-        occurredAt: now,
-        payload: {
-          id: turnItemId,
-          threadId: command.threadId,
-          runId: null,
-          nodeId: null,
-          providerThreadId: null,
-          providerTurnId: null,
-          nativeItemRef: null,
-          parentItemId: null,
-          ordinal: projection.turnItems.reduce((max, item) => Math.max(max, item.ordinal), 0) + 1,
-          status: "completed",
-          title: null,
-          startedAt: now,
-          completedAt: now,
-          updatedAt: now,
-          createdBy: "user",
-          creationSource: command.creationSource,
-          type: "user_message",
-          messageId: command.messageId,
-          inputIntent: "turn_start",
-          text: command.text,
-          attachments: [],
-        },
-      });
-      yield* Ref.update(effects, (existing) => [
-        ...existing,
-        claudeCloudEffect(command.commandId, command.threadId, {
-          type: "claude-cloud.send",
-          messageId: command.messageId,
-          text: command.text,
-        }),
-      ]);
-      return;
     }
     if (command.manualContinuationOfRunId !== undefined) {
       const source = projection.runs.find((run) => run.id === command.manualContinuationOfRunId);

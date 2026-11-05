@@ -2,6 +2,7 @@ import { runRanAfter } from "@t3tools/shared/orchestrationV2ThreadError";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import {
   CommandId,
+  isClaudeCloudThreadId,
   isOrchestrationV2WorkActive,
   latestProviderTurnForAttempt,
   MessageId,
@@ -46,6 +47,8 @@ function restartContinuationBlocked(
   settled: boolean,
 ): boolean {
   const { thread } = projection;
+  // The cloud keeps running a turn the server lost; resending "continue" would start another.
+  if (isClaudeCloudThreadId(thread.id)) return true;
   if (
     thread.archivedAt !== null ||
     thread.deletedAt !== null ||

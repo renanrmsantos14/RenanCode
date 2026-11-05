@@ -119,11 +119,6 @@ export const OrchestrationEffectRequestV2 = Schema.Union([
     type: Schema.Literal("delegated-tasks.stop"),
     reason: Schema.optional(Schema.String),
   }),
-  Schema.Struct({
-    type: Schema.Literal("claude-cloud.send"),
-    messageId: MessageId,
-    text: Schema.String,
-  }),
   Schema.Struct({ type: Schema.Literal("claude-cloud.archive") }),
 ]);
 export type OrchestrationEffectRequestV2 = typeof OrchestrationEffectRequestV2.Type;

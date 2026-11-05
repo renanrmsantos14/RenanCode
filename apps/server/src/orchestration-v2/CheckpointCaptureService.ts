@@ -1,6 +1,7 @@
 import {
   CheckpointScopeId,
   CommandId,
+  isClaudeCloudThreadId,
   type OrchestrationV2Checkpoint,
   type OrchestrationV2ExecutionNode,
   type OrchestrationV2ProviderThread,
@@ -67,6 +68,8 @@ export const layer: Layer.Layer<
     }) {
       const { run, rootNode, scope, providerThread, readyCheckpointOrdinals, sideChat } =
         yield* projections.getCheckpointCaptureContext(input.threadId, input);
+      // A Claude cloud turn edits the cloud's clone, so the local checkout has nothing to capture.
+      const skipFilesystem = sideChat || isClaudeCloudThreadId(input.threadId);
       // Stopped runs remain terminal; their checkpoint is the next message's rollback point.
       const stopped = run?.status === "interrupted" || run?.status === "cancelled";
 
@@ -109,14 +112,14 @@ export const layer: Layer.Layer<
           : yield* checkpoints.materializeBaselineCheckpoint({
               scope,
               ordinalWithinScope: 0,
-              forceMissing: sideChat,
+              forceMissing: skipFilesystem,
             });
       const baselineCheckpoint = hasReadyCheckpoint(baselineOrdinalWithinScope)
         ? null
         : yield* checkpoints.materializeBaselineCheckpoint({
             scope,
             ordinalWithinScope: baselineOrdinalWithinScope,
-            forceMissing: sideChat,
+            forceMissing: skipFilesystem,
           });
       const checkpoint = yield* checkpoints.capture({
         scope,
@@ -125,7 +128,7 @@ export const layer: Layer.Layer<
         ordinalWithinScope: run.ordinal,
         appRunOrdinal: run.ordinal,
         capturedAt,
-        forceMissing: sideChat,
+        forceMissing: skipFilesystem,
       });
       // Omit delegatedCompletion to preserve cohort writes made after capture loaded the run.
       const { delegatedCompletion: _delegatedCompletion, ...runWithoutDelegatedCompletion } = run;
