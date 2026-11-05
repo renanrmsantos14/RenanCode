@@ -270,6 +270,7 @@ import {
 } from "./sidebar/SidebarThreadRow";
 import { SidebarDraftBlock } from "./sidebar/SidebarDraftBlock";
 import { useSidebarNativeSubagents } from "./sidebar/useSidebarNativeSubagents";
+import { SubsessionBranch } from "./sidebar/SubsessionBranch";
 import {
   SidebarProjectFolderHeader,
   sidebarFolderRowId,
@@ -3602,22 +3603,26 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             {row}
                             {subsessionsOpen && subsessions.length > 0 ? (
                               <li className="list-none">
-                                <ul
-                                  className={cn(
-                                    "flex flex-col gap-px",
-                                    // Past three levels the rows stop stepping in.
-                                    depth < 3 && "ms-4 border-s border-border/60 ps-1.5",
-                                  )}
-                                >
-                                  {subsessions.map((child) =>
-                                    renderThreadRow(
-                                      child,
-                                      section,
-                                      folderRow,
-                                      threadKey,
-                                      depth + 1,
-                                    ),
-                                  )}
+                                <ul className="flex flex-col gap-px">
+                                  {subsessions.map((child, index) => (
+                                    <SubsessionBranch
+                                      key={scopedThreadKey(
+                                        scopeThreadRef(child.environmentId, child.id),
+                                      )}
+                                      last={index === subsessions.length - 1}
+                                      folder={folderRow !== undefined}
+                                      // Past three levels the rows stop stepping in.
+                                      indent={depth < 3}
+                                    >
+                                      {renderThreadRow(
+                                        child,
+                                        section,
+                                        folderRow,
+                                        threadKey,
+                                        depth + 1,
+                                      )}
+                                    </SubsessionBranch>
+                                  ))}
                                 </ul>
                               </li>
                             ) : null}
