@@ -21,7 +21,7 @@ export function SubsessionBranch(props: {
         <span
           aria-hidden
           className={cn(
-            "pointer-events-none absolute top-0 -bottom-px border-s border-border",
+            "pointer-events-none absolute top-0 -bottom-px border-s-2 border-border",
             trunkInset,
           )}
         />
@@ -29,7 +29,7 @@ export function SubsessionBranch(props: {
       <span
         aria-hidden
         className={cn(
-          "pointer-events-none absolute top-0 h-4.5 rounded-es-md border-s border-b border-border",
+          "pointer-events-none absolute top-0 h-4.5 rounded-es-md border-s-2 border-b-2 border-border",
           trunkInset,
           props.folder ? "w-3" : "w-1.5",
         )}
