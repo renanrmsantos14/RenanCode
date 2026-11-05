@@ -101,6 +101,12 @@ export type OrchestrationV2CreationSource = typeof OrchestrationV2CreationSource
 export const OrchestrationV2ThreadHistoryOrigin = Schema.Literals(["native", "v1_import"]);
 export type OrchestrationV2ThreadHistoryOrigin = typeof OrchestrationV2ThreadHistoryOrigin.Type;
 
+// Mirrored Claude Code cloud sessions are marked by id, not a new history origin,
+// so clients that predate them still decode the thread.
+export const CLAUDE_CLOUD_THREAD_ID_PREFIX = "claude-cloud:";
+export const isClaudeCloudThreadId = (threadId: string): boolean =>
+  threadId.startsWith(CLAUDE_CLOUD_THREAD_ID_PREFIX);
+
 const OrchestrationV2CreationFields = {
   createdBy: OrchestrationV2Actor,
   creationSource: OrchestrationV2CreationSource,

@@ -213,6 +213,7 @@ import {
   type SidebarSection,
   resolveSidebarRowThreadId,
   listSubsessionDescendants,
+  dedupeClaudeCloudThreads,
   nestSidebarSubsessions,
   resolveSubsessionDot,
   subsessionsExpansionKey,
@@ -1169,7 +1170,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             ),
           ),
         );
-  const threads = useQuietThreadShells();
+  const threads = dedupeClaudeCloudThreads(useQuietThreadShells(), primaryEnvironmentId);
   const routeRowThreadKey =
     routeThreadRef === null
       ? null
