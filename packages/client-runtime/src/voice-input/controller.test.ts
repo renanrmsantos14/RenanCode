@@ -168,7 +168,7 @@ describe("VoiceInputController", () => {
       getTranscriber: () => ({
         prepare: async () =>
           preparedTranscription(async () => {
-            throw new VoiceTranscriptionError(code, code);
+            throw new VoiceTranscriptionError({ code, message: code });
           }),
       }),
     });
