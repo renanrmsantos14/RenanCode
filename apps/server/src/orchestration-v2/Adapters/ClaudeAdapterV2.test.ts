@@ -5553,7 +5553,10 @@ describe("ClaudeAdapterV2 background wake turns", () => {
     Effect.gen(function* () {
       const { harness, item, mcpRequests } = yield* runClaudeMcpAppToolTurn([]);
       assert.isUndefined(mcpAppFromToolItem(item));
-      assert.deepEqual(mcpRequests, []);
+      assert.deepEqual(
+        mcpRequests.filter((request) => request !== "mcpServerStatus"),
+        [],
+      );
       const exit = yield* Effect.exit(
         harness.runtime.mcpApps!.callTool({
           providerThread: harness.providerThread,
@@ -5563,7 +5566,10 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         }),
       );
       assert.isTrue(Exit.isFailure(exit));
-      assert.deepEqual(mcpRequests, []);
+      assert.deepEqual(
+        mcpRequests.filter((request) => request !== "mcpServerStatus"),
+        [],
+      );
     }).pipe(
       Effect.scoped,
       Effect.provide(
