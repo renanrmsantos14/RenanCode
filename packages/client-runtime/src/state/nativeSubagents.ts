@@ -1,4 +1,10 @@
-import type { OrchestrationV2Subagent, ThreadId } from "@t3tools/contracts";
+import type {
+  OrchestrationV2RemoteTaskChild,
+  OrchestrationV2Subagent,
+  ThreadId,
+} from "@t3tools/contracts";
+
+import { threadKey } from "./entities.ts";
 
 export type NativeSubagentRowStatus = "running" | "completed" | "failed" | "cancelled";
 
@@ -56,4 +62,24 @@ export function nativeSubagentRows(
     });
   }
   return rows;
+}
+
+type RemoteTaskRecord = Pick<OrchestrationV2Subagent, "id" | "title" | "status" | "remoteChild">;
+
+export type RemoteTaskRow = RemoteTaskRecord & {
+  readonly remoteChild: OrchestrationV2RemoteTaskChild;
+};
+
+/**
+ * Tasks a thread's agent delegated to linked environments, from its subagent records. One whose
+ * thread there this client already nests under the parent (`nestedKeys`) shows as that thread.
+ */
+export function remoteTaskRows(
+  subagents: ReadonlyArray<RemoteTaskRecord>,
+  nestedKeys: ReadonlySet<string>,
+): RemoteTaskRow[] {
+  return subagents.filter(
+    (subagent): subagent is RemoteTaskRow =>
+      subagent.remoteChild !== undefined && !nestedKeys.has(threadKey(subagent.remoteChild)),
+  );
 }

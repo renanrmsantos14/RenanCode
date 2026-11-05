@@ -1,7 +1,9 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import {
   nativeSubagentRows,
+  remoteTaskRows,
   type NativeSubagentRow,
+  type RemoteTaskRow,
 } from "@t3tools/client-runtime/state/nativeSubagents";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import {
@@ -13,10 +15,12 @@ import * as Option from "effect/Option";
 import { useEffect } from "react";
 
 import { appAtomRegistry } from "~/rpc/atomRegistry";
+import { useDelegatedUnderParent } from "~/state/entities";
 import { threadFamilies, useEnvironmentThread } from "~/state/threads";
 import { resolveSidebarRowThreadId } from "../Sidebar.logic";
 
 const NO_NATIVE_PARENTS: ReadonlyMap<string, string> = new Map();
+const NO_REMOTE_TASKS: ReadonlyMap<string, readonly RemoteTaskRow[]> = new Map();
 
 function nativeSubagentRuntime(
   thread: EnvironmentThreadShell,
@@ -43,6 +47,8 @@ export function useSidebarNativeSubagents(
 ): {
   readonly threads: readonly EnvironmentThreadShell[];
   readonly nativeParentKeyByChild: ReadonlyMap<string, string>;
+  /** Tasks the owner delegated to linked environments, by the owner's thread key. */
+  readonly remoteTasksByParent: ReadonlyMap<string, readonly RemoteTaskRow[]>;
 } {
   const environmentId = routeThreadRef?.environmentId ?? null;
   const routeThreadId = routeThreadRef?.threadId ?? null;
@@ -63,7 +69,14 @@ export function useSidebarNativeSubagents(
   const ownerSubagents = Option.getOrNull(
     useEnvironmentThread(environmentId, ownerThreadId).data,
   )?.subagents;
+  const delegatedUnderParent = useDelegatedUnderParent();
   const rows = ownerSubagents === undefined ? null : nativeSubagentRows(ownerSubagents);
+  const remoteTasks =
+    ownerSubagents === undefined ? [] : remoteTaskRows(ownerSubagents, delegatedUnderParent);
+  const remoteTasksByParent =
+    remoteTasks.length === 0 || environmentId === null || ownerThreadId === null
+      ? NO_REMOTE_TASKS
+      : new Map([[scopedThreadKey(scopeThreadRef(environmentId, ownerThreadId)), remoteTasks]]);
   const mountsFamily = environmentId !== null && ownerThreadId !== null && (rows?.size ?? 0) > 0;
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps the owner's family (idle subagent shells the server leaves out) merged into the shell while its subagents are listed
@@ -73,7 +86,7 @@ export function useSidebarNativeSubagents(
   }, [mountsFamily, environmentId, ownerThreadId]);
 
   if (rows === null || rows.size === 0 || environmentId === null) {
-    return { threads, nativeParentKeyByChild: NO_NATIVE_PARENTS };
+    return { threads, nativeParentKeyByChild: NO_NATIVE_PARENTS, remoteTasksByParent };
   }
   const keyOf = (threadId: ThreadId) => scopedThreadKey(scopeThreadRef(environmentId, threadId));
   const nativeParentKeyByChild = new Map<string, string>();
@@ -86,5 +99,5 @@ export function useSidebarNativeSubagents(
     nativeParentKeyByChild.set(keyOf(thread.id), keyOf(row.parentThreadId));
     return { ...thread, runtime: nativeSubagentRuntime(thread, row) };
   });
-  return { threads: overlaid, nativeParentKeyByChild };
+  return { threads: overlaid, nativeParentKeyByChild, remoteTasksByParent };
 }
