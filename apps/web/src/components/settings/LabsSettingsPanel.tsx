@@ -24,6 +24,7 @@ export function LabsSettingsPanel() {
         {/* Clerk is only mounted when this build has T3 Connect. */}
         {hasCloudPublicConfig() ? <GuestLinksRowWithSignIn /> : <GuestLinksRow />}
         <LinkedEnvironmentsRow />
+        <ClaudeCloudSessionsRow />
         <SimlockHostsRow />
       </SettingsSection>
       <LegacyFeaturesSection />
@@ -126,6 +127,29 @@ function GuestLinksRow() {
           checked={settings.guestSharingEnabled}
           onCheckedChange={(checked) => updateSettings({ guestSharingEnabled: Boolean(checked) })}
           aria-label="Guest links"
+        />
+      }
+    />
+  );
+}
+
+function ClaudeCloudSessionsRow() {
+  const settings = useScopedSettings();
+  const updateSettings = useUpdateScopedSettings();
+  return (
+    <SettingsRow
+      serverScoped
+      {...searchableSetting("claude-cloud-sessions-beta")}
+      settingKeys={["claudeCloudSessionsEnabled"]}
+      description="Show this machine's Claude Code cloud sessions (claude.ai/code) in the project of the same GitHub repository, read-only. Uses the Claude CLI login here and an undocumented API that may change."
+      control={
+        <ScopedSwitch
+          settingKeys={["claudeCloudSessionsEnabled"]}
+          checked={settings.claudeCloudSessionsEnabled}
+          onCheckedChange={(checked) =>
+            updateSettings({ claudeCloudSessionsEnabled: Boolean(checked) })
+          }
+          aria-label="Claude cloud sessions"
         />
       }
     />
