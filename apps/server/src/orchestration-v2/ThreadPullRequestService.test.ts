@@ -479,6 +479,7 @@ describe("ThreadPullRequestServiceV2 reads", () => {
                 closedAt: null,
                 mergedAt: null,
                 headSha: null,
+                updatedAt: null,
                 repositoryKey: "github.com/contributor/project",
               }),
           }),
