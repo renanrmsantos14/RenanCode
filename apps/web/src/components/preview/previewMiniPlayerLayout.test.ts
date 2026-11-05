@@ -72,6 +72,22 @@ describe("resolvePreviewMiniPlayerFrame", () => {
 describe("resizePreviewMiniPlayer", () => {
   const start = { x: 300, y: 200, width: 320, height: 200 };
 
+  it("frees edges from the aspect ratio but keeps corners proportional", () => {
+    const resize = (direction: "west" | "north" | "southeast") =>
+      resizePreviewMiniPlayer({
+        start,
+        direction,
+        delta: { x: -40, y: -40 },
+        source,
+        container,
+        freeEdges: true,
+      });
+    expect(resize("west")).toEqual({ x: 260, y: 200, width: 360, height: 200 });
+    expect(resize("north")).toEqual({ x: 300, y: 160, width: 320, height: 240 });
+    const corner = resize("southeast");
+    expect(corner.width / corner.height).toBeCloseTo(source.width / source.height, 1);
+  });
+
   it("does not jump when corner motion crosses opposing dominant axes", () => {
     const frames = [-99, -100, -101].map((y) =>
       resizePreviewMiniPlayer({

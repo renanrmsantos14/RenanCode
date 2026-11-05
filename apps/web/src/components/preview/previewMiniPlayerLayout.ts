@@ -268,6 +268,8 @@ export function resizePreviewMiniPlayer(input: {
   readonly source: PreviewMiniPlayerSize;
   readonly container: PreviewMiniPlayerSize;
   readonly obstacles?: PreviewMiniPlayerObstacles;
+  /** Edges set width and height independently; corners keep the source aspect ratio. */
+  readonly freeEdges?: boolean;
 }): PreviewMiniPlayerFrame {
   const {
     start,
@@ -276,6 +278,7 @@ export function resizePreviewMiniPlayer(input: {
     source,
     container,
     obstacles = NO_PREVIEW_MINI_PLAYER_OBSTACLES,
+    freeEdges = false,
   } = input;
   const east = direction.includes("east");
   const west = direction.includes("west");
@@ -311,12 +314,20 @@ export function resizePreviewMiniPlayer(input: {
       : horizontal
         ? desiredWidth
         : desiredHeight * aspectRatio;
-  const size = fitPreviewMiniPlayerWidth(
-    desired,
-    source,
-    max,
-    Math.min(start.width, minimumPreviewMiniPlayerWidth(source)),
-  );
+  const clampAxis = (value: number, min: number, limit: number) =>
+    Math.round(Math.max(Math.min(value, Math.max(1, limit)), Math.min(min, limit)));
+  const size =
+    freeEdges && horizontal !== vertical
+      ? {
+          width: clampAxis(desiredWidth, PREVIEW_MINI_PLAYER_MIN_SIZE.width, max.width),
+          height: clampAxis(desiredHeight, PREVIEW_MINI_PLAYER_MIN_SIZE.height, max.height),
+        }
+      : fitPreviewMiniPlayerWidth(
+          desired,
+          source,
+          max,
+          Math.min(start.width, minimumPreviewMiniPlayerWidth(source)),
+        );
   const position = clampPreviewMiniPlayerPosition(
     { x: west ? right - size.width : start.x, y: north ? bottom - size.height : start.y },
     container,
