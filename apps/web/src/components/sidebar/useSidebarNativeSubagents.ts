@@ -17,6 +17,7 @@ import { Atom } from "effect/reactivity";
 import { useEffect } from "react";
 
 import { appAtomRegistry } from "~/rpc/atomRegistry";
+import { useClientSettings } from "~/hooks/useSettings";
 import { useDelegatedUnderParent } from "~/state/entities";
 import {
   nativeSubagentParentAtom,
@@ -77,6 +78,8 @@ export function useSidebarNativeSubagents(
   );
 
   const delegatedUnderParent = useDelegatedUnderParent();
+  const showNativeSubagents =
+    useClientSettings((s) => s.sidebarTreeChildren) === "subsessions_and_subagents";
 
   const keyOf = (environmentId: EnvironmentId, threadId: ThreadId) =>
     scopedThreadKey(scopeThreadRef(environmentId, threadId));
@@ -91,6 +94,7 @@ export function useSidebarNativeSubagents(
   const nativeParentKeyByChild = new Map<string, string>();
   const familyOwners: Array<[EnvironmentId, ThreadId]> = [];
   owners.forEach((owner, index) => {
+    if (!showNativeSubagents) return;
     const rows = nativeSubagentRows(records[index] ?? []);
     if (rows.size === 0) return;
     familyOwners.push([owner.environmentId, owner.threadId]);

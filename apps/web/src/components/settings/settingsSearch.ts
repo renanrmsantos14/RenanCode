@@ -461,6 +461,30 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["hide fold running monitoring threads inbox sidebar shelf"],
   },
   {
+    id: "tree-children",
+    title: "Nested threads",
+    to: "/settings/general",
+    searchTerms: ["subsessions subagents children hide show sidebar tree"],
+  },
+  {
+    id: "tree-indent",
+    title: "Nested thread indent",
+    to: "/settings/general",
+    searchTerms: ["subsessions subagents indentation spacing sidebar tree"],
+  },
+  {
+    id: "tree-line-color",
+    title: "Tree line color",
+    to: "/settings/general",
+    searchTerms: ["subsessions subagents branch colour sidebar"],
+  },
+  {
+    id: "tree-line-width",
+    title: "Tree line width",
+    to: "/settings/general",
+    searchTerms: ["subsessions subagents branch thickness thick sidebar"],
+  },
+  {
     id: "boring-sidebar",
     title: "Boring sidebar (group by project)",
     to: "/settings/labs",

@@ -23,6 +23,10 @@ import {
   type ResponseStreamingMode,
   type QuitConfirmationMode,
   SidebarProjectSortOrder,
+  SidebarTreeChildren,
+  SidebarTreeIndent,
+  SidebarTreeLineColor,
+  SidebarTreeLineWidth,
 } from "@t3tools/contracts/settings";
 import { desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";
 import { createModelSelection } from "@t3tools/shared/model";
@@ -128,6 +132,27 @@ const SIDEBAR_PROJECT_SORT_ORDER_LABELS: Record<SidebarProjectSortOrder, string>
   manual: "Manual",
 };
 const isSidebarProjectSortOrder = Schema.is(SidebarProjectSortOrder);
+
+const SIDEBAR_TREE_CHILDREN_LABELS: Record<SidebarTreeChildren, string> = {
+  subsessions_and_subagents: "Subsessions and subagents",
+  subsessions: "Subsessions only",
+};
+const SIDEBAR_TREE_LINE_COLOR_LABELS: Record<SidebarTreeLineColor, string> = {
+  border: "Default",
+  muted: "Muted",
+  primary: "Accent",
+  info: "Blue",
+  success: "Green",
+  warning: "Amber",
+};
+const SIDEBAR_TREE_INDENT_LABELS: Record<SidebarTreeIndent, string> = {
+  0: "None",
+  8: "Small",
+  16: "Medium",
+  24: "Large",
+};
+const isSidebarTreeChildren = Schema.is(SidebarTreeChildren);
+const isSidebarTreeLineColor = Schema.is(SidebarTreeLineColor);
 
 const TIMESTAMP_FORMAT_LABELS = {
   locale: "System default",
@@ -491,6 +516,18 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.sidebarWorkingShelfEnabled !== DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled
       ? ["Working section"]
       : []),
+    ...(settings.sidebarTreeChildren !== DEFAULT_UNIFIED_SETTINGS.sidebarTreeChildren
+      ? ["Nested threads"]
+      : []),
+    ...(settings.sidebarTreeIndent !== DEFAULT_UNIFIED_SETTINGS.sidebarTreeIndent
+      ? ["Nested thread indent"]
+      : []),
+    ...(settings.sidebarTreeLineColor !== DEFAULT_UNIFIED_SETTINGS.sidebarTreeLineColor
+      ? ["Tree line color"]
+      : []),
+    ...(settings.sidebarTreeLineWidth !== DEFAULT_UNIFIED_SETTINGS.sidebarTreeLineWidth
+      ? ["Tree line width"]
+      : []),
     ...(settings.sidebarAutoSettleAfterDays !== DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays
       ? ["Auto-settle inactive threads"]
       : []),
@@ -669,6 +706,10 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarProjectGroupingMode: DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode,
       sidebarProjectSortOrder: DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder,
       sidebarWorkingShelfEnabled: DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled,
+      sidebarTreeChildren: DEFAULT_UNIFIED_SETTINGS.sidebarTreeChildren,
+      sidebarTreeIndent: DEFAULT_UNIFIED_SETTINGS.sidebarTreeIndent,
+      sidebarTreeLineColor: DEFAULT_UNIFIED_SETTINGS.sidebarTreeLineColor,
+      sidebarTreeLineWidth: DEFAULT_UNIFIED_SETTINGS.sidebarTreeLineWidth,
       sidebarAutoSettleAfterDays: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays,
       sidebarAutoSettleKeepPullRequests: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleKeepPullRequests,
       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
@@ -923,6 +964,150 @@ export function GeneralSettingsPanel() {
               }
               aria-label="Working section"
             />
+          }
+        />
+        <SettingsRow
+          {...searchableSetting("tree-children")}
+          description="Choose which threads nest under their parent in the sidebar."
+          resetAction={
+            settings.sidebarTreeChildren !== DEFAULT_UNIFIED_SETTINGS.sidebarTreeChildren ? (
+              <SettingResetButton
+                label="nested threads"
+                onClick={() =>
+                  updateSettings({
+                    sidebarTreeChildren: DEFAULT_UNIFIED_SETTINGS.sidebarTreeChildren,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={String(settings.sidebarTreeChildren)}
+              onValueChange={(value) => {
+                if (isSidebarTreeChildren(value)) updateSettings({ sidebarTreeChildren: value });
+              }}
+            >
+              <SelectTrigger size="sm" className="w-full sm:w-44" aria-label="Nested threads">
+                <SelectValue>
+                  {SIDEBAR_TREE_CHILDREN_LABELS[settings.sidebarTreeChildren]}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {SidebarTreeChildren.literals.map((option) => (
+                  <SelectItem hideIndicator key={option} value={String(option)}>
+                    {SIDEBAR_TREE_CHILDREN_LABELS[option]}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+        />
+        <SettingsRow
+          {...searchableSetting("tree-indent")}
+          description="How far nested threads step in under their parent."
+          resetAction={
+            settings.sidebarTreeIndent !== DEFAULT_UNIFIED_SETTINGS.sidebarTreeIndent ? (
+              <SettingResetButton
+                label="nested thread indent"
+                onClick={() =>
+                  updateSettings({ sidebarTreeIndent: DEFAULT_UNIFIED_SETTINGS.sidebarTreeIndent })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={String(settings.sidebarTreeIndent)}
+              onValueChange={(value) => {
+                const indent = SidebarTreeIndent.literals.find((v) => String(v) === value);
+                if (indent !== undefined) updateSettings({ sidebarTreeIndent: indent });
+              }}
+            >
+              <SelectTrigger size="sm" className="w-full sm:w-44" aria-label="Nested thread indent">
+                <SelectValue>{SIDEBAR_TREE_INDENT_LABELS[settings.sidebarTreeIndent]}</SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {SidebarTreeIndent.literals.map((option) => (
+                  <SelectItem hideIndicator key={option} value={String(option)}>
+                    {SIDEBAR_TREE_INDENT_LABELS[option]}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+        />
+        <SettingsRow
+          {...searchableSetting("tree-line-color")}
+          description="Color of the line connecting nested threads to their parent. Follows your theme."
+          resetAction={
+            settings.sidebarTreeLineColor !== DEFAULT_UNIFIED_SETTINGS.sidebarTreeLineColor ? (
+              <SettingResetButton
+                label="tree line color"
+                onClick={() =>
+                  updateSettings({
+                    sidebarTreeLineColor: DEFAULT_UNIFIED_SETTINGS.sidebarTreeLineColor,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={String(settings.sidebarTreeLineColor)}
+              onValueChange={(value) => {
+                if (isSidebarTreeLineColor(value)) updateSettings({ sidebarTreeLineColor: value });
+              }}
+            >
+              <SelectTrigger size="sm" className="w-full sm:w-44" aria-label="Tree line color">
+                <SelectValue>
+                  {SIDEBAR_TREE_LINE_COLOR_LABELS[settings.sidebarTreeLineColor]}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {SidebarTreeLineColor.literals.map((option) => (
+                  <SelectItem hideIndicator key={option} value={String(option)}>
+                    {SIDEBAR_TREE_LINE_COLOR_LABELS[option]}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+        />
+        <SettingsRow
+          {...searchableSetting("tree-line-width")}
+          description="Thickness of the line connecting nested threads to their parent."
+          resetAction={
+            settings.sidebarTreeLineWidth !== DEFAULT_UNIFIED_SETTINGS.sidebarTreeLineWidth ? (
+              <SettingResetButton
+                label="tree line width"
+                onClick={() =>
+                  updateSettings({
+                    sidebarTreeLineWidth: DEFAULT_UNIFIED_SETTINGS.sidebarTreeLineWidth,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={String(settings.sidebarTreeLineWidth)}
+              onValueChange={(value) => {
+                const width = SidebarTreeLineWidth.literals.find((v) => String(v) === value);
+                if (width !== undefined) updateSettings({ sidebarTreeLineWidth: width });
+              }}
+            >
+              <SelectTrigger size="sm" className="w-full sm:w-44" aria-label="Tree line width">
+                <SelectValue>{`${settings.sidebarTreeLineWidth}px`}</SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {SidebarTreeLineWidth.literals.map((option) => (
+                  <SelectItem hideIndicator key={option} value={String(option)}>
+                    {option}px
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
           }
         />
       </SettingsSection>
