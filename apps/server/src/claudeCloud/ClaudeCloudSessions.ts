@@ -54,8 +54,8 @@ import {
 } from "./ClaudeCloudHttp.ts";
 
 const IDLE_INTERVAL = Duration.seconds(60);
-// Covers a cold provider CLI start; the client classifies while the user types.
-const PLACEMENT_TIMEOUT = Duration.seconds(20);
+// Past this the task runs locally; the client classifies while the user types to stay ahead of it.
+const PLACEMENT_TIMEOUT = Duration.seconds(15);
 const BUSY_INTERVAL = Duration.seconds(5);
 const SESSION_PAGE_LIMIT = 50;
 const EVENT_PAGE_LIMIT = 200;

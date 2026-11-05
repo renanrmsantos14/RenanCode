@@ -166,7 +166,7 @@ function ClaudeCloudAutoRoutingRow() {
       serverScoped
       {...searchableSetting("claude-cloud-auto-routing-beta")}
       settingKeys={["claudeCloudAutoRouting"]}
-      description="New Claude drafts on this machine go to a Claude cloud session when the task does not need this machine (its running services, devices, uncommitted files or attachments). A short classification runs on the text generation model as you type; unpushed commits on the branch are pushed when the task goes to the cloud. Pick a machine in Run on to keep a task local."
+      description="With Run on set to Auto, new Claude drafts go to a Claude cloud session when the task does not need this machine (its running services, devices, uncommitted files or attachments). A short classification runs on the text generation model as you type, and sending waits for it for up to 15 seconds before running on a machine as usual. Unpushed commits on the branch are pushed when the task goes to the cloud."
       control={
         <ScopedSwitch
           settingKeys={["claudeCloudAutoRouting"]}

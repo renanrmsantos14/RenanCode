@@ -294,9 +294,8 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
     !envLocked &&
     environmentById.get(draftThread.environmentId)?.serverConfig?.settings
       .claudeCloudAutoRouting === true;
-  // A machine or "Claude cloud" picked in Run on overrides the automatic choice.
-  const taskRoutingAuto =
-    taskRoutingOffered && draftThread.environmentSelection !== "manual" && !claudeCloudSelected;
+  // Only an Auto choice, including the automatic load-balanced default, may go to the cloud.
+  const taskRoutingAuto = taskRoutingOffered && draftThread.environmentSelection === "auto";
   const taskRoutingActive =
     taskRoutingAuto &&
     selectedProvider === "claudeAgent" &&
