@@ -29,18 +29,37 @@ describe("Claude cloud session mirroring", () => {
     const repository = cloudSessionRepository(session());
     expect(repository).toEqual({ owner: "owner", name: "repo" });
     expect(cloudSessionRepository(session({ config: { sources: [] } }))).toBeNull();
-    const project = (id: string, owner: string, archivedAt: string | null = null) =>
+    const project = (
+      id: string,
+      remoteUrl: string,
+      originUrl?: string,
+      archivedAt: string | null = null,
+    ) =>
       ({
         id,
         archivedAt,
-        repositoryIdentity: { owner, name: "repo" },
+        repositoryIdentity: {
+          locator: { remoteUrl },
+          ...(originUrl === undefined ? {} : { origin: { remoteUrl: originUrl } }),
+        },
       }) as unknown as OrchestrationProjectShell;
     expect(
       projectForRepository(
-        [project("archived", "OWNER", "2026-01-01T00:00:00Z"), project("live", "OWNER")],
+        [
+          project("archived", "git@github.com:OWNER/repo.git", undefined, "2026-01-01T00:00:00Z"),
+          project("other", "https://github.com/someone/else"),
+          project("live", "https://github.com/owner/repo"),
+        ],
         repository!,
       )?.id,
     ).toBe("live");
+    // A fork's identity points at upstream; the session runs on the fork's origin.
+    expect(
+      projectForRepository(
+        [project("fork", "https://github.com/upstream/repo", "https://github.com/Owner/Repo.git")],
+        repository!,
+      )?.id,
+    ).toBe("fork");
   });
 
   it("keeps user prompts and assistant text, not tool traffic or subagents", () => {

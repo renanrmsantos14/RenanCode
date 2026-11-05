@@ -119,28 +119,37 @@ function isCloudSessionBusy(session: CloudSession): boolean {
   return session.worker_status === "running";
 }
 
+function gitHubRepository(url: string | undefined): CloudRepository | null {
+  const match =
+    url === undefined ? null : /github\.com[/:]([^/]+)\/([^/]+?)(?:\.git)?\/?$/i.exec(url);
+  return match?.[1] && match[2]
+    ? { owner: match[1].toLowerCase(), name: match[2].toLowerCase() }
+    : null;
+}
+
 export function cloudSessionRepository(session: CloudSession): CloudRepository | null {
   for (const source of session.config?.sources ?? []) {
-    if (source.type !== "git_repository" || source.url === undefined) continue;
-    const match = /github\.com[/:]([^/]+)\/([^/]+?)(?:\.git)?\/?$/i.exec(source.url);
-    if (match?.[1] && match[2]) {
-      return { owner: match[1].toLowerCase(), name: match[2].toLowerCase() };
-    }
+    if (source.type !== "git_repository") continue;
+    const repository = gitHubRepository(source.url);
+    if (repository !== null) return repository;
   }
   return null;
 }
 
+type MatchableProject = Pick<OrchestrationProjectShell, "id" | "archivedAt" | "repositoryIdentity">;
+
+/** A fork's identity prefers `upstream`, while cloud sessions run on `origin`, so either matches. */
 export function projectForRepository(
-  projects: ReadonlyArray<OrchestrationProjectShell>,
+  projects: ReadonlyArray<MatchableProject>,
   repository: CloudRepository,
-): OrchestrationProjectShell | undefined {
+): MatchableProject | undefined {
   return projects.find((project) => {
     const identity = project.repositoryIdentity;
-    return (
-      project.archivedAt == null &&
-      identity?.owner?.toLowerCase() === repository.owner &&
-      identity.name?.toLowerCase() === repository.name
-    );
+    if (project.archivedAt != null || identity == null) return false;
+    return [identity.locator.remoteUrl, identity.origin?.remoteUrl].some((url) => {
+      const candidate = gitHubRepository(url);
+      return candidate?.owner === repository.owner && candidate.name === repository.name;
+    });
   });
 }
 
@@ -278,6 +287,7 @@ const make = Effect.gen(function* () {
   const configDir = yield* resolveClaudeHomePath({ homePath: "" });
   // Last event sequence written per session; rebuilt from the projection after a restart.
   const syncedSequence = new Map<string, number>();
+  const projectBySession = new Map<string, ProjectId>();
 
   // Read on every request so the CLI stays the only writer and refresher of the token.
   const authHeaders = Effect.gen(function* () {
@@ -454,15 +464,21 @@ const make = Effect.gen(function* () {
       CloudSessionPage,
       "list-sessions",
     );
-    const projectShells = yield* projects.listShells();
+    const sessions = page.data.filter(isMirroredCloudSession);
+    // listPage reads the git remote when the enrichment cache is cold; listShells would not.
+    const projectList = sessions.some((session) => !projectBySession.has(session.id))
+      ? (yield* projects.listPage({ cursor: 0, limit: 1000 })).projects
+      : [];
     let busy = false;
-    for (const session of page.data.filter(isMirroredCloudSession)) {
+    for (const session of sessions) {
       const repository = cloudSessionRepository(session);
-      const project =
-        repository === null ? undefined : projectForRepository(projectShells, repository);
-      if (project === undefined) continue;
+      const projectId =
+        projectBySession.get(session.id) ??
+        (repository === null ? undefined : projectForRepository(projectList, repository)?.id);
+      if (projectId === undefined) continue;
+      projectBySession.set(session.id, projectId);
       busy ||= isCloudSessionBusy(session);
-      yield* syncSession(session, project.id).pipe(
+      yield* syncSession(session, projectId).pipe(
         Effect.catch((cause) =>
           Effect.logWarning("Could not sync a Claude cloud session", {
             sessionId: session.id,
