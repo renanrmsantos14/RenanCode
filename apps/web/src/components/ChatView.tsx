@@ -1218,9 +1218,15 @@ export default function ChatView(props: ChatViewProps) {
     logicalProjectEnvironments.find(
       (environment) => environment.environmentId === activeThread?.environmentId,
     ) ?? null;
+  // A new draft can also go to a Claude cloud session, so the picker shows with one machine too.
+  const claudeCloudOffered =
+    draftId !== null &&
+    activeThread !== undefined &&
+    environmentById.get(activeThread.environmentId)?.serverConfig?.settings
+      .claudeCloudSessionsEnabled === true;
   const showComposerEnvironmentIndicator = shouldShowEnvironmentIndicator({
     activeEnvironment: activeEnvironmentOption,
-    canPickEnvironment: hasMultipleEnvironments,
+    canPickEnvironment: hasMultipleEnvironments || claudeCloudOffered,
   });
 
   const { handlePreparedPullRequestThreadStable, openPullRequestDialogStable } =

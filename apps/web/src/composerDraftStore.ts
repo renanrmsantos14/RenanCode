@@ -1715,7 +1715,8 @@ function normalizePersistedDraftThreads(
         envMode: normalizeDraftThreadEnvMode(candidateDraftThread.envMode, normalizedWorktreePath),
         startFromOrigin,
         ...(candidateDraftThread.environmentSelection === "manual" ||
-        candidateDraftThread.environmentSelection === "auto"
+        candidateDraftThread.environmentSelection === "auto" ||
+        candidateDraftThread.environmentSelection === "claude-cloud"
           ? { environmentSelection: candidateDraftThread.environmentSelection }
           : {}),
         ...(typeof candidateDraftThread.loadBalancedEnvironmentId === "string" &&

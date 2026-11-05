@@ -686,7 +686,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   // matching the strip visibility ChatView computes from the same inputs.
   const showEnvironmentIndicator = shouldShowEnvironmentIndicator({
     activeEnvironment: activeEnvironmentOption,
-    canPickEnvironment: hasMultipleEnvironments,
+    canPickEnvironment: hasMultipleEnvironments || onClaudeCloud !== undefined,
   });
   const [attachStrip, labelsOverflow] = useLabelsOverflow();
 

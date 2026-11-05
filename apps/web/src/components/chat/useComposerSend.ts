@@ -503,7 +503,10 @@ export function useComposerSend(input: ComposerSendInput) {
           projectId: draftThread.projectId,
           messageId: newMessageId(),
           text,
-          ...(sendCtx?.selectedModel ? { model: sendCtx.selectedModel } : {}),
+          // Only a Claude model means anything to the cloud; otherwise it uses its default.
+          ...(sendCtx?.selectedProvider === "claudeAgent" && sendCtx.selectedModel
+            ? { model: sendCtx.selectedModel }
+            : {}),
         },
       });
       sendInFlightRef.current = false;
