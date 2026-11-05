@@ -12,7 +12,13 @@ import {
   createThreadEnvironmentAtoms,
   createThreadFamilyAtoms,
 } from "@t3tools/client-runtime/state/threads";
-import type { EnvironmentId, OrchestrationV2ThreadShell, ThreadId } from "@t3tools/contracts";
+import {
+  isProviderNativeSubagentThread,
+  type EnvironmentId,
+  type OrchestrationV2ThreadProjection,
+  type OrchestrationV2ThreadShell,
+  type ThreadId,
+} from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/reactivity";
 
@@ -64,6 +70,54 @@ export function useEnvironmentThread(
   const state = AsyncResult.getOrElse(result, () => EMPTY_ENVIRONMENT_THREAD_STATE);
   return state;
 }
+
+const NO_SUBAGENT_RECORDS: OrchestrationV2ThreadProjection["subagents"] = [];
+const threadKeyOf = (environmentId: EnvironmentId, threadId: ThreadId) =>
+  JSON.stringify([environmentId, threadId]);
+const threadDetail = (
+  get: Atom.AtomContext,
+  environmentId: EnvironmentId,
+  threadId: ThreadId,
+): OrchestrationV2ThreadProjection | null =>
+  Option.getOrNull(
+    AsyncResult.getOrElse(
+      get(environmentThreads.stateAtom(environmentId, threadId)),
+      () => EMPTY_ENVIRONMENT_THREAD_STATE,
+    ).data,
+  );
+
+// The sidebar reads only these fields of a thread's detail, so streamed items do not re-render it.
+const threadSubagentRecordsAtom = Atom.family((key: string) => {
+  const [environmentId, threadId] = JSON.parse(key) as [EnvironmentId, ThreadId];
+  return Atom.make(
+    (get) => threadDetail(get, environmentId, threadId)?.subagents ?? NO_SUBAGENT_RECORDS,
+  ).pipe(Atom.withLabel(`web-thread-subagent-records:${key}`));
+});
+
+/** The parent a provider-native subagent's detail names, or null; reading it holds the detail open. */
+export const nativeSubagentParentAtom = Atom.family((key: string) => {
+  const [environmentId, threadId] = JSON.parse(key) as [EnvironmentId, ThreadId];
+  return Atom.make((get): ThreadId | null => {
+    const thread = threadDetail(get, environmentId, threadId)?.thread;
+    return thread !== undefined && isProviderNativeSubagentThread(thread)
+      ? thread.lineage.parentThreadId
+      : null;
+  }).pipe(Atom.withLabel(`web-native-subagent-parent:${key}`));
+});
+
+/** Subagent records of each thread in `key`, a JSON list of [environmentId, threadId] pairs. */
+export const subagentRecordsOfThreadsAtom = Atom.family((key: string) => {
+  const refs = JSON.parse(key) as ReadonlyArray<[EnvironmentId, ThreadId]>;
+  let previous: ReadonlyArray<OrchestrationV2ThreadProjection["subagents"]> = [];
+  return Atom.make((get) => {
+    const next = refs.map(([environmentId, threadId]) =>
+      get(threadSubagentRecordsAtom(threadKeyOf(environmentId, threadId))),
+    );
+    if (arrayElementsEqual(previous, next)) return previous;
+    previous = next;
+    return next;
+  }).pipe(Atom.withLabel(`web-subagent-records-of-threads:${key}`));
+});
 
 const isRunning = (status: string) =>
   status === "preparing" || status === "queued" || status === "starting" || status === "running";

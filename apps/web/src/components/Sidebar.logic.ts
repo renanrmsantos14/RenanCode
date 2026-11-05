@@ -574,6 +574,94 @@ export async function deleteSelectedThreadEntries<
 
 const NO_NATIVE_PARENTS: ReadonlyMap<string, string> = new Map();
 
+const LIVE_RUNTIME_STATUSES: ReadonlySet<string> = new Set([
+  "preparing",
+  "queued",
+  "starting",
+  "running",
+  "waiting",
+]);
+// Each owner holds a detail stream open; running threads already keep theirs.
+const MAX_LIVE_SUBSESSION_OWNERS = 8;
+
+type SubagentOwnerThread = SubsessionNestingThread & {
+  readonly runtime: Pick<NonNullable<SidebarThreadSummary["runtime"]>, "status"> | null;
+};
+
+/**
+ * Threads whose subagent records the sidebar reads: the open thread and each thread above it up
+ * to its listed row, then the running subsessions under that row. Native subagents keep no
+ * records; `routeNativeParent` names the open one's parent when its shell is not loaded.
+ */
+export function sidebarSubagentOwners(input: {
+  readonly route: { readonly environmentId: EnvironmentId; readonly threadId: ThreadId };
+  readonly routeNativeParent: ThreadId | null;
+  readonly threads: readonly SubagentOwnerThread[];
+}): Array<{ readonly environmentId: EnvironmentId; readonly threadId: ThreadId }> {
+  const keyOf = (environmentId: EnvironmentId, threadId: ThreadId) =>
+    scopedThreadKey(scopeThreadRef(environmentId, threadId));
+  const byKey = new Map(
+    input.threads.map((thread) => [keyOf(thread.environmentId, thread.id), thread] as const),
+  );
+  const owners: Array<{ readonly environmentId: EnvironmentId; readonly threadId: ThreadId }> = [];
+  const ownerKeys = new Set<string>();
+  const addOwner = (environmentId: EnvironmentId, threadId: ThreadId) => {
+    const key = keyOf(environmentId, threadId);
+    if (ownerKeys.has(key)) return;
+    ownerKeys.add(key);
+    owners.push({ environmentId, threadId });
+  };
+
+  let anchorKey = keyOf(input.route.environmentId, input.route.threadId);
+  const walked = new Set<string>();
+  let at: { environmentId: EnvironmentId; threadId: ThreadId } | null = input.route;
+  while (at !== null) {
+    const key = keyOf(at.environmentId, at.threadId);
+    if (walked.has(key)) break;
+    walked.add(key);
+    anchorKey = key;
+    const shell = byKey.get(key);
+    if (shell === undefined) {
+      if (at === input.route && input.routeNativeParent !== null) {
+        at = { environmentId: at.environmentId, threadId: input.routeNativeParent };
+        continue;
+      }
+      addOwner(at.environmentId, at.threadId);
+      break;
+    }
+    if (!isProviderNativeSubagentThread(shell)) addOwner(at.environmentId, at.threadId);
+    if (isListedThreadLineage(shell.lineage) || shell.lineage.parentThreadId === null) break;
+    at = { environmentId: at.environmentId, threadId: shell.lineage.parentThreadId };
+  }
+
+  const childrenByParent = new Map<string, SubagentOwnerThread[]>();
+  for (const thread of input.threads) {
+    if (thread.archivedAt !== null) continue;
+    const parent = subsessionParentRef(thread);
+    if (parent === null) continue;
+    const parentKey = keyOf(parent.environmentId, parent.threadId);
+    const siblings = childrenByParent.get(parentKey);
+    if (siblings) siblings.push(thread);
+    else childrenByParent.set(parentKey, [thread]);
+  }
+  let liveOwners = 0;
+  const visited = new Set([anchorKey]);
+  const queue = [anchorKey];
+  while (queue.length > 0 && liveOwners < MAX_LIVE_SUBSESSION_OWNERS) {
+    for (const child of childrenByParent.get(queue.shift()!) ?? []) {
+      const childKey = keyOf(child.environmentId, child.id);
+      if (visited.has(childKey)) continue;
+      visited.add(childKey);
+      queue.push(childKey);
+      if (child.runtime === null || !LIVE_RUNTIME_STATUSES.has(child.runtime.status)) continue;
+      if (liveOwners >= MAX_LIVE_SUBSESSION_OWNERS) break;
+      if (!ownerKeys.has(childKey)) liveOwners += 1;
+      addOwner(child.environmentId, child.id);
+    }
+  }
+  return owners;
+}
+
 export function isSidebarHiddenThread(thread: Pick<SidebarThreadSummary, "lineage">): boolean {
   return !isListedThreadLineage(thread.lineage);
 }
