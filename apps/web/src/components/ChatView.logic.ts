@@ -4,6 +4,7 @@ import {
   deriveThreadRuntime,
 } from "@t3tools/client-runtime/state/thread-execution";
 import { checkpointFileTotals } from "@t3tools/client-runtime/state/thread-checkpoints";
+import { COMPACT_COMMAND_PATTERN } from "@t3tools/client-runtime/state/context-window";
 import { derivePendingBackgroundWork } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import {
   latestUnheldRun,
@@ -836,7 +837,6 @@ export function shouldShowPlanFollowUpPrompt(input: {
 
 // A typed `/compact`, with or without instructions, is already the compaction. Queueing a
 // bare one ahead of it would run an uninstructed compaction first and charge for two.
-const COMPACT_COMMAND_PATTERN = /^\/compact(?:\s|$)/i;
 const isCompactCommand = (text: string) => COMPACT_COMMAND_PATTERN.test(text);
 
 const sessionDismissedBranchMismatchKeys = new Set<string>();
