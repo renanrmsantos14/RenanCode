@@ -5,7 +5,10 @@ import { threadKey as runtimeThreadKey } from "@t3tools/client-runtime/state/ent
 import { subsessionParentRef } from "@t3tools/client-runtime/state/subsessions";
 import { isShownUnderParent } from "@t3tools/client-runtime/state/threads";
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
-import { threadPullRequestSearchTerms } from "@t3tools/shared/threadPullRequests";
+import {
+  threadPullRequestDelivery,
+  threadPullRequestSearchTerms,
+} from "@t3tools/shared/threadPullRequests";
 import * as React from "react";
 import {
   isAtomCommandInterrupted,
@@ -829,7 +832,7 @@ export function resolveSubsessionDot(
   threadKey: string,
 ): "attention" | "failed" | "working" | null {
   const dot = resolveSidebarFolderDot(listSubsessionDescendants(subsessionsByParent, threadKey));
-  return dot === "unread" ? null : dot;
+  return dot === "unread" || dot === "ready" ? null : dot;
 }
 
 /**
@@ -1140,8 +1143,12 @@ export function resolveSidebarThreadStatus(thread: SidebarThreadStatusInput): Si
  * hidden threads. Waiting threads stay quiet, like their rows.
  */
 export function resolveSidebarFolderDot(
-  threads: ReadonlyArray<ThreadStatusInput & SidebarThreadStatusInput>,
-): "attention" | "failed" | "unread" | "working" | null {
+  threads: ReadonlyArray<
+    ThreadStatusInput &
+      SidebarThreadStatusInput &
+      Partial<Pick<SidebarThreadSummary, "pullRequests">>
+  >,
+): "attention" | "failed" | "ready" | "unread" | "working" | null {
   const statuses = new Set(threads.map(resolveSidebarThreadStatus));
   if (
     statuses.has("input") ||
@@ -1151,13 +1158,29 @@ export function resolveSidebarFolderDot(
   ) {
     return "attention";
   }
-  if (statuses.has("failed")) return "failed";
+  // Ready rows show their pull request's delivery in place of Done, so the dot follows it.
+  const deliveries = new Set(
+    threads.flatMap((thread) =>
+      resolveSidebarThreadStatus(thread) === "ready"
+        ? (threadPullRequestDelivery(thread.pullRequests)?.stage ?? [])
+        : [],
+    ),
+  );
+  if (statuses.has("failed") || deliveries.has("failed")) return "failed";
+  if (deliveries.has("ready")) return "ready";
   // Rows show Done only for ready threads, so the dot follows the same rule.
   const hasUnread = threads.some(
     (thread) => resolveSidebarThreadStatus(thread) === "ready" && hasUnseenCompletion(thread),
   );
   if (hasUnread) return "unread";
-  if (statuses.has("working") || statuses.has("preparing")) return "working";
+  if (
+    statuses.has("working") ||
+    statuses.has("preparing") ||
+    deliveries.has("checks") ||
+    deliveries.has("merge-checks")
+  ) {
+    return "working";
+  }
   return null;
 }
 

@@ -27,6 +27,7 @@ import {
   resolveThreadPullRequestChains,
   type ThreadPullRequestBadge,
   visibleThreadPullRequests,
+  threadPullRequestLinkDelivery,
 } from "@t3tools/client-runtime/thread-pull-requests";
 import { useRender } from "@base-ui/react/use-render";
 import { type ReactNode, type AnimationEvent, type MouseEvent, type ReactElement } from "react";
@@ -56,7 +57,10 @@ import {
   PullRequestGlyph,
   type PullRequestGlyphIcon,
 } from "./pullRequest/pullRequestIcons";
-import { resolvePullRequestState } from "./pullRequest/pullRequestPresentation";
+import {
+  pullRequestDeliveryPresentation,
+  resolvePullRequestState,
+} from "./pullRequest/pullRequestPresentation";
 
 export interface PrStatusIndicator {
   label: string;
@@ -340,6 +344,7 @@ export function ThreadPullRequestsMiniList({
           snapshot === null
             ? null
             : resolvePullRequestState({ state: snapshot.state, isDraft: snapshot.isDraft });
+        const delivery = pullRequestDeliveryPresentation(threadPullRequestLinkDelivery(line.link));
         return (
           <ThreadPullRequestMiniListItem
             key={`${line.link.host}/${line.link.repository}#${line.link.number}`}
@@ -350,9 +355,19 @@ export function ThreadPullRequestsMiniList({
             depth={line.depth}
             onOpenPullRequest={onOpenPullRequest}
           >
-            {line.stack ? (
-              <span className="ml-auto shrink-0 pl-1 text-3xs">
-                {line.stack.kind === "native" ? "stack" : "chain"} · {line.stack.size}
+            {delivery || line.stack ? (
+              <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-1 text-3xs">
+                {delivery ? (
+                  <span className={cn("inline-flex items-center gap-0.5", delivery.toneClassName)}>
+                    <delivery.Icon aria-hidden className="size-2.5" />
+                    {delivery.label}
+                  </span>
+                ) : null}
+                {line.stack ? (
+                  <span>
+                    {line.stack.kind === "native" ? "stack" : "chain"} · {line.stack.size}
+                  </span>
+                ) : null}
               </span>
             ) : null}
           </ThreadPullRequestMiniListItem>

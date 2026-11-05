@@ -905,6 +905,8 @@ export interface GitHubPullRequestSummary {
   readonly changedFiles: number;
   readonly reviewDecision: PullRequestReviewDecision | null;
   readonly checksState: PullRequestChecksState | null;
+  /** Checks on the merge commit in the base branch; null before the merge or with none. */
+  readonly mergeCommitChecksState: PullRequestChecksState | null;
   readonly mergeability: PullRequestMergeability;
   /** Null means no stack; absent means not requested. */
   readonly stack?: PullRequestStackMembership | null;
@@ -928,6 +930,9 @@ export function toPullRequestSummary(pr: SummarizedPullRequest): GitHubPullReque
     changedFiles: pr.changedFiles,
     reviewDecision: toReviewDecisionWithReviews(pr.reviewDecision, nodesOf(pr.latestReviews)),
     checksState: rollupChecksState(rollupStates(pr.commits)),
+    mergeCommitChecksState: rollupChecksState(
+      rollupStates({ nodes: pr.mergeCommit === null ? [] : [{ commit: pr.mergeCommit }] }),
+    ),
     mergeability: toMergeability(pr.mergeable),
     ...(pr.stack === undefined ? {} : { stack: toStackMembership(pr) ?? null }),
   };

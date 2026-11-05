@@ -91,6 +91,10 @@ import { ThreadSearchMatchExcerpt } from "./thread-search-match";
 import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
 import { PullRequestGlyph } from "../pull-requests/pullRequestGlyphs";
 import { pullRequestStatus } from "../pull-requests/pullRequestStatus";
+import {
+  threadPullRequestDelivery,
+  type ThreadPullRequestDelivery,
+} from "@t3tools/client-runtime/thread-pull-requests";
 
 interface StatusLabel {
   readonly label: string;
@@ -148,6 +152,40 @@ const DONE_STATUS_LABEL: StatusLabel = {
   className: "text-adaptive-emerald-700-300",
   iconTintClassName: "accent-adaptive-emerald-700-300",
 };
+
+const DELIVERY_RUNNING = {
+  icon: "clock",
+  className: "text-warning-foreground",
+  iconTintClassName: "accent-warning-foreground",
+} as const;
+const DELIVERY_FAILED = {
+  icon: "exclamationmark.circle",
+  className: "text-danger-foreground",
+  iconTintClassName: "accent-danger-foreground",
+} as const;
+
+/** An idle thread's pull request, while it still runs checks or awaits a merge. */
+function deliveryStatusLabel(delivery: ThreadPullRequestDelivery | null): StatusLabel | null {
+  switch (delivery?.stage) {
+    case "failed":
+      return delivery.reason === "conflict"
+        ? { ...DELIVERY_FAILED, label: "Conflict", icon: PullRequestGlyph.conflicting }
+        : { ...DELIVERY_FAILED, label: delivery.reason === "checks" ? "Checks" : "Deploy" };
+    case "checks":
+      return { ...DELIVERY_RUNNING, label: "Checks" };
+    case "merge-checks":
+      return { ...DELIVERY_RUNNING, label: "Deploy" };
+    case "ready":
+      return {
+        label: "Ready",
+        icon: PullRequestGlyph.merged,
+        className: DONE_STATUS_LABEL.className,
+        iconTintClassName: DONE_STATUS_LABEL.iconTintClassName,
+      };
+    default:
+      return null;
+  }
+}
 
 function ThreadListV2Duration(props: { readonly startedAt: string | null }) {
   const startedAtMs = Date.parse(props.startedAt ?? "");
@@ -839,7 +877,11 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const statusLabel =
     (status === "working" && workingLabel !== undefined && thread.goal?.status === "active"
       ? { ...workingLabel, label: "Goal" }
-      : workingLabel) ?? (isUnread ? DONE_STATUS_LABEL : undefined);
+      : workingLabel) ??
+    (status === "ready"
+      ? deliveryStatusLabel(threadPullRequestDelivery(thread.pullRequests))
+      : null) ??
+    (isUnread ? DONE_STATUS_LABEL : undefined);
   const recede = shouldRecedeThreadRow({ status, selected });
   const isRegeneratingTitle = thread.titleRegeneration != null;
   const rowAccessibilityLabel = `${thread.title}${props.hasQueuedMessages ? ", messages queued to send" : ""}${isRegeneratingTitle ? ", regenerating title" : ""}`;

@@ -136,6 +136,8 @@ export const PullRequestSummaryRepositoryPullRequestPullRequest = Schema.Struct(
   latestReviews: Schema.NullOr(LatestReviewsPullRequestReviewConnection),
   /** A list of commits present in this pull request's head branch not present in the base branch. */
   commits: PullRequestSummaryRepositoryPullRequestCommitsPullRequestCommitConnection,
+  /** The commit that was created when this pull request was merged. */
+  mergeCommit: Schema.NullOr(PullRequestSummaryRepositoryPullRequestCommitsNodesCommitCommit),
   /** The stack this Pull Request belongs to, or null if it is not part of a stack */
   stack: Schema.optionalKey(Schema.NullOr(PullRequestStack)),
   /** The stack entry for this Pull Request, or null if it is not part of a stack */
@@ -160,7 +162,7 @@ export const PullRequestSummary = GraphQL.query("PullRequestSummary", {
       { name: "stacks", body: "Boolean!" }
     ],
     selections: [
-      { name: "repository", body: ["(owner:$", "owner", " name:$", "name", "){pullRequest(number:$", "number", "){number title url state isDraft mergeable reviewDecision additions deletions changedFiles updatedAt mergedAt closedAt headRefName baseRefName author{__typename login avatarUrl...on User{name}}latestReviews(first:20){nodes{state author{__typename login}}}commits(last:1){nodes{commit{statusCheckRollup{state}}}}stack@include(if:$", "stacks", "){number size baseRefName}stackEntry@include(if:$", "stacks", "){position}}}"] }
+      { name: "repository", body: ["(owner:$", "owner", " name:$", "name", "){pullRequest(number:$", "number", "){number title url state isDraft mergeable reviewDecision additions deletions changedFiles updatedAt mergedAt closedAt headRefName baseRefName author{__typename login avatarUrl...on User{name}}latestReviews(first:20){nodes{state author{__typename login}}}commits(last:1){nodes{commit{statusCheckRollup{state}}}}mergeCommit{statusCheckRollup{state}}stack@include(if:$", "stacks", "){number size baseRefName}stackEntry@include(if:$", "stacks", "){position}}}"] }
     ],
     fragments: []
   },

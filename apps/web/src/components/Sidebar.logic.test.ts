@@ -47,7 +47,14 @@ import {
 } from "@t3tools/client-runtime/state/thread-sort";
 import { resolveProjectExpanded } from "../uiStateStore";
 import { threadSearchMatchKey } from "@t3tools/client-runtime/state/thread-search";
-import { EnvironmentId, ProjectId, ProviderInstanceId, RunId, ThreadId } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  ProjectId,
+  ProviderInstanceId,
+  RunId,
+  ThreadId,
+  type ThreadPullRequestSnapshot,
+} from "@t3tools/contracts";
 
 import {
   DEFAULT_INTERACTION_MODE,
@@ -1644,6 +1651,47 @@ describe("resolveSidebarFolderDot", () => {
     expect(resolveSidebarFolderDot([idle, working])).toBe("working");
     expect(resolveSidebarFolderDot([working, unread])).toBe("unread");
     expect(resolveSidebarFolderDot([unread, limited])).toBe("attention");
+
+    // An idle thread's pull request speaks for it, as on its row.
+    const withPullRequest = (snapshot: Partial<ThreadPullRequestSnapshot>) => ({
+      ...idle,
+      pullRequests: [
+        {
+          host: "github.com",
+          repository: "owner/repository",
+          number: 1,
+          url: "https://github.com/owner/repository/pull/1",
+          source: "created" as const,
+          linkedAt: "2026-03-09T10:00:00.000Z",
+          snapshot: {
+            state: "open" as const,
+            title: "Pull request",
+            headBranch: "feature",
+            baseBranch: "main",
+            isDraft: false,
+            updatedAt: "2026-03-09T10:00:00.000Z",
+            syncedAt: "2026-03-09T10:00:00.000Z",
+            ...snapshot,
+          },
+          stack: null,
+        },
+      ],
+    });
+    expect(resolveSidebarFolderDot([withPullRequest({ checksState: "pending" })])).toBe("working");
+    expect(resolveSidebarFolderDot([unread, withPullRequest({ checksState: "passing" })])).toBe(
+      "ready",
+    );
+    expect(
+      resolveSidebarFolderDot([
+        withPullRequest({ checksState: "passing" }),
+        withPullRequest({ state: "merged", mergeCommitChecksState: "failing" }),
+      ]),
+    ).toBe("failed");
+    expect(resolveSidebarFolderDot([withPullRequest({ state: "merged" })])).toBeNull();
+    // A working agent outranks its pull request, as on its row.
+    expect(
+      resolveSidebarFolderDot([{ ...withPullRequest({ checksState: "failing" }), runtime }]),
+    ).toBe("working");
   });
 });
 
