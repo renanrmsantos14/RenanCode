@@ -782,7 +782,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     }
   }
 
-  html[data-theme-id="grove"] {
+  :is(html[data-theme-id="grove"], html[data-theme-id="fern"]) {
     --stage-art-top: oklch(0.751465 0.112731 157.313);
     --stage-art-mid: oklch(0.567105 0.11099 158.859);
     --stage-art-bottom: oklch(0.367918 0.067635 160.558);
@@ -870,7 +870,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     }
   }
 
-  html[data-theme-id="iris"] {
+  :is(html[data-theme-id="iris"], html[data-theme-id="amethyst"]) {
     --stage-art-top: oklch(0.738305 0.113454 298.926);
     --stage-art-mid: oklch(0.551826 0.159189 294.531);
     --stage-art-bottom: oklch(0.37147 0.133317 289.999);
@@ -890,7 +890,12 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     }
   }
 
-  :is(html[data-theme-id="t3-chat"], html[data-theme-id="ocean"], html[data-theme-id="iris"]) {
+  :is(
+    html[data-theme-id="t3-chat"],
+    html[data-theme-id="ocean"],
+    html[data-theme-id="iris"],
+    html[data-theme-id="amethyst"]
+  ) {
     --stage-night-top: color-mix(in oklch, var(--stage-art-top) 38%, var(--stage-night-base-top));
     --stage-night-mid: color-mix(in oklch, var(--stage-art-mid) 38%, var(--stage-night-base-mid));
     --stage-night-bottom: color-mix(
@@ -917,7 +922,9 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     html[data-theme-id="grove"],
     html[data-theme-id="ocean"],
     html[data-theme-id="ember"],
-    html[data-theme-id="iris"]
+    html[data-theme-id="iris"],
+    html[data-theme-id="amethyst"],
+    html[data-theme-id="fern"]
   ) {
     --stage-art-celeste-highlight: var(--stage-art-highlight);
     --stage-art-celeste-secondary: var(--stage-art-secondary);
