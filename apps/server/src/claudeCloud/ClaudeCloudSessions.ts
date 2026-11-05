@@ -1,5 +1,6 @@
 import {
   CLAUDE_CLOUD_THREAD_ID_PREFIX,
+  CommandId,
   DEFAULT_MODEL,
   DEFAULT_MODEL_BY_PROVIDER,
   DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -10,6 +11,7 @@ import {
   ThreadId,
   TurnItemId,
   defaultInstanceIdForDriver,
+  isClaudeCloudThreadId,
   type OrchestrationProjectShell,
   type OrchestrationV2AppThread,
   type OrchestrationV2DomainEvent,
@@ -20,10 +22,13 @@ import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
+import * as Queue from "effect/Queue";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientError from "effect/http/HttpClientError";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as Path from "effect/Path";
@@ -105,6 +110,8 @@ interface CloudRepository {
 
 interface CloudMessage {
   readonly sequence: string;
+  /** Echoes the id T3 sent the prompt with, so the mirror can skip its own messages. */
+  readonly uuid: string | null;
   readonly role: "user" | "assistant";
   readonly text: string;
   readonly createdAt: string;
@@ -112,7 +119,19 @@ interface CloudMessage {
 
 /** "bridge" sessions are Remote Control views of a local session, which T3 already shows. */
 export function isMirroredCloudSession(session: CloudSession): boolean {
-  return session.environment_kind !== "bridge" && session.status !== "archived";
+  return session.environment_kind !== "bridge";
+}
+
+function isCloudSessionArchived(session: CloudSession): boolean {
+  return session.status === "archived";
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function cloudSessionIdOf(threadId: string): string | null {
+  return isClaudeCloudThreadId(threadId)
+    ? threadId.slice(CLAUDE_CLOUD_THREAD_ID_PREFIX.length)
+    : null;
 }
 
 function isCloudSessionBusy(session: CloudSession): boolean {
@@ -175,6 +194,7 @@ export function cloudMessages(events: ReadonlyArray<CloudEvent>): ReadonlyArray<
     const payload = event.payload as
       | {
           type?: unknown;
+          uuid?: unknown;
           isSidechain?: unknown;
           isMeta?: unknown;
           parent_tool_use_id?: unknown;
@@ -189,6 +209,7 @@ export function cloudMessages(events: ReadonlyArray<CloudEvent>): ReadonlyArray<
     return [
       {
         sequence: String(event.sequence_num),
+        uuid: typeof payload.uuid === "string" ? payload.uuid : null,
         role: payload.type,
         text,
         createdAt: event.created_at,
@@ -384,12 +405,26 @@ const make = Effect.gen(function* () {
     if (unchanged) return;
 
     const events = yield* listEventsAfter(session.id, afterSequence);
-    const messages = cloudMessages(events);
+    const sentFromT3 = new Set(
+      Option.isSome(existing)
+        ? existing.value.turnItems.flatMap((item) =>
+            item.type === "user_message" ? [String(item.messageId)] : [],
+          )
+        : [],
+    );
+    const messages = cloudMessages(events).filter(
+      (message) => message.uuid === null || !sentFromT3.has(message.uuid),
+    );
     const lastSequence = Math.max(
       afterSequence,
       ...events.map((event) => Number(event.sequence_num)),
     );
     const updatedAt = DateTime.makeUnsafe(session.last_event_at ?? session.created_at);
+    // A prompt sent from T3 moves the thread's updatedAt without new cloud content; nothing to write.
+    if (messages.length === 0 && Option.isSome(existing) && existing.value.thread.title === title) {
+      syncedSequence.set(session.id, lastSequence);
+      return;
+    }
     const ordinalBase = Option.isSome(existing) ? existing.value.turnItems.length : 0;
     const driver = ProviderDriverKind.make("claudeAgent");
     const instanceId = defaultInstanceIdForDriver(driver);
@@ -458,6 +493,20 @@ const make = Effect.gen(function* () {
     syncedSequence.set(session.id, lastSequence);
   });
 
+  // Archived on claude.ai: archive the T3 thread too. The archive effect then gets a 409, a no-op.
+  const archiveMirror = Effect.fn("ClaudeCloudSessions.archiveMirror")(function* (
+    session: CloudSession,
+  ) {
+    const threadId = cloudThreadId(session.id);
+    const existing = yield* Effect.option(orchestrator.getThreadRecords(threadId, []));
+    if (Option.isNone(existing) || existing.value.thread.archivedAt !== null) return;
+    yield* orchestrator.dispatch({
+      type: "thread.archive",
+      commandId: CommandId.make(`server:claude-cloud-archive:${session.id}`),
+      threadId,
+    });
+  });
+
   const syncOnce = Effect.fn("ClaudeCloudSessions.syncOnce")(function* () {
     const page = yield* getJson(
       `${API_BASE}?limit=${SESSION_PAGE_LIMIT}`,
@@ -471,6 +520,17 @@ const make = Effect.gen(function* () {
       : [];
     let busy = false;
     for (const session of sessions) {
+      if (isCloudSessionArchived(session)) {
+        yield* archiveMirror(session).pipe(
+          Effect.catch((cause) =>
+            Effect.logWarning("Could not archive a Claude cloud thread", {
+              sessionId: session.id,
+              cause,
+            }),
+          ),
+        );
+        continue;
+      }
       const repository = cloudSessionRepository(session);
       const projectId =
         projectBySession.get(session.id) ??
@@ -499,12 +559,94 @@ const make = Effect.gen(function* () {
     ),
   );
 
+  const wakeups = yield* Queue.sliding<void>(1);
   yield* forkParked(
     tick.pipe(
-      Effect.flatMap((busy) => Effect.sleep(busy ? BUSY_INTERVAL : IDLE_INTERVAL)),
+      Effect.flatMap((busy) =>
+        Queue.take(wakeups).pipe(
+          Effect.timeoutOrElse({
+            duration: busy ? BUSY_INTERVAL : IDLE_INTERVAL,
+            orElse: () => Effect.void,
+          }),
+        ),
+      ),
       Effect.forever,
     ),
   );
+
+  const post = (url: string, body: unknown, operation: string) =>
+    authHeaders.pipe(
+      Effect.flatMap((headers) =>
+        HttpClientRequest.post(url).pipe(
+          HttpClientRequest.setHeaders(headers),
+          HttpClientRequest.bodyJsonUnsafe(body),
+          httpClient.execute,
+        ),
+      ),
+      Effect.timeout(Duration.seconds(30)),
+      Effect.asVoid,
+      Effect.mapError((cause) =>
+        isClaudeCloudSessionsError(cause)
+          ? cause
+          : new ClaudeCloudSessionsError({ operation, cause }),
+      ),
+    );
+
+  const requireSessionId = (threadId: ThreadId) => {
+    const sessionId = cloudSessionIdOf(threadId);
+    return sessionId === null
+      ? Effect.fail(new ClaudeCloudSessionsError({ operation: "resolve-session", cause: threadId }))
+      : Effect.succeed(sessionId);
+  };
+
+  const send = Effect.fn("ClaudeCloudSessions.send")(function* (
+    threadId: ThreadId,
+    messageId: MessageId,
+    text: string,
+  ) {
+    const sessionId = yield* requireSessionId(threadId);
+    // The cloud echoes this uuid back, which is how the mirror skips the prompt T3 already shows.
+    // It needs a UUID; for other ids the API assigns one and the echo shows as a second copy.
+    yield* post(
+      `${API_BASE}/${encodeURIComponent(sessionId)}/events`,
+      {
+        events: [
+          {
+            payload: {
+              ...(UUID_PATTERN.test(messageId) ? { uuid: messageId } : {}),
+              session_id: sessionId,
+              type: "user",
+              parent_tool_use_id: null,
+              message: { role: "user", content: text },
+            },
+          },
+        ],
+      },
+      "send-message",
+    );
+    yield* Queue.offer(wakeups, undefined);
+  });
+
+  const archive = Effect.fn("ClaudeCloudSessions.archive")(function* (threadId: ThreadId) {
+    const sessionId = yield* requireSessionId(threadId);
+    yield* post(`${API_BASE}/${encodeURIComponent(sessionId)}/archive`, {}, "archive").pipe(
+      // 409: already archived, for example on claude.ai first.
+      Effect.catchIf(
+        (error) =>
+          HttpClientError.isHttpClientError(error.cause) &&
+          error.cause.reason._tag === "StatusCodeError" &&
+          error.cause.reason.response.status === 409,
+        () => Effect.void,
+      ),
+    );
+  });
+
+  return { send, archive };
 });
 
-export const layer = Layer.effectDiscard(make);
+export class ClaudeCloudSessions extends Context.Service<
+  ClaudeCloudSessions,
+  Effect.Success<typeof make>
+>()("t3/claudeCloud/ClaudeCloudSessions") {}
+
+export const layer = Layer.effect(ClaudeCloudSessions, make);

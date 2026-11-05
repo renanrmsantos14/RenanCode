@@ -2,6 +2,7 @@ import * as GuestShareService from "../guest/GuestShareService.ts";
 import * as UsageLimitRecoveryWorker from "./UsageLimitRecoveryWorker.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as Layer from "effect/Layer";
+import { FetchHttpClient } from "effect/http";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as OrchestrationCommandReceipts from "../persistence/OrchestrationCommandReceipts.ts";
 import * as OrchestrationEventStore from "../persistence/OrchestrationEventStore.ts";
@@ -331,6 +332,17 @@ const layerThreadHandoffProvided = ThreadHandoffService.layer.pipe(
     Layer.mergeAll(layerOrchestratorProvided, ProjectionStore.layer, layerThreadLaunchProvided),
   ),
 );
+// Provided into `layer` for the effect executor and merged below; one memoized build, one sync loop.
+const layerClaudeCloudSessionsProvided = ClaudeCloudSessions.layer.pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      layerProjectService,
+      layerOrchestratorProvided,
+      layerEventSink,
+      FetchHttpClient.layer,
+    ),
+  ),
+);
 const layerEffectExecutorProvided = EffectWorker.layerExecutor.pipe(
   Layer.provide(
     Layer.mergeAll(
@@ -385,7 +397,7 @@ export const layer = Layer.mergeAll(
 );
 
 export const layerProduction = Layer.mergeAll(
-  layer.pipe(Layer.provide(layerProjectService)),
+  layer.pipe(Layer.provide(Layer.merge(layerProjectService, layerClaudeCloudSessionsProvided))),
   layerProjectService,
   layerManagedProjectFoldersProvided,
   layerThreadLaunchProvided,
@@ -409,9 +421,7 @@ export const layerProduction = Layer.mergeAll(
   ),
   layerProviderContinuationWorkerProvided,
   layerAgentSessionImporterProvided,
-  ClaudeCloudSessions.layer.pipe(
-    Layer.provide(Layer.mergeAll(layerProjectService, layerOrchestratorProvided, layerEventSink)),
-  ),
+  layerClaudeCloudSessionsProvided,
   EffectOutbox.layerPruneWorker.pipe(Layer.provide(EffectOutbox.layer)),
 ).pipe(
   Layer.provide(ResourceCleanupService.layer.pipe(Layer.provide(layerScheduledTaskProvided))),

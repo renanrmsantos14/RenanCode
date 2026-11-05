@@ -19,10 +19,10 @@ const session = (overrides: Partial<CloudSession> = {}): CloudSession => ({
 });
 
 describe("Claude cloud session mirroring", () => {
-  it("skips Remote Control bridges and archived sessions", () => {
+  it("skips Remote Control bridges but keeps archived sessions so the archive syncs", () => {
     expect(isMirroredCloudSession(session())).toBe(true);
     expect(isMirroredCloudSession(session({ environment_kind: "bridge" }))).toBe(false);
-    expect(isMirroredCloudSession(session({ status: "archived" }))).toBe(false);
+    expect(isMirroredCloudSession(session({ status: "archived" }))).toBe(true);
   });
 
   it("matches the session repository to a project case-insensitively", () => {
@@ -69,7 +69,7 @@ describe("Claude cloud session mirroring", () => {
       payload,
     });
     const messages = cloudMessages([
-      event(1, { type: "user", message: { content: "Fix the bug" } }),
+      event(1, { type: "user", uuid: "sent-from-t3", message: { content: "Fix the bug" } }),
       event(2, {
         type: "assistant",
         message: {
@@ -84,9 +84,11 @@ describe("Claude cloud session mirroring", () => {
       event(4, { type: "assistant", parent_tool_use_id: "t1", message: { content: "sub" } }),
       event(5, { type: "system", subtype: "init" }),
     ]);
-    expect(messages.map(({ sequence, role, text }) => ({ sequence, role, text }))).toEqual([
-      { sequence: "1", role: "user", text: "Fix the bug" },
-      { sequence: "2", role: "assistant", text: "On it." },
+    expect(
+      messages.map(({ sequence, uuid, role, text }) => ({ sequence, uuid, role, text })),
+    ).toEqual([
+      { sequence: "1", uuid: "sent-from-t3", role: "user", text: "Fix the bug" },
+      { sequence: "2", uuid: null, role: "assistant", text: "On it." },
     ]);
   });
 });
