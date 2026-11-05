@@ -6,9 +6,11 @@ import { useStableCallback } from "../../hooks/useStableCallback";
 import { claudeCloudEnvironment } from "../../state/claudeCloud";
 import { useAtomCommand } from "../../state/use-atom-command";
 
-// Classify after typing pauses, so a task costs one model call rather than one per keystroke.
-const TYPING_PAUSE_MS = 1_200;
+// Users send seconds after typing, so classification starts on the briefest pause.
+const TYPING_PAUSE_MS = 100;
 const MIN_TASK_CHARS = 12;
+// Matches the server's limit; past it the task runs on a machine as usual.
+const PLACEMENT_TIMEOUT_MS = 15_000;
 
 interface TaskCloudPlacementInput {
   readonly active: boolean;
@@ -16,6 +18,8 @@ interface TaskCloudPlacementInput {
   readonly projectId: ProjectId | null;
   readonly draftId: DraftId | null;
 }
+
+type PlacementRequest = Promise<ClaudeCloudPlacementResult | null>;
 
 /** Asks the draft's machine whether the typed task can run in a Claude cloud session. */
 export function useTaskCloudPlacement(input: TaskCloudPlacementInput) {
@@ -29,13 +33,14 @@ export function useTaskCloudPlacement(input: TaskCloudPlacementInput) {
     readonly text: string;
     readonly result: ClaudeCloudPlacementResult;
   } | null>(null);
-  const inFlightRef = useRef<{
-    readonly key: string;
-    readonly promise: Promise<ClaudeCloudPlacementResult | null>;
-  } | null>(null);
+  const requestsRef = useRef(new Map<string, PlacementRequest>());
+  // One background call at a time keeps typing from spawning a provider process per pause.
+  const typingRef = useRef<{ inFlight: boolean; next: string | null }>({
+    inFlight: false,
+    next: null,
+  });
 
-  /** Resolves to null when routing is off or the machine could not answer. */
-  const classify = useStableCallback((rawText: string) => {
+  const request = useStableCallback((rawText: string): PlacementRequest => {
     const text = rawText.trim();
     if (!active || environmentId === null || projectId === null || text.length === 0) {
       return Promise.resolve(null);
@@ -44,15 +49,36 @@ export function useTaskCloudPlacement(input: TaskCloudPlacementInput) {
       return Promise.resolve(placement.result);
     }
     const key = `${scope}\n${text}`;
-    if (inFlightRef.current?.key === key) return inFlightRef.current.promise;
-    const promise = suggest({ environmentId, input: { projectId, text } }).then((result) => {
-      if (inFlightRef.current?.key === key) inFlightRef.current = null;
+    const existing = requestsRef.current.get(key);
+    if (existing) return existing;
+    const call = suggest({ environmentId, input: { projectId, text } }).then((result) => {
       if (result._tag === "Failure") return null;
       setPlacement({ scope, text, result: result.value });
       return result.value;
     });
-    inFlightRef.current = { key, promise };
-    return promise;
+    const timeout = new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), PLACEMENT_TIMEOUT_MS);
+    });
+    const pending = Promise.race([call, timeout]).finally(() => {
+      requestsRef.current.delete(key);
+    });
+    requestsRef.current.set(key, pending);
+    return pending;
+  });
+
+  const classifyWhileTyping = useStableCallback((text: string) => {
+    const typing = typingRef.current;
+    typing.next = text;
+    if (typing.inFlight) return;
+    typing.inFlight = true;
+    void (async () => {
+      while (typing.next !== null) {
+        const current = typing.next;
+        typing.next = null;
+        await request(current);
+      }
+      typing.inFlight = false;
+    })();
   });
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- watches the draft text in the store so typing never re-renders the chat view
@@ -63,7 +89,7 @@ export function useTaskCloudPlacement(input: TaskCloudPlacementInput) {
       clearTimeout(timer);
       const text = prompt?.trim() ?? "";
       if (text.length < MIN_TASK_CHARS) return;
-      timer = setTimeout(() => void classify(text), TYPING_PAUSE_MS);
+      timer = setTimeout(() => classifyWhileTyping(text), TYPING_PAUSE_MS);
     };
     schedule(useComposerDraftStore.getState().draftsByThreadKey[draftId]?.prompt);
     const unsubscribe = useComposerDraftStore.subscribe((state, previous) => {
@@ -74,11 +100,12 @@ export function useTaskCloudPlacement(input: TaskCloudPlacementInput) {
       clearTimeout(timer);
       unsubscribe();
     };
-  }, [active, draftId, classify]);
+  }, [active, draftId, classifyWhileTyping]);
 
   return {
     /** The latest answer for this draft, possibly for slightly older text. */
     placement: active && placement?.scope === scope ? placement.result : null,
-    classify,
+    /** For sending: answers for exactly this text, null when routing is off, failed or timed out. */
+    classify: request,
   };
 }

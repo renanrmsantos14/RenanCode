@@ -500,7 +500,18 @@ export function useComposerSend(input: ComposerSendInput) {
     let autoCloud: { readonly pushBranch: boolean } | null = null;
     if (isLocalDraftThread && draftId && !pickedCloud && cloudText.length > 0) {
       sendInFlightRef.current = true;
+      // Nothing starts until the answer is in; say so when it is not instant.
+      const waitToast = setTimeout(() => {
+        toastManager.add({
+          id: "task-placement-pending",
+          type: "loading",
+          title: "Deciding where to run…",
+          description: "Checking whether this task can run in a Claude cloud session.",
+        });
+      }, 300);
       const placement = await classifyTaskPlacement(cloudText);
+      clearTimeout(waitToast);
+      toastManager.close("task-placement-pending");
       sendInFlightRef.current = false;
       if (placement?.placement === "cloud") autoCloud = { pushBranch: placement.pushRequired };
     }
