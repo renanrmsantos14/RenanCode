@@ -271,6 +271,7 @@ import {
 } from "./sidebar/SidebarThreadRow";
 import { SidebarDraftBlock } from "./sidebar/SidebarDraftBlock";
 import { useSidebarNativeSubagents } from "./sidebar/useSidebarNativeSubagents";
+import { SubsessionBranch } from "./sidebar/SubsessionBranch";
 import { SidebarRemoteTaskRow } from "./sidebar/SidebarRemoteTaskRow";
 import {
   SidebarProjectFolderHeader,
@@ -3607,24 +3608,38 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             {row}
                             {subsessionsOpen && childCount > 0 ? (
                               <li className="list-none">
-                                <ul
-                                  className={cn(
-                                    "flex flex-col gap-px",
-                                    // Past three levels the rows stop stepping in.
-                                    depth < 3 && "ms-4 border-s border-border/60 ps-1.5",
-                                  )}
-                                >
-                                  {subsessions.map((child) =>
-                                    renderThreadRow(
-                                      child,
-                                      section,
-                                      folderRow,
-                                      threadKey,
-                                      depth + 1,
-                                    ),
-                                  )}
-                                  {remoteTasks.map((task) => (
-                                    <SidebarRemoteTaskRow key={task.id} task={task} />
+                                <ul className="flex flex-col gap-px">
+                                  {subsessions.map((child, index) => (
+                                    <SubsessionBranch
+                                      key={scopedThreadKey(
+                                        scopeThreadRef(child.environmentId, child.id),
+                                      )}
+                                      last={index === childCount - 1}
+                                      folder={folderRow !== undefined}
+                                      // Past three levels the rows stop stepping in.
+                                      indent={depth < 3}
+                                    >
+                                      {renderThreadRow(
+                                        child,
+                                        section,
+                                        folderRow,
+                                        threadKey,
+                                        depth + 1,
+                                      )}
+                                    </SubsessionBranch>
+                                  ))}
+                                  {remoteTasks.map((task, index) => (
+                                    <SubsessionBranch
+                                      key={task.id}
+                                      last={subsessions.length + index === childCount - 1}
+                                      folder={folderRow !== undefined}
+                                      indent={depth < 3}
+                                    >
+                                      <SidebarRemoteTaskRow
+                                        task={task}
+                                        folder={folderRow !== undefined}
+                                      />
+                                    </SubsessionBranch>
                                   ))}
                                 </ul>
                               </li>

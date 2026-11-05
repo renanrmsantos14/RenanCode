@@ -9,13 +9,18 @@ import {
   ThreadRelationshipIcon,
   threadRelationshipStatusLabel,
 } from "../chat/ThreadRelationshipIcon";
+import { cn } from "~/lib/utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 /**
  * A task the parent delegated to a linked environment this client is not showing. It opens the
  * thread there when this client is connected to that environment, as its Lineage row does.
  */
-export function SidebarRemoteTaskRow(props: { readonly task: RemoteTaskRow }) {
+export function SidebarRemoteTaskRow(props: {
+  readonly task: RemoteTaskRow;
+  /** Folder rows start their text past the folder's icon; this row lines up with them. */
+  readonly folder: boolean;
+}) {
   const navigate = useNavigate();
   const { remoteChild, status } = props.task;
   const environment = useEnvironment(remoteChild.environmentId);
@@ -29,7 +34,10 @@ export function SidebarRemoteTaskRow(props: { readonly task: RemoteTaskRow }) {
               type="button"
               aria-disabled={environment === null || undefined}
               data-testid="sidebar-row-remote-task"
-              className="group/sidebar-row flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-left text-sidebar-foreground outline-none select-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-disabled:cursor-default"
+              className={cn(
+                "group/sidebar-row flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-md text-left text-sidebar-foreground outline-none select-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-disabled:cursor-default",
+                props.folder ? "ps-9 pe-2.5" : "px-2.5",
+              )}
               onClick={() => {
                 if (environment === null) return;
                 void navigate({
