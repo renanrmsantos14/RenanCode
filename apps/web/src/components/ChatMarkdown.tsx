@@ -870,11 +870,8 @@ function useChatMarkdownState({
           environmentId !== null &&
           readEnvironmentScope(environmentId, AuthFilesystemReadScope)
             ? async () => {
-                const relativePath = workspaceRelativeFilePath(
-                  (await resolveHostPath()).absolutePath,
-                  cwd,
-                );
-                if (relativePath === null) throw new Error("File is outside the workspace.");
+                const { absolutePath } = await resolveHostPath();
+                const relativePath = workspaceRelativeFilePath(absolutePath, cwd) ?? absolutePath;
                 const result = await readProjectFile({
                   environmentId,
                   input: { cwd, relativePath },
