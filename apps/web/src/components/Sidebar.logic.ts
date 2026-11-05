@@ -1,6 +1,7 @@
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
+import { threadKey as runtimeThreadKey } from "@t3tools/client-runtime/state/entities";
 import { subsessionParentRef } from "@t3tools/client-runtime/state/subsessions";
 import { isShownUnderParent } from "@t3tools/client-runtime/state/threads";
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
@@ -728,7 +729,11 @@ export function nestSidebarSubsessions<T extends SubsessionNestingThread>(
     if (parent === undefined) continue;
     const sameProject =
       parent.environmentId === thread.environmentId && parent.projectId === thread.projectId;
-    if (sameProject || (thread.delegatedFrom != null && delegatedUnderParent.has(key))) {
+    // delegatedUnderParent holds the client runtime's thread keys, not the sidebar's.
+    const delegated = delegatedUnderParent.has(
+      runtimeThreadKey({ environmentId: thread.environmentId, threadId: thread.id }),
+    );
+    if (sameProject || (thread.delegatedFrom != null && delegated)) {
       candidateParentKey.set(key, parentKey);
     }
   }
