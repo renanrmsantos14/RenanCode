@@ -1,12 +1,15 @@
 import * as Schema from "effect/Schema";
 
 import { MessageId, ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { ProviderInstanceId } from "./providerInstance.ts";
 
 export const ClaudeCloudStartSessionInput = Schema.Struct({
   projectId: ProjectId,
   messageId: MessageId,
   text: TrimmedNonEmptyString,
   model: Schema.optional(TrimmedNonEmptyString),
+  /** The Claude provider instance whose claude.ai login owns the session; default when absent. */
+  providerInstanceId: Schema.optional(ProviderInstanceId),
   /** Push the branch's local commits first instead of failing with `branch-not-pushed`. */
   pushBranch: Schema.optional(Schema.Boolean),
 });

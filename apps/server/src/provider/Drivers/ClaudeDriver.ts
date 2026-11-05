@@ -18,9 +18,14 @@ import * as ServerConfig from "../../config.ts";
 import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import {
+  ClaudeAgentSdkQueryRunner,
   createClaudeAdapterV2,
   type ClaudeAdapterV2DriverEnv,
 } from "../../orchestration-v2/Adapters/ClaudeAdapterV2.ts";
+import {
+  makeClaudeCloudQueryRunner,
+  routeClaudeQueryRunner,
+} from "../../claudeCloud/ClaudeCloudQueryRunner.ts";
 import { ProviderDriverError } from "../Errors.ts";
 import { claudeUsageReader } from "./claudeUsage.ts";
 import { makeClaudeScopedLimitNames } from "../claudeUsageLimits.ts";
@@ -146,6 +151,16 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
     });
 
     const scopedLimitNames = yield* makeClaudeScopedLimitNames;
+    // Claude cloud threads of this instance run on its claude.ai login, not a local process.
+    const cloudQueryRunner = yield* makeClaudeCloudQueryRunner({
+      configDir,
+      accountFile: accountConfigPath,
+    }).pipe(
+      Effect.provideService(FileSystem.FileSystem, fileSystem),
+      Effect.provideService(HttpClient.HttpClient, httpClient),
+      Effect.provideService(SecureRandom.SecureRandom, yield* SecureRandom.SecureRandom),
+    );
+    const queryRunner = routeClaudeQueryRunner(yield* ClaudeAgentSdkQueryRunner, cloudQueryRunner);
     const orchestrationAdapter = yield* createClaudeAdapterV2(
       {
         instanceId,
@@ -157,6 +172,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
       },
       { scopedLimitNames, onUsageLimits: (update) => snapshot.applyUsageLimits(update) },
     ).pipe(
+      Effect.provideService(ClaudeAgentSdkQueryRunner, queryRunner),
       Effect.mapError(
         (cause) =>
           new ProviderDriverError({

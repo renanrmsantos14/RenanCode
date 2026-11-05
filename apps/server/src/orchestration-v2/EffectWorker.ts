@@ -594,12 +594,6 @@ export const layerExecutor: Layer.Layer<
                     }),
                 ),
               );
-          case "claude-cloud.send": {
-            const { messageId, text } = effect.request;
-            return runClaudeCloud(effect, (service) =>
-              service.send(effect.threadId, messageId, text),
-            );
-          }
           case "claude-cloud.archive":
             return runClaudeCloud(effect, (service) => service.archive(effect.threadId));
         }
