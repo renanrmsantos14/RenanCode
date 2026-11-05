@@ -47,8 +47,9 @@ export interface DesktopSettingsChange {
 }
 
 const DEFAULT_TAILSCALE_SERVE_PORT = 443;
-const MIN_MAIN_WINDOW_SIZE = {
-  width: 840,
+// The web UI has a phone layout, so narrow windows (portrait tablets, tiling) stay usable.
+export const MIN_MAIN_WINDOW_SIZE = {
+  width: 360,
   height: 620,
 } as const;
 export const DesktopWindowBoundsSchema = Schema.Struct({
