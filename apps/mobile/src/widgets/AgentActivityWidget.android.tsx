@@ -47,7 +47,7 @@ export function AgentActivityWidget(
         </Text>
         {activities.length === 0 ? (
           <Text color={muted} maxLines={1} style={{ fontSize: 11 }}>
-            {props.title ? "No agent activity" : "Open T3 to connect"}
+            {props.title ? "No agent activity" : "Open RenanCode to connect"}
           </Text>
         ) : null}
         {activities.map((row) => {
