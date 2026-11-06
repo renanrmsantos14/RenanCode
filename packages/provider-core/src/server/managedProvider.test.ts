@@ -118,6 +118,7 @@ function layerProviderHost(input: {
         subscribe: Effect.succeed(Stream.empty),
       },
       shouldRunBackgroundWork: () => Effect.succeed(input.runBackgroundWork),
+      backgroundDemand: () => Effect.succeed(input.runBackgroundWork ? "foreground" : "none"),
       resolveAttachmentPath: () => null,
       credentials: () => Effect.die("unused"),
     }),

@@ -4,6 +4,7 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   type ServerProvider,
+  type ServerProviderUsageLimits,
   UsageLimitSourceId,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
@@ -21,7 +22,11 @@ import {
   elapsedShare,
   exhaustedUsageWindow,
   claudeGoalSummary,
-  forecastText,
+  forecastWarningText,
+  claudeUsageStatusText,
+  claudeUsageValueText,
+  claudeVerdictText,
+  claudeWindowsText,
   limitInstanceName,
   weeklyBarLabel,
   claudeAccountValue,
@@ -1656,6 +1661,65 @@ describe("projected exhaustion", () => {
   });
 });
 
+describe("Claude account summary", () => {
+  const now = Date.parse("2026-11-06T15:10:00Z");
+  const usageWindow = (id: string, label: string, usedPercent: number) => ({
+    id,
+    kind: "weekly" as const,
+    label,
+    usedPercent,
+  });
+  const limits = (lastError?: ServerProviderUsageLimits["lastError"]) => ({
+    checkedAt: "2026-11-06T15:04:00Z",
+    windows: [],
+    ...(lastError ? { lastError } : {}),
+  });
+
+  it("leads with the verdict against today's goal", () => {
+    expect(claudeVerdictText({ used: 14, goal: 100, over: false })).toBe("On pace");
+    expect(claudeVerdictText({ used: 74, goal: 60, over: true })).toBe("14% over goal");
+    expect(claudeVerdictText({ used: 14, goal: null, over: false })).toBe(null);
+    expect(claudeUsageValueText({ used: 14, goal: 100 })).toBe("14 / 100");
+    expect(claudeUsageValueText({ used: 14, goal: null })).toBe("14%");
+  });
+
+  it("hides a model window with no use", () => {
+    const session = { ...usageWindow("five_hour", "Session", 0), kind: "session" as const };
+    const fable = usageWindow("seven_day_fable", "Weekly · Fable", 0);
+    expect(claudeWindowsText({ session, scoped: [fable] })).toBe("5h 0%");
+    expect(claudeWindowsText({ session, scoped: [{ ...fable, usedPercent: 12 }] })).toBe(
+      "5h 0% · Fable 12%",
+    );
+    expect(claudeWindowsText({ session: undefined, scoped: [] })).toBe("");
+  });
+
+  it("shows a failed read only once the reading is stale", () => {
+    const rateLimited = {
+      at: "2026-11-06T15:05:00Z",
+      reason: "rateLimited" as const,
+      retryAt: "2026-11-06T15:18:00Z",
+    };
+    expect(claudeUsageStatusText({ stale: false, limits: limits(rateLimited) }, now)).toBe(
+      "Updated 6m ago",
+    );
+    expect(claudeUsageStatusText({ stale: true, limits: limits(rateLimited) }, now)).toBe(
+      "Updated 6m ago · retrying in 8m",
+    );
+    expect(
+      claudeUsageStatusText(
+        { stale: true, limits: limits({ ...rateLimited, retryAt: "2026-11-06T15:10:20Z" }) },
+        now,
+      ),
+    ).toBe("Updated 6m ago · retrying in 1m");
+    expect(
+      claudeUsageStatusText(
+        { stale: true, limits: limits({ at: rateLimited.at, reason: "signedOut" }) },
+        now,
+      ),
+    ).toBe("Updated 6m ago · open Claude to sign in");
+  });
+});
+
 describe("Claude account selection", () => {
   const claude = (instanceId: string, overrides: Partial<ServerProvider> = {}) =>
     provider({
@@ -1748,12 +1812,15 @@ describe("Claude account selection", () => {
       "Used 50% · today's goal 60%",
     );
     expect(account?.weekly && claudeGoalSummary(account.weekly, at, null)).toBe("Used 50%");
+    expect(
+      account?.weekly && claudeGoalSummary({ ...account.weekly, id: "seven_day_fable" }, at),
+    ).toBeNull();
     expect(weeklyBarLabel({ used: 50, goal: 60 })).toBe("Weekly: 50% used, today's goal 60%");
     expect(weeklyBarLabel({ used: 50, goal: null })).toBe("Weekly: 50% used");
     const at9 = (ms: number) => `@${ms}`;
-    expect(forecastText({ kind: "at", at: 5 }, at9)).toBe("Projected to run out @5");
-    expect(forecastText({ kind: "safe" }, at9)).toBe("Not projected to run out before the reset");
-    expect(forecastText(undefined, at9)).toBe("Not enough use yet to project");
+    expect(forecastWarningText({ kind: "at", at: 5 }, at9)).toBe("Projected to run out @5");
+    expect(forecastWarningText({ kind: "safe" }, at9)).toBe(null);
+    expect(forecastWarningText(undefined, at9)).toBe(null);
     const named = { displayName: " Renan ", email: "r@x.com" } as LimitAccount;
     expect(limitInstanceName(named, "Claude")).toBe("Renan");
     expect(limitInstanceName(named, "renan")).toBeNull();

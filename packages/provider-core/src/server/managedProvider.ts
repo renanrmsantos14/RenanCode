@@ -1,4 +1,5 @@
 import {
+  type BackgroundDemand,
   DEFAULT_PROVIDER_HEALTH_REFRESH_INTERVAL,
   type ProviderInstanceId,
   type ServerProvider,
@@ -42,7 +43,7 @@ function withUsageLimits(
 }
 
 /** Generic provider-status demand, or demand for this one instance. */
-export const shouldRunProviderStatusWork = (
+const shouldRunProviderStatusWork = (
   host: Pick<ProviderHost.ProviderHost["Service"], "shouldRunBackgroundWork">,
   instanceId: ProviderInstanceId,
 ): Effect.Effect<boolean> =>
@@ -55,6 +56,17 @@ export const shouldRunProviderStatusWork = (
           : host.shouldRunBackgroundWork({ type: "provider-status", instanceId }),
       ),
     );
+
+export const providerStatusDemand = (
+  host: Pick<ProviderHost.ProviderHost["Service"], "backgroundDemand">,
+  instanceId: ProviderInstanceId,
+): Effect.Effect<BackgroundDemand> =>
+  host.backgroundDemand({ type: "provider-status" }).pipe(
+    Effect.filterOrElse(
+      (generic) => generic !== "none",
+      () => host.backgroundDemand({ type: "provider-status", instanceId }),
+    ),
+  );
 
 export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(function* <
   Settings,
@@ -242,7 +254,12 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
         const usageLimits =
           reading._tag === "ok"
             ? applyUsageReading({ previous, reading: reading.limits })
-            : applyUsageReadFailure({ previous, at: reading.at, reason: reading.reason });
+            : applyUsageReadFailure({
+                previous,
+                at: reading.at,
+                reason: reading.reason,
+                retryAt: reading.retryAt,
+              });
         if (usageLimits === previous) {
           return [null, state] as const;
         }

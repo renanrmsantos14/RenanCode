@@ -15,6 +15,7 @@ import {
   makeUnavailableUsageLimits,
   makeUsageLimits,
 } from "@t3tools/provider-core/server/usageLimits";
+import { CLAUDE_WEEKLY_MODEL_LABEL_PREFIX } from "@t3tools/shared/usageLimits";
 
 const SESSION_MINS = 5 * 60;
 const WEEK_MINS = 7 * 24 * 60;
@@ -59,7 +60,7 @@ function scopedWindow(
   return {
     id: scopedWindowId(displayName),
     kind: "weekly",
-    label: `Weekly · ${displayName}`,
+    label: `${CLAUDE_WEEKLY_MODEL_LABEL_PREFIX}${displayName}`,
     windowDurationMins: WEEK_MINS,
     usedPercent: clampPercent(usedPercent),
     ...(resetsAt ? { resetsAt } : {}),

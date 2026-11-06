@@ -52,6 +52,7 @@ export const ServerProviderUsageLimits = Schema.Struct({
     Schema.Struct({
       at: IsoDateTime,
       reason: Schema.Literals(["rateLimited", "signedOut", "requestFailed"]),
+      retryAt: Schema.optional(IsoDateTime),
     }),
   ),
 });

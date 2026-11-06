@@ -148,6 +148,7 @@ describe("ThreadPullRequestServiceV2 reads", () => {
           // No client holds an activity lease.
           Layer.mock(BackgroundPolicy.BackgroundPolicy)({
             shouldRunScopeWork: () => Effect.succeed(false),
+            scopeDemand: () => Effect.succeed("none"),
             shouldRunOpportunisticWork: Effect.succeed(false),
           }),
           Layer.succeed(ServerActivation.ServerActivation, Deferred.await(activation)),
@@ -383,6 +384,7 @@ describe("ThreadPullRequestServiceV2 reads", () => {
           }),
           Layer.mock(BackgroundPolicy.BackgroundPolicy)({
             shouldRunScopeWork: () => Effect.succeed(true),
+            scopeDemand: () => Effect.succeed("none"),
             shouldRunOpportunisticWork: Effect.succeed(true),
           }),
           Layer.succeed(ServerActivation.ServerActivation, Deferred.await(activation)),

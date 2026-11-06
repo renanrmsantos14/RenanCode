@@ -792,6 +792,7 @@ it.layer(layerGitManagerTest)("GitManager", (it) => {
             Layer.provide(
               Layer.mock(BackgroundPolicy.BackgroundPolicy)({
                 shouldRunScopeWork: () => Effect.succeed(true),
+                scopeDemand: () => Effect.succeed("none"),
               }),
             ),
           ),

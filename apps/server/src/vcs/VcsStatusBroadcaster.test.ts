@@ -161,6 +161,7 @@ function layerBackgroundPolicy(shouldRunScopeWork: (scope: BackgroundScope) => b
       updatedAt: TEST_EPOCH,
     }),
     shouldRunScopeWork: (scope) => Effect.sync(() => shouldRunScopeWork(scope)),
+    scopeDemand: () => Effect.succeed("none"),
     shouldRunOpportunisticWork: Effect.succeed(true),
   });
 }

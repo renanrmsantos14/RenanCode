@@ -3,19 +3,19 @@ import { useNavigation, type StaticScreenProps } from "@react-navigation/native"
 import { normalizeProviderAccentColor } from "@t3tools/client-runtime/state/provider-instance-display";
 import { PROVIDER_DISPLAY_NAMES, type EnvironmentId } from "@t3tools/contracts";
 import {
-  CLAUDE_USAGE_ERROR_TEXT,
   type ClaudeAccountUsage,
   limitInstanceName,
-  claudeGoalSummary,
-  forecastText,
+  claudeUsageStatusText,
+  claudeUsageValueText,
+  claudeVerdictText,
+  claudeWindowsText,
+  forecastWarningText,
   weeklyBarLabel,
-  windowUsedText,
   claudeWeeklyReading,
   collectLimitAccounts,
   collectLimitNotices,
   exhaustionForecast,
   limitAccountsBesideClaude,
-  formatAgo,
   formatDuration,
   formatGoalZoneInstant,
   selectClaudeUsageAccounts,
@@ -81,25 +81,6 @@ function UsageBar(props: {
   );
 }
 
-function WindowLine(props: {
-  readonly window: ClaudeAccountUsage["weekly"];
-  readonly label: string;
-  readonly emptyText?: string;
-  readonly now: number;
-}) {
-  const { window, now } = props;
-  return (
-    <View className="flex-row items-baseline justify-between gap-3">
-      <Text className="min-w-0 shrink text-sm text-foreground-muted" numberOfLines={1}>
-        {props.label}
-      </Text>
-      <Text className="shrink-0 text-sm tabular-nums text-foreground">
-        {window ? windowUsedText(window, now) : (props.emptyText ?? "")}
-      </Text>
-    </View>
-  );
-}
-
 function ClaudeAccountBlock(props: {
   readonly environmentId: EnvironmentId;
   readonly account: ClaudeAccountUsage;
@@ -108,53 +89,74 @@ function ClaudeAccountBlock(props: {
 }) {
   const { account, now } = props;
   const reading = claudeWeeklyReading(account);
-  const { weekly, session } = account;
-  const forecast = weekly ? exhaustionForecast(weekly, now) : undefined;
+  const { weekly } = account;
+  const verdict = reading ? claudeVerdictText(reading) : null;
+  const forecastWarning = forecastWarningText(
+    weekly ? exhaustionForecast(weekly, now) : undefined,
+    (at) => formatGoalZoneInstant(at, now),
+  );
   const resetsAt = weekly?.resetsAt ? Date.parse(weekly.resetsAt) : Number.NaN;
   return (
-    <View className="gap-2">
-      <AccountName label={account.label} />
-      {weekly && reading ? (
-        <View className="gap-1">
-          <UsageBar
-            used={reading.used}
-            goal={reading.goal}
-            over={reading.over}
-            color={props.color}
-            label={weeklyBarLabel(reading)}
-          />
-          <Text className="text-sm tabular-nums text-foreground">
-            {claudeGoalSummary(weekly, now, account.goal) ?? `Used ${reading.used}%`}
+    <View className="gap-1.5">
+      <View className="flex-row items-baseline justify-between gap-3">
+        <View className="min-w-0 shrink">
+          <AccountName label={account.label} />
+        </View>
+        {verdict ? (
+          <Text
+            className={
+              reading?.over
+                ? "shrink-0 text-sm text-warning-foreground"
+                : "shrink-0 text-sm text-foreground-muted"
+            }
+          >
+            {verdict}
           </Text>
+        ) : null}
+      </View>
+      {weekly && reading ? (
+        <>
+          <View className="flex-row items-center gap-2">
+            <View className="min-w-0 flex-1">
+              <UsageBar
+                used={reading.used}
+                goal={reading.goal}
+                over={reading.over}
+                color={props.color}
+                label={weeklyBarLabel(reading)}
+              />
+            </View>
+            <Text className="shrink-0 text-sm tabular-nums text-foreground">
+              {claudeUsageValueText(reading)}
+            </Text>
+          </View>
           {Number.isFinite(resetsAt) ? (
             <Text className="text-xs text-foreground-muted">
-              Resets {formatGoalZoneInstant(resetsAt, now)} (São Paulo)
+              Resets {formatGoalZoneInstant(resetsAt, now)}
               {resetsAt > now ? ` · in ${formatDuration(resetsAt - now)}` : ""}
             </Text>
           ) : null}
-          <Text className="text-xs text-foreground-muted">
-            {forecastText(forecast, (at) => formatGoalZoneInstant(at, now))}
-          </Text>
-        </View>
+          {forecastWarning ? (
+            <Text className="text-xs text-warning-foreground">{forecastWarning}</Text>
+          ) : null}
+        </>
       ) : (
         <Text className="text-xs text-foreground-muted">No weekly reading yet</Text>
       )}
-      <WindowLine window={session} label="5-hour window" emptyText="No active window" now={now} />
-      {account.scoped.map((window) => (
-        <WindowLine key={window.id} window={window} label={window.label} now={now} />
-      ))}
-      <Text
-        className={
-          account.stale ? "text-xs text-warning-foreground" : "text-xs text-foreground-muted"
-        }
-      >
-        Updated {formatAgo(account.limits.checkedAt, now) || "n/a"}
-      </Text>
-      {account.limits.lastError ? (
-        <Text className="text-xs text-warning-foreground" numberOfLines={1}>
-          {CLAUDE_USAGE_ERROR_TEXT[account.limits.lastError.reason]}
+      <View className="flex-row flex-wrap items-baseline justify-between gap-x-3">
+        <Text className="text-xs tabular-nums text-foreground-muted">
+          {claudeWindowsText(account)}
         </Text>
-      ) : null}
+        <Text
+          className={
+            account.stale
+              ? "text-xs tabular-nums text-warning-foreground"
+              : "text-xs tabular-nums text-foreground-muted"
+          }
+        >
+          {claudeUsageStatusText(account, now)}
+        </Text>
+      </View>
       {account.limits.resetCredits ? (
         <ResetCredits
           dense
