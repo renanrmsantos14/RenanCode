@@ -67,6 +67,8 @@ import {
 import { useRightPanelStore } from "../../rightPanelStore";
 import { useOpenPrLink } from "../../lib/openPullRequestLink";
 import { useUiStateStore } from "../../uiStateStore";
+import { useClientSettings } from "../../hooks/useSettings";
+import { resolveSidebarRowVisibility } from "./sidebarRowItems";
 import { useThreadSelectionStore } from "../../threadSelectionStore";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { useNowSecond } from "../../hooks/useNowSecond";
@@ -668,7 +670,8 @@ function ThreadRenameInput(props: {
   );
 }
 
-const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowProps) {
+/** The row without drag and drop, as the sidebar and the settings preview draw it. */
+export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowProps) {
   const {
     isRenaming,
     onCancelRename,
@@ -697,6 +700,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const threadKey = scopedThreadKey(threadRef);
   const canOperateThread = useEnvironmentScope(thread.environmentId, AuthOrchestrationOperateScope);
   const { leaseLiveStatus, rowRef: leaseRowRef } = useSidebarRowSubscriptionLease(props.isActive);
+  const folderRow = variant === "folder" || variant === "folder-multiline";
+  const rowVisibility = useClientSettings(resolveSidebarRowVisibility);
+  const rowHighlightEnabled = useClientSettings((settings) => settings.sidebarRowHighlight);
+  // Settings shape folder rows only; cards and slim rows show everything.
+  const shows = (id: keyof typeof rowVisibility) => !folderRow || rowVisibility[id];
   const { revealRef } = props;
   const rowRef = (row: HTMLElement | null) => {
     if (row !== null) revealRef?.(row, threadKey);
@@ -854,12 +862,21 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   });
   const prStatus = prStatusIndicator(pr, linkedPullRequestStatus?.sourceControlProvider);
   // "Done" or "Waiting" is not the end while the pull request still runs checks or awaits a merge.
-  const deliveryStatus =
+  const delivery =
     isNativeSubagent || isWokeStatus
       ? null
-      : pullRequestDeliveryPresentation(
-          threadPullRequestDeliveryForStatus(thread.pullRequests, status),
-        );
+      : threadPullRequestDeliveryForStatus(thread.pullRequests, status);
+  const deliveryStatus = shows("pullRequestStatus")
+    ? pullRequestDeliveryPresentation(delivery)
+    : null;
+  const deliveryHighlightClassName =
+    !folderRow || !rowHighlightEnabled
+      ? null
+      : delivery?.stage === "failed"
+        ? "bg-error/6 hover:bg-error/10"
+        : delivery?.stage === "ready"
+          ? "bg-success/6 hover:bg-success/10"
+          : null;
 
   const modelInstanceId = thread.runtime?.providerInstanceId ?? thread.modelSelection.instanceId;
   const providerEntry = props.providerEntryByInstanceId.get(modelInstanceId) ?? null;
@@ -1043,9 +1060,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
         ? "bg-sidebar-row-selected text-sidebar-foreground light:ring-1 light:ring-inset light:ring-sidebar-border/70"
         : hasUnsentDraft
           ? cn(draftSurfaceClassName, "text-sidebar-foreground")
-          : shouldRecede
-            ? "text-sidebar-muted-foreground/75 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
-            : "bg-transparent text-sidebar-foreground hover:bg-sidebar-row-hover",
+          : deliveryHighlightClassName
+            ? cn(deliveryHighlightClassName, "text-sidebar-foreground")
+            : shouldRecede
+              ? "text-sidebar-muted-foreground/75 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+              : "bg-transparent text-sidebar-foreground hover:bg-sidebar-row-hover",
     shouldRecede &&
       (status === "preparing" || status === "working") &&
       "opacity-70 transition-opacity hover:opacity-100 focus-within:opacity-100 motion-reduce:transition-none",
@@ -1232,7 +1251,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
 
   const isCloudSession = isClaudeCloudThreadId(thread.id);
   const machineIcon =
-    isRemote || isCloudSession ? (
+    (isRemote || isCloudSession) && shows("machine") ? (
       <span className="inline-flex shrink-0 items-center text-sidebar-muted-foreground/70">
         <EnvironmentMachineIcon
           aria-hidden
@@ -1243,17 +1262,25 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     ) : null;
   // The meta line already names the scratch machine, so the trailing icon would repeat it.
   const remoteMachineIcon = showsScratchMachine ? null : machineIcon;
-  const diff = latestRunDiff(thread);
+  const diff = shows("diff") ? latestRunDiff(thread) : null;
+  const showsBranch = Boolean(thread.branch) && shows("branch");
+  const shownPrBadge = shows("pullRequest") ? prBadge : null;
+  const providerStack = shows("agent") ? (
+    <SidebarProviderStack
+      thread={thread}
+      providerEntryByInstanceId={props.providerEntryByInstanceId}
+    />
+  ) : null;
   // Only the trailing icons would remain, so the row moves them to the title line instead.
   const metaLineEmpty =
-    !thread.branch &&
+    !showsBranch &&
     !showsScratchMachine &&
-    prBadge === null &&
+    shownPrBadge === null &&
     diff === null &&
     runningTerminalIds.length === 0;
   const metaLine = metaLineEmpty ? null : (
     <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-xs">
-      {thread.branch ? (
+      {showsBranch && thread.branch ? (
         <>
           <ThreadWorktreeIndicator thread={thread} />
           <span className="flex min-w-0 flex-1">
@@ -1273,7 +1300,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
         <span className="flex-1" />
       )}
       {terminalStatusIcon}
-      {prBadge}
+      {shownPrBadge}
       {diff ? (
         <span className="shrink-0 font-mono">
           <span className="text-diff-addition-foreground">+{formatDiffCount(diff.insertions)}</span>{" "}
@@ -1285,20 +1312,14 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
         className="pointer-events-none ml-auto inline-flex shrink-0 items-center gap-1"
       >
         {remoteMachineIcon}
-        <SidebarProviderStack
-          thread={thread}
-          providerEntryByInstanceId={props.providerEntryByInstanceId}
-        />
+        {providerStack}
       </span>
     </div>
   );
   const titleLineIcons = metaLineEmpty ? (
     <span aria-hidden className="inline-flex shrink-0 items-center gap-1">
       {remoteMachineIcon}
-      <SidebarProviderStack
-        thread={thread}
-        providerEntryByInstanceId={props.providerEntryByInstanceId}
-      />
+      {providerStack}
     </span>
   ) : null;
 
