@@ -1370,6 +1370,44 @@ it.layer(layerGitManagerTest)("GitManager", (it) => {
     }),
   );
 
+  it.effect("branch PR lookup accepts two remote names for one repository", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("t3code-git-manager-");
+      yield* initRepo(repoDir);
+      const originDir = yield* createBareRemote();
+      yield* runGit(repoDir, ["remote", "add", "mirror", originDir]);
+      yield* runGit(repoDir, ["remote", "add", "origin", originDir]);
+      yield* runGit(repoDir, ["checkout", "-b", "feature/two-names"]);
+      yield* runGit(repoDir, ["push", "origin", "feature/two-names"]);
+      yield* runGit(repoDir, ["fetch", "mirror"]);
+      yield* runGit(repoDir, ["checkout", "main"]);
+      yield* runGit(repoDir, ["branch", "-D", "feature/two-names"]);
+
+      const { manager } = yield* makeManager({
+        providerScenario: {
+          prListByHeadSelector: {
+            "feature/two-names": [
+              {
+                number: 219,
+                title: "Two names",
+                url: "https://github.com/pingdotgg/codething-mvp/pull/219",
+                baseRefName: "main",
+                headRefName: "feature/two-names",
+              },
+            ],
+          },
+        },
+      });
+
+      const pullRequest = yield* manager.branchPullRequest({
+        cwd: repoDir,
+        branch: "feature/two-names",
+      });
+
+      expect(pullRequest?.number).toBe(219);
+    }),
+  );
+
   it.effect("branch PR lookup rejects ambiguous deleted-branch remote refs", () =>
     Effect.gen(function* () {
       const repoDir = yield* makeTempDir("t3code-git-manager-");
