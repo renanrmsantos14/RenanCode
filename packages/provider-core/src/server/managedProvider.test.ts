@@ -631,6 +631,46 @@ describe("makeManagedServerProvider", () => {
     ).pipe(Effect.provide(layerAlwaysRunTest)),
   );
 
+  it.effect(
+    "records a failed usage poll without touching windows and clears it on the next read",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const limits = {
+            checkedAt: "2026-04-10T00:00:01.000Z",
+            windows: [{ id: "seven_day", kind: "weekly", label: "Weekly", usedPercent: 20 }],
+          } as const;
+          const provider = yield* makeManagedServerProvider<TestSettings>({
+            resolveMaintenance: () => Effect.succeed(maintenanceCapabilities),
+            getSettings: Effect.succeed({ enabled: true }),
+            streamSettings: Stream.empty,
+            haveSettingsChanged: (previous, next) => previous.enabled !== next.enabled,
+            initialSnapshot: () => Effect.succeed(initialSnapshot),
+            checkProvider: Effect.succeed({ ...refreshedSnapshot, usageLimits: limits }),
+            refreshOnInterval: false,
+          });
+          yield* Stream.take(provider.streamChanges, 1).pipe(Stream.runDrain);
+
+          yield* provider.recordUsageReading!({
+            _tag: "failed",
+            at: "2026-04-10T00:02:00.000Z",
+            reason: "rateLimited",
+          });
+          assert.deepStrictEqual((yield* provider.getSnapshot).usageLimits, {
+            ...limits,
+            lastError: { at: "2026-04-10T00:02:00.000Z", reason: "rateLimited" },
+          });
+
+          const fresh = {
+            checkedAt: "2026-04-10T00:03:00.000Z",
+            windows: [{ ...limits.windows[0], usedPercent: 25 }],
+          };
+          yield* provider.recordUsageReading!({ _tag: "ok", limits: fresh });
+          assert.deepStrictEqual((yield* provider.getSnapshot).usageLimits, fresh);
+        }),
+      ).pipe(Effect.provide(layerAlwaysRunTest)),
+  );
+
   it.effect("keeps live usage windows across a failed probe and a stale enrichment", () =>
     Effect.scoped(
       Effect.gen(function* () {

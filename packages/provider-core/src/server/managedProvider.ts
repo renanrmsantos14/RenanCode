@@ -1,5 +1,6 @@
 import {
   DEFAULT_PROVIDER_HEALTH_REFRESH_INTERVAL,
+  type ProviderInstanceId,
   type ServerProvider,
   ServerSettingsError,
 } from "@t3tools/contracts";
@@ -16,7 +17,12 @@ import * as Stream from "effect/Stream";
 import * as Semaphore from "effect/Semaphore";
 
 import * as ProviderHost from "./ProviderHost.ts";
-import { applyUsageLimitsUpdate, resolveUsageLimitsAfterProbe } from "./usageLimits.ts";
+import {
+  applyUsageLimitsUpdate,
+  applyUsageReadFailure,
+  applyUsageReading,
+  resolveUsageLimitsAfterProbe,
+} from "./usageLimits.ts";
 import type { ManagedServerProvider } from "./snapshot.ts";
 
 interface ProviderSnapshotState {
@@ -34,6 +40,21 @@ function withUsageLimits(
   const { usageLimits: _previous, ...rest } = snapshot;
   return usageLimits ? { ...rest, usageLimits } : rest;
 }
+
+/** Generic provider-status demand, or demand for this one instance. */
+export const shouldRunProviderStatusWork = (
+  host: Pick<ProviderHost.ProviderHost["Service"], "shouldRunBackgroundWork">,
+  instanceId: ProviderInstanceId,
+): Effect.Effect<boolean> =>
+  host
+    .shouldRunBackgroundWork({ type: "provider-status" })
+    .pipe(
+      Effect.flatMap((generic) =>
+        generic
+          ? Effect.succeed(true)
+          : host.shouldRunBackgroundWork({ type: "provider-status", instanceId }),
+      ),
+    );
 
 export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(function* <
   Settings,
@@ -214,6 +235,25 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
     },
   );
 
+  const recordUsageReading: NonNullable<ManagedServerProvider["recordUsageReading"]> =
+    Effect.fnUntraced(function* (reading) {
+      const snapshotToPublish = yield* Ref.modify(snapshotStateRef, (state) => {
+        const previous = state.snapshot.usageLimits;
+        const usageLimits =
+          reading._tag === "ok"
+            ? applyUsageReading({ previous, reading: reading.limits })
+            : applyUsageReadFailure({ previous, at: reading.at, reason: reading.reason });
+        if (usageLimits === previous) {
+          return [null, state] as const;
+        }
+        const snapshot = withUsageLimits(state.snapshot, usageLimits);
+        return [snapshot, { ...state, snapshot }] as const;
+      });
+      if (snapshotToPublish !== null) {
+        yield* PubSub.publish(changesPubSub, snapshotToPublish);
+      }
+    });
+
   const refreshSnapshot = Effect.fn("refreshSnapshot")(function* () {
     const nextSettings = yield* input.getSettings;
     return yield* applySnapshot(nextSettings, { forceRefresh: true });
@@ -293,12 +333,7 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
     ) {
       return false;
     }
-    const instanceId = state.snapshot.instanceId;
-    const [genericDemand, instanceDemand] = yield* Effect.all([
-      host.shouldRunBackgroundWork({ type: "provider-status" }),
-      host.shouldRunBackgroundWork({ type: "provider-status", instanceId }),
-    ]);
-    return genericDemand || instanceDemand;
+    return yield* shouldRunProviderStatusWork(host, state.snapshot.instanceId);
   });
 
   const getRefreshInterval =
@@ -374,6 +409,7 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
       .resolveMaintenance({ fresh: true })
       .pipe(Effect.andThen(refreshSnapshot), Effect.tapError(Effect.logError), Effect.orDie),
     applyUsageLimits,
+    recordUsageReading,
     refreshUsage: refreshUsage(),
     get streamChanges() {
       return Stream.fromPubSub(changesPubSub);

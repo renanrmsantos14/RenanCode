@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { applyUsageLimitsUpdate, resolveUsageLimitsAfterProbe } from "./usageLimits.ts";
+import {
+  applyUsageLimitsUpdate,
+  applyUsageReadFailure,
+  applyUsageReading,
+  resolveUsageLimitsAfterProbe,
+} from "./usageLimits.ts";
 
 const checkedAt = "2026-09-03T12:00:00.000Z";
 const session = {
@@ -115,8 +120,84 @@ describe("resolveUsageLimitsAfterProbe", () => {
   it("keeps the last good windows through a failed probe but not an unsupported one", () => {
     const failed = { checkedAt, windows: [], unavailable: { reason: "probeFailed" as const } };
     const unsupported = { checkedAt, windows: [], unavailable: { reason: "unsupported" as const } };
-    expect(resolveUsageLimitsAfterProbe({ published, probed: failed })).toBe(published);
+    expect(resolveUsageLimitsAfterProbe({ published, probed: failed })).toEqual({
+      ...published,
+      lastError: { at: checkedAt, reason: "requestFailed" },
+    });
+    const stillFailing = {
+      ...published,
+      lastError: { at: checkedAt, reason: "requestFailed" as const },
+    };
+    expect(resolveUsageLimitsAfterProbe({ published: stillFailing, probed: failed })).toBe(
+      stillFailing,
+    );
     expect(resolveUsageLimitsAfterProbe({ published, probed: unsupported })).toBe(unsupported);
     expect(resolveUsageLimitsAfterProbe({ published: undefined, probed: failed })).toBe(failed);
+  });
+});
+
+describe("usage readings", () => {
+  const later = "2026-09-03T12:01:00.000Z";
+  const reading = { checkedAt: later, windows: [{ ...session, usedPercent: 41 }, weekly] };
+
+  it("replaces windows, advances checkedAt, and clears a recorded failure", () => {
+    const failed = applyUsageReadFailure({
+      previous: published,
+      at: later,
+      reason: "rateLimited",
+    });
+    expect(failed?.lastError).toEqual({ at: later, reason: "rateLimited" });
+    expect(applyUsageReading({ previous: failed, reading })).toEqual(reading);
+  });
+
+  it("keeps windows and checkedAt through a failure and records the first failure of a reason only", () => {
+    const failed = applyUsageReadFailure({ previous: published, at: later, reason: "signedOut" });
+    expect(failed).toEqual({ ...published, lastError: { at: later, reason: "signedOut" } });
+    expect(
+      applyUsageReadFailure({
+        previous: failed,
+        at: "2026-09-03T12:02:00.000Z",
+        reason: "signedOut",
+      }),
+    ).toBe(failed);
+    expect(
+      applyUsageReadFailure({ previous: failed, at: later, reason: "requestFailed" })?.lastError
+        ?.reason,
+    ).toBe("requestFailed");
+  });
+
+  it("ignores failures without a good reading to attach to and readings older than the published one", () => {
+    expect(applyUsageReadFailure({ previous: undefined, at: later, reason: "signedOut" })).toBe(
+      undefined,
+    );
+    const unavailable = { checkedAt, windows: [], unavailable: { reason: "probeFailed" as const } };
+    expect(applyUsageReadFailure({ previous: unavailable, at: later, reason: "signedOut" })).toBe(
+      unavailable,
+    );
+    expect(
+      applyUsageReading({
+        previous: { ...published, checkedAt: later },
+        reading: { checkedAt, windows: [] },
+      }).checkedAt,
+    ).toBe(later);
+  });
+
+  it("keeps reset credits that the reading does not carry", () => {
+    const resetCredits = { availableCount: 1 };
+    expect(
+      applyUsageReading({ previous: { ...published, resetCredits }, reading }).resetCredits,
+    ).toEqual(resetCredits);
+  });
+
+  it("publishes an identical reading only once the last one is 120 s old, and a changed one at once", () => {
+    const first = applyUsageReading({
+      previous: published,
+      reading: { ...published, checkedAt: later },
+    });
+    expect(first).toBe(published);
+    const due = { ...published, checkedAt: "2026-09-03T12:02:00.000Z" };
+    expect(applyUsageReading({ previous: published, reading: due })).toEqual(due);
+    const changed = { checkedAt: later, windows: [{ ...session, usedPercent: 41 }, weekly] };
+    expect(applyUsageReading({ previous: published, reading: changed })).toEqual(changed);
   });
 });

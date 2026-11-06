@@ -84,7 +84,63 @@ describe("claudeUsageResponseToLimits", () => {
     ).toEqual({ overageIncluded: "Fable" });
   });
 
-  it("skips a window the endpoint reports without a utilization", () => {
+  it("reads the HTTP payload: scoped weekly from limits[], no session row for a null five_hour", () => {
+    const rate_limits = {
+      five_hour: null,
+      seven_day: { utilization: 41, resets_at: "2026-09-26T11:00:00.123456+00:00" },
+      ...({
+        limits: [
+          {
+            kind: "weekly_scoped",
+            scope: { model: { display_name: "Fable" } },
+            percent: 0,
+            is_active: false,
+            resets_at: "2026-09-26T11:00:00.123456+00:00",
+          },
+          { kind: "session", percent: 3, resets_at: null },
+          { kind: "weekly_scoped", scope: null, percent: 9 },
+        ],
+      } as object),
+    };
+    const result = claudeUsageResponseToLimits({
+      checkedAt,
+      response: { rate_limits_available: true, rate_limits },
+    });
+    expect(result.limits.windows).toEqual([
+      expect.objectContaining({
+        id: "seven_day",
+        usedPercent: 41,
+        resetsAt: "2026-09-26T11:00:00.123Z",
+      }),
+      expect.objectContaining({
+        id: "seven_day_fable",
+        label: "Weekly · Fable",
+        usedPercent: 0,
+        resetsAt: "2026-09-26T11:00:00.123Z",
+      }),
+    ]);
+    expect(result.names).toEqual({ overageIncluded: "Fable" });
+  });
+
+  it("does not duplicate a scoped window that arrives in both model_scoped and limits[]", () => {
+    const { limits } = claudeUsageResponseToLimits({
+      checkedAt,
+      response: {
+        rate_limits_available: true,
+        rate_limits: {
+          ...({
+            model_scoped: [{ display_name: "Fable", utilization: 7, resets_at: null }],
+            limits: [
+              { kind: "weekly_scoped", scope: { model: { display_name: "Fable" } }, percent: 8 },
+            ],
+          } as object),
+        },
+      },
+    });
+    expect(limits.windows.map((w) => [w.id, w.usedPercent])).toEqual([["seven_day_fable", 7]]);
+  });
+
+  it("keeps an unstarted session at 0% and skips other windows without a utilization", () => {
     expect(
       claudeUsageResponseToLimits({
         checkedAt,
@@ -93,10 +149,20 @@ describe("claudeUsageResponseToLimits", () => {
           rate_limits: {
             five_hour: { utilization: null, resets_at: null },
             seven_day: { utilization: 250, resets_at: null },
+            ...({
+              model_scoped: [{ display_name: "Ghost", utilization: null, resets_at: null }],
+            } as object),
           },
         },
       }).limits.windows,
     ).toEqual([
+      {
+        id: "five_hour",
+        kind: "session",
+        label: "Session",
+        usedPercent: 0,
+        windowDurationMins: 300,
+      },
       {
         id: "seven_day",
         kind: "weekly",

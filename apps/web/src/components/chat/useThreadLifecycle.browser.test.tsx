@@ -128,7 +128,6 @@ function RestoreBranchHarness(props: {
     sendInFlightRef: { current: false },
     setOptimisticUserMessages: () => undefined,
     setThreadError: () => undefined,
-    clearUsageLimitsFor: () => undefined,
     beginLocalDispatch: () => undefined,
     resetLocalDispatch: () => undefined,
     scrollToEnd: () => undefined,

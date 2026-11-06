@@ -41,12 +41,16 @@ export const isRelayUnavailable = (error: unknown): boolean =>
 
 // Retry-After is either delay-seconds or an HTTP date (RFC 9110 §10.2.3).
 const MAX_RELAY_RETRY_AFTER_MILLIS = 15 * 60 * 1000;
-function parseRetryAfterMillis(value: string | undefined, nowMillis: number): number | undefined {
+export function parseRetryAfterMillis(
+  value: string | undefined,
+  nowMillis: number,
+  maxMillis = MAX_RELAY_RETRY_AFTER_MILLIS,
+): number | undefined {
   if (value === undefined) return undefined;
   const trimmed = value.trim();
   const millis = /^\d+$/.test(trimmed) ? Number(trimmed) * 1000 : Date.parse(trimmed) - nowMillis;
   if (!Number.isFinite(millis) || millis <= 0) return undefined;
-  return Math.min(millis, MAX_RELAY_RETRY_AFTER_MILLIS);
+  return Math.min(millis, maxMillis);
 }
 
 /** The relay's requested wait, found anywhere in a failure's cause chain. */

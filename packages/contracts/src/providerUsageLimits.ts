@@ -30,6 +30,7 @@ export type ServerProviderResetCredits = typeof ServerProviderResetCredits.Type;
 
 /** Clear bars for unavailable accounts; retain last good bars after a failed probe. */
 export const ServerProviderUsageLimits = Schema.Struct({
+  /** Time of the last good reading; a failed read never advances it. */
   checkedAt: IsoDateTime,
   windows: ForwardCompatibleArray(ServerProviderUsageWindow),
   credentialFingerprint: Schema.optional(TrimmedNonEmptyString),
@@ -44,6 +45,13 @@ export const ServerProviderUsageLimits = Schema.Struct({
     Schema.Struct({
       reason: Schema.Literals(["unsupported", "probeFailed"]),
       message: Schema.optional(TrimmedNonEmptyString),
+    }),
+  ),
+  /** Why the latest read failed while the windows above stay on screen; cleared by the next good read. */
+  lastError: Schema.optional(
+    Schema.Struct({
+      at: IsoDateTime,
+      reason: Schema.Literals(["rateLimited", "signedOut", "requestFailed"]),
     }),
   ),
 });

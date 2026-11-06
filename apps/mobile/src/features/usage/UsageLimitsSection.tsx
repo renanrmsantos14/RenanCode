@@ -35,6 +35,7 @@ import {
   limitsRefreshFailuresAtom,
   refreshEnvironmentLimits,
 } from "./usageLimitsRefresh";
+import { MaskedAccountLabel } from "./MaskedAccountLabel";
 import { usageProviderKind, useProviderColors } from "./usageProviders";
 
 const PACE_LABEL = { ahead: "ahead of pace", on: "on pace", under: "under pace" } as const;
@@ -129,25 +130,12 @@ function WindowRow(props: {
 }
 
 function AccountInstanceLabel({ value }: { readonly value: string }) {
-  const [revealed, setRevealed] = useState(false);
-  if (!value.includes("@")) {
-    return (
-      <Text className="shrink text-xs text-foreground-tertiary" numberOfLines={1}>
-        · {value}
-      </Text>
-    );
-  }
   return (
-    <Pressable
-      className="shrink active:opacity-60"
-      accessibilityRole="button"
-      accessibilityLabel={revealed ? "Hide account label" : "Reveal account label"}
-      onPress={() => setRevealed((current) => !current)}
-    >
-      <Text className="text-xs text-foreground-tertiary" numberOfLines={1}>
-        · {revealed ? value : "••••••@••••••"}
-      </Text>
-    </Pressable>
+    <MaskedAccountLabel
+      value={value}
+      className="shrink text-xs text-foreground-tertiary"
+      prefix="· "
+    />
   );
 }
 

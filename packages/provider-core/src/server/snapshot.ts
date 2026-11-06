@@ -1,6 +1,7 @@
 import type {
   ProviderUsageLimitsUpdate,
   ServerProvider,
+  ServerProviderUsageLimits,
   ServerSettingsError,
 } from "@t3tools/contracts";
 import type * as Effect from "effect/Effect";
@@ -19,5 +20,18 @@ export interface ManagedServerProvider {
   /** Merge windows by ID; updates with no usable window leave the snapshot untouched. */
   readonly applyUsageLimits: (
     update: ProviderUsageLimitsUpdate & { readonly checkedAt: string },
+  ) => Effect.Effect<void>;
+  /**
+   * A full out-of-band usage poll. Success replaces the windows and advances `checkedAt`;
+   * failure keeps both and records why. Absent where the provider has no such poll.
+   */
+  readonly recordUsageReading?: (
+    reading:
+      | { readonly _tag: "ok"; readonly limits: ServerProviderUsageLimits }
+      | {
+          readonly _tag: "failed";
+          readonly at: string;
+          readonly reason: NonNullable<ServerProviderUsageLimits["lastError"]>["reason"];
+        },
   ) => Effect.Effect<void>;
 }
