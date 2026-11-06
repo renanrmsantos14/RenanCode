@@ -39,7 +39,7 @@ interface BranchToolbarEnvironmentSelectorProps {
 const AUTO_VALUE = "action:auto";
 const ADD_MACHINE_VALUE = "action:add-machine";
 const CLAUDE_CLOUD_VALUE = "action:claude-cloud";
-const CLAUDE_CLOUD_LABEL = "Claude cloud";
+export const CLAUDE_CLOUD_LABEL = "Claude cloud";
 const environmentValue = (id: EnvironmentId) => `env:${id}`;
 
 export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvironmentSelector({
