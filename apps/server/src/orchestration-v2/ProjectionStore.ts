@@ -263,6 +263,8 @@ export interface ProjectionCheckpointCaptureContext {
   readonly readyCheckpointOrdinals: ReadonlyArray<number>;
   /** Side chats share their parent's worktree and never snapshot it. */
   readonly sideChat: boolean;
+  readonly creationSource: string | null;
+  readonly relationshipToParent: string | null;
 }
 
 const RollbackTargetAttempts = Schema.Array(
@@ -770,6 +772,10 @@ function preserveRunRecordedFields(
     current.restartCancelledBackgroundWork !== undefined
       ? { restartCancelledBackgroundWork: current.restartCancelledBackgroundWork }
       : {}),
+    // Only run.next-action-suggestion-updated changes it, so a stale run snapshot cannot regress it.
+    ...(current.nextActionSuggestion === undefined
+      ? {}
+      : { nextActionSuggestion: current.nextActionSuggestion }),
   };
 }
 
@@ -896,6 +902,15 @@ export function applyToProjection(
                 ...run,
                 restartCancelledBackgroundWork: event.payload.restartCancelledBackgroundWork,
               }
+            : run,
+        ),
+      };
+    case "run.next-action-suggestion-updated":
+      return {
+        ...base,
+        runs: base.runs.map((run) =>
+          run.id === event.payload.runId
+            ? { ...run, nextActionSuggestion: event.payload.nextActionSuggestion }
             : run,
         ),
       };
@@ -1100,6 +1115,9 @@ const encodeThreadUpdatedAt = Schema.encodeEffect(
 const encodeRunPayload = Schema.encodeEffect(Schema.fromJsonString(OrchestrationV2RunJsonSchema));
 const encodeRestartCancelledBackgroundWork = Schema.encodeEffect(
   Schema.fromJsonString(OrchestrationV2RunJsonSchema.fields.restartCancelledBackgroundWork),
+);
+const encodeNextActionSuggestion = Schema.encodeEffect(
+  Schema.fromJsonString(OrchestrationV2RunJsonSchema.fields.nextActionSuggestion),
 );
 const encodeRunAttemptPayload = Schema.encodeEffect(
   Schema.fromJsonString(OrchestrationV2RunAttemptJsonSchema),
@@ -2012,6 +2030,18 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       END
     `;
 
+    const pinRecordedRunField = (payload: Statement.Fragment, path: string) => sql`
+      CASE
+        WHEN json_type(orchestration_v2_projection_runs.payload_json, ${path}) IS NOT NULL
+        THEN json_set(
+          ${payload},
+          ${path},
+          json_extract(orchestration_v2_projection_runs.payload_json, ${path})
+        )
+        ELSE ${payload}
+      END
+    `;
+
     const apply: ProjectionStoreV2Shape["apply"] =
       /* This helper runs for individual orchestration events; the enclosing operation owns the span. */
       Effect.fnUntraced(
@@ -2140,9 +2170,12 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 status = excluded.status,
                 requested_at = excluded.requested_at,
                 completed_at = excluded.completed_at,
-                payload_json = ${keepRecordedRunField(
-                  keepRecordedRunField(sql`excluded.payload_json`, "$.delegatedCompletion"),
-                  "$.restartCancelledBackgroundWork",
+                payload_json = ${pinRecordedRunField(
+                  keepRecordedRunField(
+                    keepRecordedRunField(sql`excluded.payload_json`, "$.delegatedCompletion"),
+                    "$.restartCancelledBackgroundWork",
+                  ),
+                  "$.nextActionSuggestion",
                 )}
             `;
               break;
@@ -2158,6 +2191,21 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 payload_json,
                 '$.restartCancelledBackgroundWork',
                 json(${workJson})
+              )
+              WHERE run_id = ${event.payload.runId} AND thread_id = ${event.threadId}
+            `;
+              break;
+            }
+            case "run.next-action-suggestion-updated": {
+              const suggestionJson = yield* encodeNextActionSuggestion(
+                event.payload.nextActionSuggestion,
+              );
+              yield* sql`
+              UPDATE orchestration_v2_projection_runs
+              SET payload_json = json_set(
+                payload_json,
+                '$.nextActionSuggestion',
+                json(${suggestionJson})
               )
               WHERE run_id = ${event.payload.runId} AND thread_id = ${event.threadId}
             `;
@@ -5328,8 +5376,14 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       sql
         .withTransaction(
           Effect.gen(function* () {
-            const threadRows = yield* sql<{ readonly side_chat: number | null }>`
-          SELECT json_extract(payload_json, '$.lineage.sideChat') AS side_chat
+            const threadRows = yield* sql<{
+              readonly side_chat: number | null;
+              readonly creation_source: string | null;
+              readonly relationship_to_parent: string | null;
+            }>`
+          SELECT json_extract(payload_json, '$.lineage.sideChat') AS side_chat,
+            json_extract(payload_json, '$.creationSource') AS creation_source,
+            json_extract(payload_json, '$.lineage.relationshipToParent') AS relationship_to_parent
           FROM orchestration_v2_projection_threads WHERE thread_id = ${threadId} LIMIT 1`;
             if (threadRows[0] === undefined) {
               return yield* new ProjectionStoreThreadNotFoundError({ threadId });
@@ -5371,6 +5425,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                   : yield* decodeProviderThreadPayload(providerRows[0].payload_json),
               readyCheckpointOrdinals: readyRows.map(({ ordinal }) => ordinal),
               sideChat: threadRows[0].side_chat === 1,
+              creationSource: threadRows[0].creation_source,
+              relationshipToParent: threadRows[0].relationship_to_parent,
             };
           }),
         )

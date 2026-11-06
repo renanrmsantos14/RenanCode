@@ -31,6 +31,7 @@ import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import * as ProviderTurnControlService from "./ProviderTurnControlService.ts";
 import * as ProviderTurnStartService from "./ProviderTurnStartService.ts";
 import * as RuntimeRequestService from "./RuntimeRequestService.ts";
+import * as NextActionSuggestionService from "./NextActionSuggestionService.ts";
 import * as ThreadTitleRegenerationService from "./ThreadTitleRegenerationService.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
 import * as ServerSettings from "../serverSettings.ts";
@@ -148,6 +149,10 @@ function layerExecutorFor(input: {
       RuntimeRequestService.RuntimeRequestServiceV2.of({
         respond: input.respond ?? (() => Effect.void),
       }),
+    ),
+    Layer.succeed(
+      NextActionSuggestionService.NextActionSuggestionService,
+      NextActionSuggestionService.NextActionSuggestionService.of({ execute: () => Effect.void }),
     ),
     Layer.succeed(
       ThreadTitleRegenerationService.ThreadTitleRegenerationService,

@@ -65,7 +65,6 @@ import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import * as HostResources from "./resourceTelemetry/HostResources.ts";
 import * as ManagedProjectFolders from "./project/ManagedProjectFolders.ts";
 import * as ScratchThreadPromotion from "./project/ScratchThreadPromotion.ts";
-import * as NextActionSuggestionService from "./orchestration-v2/NextActionSuggestionService.ts";
 import * as CacheKeepWarmService from "./orchestration-v2/CacheKeepWarmService.ts";
 import * as ThreadHandoffService from "./orchestration-v2/ThreadHandoffService.ts";
 import * as McpAppRequests from "./mcpApps/McpAppRequests.ts";
@@ -943,8 +942,6 @@ it.effect.each([
           namedProjectsRoot: process.cwd(),
         }),
         Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
-        Layer.mock(NextActionSuggestionService.NextActionSuggestionService)({}),
-        Layer.mock(NextActionSuggestionService.NextActionSuggestionService)({}),
         Layer.mock(CacheKeepWarmService.CacheKeepWarmService)({}),
         Layer.mock(ThreadHandoffService.ThreadHandoffService)({}),
         Layer.mock(ServerEnvironment.ServerEnvironment)({
@@ -1199,7 +1196,6 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
         namedProjectsRoot: process.cwd(),
       }),
       Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
-      Layer.mock(NextActionSuggestionService.NextActionSuggestionService)({}),
       Layer.mock(CacheKeepWarmService.CacheKeepWarmService)({}),
       Layer.mock(ThreadHandoffService.ThreadHandoffService)({}),
       Layer.mock(ServerEnvironment.ServerEnvironment)({
@@ -1389,7 +1385,6 @@ it.effect("a publish whose push fails still refreshes the new remote", () =>
       Layer.mock(DirectEndpoints.DirectEndpoints)({}),
       Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({ namedProjectsRoot: "/unused" }),
       Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
-      Layer.mock(NextActionSuggestionService.NextActionSuggestionService)({}),
       Layer.mock(CacheKeepWarmService.CacheKeepWarmService)({}),
       Layer.mock(ThreadHandoffService.ThreadHandoffService)({}),
       Layer.mock(ServerEnvironment.ServerEnvironment)({}),

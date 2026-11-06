@@ -117,6 +117,7 @@ function shouldPublishAgentAwarenessEvent(
     case "thread.interaction-mode-updated":
     case "thread.mcp-servers-updated":
     case "run.background-work-cancelled":
+    case "run.next-action-suggestion-updated":
     case "run-attempt.created":
     case "run-attempt.updated":
     case "node.updated":

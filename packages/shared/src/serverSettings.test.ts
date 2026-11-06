@@ -20,6 +20,7 @@ import {
   applyServerSettingsPatch,
   fallbackTextGenerationModelSelection,
   modelPreferencesMigrationPatch,
+  nextActionSuggestionsMigrationPatch,
   resolveModelPreferences,
   isModelSelectionProviderEnabled,
   parsePersistedServerObservabilitySettings,
@@ -935,6 +936,25 @@ describe("synchronized model preferences", () => {
     expect(modelPreferencesMigrationPatch(favoritesOnly, legacy)).toEqual({
       migrateModelPreferences: { providerModelPreferences: legacy.providerModelPreferences },
     });
+  });
+
+  it("migrates a saved next message suggestion toggle only into an untouched server", () => {
+    const on = { nextActionSuggestionsEnabled: true };
+    expect(nextActionSuggestionsMigrationPatch(DEFAULT_SERVER_SETTINGS, {})).toBeNull();
+    expect(
+      nextActionSuggestionsMigrationPatch(DEFAULT_SERVER_SETTINGS, {
+        nextActionSuggestionsEnabled: false,
+      }),
+    ).toBeNull();
+    const patch = nextActionSuggestionsMigrationPatch(DEFAULT_SERVER_SETTINGS, on)!;
+    expect(patch).toEqual(on);
+    const migrated = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, patch);
+    expect(migrated.nextActionSuggestionsEnabled).toBe(true);
+    expect(nextActionSuggestionsMigrationPatch(migrated, on)).toBeNull();
+    const cleared = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+      nextActionSuggestionsEnabled: false,
+    });
+    expect(nextActionSuggestionsMigrationPatch(cleared, on)).toBeNull();
   });
 
   it("keeps explicit clears when a delayed migration arrives from another device", () => {

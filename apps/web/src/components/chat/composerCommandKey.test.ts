@@ -76,6 +76,7 @@ describe("composerCommandKeyHandler next action suggestion", () => {
       DraftId.make("draft"),
       "Run the tests",
     );
+    expect(harness.dismissNextActionSuggestion).toHaveBeenCalledOnce();
   });
 
   it("dismisses the suggestion on Escape", () => {

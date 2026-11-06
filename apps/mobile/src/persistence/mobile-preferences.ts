@@ -118,6 +118,7 @@ export interface Preferences {
   readonly projectGroupingMode?: SidebarProjectGroupingMode;
   readonly planModeEnabled?: boolean;
   readonly toolCallVisibility?: ToolCallVisibility;
+  /** Legacy local toggle, read only to migrate "on" to server settings. */
   readonly nextActionSuggestionsEnabled?: boolean;
   readonly workingShelfEnabled?: boolean;
   readonly useLastProjectForNewThreads?: boolean;

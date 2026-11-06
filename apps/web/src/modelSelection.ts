@@ -336,6 +336,7 @@ export function defaultModelSelectionsAreMixed(
               ...clientSettings,
               ...settings,
               ...resolveModelPreferences(settings, clientSettings),
+              nextActionSuggestionsEnabled: clientSettings.nextActionSuggestionsEnabled,
             },
             providers,
             selection,

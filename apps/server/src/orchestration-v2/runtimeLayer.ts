@@ -322,7 +322,13 @@ const layerThreadTitleRegenerationProvided = ThreadTitleRegenerationService.laye
 );
 const layerNextActionSuggestionProvided = NextActionSuggestionService.layer.pipe(
   Layer.provide(
-    Layer.mergeAll(layerThreadManagementProvided, ProjectStore.layer, TextGeneration.layer),
+    Layer.mergeAll(
+      layerThreadManagementProvided,
+      ProjectStore.layer,
+      TextGeneration.layer,
+      layerEventSink,
+      IdAllocator.layer,
+    ),
   ),
 );
 const layerCacheKeepWarmProvided = CacheKeepWarmService.layer.pipe(
@@ -355,6 +361,7 @@ const layerEffectExecutorProvided = EffectWorker.layerExecutor.pipe(
       layerProviderTurnStartServiceProvided,
       layerRuntimeRequestServiceProvided,
       layerThreadTitleRegenerationProvided,
+      layerNextActionSuggestionProvided,
       layerThreadManagementProvided,
     ),
   ),
@@ -408,7 +415,6 @@ export const layerProduction = Layer.mergeAll(
   layerThreadLaunchProvided,
   layerScheduledTaskProvided,
   layerScratchThreadPromotionProvided,
-  layerNextActionSuggestionProvided,
   layerCacheKeepWarmProvided,
   layerThreadHandoffProvided,
   layerSecretRequestsProvided,

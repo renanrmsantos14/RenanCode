@@ -402,10 +402,6 @@ export function createThreadEnvironmentAtoms<R, E, StateError>(
       scheduler,
       concurrency,
     }),
-    suggestNextAction: createEnvironmentRpcCommand(runtime, {
-      label: "environment-data:commands:thread:suggest-next-action",
-      tag: WS_METHODS.threadsSuggestNextAction,
-    }),
     cacheKeepWarm: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:commands:thread:cache-keep-warm",
       tag: WS_METHODS.threadsCacheKeepWarm,

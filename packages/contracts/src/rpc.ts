@@ -173,7 +173,6 @@ import {
   GuestShareCreateResult,
 } from "./guestShare.ts";
 import { PullRequestReviewGuideResult } from "./pullRequestReviewGuide.ts";
-import { NextActionSuggestionInput, NextActionSuggestionResult } from "./nextActionSuggestion.ts";
 import {
   CacheKeepWarmInput,
   CacheKeepWarmStatus,
@@ -436,7 +435,6 @@ export const WS_METHODS = {
   projectsEnsureScratch: "projects.ensureScratch",
   projectsCreateNew: "projects.createNew",
   projectsCreateFromThread: "projects.createFromThread",
-  threadsSuggestNextAction: "threads.suggestNextAction",
   threadsCacheKeepWarm: "threads.cacheKeepWarm",
   threadsHandoff: "threads.handoff",
   claudeCloudStartSession: "claudeCloud.startSession",
@@ -1386,12 +1384,6 @@ const WsProjectsCreateFromThreadRpc = Rpc.make(WS_METHODS.projectsCreateFromThre
   error: Schema.Union([OrchestrationDispatchCommandError, EnvironmentAuthorizationError]),
 });
 
-const WsThreadsSuggestNextActionRpc = Rpc.make(WS_METHODS.threadsSuggestNextAction, {
-  payload: NextActionSuggestionInput,
-  success: NextActionSuggestionResult,
-  error: EnvironmentAuthorizationError,
-});
-
 const WsThreadsCacheKeepWarmRpc = Rpc.make(WS_METHODS.threadsCacheKeepWarm, {
   payload: CacheKeepWarmInput,
   success: CacheKeepWarmStatus,
@@ -2191,7 +2183,6 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsEnsureScratchRpc,
   WsProjectsCreateNewRpc,
   WsProjectsCreateFromThreadRpc,
-  WsThreadsSuggestNextActionRpc,
   WsThreadsCacheKeepWarmRpc,
   WsThreadsHandoffRpc,
   WsClaudeCloudStartSessionRpc,

@@ -688,6 +688,21 @@ export const OrchestrationV2ThreadLaunchWorkspaceStrategy = Schema.Union([
 export type OrchestrationV2ThreadLaunchWorkspaceStrategy =
   typeof OrchestrationV2ThreadLaunchWorkspaceStrategy.Type;
 
+export const OrchestrationV2RunNextActionSuggestion = Schema.Union([
+  Schema.Struct({ status: Schema.Literal("pending") }),
+  Schema.Struct({ status: Schema.Literal("ready"), text: TrimmedNonEmptyString }),
+  Schema.Struct({ status: Schema.Literal("none") }),
+]);
+export type OrchestrationV2RunNextActionSuggestion =
+  typeof OrchestrationV2RunNextActionSuggestion.Type;
+
+export const OrchestrationV2RunNextActionSuggestionUpdated = Schema.Struct({
+  runId: RunId,
+  nextActionSuggestion: OrchestrationV2RunNextActionSuggestion,
+});
+export type OrchestrationV2RunNextActionSuggestionUpdated =
+  typeof OrchestrationV2RunNextActionSuggestionUpdated.Type;
+
 export const ORCHESTRATION_V2_WORKSPACE_PREPARATION_FAILURE_CODE = "workspace_preparation_failed";
 
 export const OrchestrationV2Run = Schema.Struct({
@@ -724,6 +739,7 @@ export const OrchestrationV2Run = Schema.Struct({
   workspacePreparation: Schema.optional(OrchestrationV2ThreadLaunchWorkspaceStrategy),
   /** Starts a new provider conversation; earlier runs stay visible but never reach the provider. */
   freshContext: Schema.optional(Schema.Boolean),
+  nextActionSuggestion: Schema.optional(OrchestrationV2RunNextActionSuggestion),
 });
 export type OrchestrationV2Run = typeof OrchestrationV2Run.Type;
 
@@ -1994,6 +2010,11 @@ export const OrchestrationV2DomainEvent = Schema.Union([
   }),
   Schema.Struct({
     ...OrchestrationV2EventBase.fields,
+    type: Schema.Literal("run.next-action-suggestion-updated"),
+    payload: OrchestrationV2RunNextActionSuggestionUpdated,
+  }),
+  Schema.Struct({
+    ...OrchestrationV2EventBase.fields,
     type: Schema.Literal("run-attempt.created"),
     payload: OrchestrationV2RunAttempt,
   }),
@@ -2887,6 +2908,11 @@ export const OrchestrationV2DomainEventJson = Schema.Union([
     ...OrchestrationV2JsonEventBaseFields,
     type: Schema.Literal("run.background-work-cancelled"),
     payload: OrchestrationV2RunBackgroundWorkCancelled,
+  }),
+  Schema.Struct({
+    ...OrchestrationV2JsonEventBaseFields,
+    type: Schema.Literal("run.next-action-suggestion-updated"),
+    payload: OrchestrationV2RunNextActionSuggestionUpdated,
   }),
   Schema.Struct({
     ...OrchestrationV2JsonEventBaseFields,

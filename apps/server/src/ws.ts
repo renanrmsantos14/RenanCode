@@ -222,7 +222,6 @@ import * as ProjectService from "./project/ProjectService.ts";
 import { threadWorkspaceRoot } from "./project/threadWorkspaceRoot.ts";
 import * as ManagedProjectFolders from "./project/ManagedProjectFolders.ts";
 import * as ScratchThreadPromotion from "./project/ScratchThreadPromotion.ts";
-import * as NextActionSuggestionService from "./orchestration-v2/NextActionSuggestionService.ts";
 import * as CacheKeepWarmService from "./orchestration-v2/CacheKeepWarmService.ts";
 import { KEEP_WARM_DEFAULT_HOURS } from "@t3tools/shared/promptCache";
 import * as ThreadHandoffService from "./orchestration-v2/ThreadHandoffService.ts";
@@ -1418,7 +1417,6 @@ export const layerWsRpc = (
       const projectService = yield* ProjectService.ProjectService;
       const managedFolders = yield* ManagedProjectFolders.ManagedProjectFolders;
       const scratchThreadPromotion = yield* ScratchThreadPromotion.ScratchThreadPromotion;
-      const nextActionSuggestions = yield* NextActionSuggestionService.NextActionSuggestionService;
       const cacheKeepWarm = yield* CacheKeepWarmService.CacheKeepWarmService;
       const threadHandoff = yield* ThreadHandoffService.ThreadHandoffService;
       // Optional so test servers need not build the Claude cloud client.
@@ -2930,7 +2928,6 @@ export const layerWsRpc = (
                 (cause) => new OrchestrationDispatchCommandError({ message: cause.message, cause }),
               ),
             ),
-        [WS_METHODS.threadsSuggestNextAction]: (input) => nextActionSuggestions.suggest(input),
         [WS_METHODS.threadsCacheKeepWarm]: (input) =>
           input.action === "start"
             ? cacheKeepWarm.start(input.threadId, input.hours ?? KEEP_WARM_DEFAULT_HOURS)

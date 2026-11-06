@@ -20,6 +20,7 @@ import * as CheckpointService from "./CheckpointService.ts";
 import * as EventSink from "./EventSink.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProjectionStore from "./ProjectionStore.ts";
+import * as ServerSettings from "../serverSettings.ts";
 
 export class CheckpointCaptureExecutionError extends Schema.TaggedError<CheckpointCaptureExecutionError>()(
   "CheckpointCaptureExecutionError",
@@ -53,6 +54,7 @@ export const layer: Layer.Layer<
   | EventSink.EventSinkV2
   | IdAllocator.IdAllocatorV2
   | ProjectionStore.ProjectionStoreV2
+  | ServerSettings.ServerSettingsService
 > = Layer.effect(
   CheckpointCaptureServiceV2,
   Effect.gen(function* () {
@@ -60,14 +62,31 @@ export const layer: Layer.Layer<
     const eventSink = yield* EventSink.EventSinkV2;
     const ids = yield* IdAllocator.IdAllocatorV2;
     const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const serverSettings = yield* ServerSettings.ServerSettingsService;
+
+    // Scheduled tasks and MCP launches run unattended, so nobody is waiting to type a reply.
+    const wantsNextActionSuggestion = Effect.fn(
+      "CheckpointCaptureService.wantsNextActionSuggestion",
+    )(function* (
+      context: ProjectionStore.ProjectionCheckpointCaptureContext,
+      run: OrchestrationV2Run,
+    ) {
+      if (context.sideChat) return false;
+      if (context.creationSource === "mcp" && context.relationshipToParent !== "subagent") {
+        return false;
+      }
+      if ((yield* serverSettings.getSettings).nextActionSuggestionsEnabled !== true) return false;
+      const message = yield* projections.getRunMessage(run.threadId, run.id);
+      return message?.scheduledTaskId === undefined;
+    });
 
     const execute = Effect.fn("orchestrationV2.checkpointCapture.execute")(function* (input: {
       readonly threadId: ThreadId;
       readonly runId: RunId;
       readonly scopeId: CheckpointScopeId;
     }) {
-      const { run, rootNode, scope, providerThread, readyCheckpointOrdinals, sideChat } =
-        yield* projections.getCheckpointCaptureContext(input.threadId, input);
+      const context = yield* projections.getCheckpointCaptureContext(input.threadId, input);
+      const { run, rootNode, scope, providerThread, readyCheckpointOrdinals, sideChat } = context;
       // A Claude cloud turn edits the cloud's clone, so the local checkout has nothing to capture.
       const skipFilesystem = sideChat || isClaudeCloudThreadId(input.threadId);
       // Stopped runs remain terminal; their checkpoint is the next message's rollback point.
@@ -135,12 +154,30 @@ export const layer: Layer.Layer<
       // Omit delegatedCompletion to preserve cohort writes made after capture loaded the run.
       const { delegatedCompletion: _delegatedCompletion, ...runWithoutDelegatedCompletion } = run;
       const commandId = CommandId.make(`command:effect:checkpoint.capture:${run.id}`);
+      const suggestNextAction =
+        !stopped &&
+        (yield* wantsNextActionSuggestion(context, run).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning("Next action suggestion eligibility failed", { cause }).pipe(
+              Effect.as(false),
+            ),
+          ),
+        ));
       yield* eventSink.commitCommand({
         commandId,
         threadId: input.threadId,
         commandType: "checkpoint.capture",
         acceptedAt: capturedAt,
-        effects: [],
+        effects: suggestNextAction
+          ? [
+              {
+                id: `effect:next-action-suggestion.generate:${run.id}`,
+                commandId: CommandId.make(`command:effect:next-action-suggestion:${run.id}`),
+                threadId: input.threadId,
+                request: { type: "next-action-suggestion.generate", runId: run.id },
+              },
+            ]
+          : [],
         events: [
           ...(threadStartCheckpoint === null
             ? []
@@ -235,6 +272,19 @@ export const layer: Layer.Layer<
                   },
                 },
               ]),
+          ...(suggestNextAction
+            ? [
+                {
+                  id: yield* ids.allocate.event({ threadId: input.threadId, commandId }),
+                  type: "run.next-action-suggestion-updated" as const,
+                  threadId: input.threadId,
+                  runId: run.id,
+                  providerInstanceId: run.providerInstanceId,
+                  occurredAt: capturedAt,
+                  payload: { runId: run.id, nextActionSuggestion: { status: "pending" as const } },
+                },
+              ]
+            : []),
         ],
       });
     });

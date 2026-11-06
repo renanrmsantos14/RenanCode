@@ -59,6 +59,7 @@ import * as McpAppModelContext from "../../mcpApps/McpAppModelContext.ts";
 import * as PreviewAgentActivity from "../../preview/PreviewAgentActivity.ts";
 import * as RunExecutionService from "../RunExecutionService.ts";
 import * as RunFinalizationService from "../RunFinalizationService.ts";
+import * as NextActionSuggestionService from "../NextActionSuggestionService.ts";
 import * as ThreadTitleRegenerationService from "../ThreadTitleRegenerationService.ts";
 import * as RuntimePolicy from "../RuntimePolicy.ts";
 import * as TurnItemPositionStore from "../TurnItemPositionStore.ts";
@@ -458,6 +459,7 @@ export function layerWithRegistry<Error>(
         layerCheckpointServiceProvided,
         layerEventSinkProvided,
         IdAllocator.layer,
+        layerServerSettings,
         layerStores,
       ),
     ),
@@ -473,6 +475,9 @@ export function layerWithRegistry<Error>(
       }),
     }),
   );
+  const layerNextActionSuggestionTest = Layer.mock(
+    NextActionSuggestionService.NextActionSuggestionService,
+  )({ execute: () => Effect.void });
   const layerOrchestratorProvided = Orchestrator.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -525,6 +530,7 @@ export function layerWithRegistry<Error>(
         layerProviderTurnStartServiceProvided,
         layerRuntimeRequestServiceProvided,
         layerThreadTitleRegenerationTest,
+        layerNextActionSuggestionTest,
         layerServerSettings,
         layerThreadManagementProvided,
       ),

@@ -165,12 +165,19 @@ into a normal draft.
 ## Suggested next message
 
 Turn on **Settings > Chat > Suggest next message** to get a guess at your next message after a turn
-you watched finishes. It appears in the empty composer as faded text. Press `Tab` to put it in the
-composer without sending, or `Escape` to dismiss it. Typing, switching threads, or starting another
-turn also discards it. Suggestions use your text generation model, so each one is a small model
-request on the environment running the thread.
+finishes. The setting belongs to the environment running the thread, so it applies to web, desktop,
+and mobile alike. The environment writes the suggestion when the turn completes, so it is waiting
+when you return to the thread, and a short "Sugerindo…" placeholder shows until it is ready.
 
-On mobile, turn it on in **Settings > Chat**. The suggestion appears above the composer; tap it to
+The suggestion appears in the empty composer as faded text. Press `Tab` to put it in the composer
+without sending, or `Escape` to dismiss it on that device. Typing only hides it; clearing the
+composer brings it back. Switching threads keeps it, and starting another turn replaces it. Scheduled
+tasks, turns launched by another tool, interrupted turns, and failed turns get no suggestion.
+
+Each suggestion uses your text generation model, so it is a small model request on the environment.
+With the setting off, the environment makes no such requests.
+
+On mobile, turn it on in **Settings > Threads**. The suggestion appears above the composer; tap it to
 put it in the composer, or tap the close button to dismiss it.
 
 ## Edit an earlier prompt

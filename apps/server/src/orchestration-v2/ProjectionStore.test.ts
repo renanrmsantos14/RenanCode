@@ -2500,6 +2500,55 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
       assert.deepEqual(recovery?.restartCancelledBackgroundWork, work);
     }),
   );
+  it.effect("keeps a recorded next action suggestion across stale run updates", () =>
+    Effect.gen(function* () {
+      const store = yield* ProjectionStore.ProjectionStoreV2;
+      const threadId = yield* addRolledBackRecoveryCandidate("next-action-suggestion");
+      const run = (yield* store.getThreadProjection(threadId)).runs[0]!;
+      const now = yield* DateTime.now;
+      const update = (id: string, payload: typeof run) =>
+        store.apply({
+          id: EventId.make(`event:next-action-suggestion:${id}`),
+          type: "run.updated",
+          threadId,
+          runId: run.id,
+          providerInstanceId,
+          occurredAt: now,
+          payload,
+        });
+      const suggest = (id: string, nextActionSuggestion: typeof run.nextActionSuggestion) =>
+        store.apply({
+          id: EventId.make(`event:next-action-suggestion:${id}`),
+          type: "run.next-action-suggestion-updated",
+          threadId,
+          runId: run.id,
+          providerInstanceId,
+          occurredAt: now,
+          payload: { runId: run.id, nextActionSuggestion: nextActionSuggestion! },
+        });
+      const read = Effect.gen(function* () {
+        const projected = (yield* store.getThreadProjection(threadId)).runs[0];
+        const [record] = (yield* store.getThreadRecords(threadId, ["runs"], {
+          runIds: [run.id],
+        })).runs;
+        assert.deepEqual(record?.nextActionSuggestion, projected?.nextActionSuggestion);
+        return projected?.nextActionSuggestion;
+      });
+
+      yield* update("completed", { ...run, status: "completed", completedAt: now });
+      yield* suggest("pending", { status: "pending" });
+      assert.deepEqual(yield* read, { status: "pending" });
+      yield* suggest("ready", { status: "ready", text: "Run the tests" });
+      yield* update("stale", { ...run, status: "completed", completedAt: now });
+      yield* update("stale-pending", {
+        ...run,
+        status: "completed",
+        completedAt: now,
+        nextActionSuggestion: { status: "pending" },
+      });
+      assert.deepEqual(yield* read, { status: "ready", text: "Run the tests" });
+    }),
+  );
   it.effect("record reads select subagents by id", () => subagentRecordsSelectById);
   it.effect(
     "command reads skip finished leaf nodes of finished runs",
