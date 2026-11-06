@@ -30,8 +30,16 @@ import type { SnoozePresetSetting } from "@t3tools/contracts/settings";
 import { canSnooze } from "@t3tools/client-runtime/state/thread-settled";
 import { threadChipCopyTarget } from "@t3tools/client-runtime/thread-reference";
 import type { MenuAction } from "@react-native-menu/menu";
-import { memo, useCallback, useMemo, useRef, useState, type ComponentProps } from "react";
-import { Platform, Pressable, useWindowDimensions, View } from "react-native";
+import {
+  memo,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
+import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 
 import type { ThreadListProvider } from "../../state/thread-list-environments";
@@ -73,7 +81,9 @@ import {
   resolveThreadListV2Status,
   resolveThreadListV2ProviderDrivers,
   resolveThreadListV2SwipeActions,
+  layoutThreadListV2RowMenuActions,
   type ThreadListV2Status,
+  type ThreadListV2Subsessions,
 } from "./threadListV2";
 import { QueuedMessageIcon } from "./queued-message-icon";
 import { shouldRecedeThreadRow } from "./thread-row-emphasis";
@@ -622,6 +632,86 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
 
 const PREFETCH_PRESS_DELAY_MS = 100;
 
+const SUBSESSION_INDENT = 14;
+
+/** Indents a subsession row under its parent with a guide line per level, and folds a parent's subsessions. */
+function ThreadListV2SubsessionFrame(props: {
+  readonly depth: number;
+  readonly subsessions: ThreadListV2Subsessions | null;
+  readonly threadKey: string;
+  readonly sidebarPane: boolean;
+  readonly onToggle: ((threadKey: string) => void) | undefined;
+  readonly children: ReactNode;
+}) {
+  const { depth, subsessions, sidebarPane } = props;
+  if (depth === 0 && subsessions === null) return props.children;
+  const hiddenStatus =
+    subsessions?.collapsed === true && subsessions.hiddenStatus !== null
+      ? STATUS_LABEL_BY_STATUS[subsessions.hiddenStatus]
+      : undefined;
+  const mutedClassName = sidebarPane ? "text-drawer-foreground-muted" : "text-foreground-muted";
+  return (
+    <View style={{ paddingLeft: depth * SUBSESSION_INDENT }}>
+      {Array.from({ length: depth }, (_, level) => (
+        <View
+          key={level}
+          pointerEvents="none"
+          className={sidebarPane ? "bg-drawer-border" : "bg-border"}
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: level * SUBSESSION_INDENT + 12,
+            width: StyleSheet.hairlineWidth,
+          }}
+        />
+      ))}
+      {props.children}
+      {subsessions ? (
+        <Pressable
+          accessibilityLabel={subsessions.collapsed ? "Expand subsessions" : "Collapse subsessions"}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: !subsessions.collapsed }}
+          className={cn(
+            "min-h-8 flex-row items-center gap-1.5",
+            sidebarPane ? "px-3" : "bg-screen px-5",
+          )}
+          hitSlop={6}
+          onPress={() => props.onToggle?.(props.threadKey)}
+          style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+        >
+          <SymbolView
+            name="chevron.down"
+            size={10}
+            tintColorClassName={
+              sidebarPane ? "accent-drawer-foreground-muted" : "accent-foreground-muted"
+            }
+            type="monochrome"
+            style={{ transform: [{ rotate: subsessions.collapsed ? "-90deg" : "0deg" }] }}
+          />
+          <Text className={cn("text-xs", mutedClassName)}>
+            {subsessions.count} {subsessions.count === 1 ? "subsession" : "subsessions"}
+          </Text>
+          {hiddenStatus ? (
+            <>
+              <SymbolView
+                name={hiddenStatus.icon}
+                size={12}
+                tintColorClassName={hiddenStatus.iconTintClassName}
+                type="monochrome"
+                weight="semibold"
+              />
+              <Text className={cn("text-xs font-t3-bold", hiddenStatus.className)}>
+                {hiddenStatus.label}
+              </Text>
+            </>
+          ) : null}
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly thread: EnvironmentThreadShell;
   readonly variant: "card" | "slim";
@@ -639,6 +729,9 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly environmentMachine?: EnvironmentMachineKind;
   readonly pane?: "screen" | "sidebar";
   readonly showTrailingDivider?: boolean;
+  readonly depth?: number;
+  readonly subsessions?: ThreadListV2Subsessions | null;
+  readonly onToggleSubsessions?: (threadKey: string) => void;
   readonly selected?: boolean;
   readonly fullSwipeWidth?: number;
   readonly onSelectThread: (thread: EnvironmentThreadShell) => void;
@@ -838,9 +931,9 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     ],
     [snoozePresets],
   );
-  const arrangementMenuItems = useMemo<MenuAction[]>(
-    () => [
-      ...(props.reorderSupported === true
+  const reorderMenuItems = useMemo<MenuAction[]>(
+    () =>
+      props.reorderSupported === true
         ? [
             { id: "arrange", title: "Arrange threads…", image: "line.3.horizontal" },
             {
@@ -856,22 +949,19 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
               attributes: { disabled: props.canMoveDown !== true },
             } satisfies MenuAction,
           ]
-        : []),
-      ...(props.pinningSupported
+        : [],
+    [props.canMoveDown, props.canMoveUp, props.reorderSupported],
+  );
+  const pinMenuItems = useMemo<MenuAction[]>(
+    () =>
+      props.pinningSupported
         ? [
             thread.pinnedAt != null
               ? { id: "unpin", title: "Unpin", image: "pin.slash" }
               : { id: "pin", title: "Pin", image: "pin" },
           ]
-        : []),
-    ],
-    [
-      props.canMoveDown,
-      props.canMoveUp,
-      props.reorderSupported,
-      props.pinningSupported,
-      thread.pinnedAt,
-    ],
+        : [],
+    [props.pinningSupported, thread.pinnedAt],
   );
   const settlementMenuItems = useMemo<MenuAction[]>(
     () => [
@@ -932,66 +1022,90 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     ],
     [canTurnIntoProject, props.titleRegenerationSupported, thread.runtime, isRegeneratingTitle],
   );
-  const snoozableCardMenuActions = useMemo<MenuAction[]>(
-    () => [
-      { id: "settle", title: "Settle", image: "checkmark" },
-      {
-        id: "snooze",
-        title: "Snooze",
-        image: "clock",
-        subactions: snoozePresetActions,
-      },
-      ...arrangementMenuItems,
-      ...titleMenuItems,
-      ...settlementMenuItems,
-      LEGACY_MENU_ACTIONS[0]!,
-      { id: "delete", title: "Delete", image: "trash", attributes: { destructive: true } },
-    ],
-    [arrangementMenuItems, settlementMenuItems, snoozePresetActions, titleMenuItems],
-  );
-  const cardMenuActions = useMemo<MenuAction[]>(
-    () => [
-      CARD_MENU_ACTIONS[0]!,
-      ...arrangementMenuItems,
-      ...titleMenuItems,
-      ...settlementMenuItems,
-      LEGACY_MENU_ACTIONS[0]!,
-      ...CARD_MENU_ACTIONS.slice(1),
-    ],
-    [arrangementMenuItems, settlementMenuItems, titleMenuItems],
-  );
-  const slimMenuActions = useMemo<MenuAction[]>(
-    () => [
-      SLIM_MENU_ACTIONS[0]!,
-      ...arrangementMenuItems.filter(
-        (action) => action.id !== "move-up" && action.id !== "move-down",
-      ),
-      ...titleMenuItems,
-      ...settlementMenuItems,
-      LEGACY_MENU_ACTIONS[0]!,
-      SLIM_MENU_ACTIONS[1]!,
-    ],
-    [arrangementMenuItems, settlementMenuItems, titleMenuItems],
-  );
-  const snoozedMenuActions = useMemo<MenuAction[]>(
-    () => [
-      SNOOZED_MENU_ACTIONS[0]!,
-      ...titleMenuItems,
-      ...settlementMenuItems,
-      LEGACY_MENU_ACTIONS[0]!,
-      SNOOZED_MENU_ACTIONS[1]!,
-    ],
-    [settlementMenuItems, titleMenuItems],
-  );
-  const legacyMenuActions = useMemo<MenuAction[]>(
-    () => [
-      LEGACY_MENU_ACTIONS[0]!,
-      ...arrangementMenuItems,
-      ...titleMenuItems,
-      LEGACY_MENU_ACTIONS[1]!,
-    ],
-    [arrangementMenuItems, titleMenuItems],
-  );
+  const menuActions = useMemo<MenuAction[]>(() => {
+    const nested = Platform.OS === "ios";
+    const direct: MenuAction[] = [
+      ...(thread.branch
+        ? [
+            {
+              id: "new-thread-on-branch",
+              title: getThreadListV2NewBranchMenuTitle(thread.branch),
+              image: "square.and.pencil",
+            },
+          ]
+        : []),
+      { id: "copy-thread", title: "Copy thread", image: "text.bubble" },
+      { id: "copy-thread-id", title: "Copy thread ID", image: "doc.on.doc" },
+    ];
+    if (snoozedRow) {
+      return layoutThreadListV2RowMenuActions({
+        nested,
+        direct: [...direct, SNOOZED_MENU_ACTIONS[0]!],
+        reorder: [],
+        pin: [],
+        secondary: [
+          ...titleMenuItems,
+          ...settlementMenuItems,
+          LEGACY_MENU_ACTIONS[0]!,
+          SNOOZED_MENU_ACTIONS[1]!,
+        ],
+      });
+    }
+    if (!props.settlementSupported) {
+      return layoutThreadListV2RowMenuActions({
+        nested,
+        direct: [...direct, LEGACY_MENU_ACTIONS[0]!],
+        reorder: reorderMenuItems,
+        pin: pinMenuItems,
+        secondary: [...titleMenuItems, LEGACY_MENU_ACTIONS[1]!],
+      });
+    }
+    if (canUnsettle) {
+      return layoutThreadListV2RowMenuActions({
+        nested,
+        direct: [...direct, SLIM_MENU_ACTIONS[0]!],
+        reorder: reorderMenuItems.filter(
+          (action) => action.id !== "move-up" && action.id !== "move-down",
+        ),
+        pin: pinMenuItems,
+        secondary: [
+          ...titleMenuItems,
+          ...settlementMenuItems,
+          LEGACY_MENU_ACTIONS[0]!,
+          SLIM_MENU_ACTIONS[1]!,
+        ],
+      });
+    }
+    return layoutThreadListV2RowMenuActions({
+      nested,
+      direct: [
+        ...direct,
+        CARD_MENU_ACTIONS[0]!,
+        ...(swipeActions.secondary === "snooze"
+          ? [{ id: "snooze", title: "Snooze", image: "clock", subactions: snoozePresetActions }]
+          : []),
+      ],
+      reorder: reorderMenuItems,
+      pin: pinMenuItems,
+      secondary: [
+        ...titleMenuItems,
+        ...settlementMenuItems,
+        LEGACY_MENU_ACTIONS[0]!,
+        CARD_MENU_ACTIONS[1]!,
+      ],
+    });
+  }, [
+    settlementMenuItems,
+    canUnsettle,
+    pinMenuItems,
+    props.settlementSupported,
+    reorderMenuItems,
+    snoozePresetActions,
+    snoozedRow,
+    swipeActions.secondary,
+    thread.branch,
+    titleMenuItems,
+  ]);
   const handleMenuAction = useCallback(
     ({ nativeEvent }: { readonly nativeEvent: { readonly event: string } }) => {
       if (nativeEvent.event === "new-thread-on-branch") onNewThreadOnBranch(thread);
@@ -1499,10 +1613,9 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       </RowPressable>
     );
 
-  if (!canOperateThread)
-    return <View style={rowAppearance.swipeContainerStyle}>{rowContent(() => {})}</View>;
-
-  return (
+  const body = !canOperateThread ? (
+    <View style={rowAppearance.swipeContainerStyle}>{rowContent(() => {})}</View>
+  ) : (
     <View collapsable={false}>
       {customSnoozeOpen && (
         <CustomSnoozeSheet onClose={() => setCustomSnoozeOpen(false)} onSnooze={handleSnooze} />
@@ -1526,36 +1639,23 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         threadTitle={thread.title}
       >
         {(close) => (
-          <Menu
-            actions={[
-              ...(thread.branch
-                ? [
-                    {
-                      id: "new-thread-on-branch",
-                      title: getThreadListV2NewBranchMenuTitle(thread.branch),
-                      image: "square.and.pencil",
-                    },
-                  ]
-                : []),
-              { id: "copy-thread", title: "Copy thread", image: "text.bubble" },
-              { id: "copy-thread-id", title: "Copy thread ID", image: "doc.on.doc" },
-              ...(snoozedRow
-                ? snoozedMenuActions
-                : !props.settlementSupported
-                  ? legacyMenuActions
-                  : canUnsettle
-                    ? slimMenuActions
-                    : swipeActions.secondary === "snooze"
-                      ? snoozableCardMenuActions
-                      : cardMenuActions),
-            ]}
-            onPressAction={handleMenuAction}
-            shouldOpenOnLongPress
-          >
+          <Menu actions={menuActions} onPressAction={handleMenuAction} shouldOpenOnLongPress>
             {rowContent(close)}
           </Menu>
         )}
       </ThreadSwipeable>
     </View>
+  );
+
+  return (
+    <ThreadListV2SubsessionFrame
+      depth={props.depth ?? 0}
+      subsessions={props.subsessions ?? null}
+      threadKey={`${thread.environmentId}:${thread.id}`}
+      sidebarPane={sidebarPane}
+      onToggle={props.onToggleSubsessions}
+    >
+      {body}
+    </ThreadListV2SubsessionFrame>
   );
 });

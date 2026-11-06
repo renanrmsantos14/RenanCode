@@ -12,6 +12,7 @@ import {
   buildNextActionPrompt,
   buildPrContentPrompt,
   buildReviewGuidePrompt,
+  buildTaskPlacementPrompt,
   buildThreadTitlePrompt,
 } from "./textGenerationPrompts.ts";
 import {
@@ -181,6 +182,18 @@ export function fromRunner(name: string, run: Runner): ProviderTextGeneration {
     return { suggestion: sanitizeNextAction(generated.suggestion) };
   });
 
+  const generateTaskPlacement: ProviderTextGeneration["generateTaskPlacement"] = Effect.fn(
+    `${name}.generateTaskPlacement`,
+  )(function* (input) {
+    const generated = yield* run({
+      operation: "generateTaskPlacement",
+      cwd: input.cwd,
+      modelSelection: input.modelSelection,
+      ...buildTaskPlacementPrompt(input),
+    });
+    return { placement: generated.placement, reason: generated.reason.trim() };
+  });
+
   return {
     generateCommitMessage,
     generatePrContent,
@@ -188,5 +201,6 @@ export function fromRunner(name: string, run: Runner): ProviderTextGeneration {
     generateThreadTitle,
     generateReviewGuide,
     generateNextAction,
+    generateTaskPlacement,
   } satisfies ProviderTextGeneration;
 }

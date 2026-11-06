@@ -1160,7 +1160,7 @@ describe("OrchestratorMcpService provider resolution", () => {
     version: input.enabled === false ? null : "test",
     status: input.enabled === false ? "disabled" : "ready",
     auth: { status: input.enabled === false ? "unknown" : "authenticated" },
-    ...(input.enabled === false ? { message: "Provider is disabled in T3 Code settings." } : {}),
+    ...(input.enabled === false ? { message: "Provider is disabled in RenanCode settings." } : {}),
     checkedAt: "2026-09-13T00:00:00.000Z",
     models:
       input.model === undefined
@@ -2177,6 +2177,7 @@ describe("OrchestratorMcpService provider resolution", () => {
             assert.equal(started.threads[0]?.threadId, child.threadId);
             const before = yield* orchestrator.getThreadProjection(child.threadId);
             assert.deepEqual(before.runs[0]?.modelSelection, selection);
+            assert.equal(before.thread.launchedFrom, parentThreadId);
             assert.equal(before.messages.length, 1);
             const empty = yield* service.createThreads(scope, {
               ...request,

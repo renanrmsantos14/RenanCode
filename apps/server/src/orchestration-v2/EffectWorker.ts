@@ -27,6 +27,7 @@ import * as RuntimeRequestService from "./RuntimeRequestService.ts";
 import * as ThreadTitleRegenerationService from "./ThreadTitleRegenerationService.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import * as ClaudeCloudSessions from "../claudeCloud/ClaudeCloudSessions.ts";
 import { continueRestartedRun } from "./RestartContinuation.ts";
 
 export class OrchestrationEffectExecutionError extends Schema.TaggedError<OrchestrationEffectExecutionError>()(
@@ -94,6 +95,27 @@ export const layerExecutor: Layer.Layer<
       yield* ThreadTitleRegenerationService.ThreadTitleRegenerationService;
     const threads = yield* ThreadManagementService.ThreadManagementService;
     const settings = yield* ServerSettings.ServerSettingsService;
+    // Optional so executor fixtures need not build the Claude cloud client.
+    const claudeCloud = yield* Effect.serviceOption(ClaudeCloudSessions.ClaudeCloudSessions);
+    const runClaudeCloud = (
+      effect: { readonly id: string; readonly request: { readonly type: string } },
+      run: (
+        service: Context.Service.Shape<typeof ClaudeCloudSessions.ClaudeCloudSessions>,
+      ) => Effect.Effect<void, unknown>,
+    ) =>
+      (Option.isSome(claudeCloud)
+        ? run(claudeCloud.value)
+        : Effect.fail("Claude cloud sessions are not available on this server.")
+      ).pipe(
+        Effect.mapError(
+          (cause) =>
+            new OrchestrationEffectExecutionError({
+              effectId: effect.id,
+              effectType: effect.request.type,
+              cause,
+            }),
+        ),
+      );
     return OrchestrationEffectExecutorV2.of({
       execute: Effect.fn("OrchestrationEffectExecutorV2.execute")(function (effect, options) {
         const willRetry = options?.willRetry ?? false;
@@ -572,6 +594,8 @@ export const layerExecutor: Layer.Layer<
                     }),
                 ),
               );
+          case "claude-cloud.archive":
+            return runClaudeCloud(effect, (service) => service.archive(effect.threadId));
         }
       }),
     });

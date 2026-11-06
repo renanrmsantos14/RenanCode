@@ -201,7 +201,7 @@ describe("DesktopSettings", () => {
       Effect.gen(function* () {
         const settings = yield* DesktopAppSettings.DesktopAppSettings;
         yield* writeSettingsPatch({
-          mainWindowBounds: { x: 10.5, y: 20, width: 839, height: 620 },
+          mainWindowBounds: { x: 10.5, y: 20, width: 359, height: 620 },
           mainWindowMaximized: true,
           serverExposureMode: "network-accessible",
         });
@@ -210,6 +210,10 @@ describe("DesktopSettings", () => {
         assert.isNull(loaded.mainWindowBounds);
         assert.isFalse(loaded.mainWindowMaximized);
         assert.equal(loaded.serverExposureMode, "network-accessible");
+
+        const portraitBounds = { x: 0, y: 0, width: 360, height: 620 };
+        yield* writeSettingsPatch({ mainWindowBounds: portraitBounds });
+        assert.deepEqual((yield* settings.load).mainWindowBounds, portraitBounds);
       }),
     ),
   );

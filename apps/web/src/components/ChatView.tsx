@@ -321,15 +321,13 @@ import { ComposerBannerStack, type ComposerBannerStackItem } from "./chat/Compos
 import { modelFallbackBannerItem } from "./chat/ComposerUsageLimits";
 import { ComposerSurface } from "./chat/ComposerSurface";
 import { resolveThreadSyncPhase } from "../threadSync";
-import {
-  hasAvailableCompactionProvider,
-  hasDismissedResumeCompaction,
-  shouldOfferResumeCompaction,
-} from "./chat/ContextWindowMeter.logic";
+import { hasAvailableCompactionProvider } from "./chat/ContextWindowMeter.logic";
 import {
   deriveLatestContextWindowSnapshot,
+  hasDismissedResumeCompaction,
   latestProviderTurnTokenUsage,
-} from "../lib/contextWindow";
+  shouldOfferResumeCompaction,
+} from "@t3tools/client-runtime/state/context-window";
 import {
   MOBILE_COMPOSER_VIEW_TRANSITION_NAME,
   MOBILE_DRAFT_HEADLINE_VIEW_TRANSITION_NAME,
@@ -1221,9 +1219,15 @@ export default function ChatView(props: ChatViewProps) {
     logicalProjectEnvironments.find(
       (environment) => environment.environmentId === activeThread?.environmentId,
     ) ?? null;
+  // A new draft can also go to a Claude cloud session, so the picker shows with one machine too.
+  const claudeCloudOffered =
+    draftId !== null &&
+    activeThread !== undefined &&
+    environmentById.get(activeThread.environmentId)?.serverConfig?.settings
+      .claudeCloudSessionsEnabled === true;
   const showComposerEnvironmentIndicator = shouldShowEnvironmentIndicator({
     activeEnvironment: activeEnvironmentOption,
-    canPickEnvironment: hasMultipleEnvironments,
+    canPickEnvironment: hasMultipleEnvironments || claudeCloudOffered,
   });
 
   const { handlePreparedPullRequestThreadStable, openPullRequestDialogStable } =
@@ -1288,6 +1292,7 @@ export default function ChatView(props: ChatViewProps) {
     canAutoBalanceEnvironments &&
     loadBalancingSettings.loadBalancingEnabled &&
     draftThread?.environmentSelection !== "manual" &&
+    draftThread?.environmentSelection !== "claude-cloud" &&
     (!composerHasAttachments || Boolean(draftThread?.loadBalancedEnvironmentId)) &&
     (!draftThread?.branch || draftThread.environmentSelection === "auto") &&
     !draftThread?.worktreePath,
@@ -1818,6 +1823,11 @@ export default function ChatView(props: ChatViewProps) {
     loadBalancing,
     onAutoEnvironmentStable,
     autoEnvironmentLabel,
+    onClaudeCloudStable,
+    claudeCloudSelected,
+    taskRoutingOffered,
+    taskRoutedToCloud,
+    classifyTaskPlacement,
     isEnvironmentChanging,
     readPendingEnvironmentChange,
     onEnvironmentChangeStable,
@@ -2597,6 +2607,7 @@ export default function ChatView(props: ChatViewProps) {
     activeThreadShell?.latestRun
       ? usageLimitRecoveryBannerItem({
           runId: activeThreadShell.latestRun.runId,
+          errorCode: serverRuntime.lastErrorCode ?? null,
           resetAt: serverRuntime.usageLimitResetAt ?? null,
           stoppedAt: activeThreadShell.latestRun.completedAt ?? activeThreadShell.updatedAt,
           recovery: activeThreadShell.limitRecovery ?? null,
@@ -2836,7 +2847,7 @@ export default function ChatView(props: ChatViewProps) {
         : serverConfig === null
           ? "Side chats are not ready yet. Try again in a moment."
           : serverConfig.environment.capabilities.sideChats !== true
-            ? "Update this environment's T3 Code server to use side chats."
+            ? "Update this environment's RenanCode server to use side chats."
             : sideChatsOffered && !isServerThread
               ? "Side chats start after the first message."
               : sideChat.available &&
@@ -3002,6 +3013,7 @@ export default function ChatView(props: ChatViewProps) {
     needsLoadBalancing,
     loadBalancing,
     readPendingEnvironmentChange,
+    classifyTaskPlacement,
     pendingApprovals,
     respondingRequestIds,
     activePendingProgress,
@@ -3828,6 +3840,9 @@ export default function ChatView(props: ChatViewProps) {
                           {showComposerContextStrip && (
                             <div className="pointer-events-auto">
                               <BranchToolbar
+                                onClaudeCloud={onClaudeCloudStable}
+                                claudeCloudSelected={claudeCloudSelected}
+                                autoEnvironmentCloud={taskRoutedToCloud}
                                 forceNewWorktree={multipleModelSelections !== null}
                                 ref={branchToolbarRef}
                                 environmentId={activeThread.environmentId}
@@ -3853,15 +3868,16 @@ export default function ChatView(props: ChatViewProps) {
                                 {...(canCheckoutPullRequestIntoThread
                                   ? { onCheckoutPullRequestRequest: openPullRequestDialogStable }
                                   : {})}
-                                {...(canChangeEnvironment
+                                {...(canChangeEnvironment || taskRoutingOffered
                                   ? { onEnvironmentChange: onEnvironmentChangeStable }
                                   : {})}
                                 autoEnvironmentLabel={autoEnvironmentLabel}
                                 onAutoEnvironment={
                                   draftId &&
                                   !envLocked &&
-                                  canAutoBalanceEnvironments &&
-                                  loadBalancingSettings.loadBalancingEnabled
+                                  ((canAutoBalanceEnvironments &&
+                                    loadBalancingSettings.loadBalancingEnabled) ||
+                                    taskRoutingOffered)
                                     ? onAutoEnvironmentStable
                                     : undefined
                                 }
@@ -3954,12 +3970,12 @@ export default function ChatView(props: ChatViewProps) {
                   onAutoEnvironment={
                     draftId &&
                     !envLocked &&
-                    canAutoBalanceEnvironments &&
-                    loadBalancingSettings.loadBalancingEnabled
+                    ((canAutoBalanceEnvironments && loadBalancingSettings.loadBalancingEnabled) ||
+                      taskRoutingOffered)
                       ? onAutoEnvironmentStable
                       : undefined
                   }
-                  {...(canChangeEnvironment
+                  {...(canChangeEnvironment || taskRoutingOffered
                     ? { onEnvironmentChange: onEnvironmentChangeStable }
                     : {})}
                   onEnvModeChange={onEnvModeChangeStable}

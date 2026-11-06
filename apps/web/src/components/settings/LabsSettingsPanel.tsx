@@ -24,6 +24,8 @@ export function LabsSettingsPanel() {
         {/* Clerk is only mounted when this build has T3 Connect. */}
         {hasCloudPublicConfig() ? <GuestLinksRowWithSignIn /> : <GuestLinksRow />}
         <LinkedEnvironmentsRow />
+        <ClaudeCloudSessionsRow />
+        <ClaudeCloudAutoRoutingRow />
         <SimlockHostsRow />
       </SettingsSection>
       <LegacyFeaturesSection />
@@ -126,6 +128,53 @@ function GuestLinksRow() {
           checked={settings.guestSharingEnabled}
           onCheckedChange={(checked) => updateSettings({ guestSharingEnabled: Boolean(checked) })}
           aria-label="Guest links"
+        />
+      }
+    />
+  );
+}
+
+function ClaudeCloudSessionsRow() {
+  const settings = useScopedSettings();
+  const updateSettings = useUpdateScopedSettings();
+  return (
+    <SettingsRow
+      serverScoped
+      {...searchableSetting("claude-cloud-sessions-beta")}
+      settingKeys={["claudeCloudSessionsEnabled"]}
+      description="Show this machine's Claude Code cloud sessions (claude.ai/code) in the project of the same GitHub repository, read-only. Uses the Claude CLI login here and an undocumented API that may change."
+      control={
+        <ScopedSwitch
+          settingKeys={["claudeCloudSessionsEnabled"]}
+          checked={settings.claudeCloudSessionsEnabled}
+          onCheckedChange={(checked) =>
+            updateSettings({ claudeCloudSessionsEnabled: Boolean(checked) })
+          }
+          aria-label="Claude cloud sessions"
+        />
+      }
+    />
+  );
+}
+
+function ClaudeCloudAutoRoutingRow() {
+  const settings = useScopedSettings();
+  const updateSettings = useUpdateScopedSettings();
+  if (!settings.claudeCloudSessionsEnabled) return null;
+  return (
+    <SettingsRow
+      serverScoped
+      {...searchableSetting("claude-cloud-auto-routing-beta")}
+      settingKeys={["claudeCloudAutoRouting"]}
+      description="With Run on set to Auto, new Claude drafts go to a Claude cloud session when the task does not need this machine (its running services, devices, uncommitted files or attachments). A short classification runs on the text generation model as you type, and sending waits for it for up to 15 seconds before running on a machine as usual. Unpushed commits on the branch are pushed when the task goes to the cloud."
+      control={
+        <ScopedSwitch
+          settingKeys={["claudeCloudAutoRouting"]}
+          checked={settings.claudeCloudAutoRouting}
+          onCheckedChange={(checked) =>
+            updateSettings({ claudeCloudAutoRouting: Boolean(checked) })
+          }
+          aria-label="Send tasks to the cloud automatically"
         />
       }
     />

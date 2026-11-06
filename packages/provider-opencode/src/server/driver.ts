@@ -160,6 +160,11 @@ function selectOpenCodeRuntimeTextGeneration(
         v1: v1.generateNextAction(input),
         v2: v2.generateNextAction(input),
       }),
+    generateTaskPlacement: (input) =>
+      byOpenCodeRuntime(probe.get, {
+        v1: v1.generateTaskPlacement(input),
+        v2: v2.generateTaskPlacement(input),
+      }),
   };
 }
 

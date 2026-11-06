@@ -20,6 +20,7 @@ import { useComposerDraftStore, DraftId } from "../../composerDraftStore";
 import { type EnvironmentPresentation, useEnvironmentProviders } from "../../state/environments";
 import { useProjects } from "../../state/entities";
 import type { DraftSessionState } from "../../composerDraftStore";
+import { useTaskCloudPlacement } from "./useTaskCloudPlacement";
 
 interface DraftEnvironmentRoutingInput {
   readonly draftId: DraftId | null;
@@ -155,7 +156,7 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
     });
   };
   const onAutoEnvironmentStable = useStableCallback(onAutoEnvironment);
-  const autoEnvironmentLabel = automaticEnvironment
+  const balanceLabel = automaticEnvironment
     ? draftThread?.loadBalancedEnvironmentId
       ? "Auto balance"
       : loadBalancing.pending
@@ -259,7 +260,69 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
   };
   const onEnvironmentChangeStable = useStableCallback(onEnvironmentChange);
 
+  const claudeCloudSelected = draftThread?.environmentSelection === "claude-cloud";
+  // The draft's machine starts the session with its own Claude login, so it must opt in.
+  const claudeCloudAvailable =
+    draftThread !== null &&
+    draftThread !== undefined &&
+    environmentById.get(draftThread.environmentId)?.serverConfig?.settings
+      .claudeCloudSessionsEnabled === true;
+  const onClaudeCloud = () => {
+    if (envLocked || !draftId || sendInFlightRef.current) return;
+    if (composerHasAttachments) {
+      toastManager.add({
+        type: "warning",
+        id: "claude-cloud-attachments",
+        title: "Cloud sessions take text only",
+        description: "Remove attachments before sending this to a Claude cloud session.",
+      });
+      return;
+    }
+    setDraftThreadContext(draftId, {
+      environmentSelection: "claude-cloud",
+      loadBalancedEnvironmentId: null,
+      branch: null,
+      worktreePath: null,
+    });
+  };
+  const onClaudeCloudStable = useStableCallback(onClaudeCloud);
+
+  const taskRoutingOffered =
+    draftThread !== null &&
+    draftThread !== undefined &&
+    claudeCloudAvailable &&
+    !envLocked &&
+    environmentById.get(draftThread.environmentId)?.serverConfig?.settings
+      .claudeCloudAutoRouting === true;
+  // Only an Auto choice, including the automatic load-balanced default, may go to the cloud.
+  const taskRoutingAuto = taskRoutingOffered && draftThread.environmentSelection === "auto";
+  const taskRoutingActive =
+    taskRoutingAuto &&
+    selectedProvider === "claudeAgent" &&
+    !composerHasAttachments &&
+    referencedThreadContexts.length === 0 &&
+    !draftThread.worktreePath;
+  const taskPlacement = useTaskCloudPlacement({
+    active: taskRoutingActive,
+    environmentId: draftThread?.environmentId ?? null,
+    projectId: draftThread?.projectId ?? null,
+    draftId,
+  });
+
+  const taskRoutedToCloud = taskPlacement.placement?.placement === "cloud";
+  const autoEnvironmentLabel = taskRoutedToCloud
+    ? "Auto: Claude cloud"
+    : taskRoutingAuto
+      ? (balanceLabel ?? "Auto")
+      : balanceLabel;
+
   return {
+    claudeCloudSelected,
+    taskRoutingOffered,
+    taskRoutedToCloud,
+    taskPlacement: taskPlacement.placement,
+    classifyTaskPlacement: taskPlacement.classify,
+    onClaudeCloudStable: claudeCloudAvailable ? onClaudeCloudStable : undefined,
     needsLoadBalancing,
     loadBalancing,
     onAutoEnvironmentStable,

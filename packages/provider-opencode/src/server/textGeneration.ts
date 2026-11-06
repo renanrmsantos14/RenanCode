@@ -19,6 +19,7 @@ const OpenCodeTextGenerationOperation = Schema.Literals([
   "generateThreadTitle",
   "generateReviewGuide",
   "generateNextAction",
+  "generateTaskPlacement",
 ]);
 
 const openCodeTextGenerationErrorContext = {
@@ -212,7 +213,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
           try: (signal) =>
             client.session.create(
               {
-                title: `T3 Code ${input.operation}`,
+                title: `RenanCode ${input.operation}`,
                 // OpenCode Zen refuses free-model requests that carry no tools, so keep read.
                 permission: [
                   { permission: "*", pattern: "*", action: "deny" },

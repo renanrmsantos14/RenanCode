@@ -5,6 +5,7 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 
 import * as Electron from "electron";
@@ -39,6 +40,15 @@ import { makeQuitShortcutHandler } from "./QuitHold.ts";
 import { copyContextMenuImage } from "./ContextMenuImage.ts";
 
 const TITLEBAR_HEIGHT = 40;
+
+class ContextMenuImageCopyError extends Schema.TaggedError<ContextMenuImageCopyError>()(
+  "ContextMenuImageCopyError",
+  { cause: Schema.Defect() },
+) {
+  override get message(): string {
+    return "Could not copy the context-menu image.";
+  }
+}
 // Match --workspace-topbar-height in apps/web/src/index.css; native macOS buttons stay 14 points at any zoom.
 const MACOS_WORKSPACE_TOPBAR_HEIGHT = 52;
 const MACOS_WINDOW_BUTTON_RADIUS = 7;
@@ -165,14 +175,20 @@ function windowBoundsEqual(
 export function resolveInitialMainWindowBounds(
   persistedBounds: DesktopAppSettings.DesktopWindowBounds | null,
   displays: readonly DisplayBounds[],
-): DesktopAppSettings.DesktopWindowBounds | typeof DesktopAppSettings.DEFAULT_MAIN_WINDOW_SIZE {
+  primaryWorkArea: Pick<DisplayBounds, "width" | "height"> | null,
+): DesktopAppSettings.DesktopWindowBounds | { readonly width: number; readonly height: number } {
   if (
     persistedBounds !== null &&
     displays.some((display) => windowFitsWithinDisplay(persistedBounds, display))
   ) {
     return persistedBounds;
   }
-  return DesktopAppSettings.DEFAULT_MAIN_WINDOW_SIZE;
+  const { width, height } = DesktopAppSettings.DEFAULT_MAIN_WINDOW_SIZE;
+  if (primaryWorkArea === null) return { width, height };
+  return {
+    width: Math.min(width, primaryWorkArea.width),
+    height: Math.min(height, primaryWorkArea.height),
+  };
 }
 
 function buildConnectingSplashDataUrl(shouldUseDarkColors: boolean, message: string): string {
@@ -374,6 +390,7 @@ export const make = Effect.gen(function* () {
         return {
           _tag: "Success" as const,
           bounds: Electron.screen.getAllDisplays().map((display) => display.bounds),
+          primaryWorkArea: Electron.screen.getPrimaryDisplay().workArea,
         };
       } catch (cause) {
         return { _tag: "Failure" as const, cause };
@@ -385,16 +402,20 @@ export const make = Effect.gen(function* () {
         : yield* logWindowWarning("failed to read connected displays; using defaults", {
             cause: displayBoundsResult.cause,
           }).pipe(Effect.as<readonly Electron.Rectangle[]>([]));
-    const initialBounds = resolveInitialMainWindowBounds(persistedBounds, displayBounds);
+    const initialBounds = resolveInitialMainWindowBounds(
+      persistedBounds,
+      displayBounds,
+      displayBoundsResult._tag === "Success" ? displayBoundsResult.primaryWorkArea : null,
+    );
     const restoredPersistedBounds = persistedBounds !== null && initialBounds === persistedBounds;
-    if (persistedBounds !== null && initialBounds === DesktopAppSettings.DEFAULT_MAIN_WINDOW_SIZE) {
+    if (persistedBounds !== null && !restoredPersistedBounds) {
       yield* logWindowWarning("saved main window bounds could not be restored; using defaults");
     }
     if (yield* Ref.get(desktopState.quitting)) return Option.none();
     const window = yield* electronWindow.create({
       ...initialBounds,
-      minWidth: 840,
-      minHeight: 620,
+      minWidth: DesktopAppSettings.MIN_MAIN_WINDOW_SIZE.width,
+      minHeight: DesktopAppSettings.MIN_MAIN_WINDOW_SIZE.height,
       show: false,
       autoHideMenuBar: true,
       ...(environment.platform === "darwin" ? { disableAutoHideCursor: true } : {}),
@@ -584,9 +605,10 @@ export const make = Effect.gen(function* () {
             label: "Copy Image",
             click: () => {
               void runPromise(
-                Effect.tryPromise(() => copyContextMenuImage(contents, params)).pipe(
-                  Effect.catch(() => logWindowWarning("failed to copy context-menu image")),
-                ),
+                Effect.tryPromise({
+                  try: () => copyContextMenuImage(contents, params),
+                  catch: (cause) => new ContextMenuImageCopyError({ cause }),
+                }).pipe(Effect.catch(() => logWindowWarning("failed to copy context-menu image"))),
               );
             },
           });

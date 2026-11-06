@@ -74,8 +74,7 @@ const layerGit = GitVcsDriver.layer.pipe(
 );
 
 const layerEmptyInstances = Layer.mock(ProviderInstanceRegistry.ProviderInstanceRegistry)({
-  // @effect-diagnostics-next-line effectSucceedWithVoid:off - Optional instances require undefined rather than void.
-  getInstance: () => Effect.succeed(undefined),
+  getInstance: () => Effect.undefined,
 });
 const makeLayerTest = <E>(
   ingestorEventSink: Layer.Layer<EventSink.EventSinkV2, E>,
@@ -260,6 +259,7 @@ it.effect("refreshes the failing instance snapshot after a committed usage_limit
           generateThreadTitle: () => Effect.die("unused"),
           generateReviewGuide: () => Effect.die("unused"),
           generateNextAction: () => Effect.die("unused"),
+          generateTaskPlacement: () => Effect.die("unused"),
         },
         snapshot: {
           refreshUsage: Deferred.succeed(refreshed, undefined).pipe(Effect.asVoid),

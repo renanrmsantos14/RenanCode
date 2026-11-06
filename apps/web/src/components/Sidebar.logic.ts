@@ -1,6 +1,8 @@
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
+import { threadKey as runtimeThreadKey } from "@t3tools/client-runtime/state/entities";
+import { subsessionParentRef } from "@t3tools/client-runtime/state/subsessions";
 import { isShownUnderParent } from "@t3tools/client-runtime/state/threads";
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import { threadPullRequestSearchTerms } from "@t3tools/shared/threadPullRequests";
@@ -16,9 +18,10 @@ import {
   type ThreadSearchShell,
 } from "@t3tools/client-runtime/state/thread-search";
 import { foldSearchQuery, rankSearchItems, scoreThreadSearch } from "@t3tools/shared/paletteSearch";
-import type { EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
 import {
+  isClaudeCloudThreadId,
   isListedThreadLineage,
+  isProviderNativeSubagentThread,
   type ContextMenuItem,
   type EnvironmentId,
   type ThreadId,
@@ -185,29 +188,6 @@ export function resolveSidebarThreadSection(input: {
   if (input.testing) return "testing";
   if (input.pinned) return "pinned";
   return "active";
-}
-
-// Keep cached placement on the first connection attempt, matching mobile's threadRouteIsHydrating.
-export function isSidebarEnvironmentDisconnected(
-  phase: EnvironmentConnectionPhase,
-  shellIsLive: boolean,
-): boolean {
-  return phase !== "connecting" && (phase !== "connected" || !shellIsLive);
-}
-
-export function belongsInSidebarWorkingShelf<T extends { readonly environmentId: EnvironmentId }>(
-  thread: T,
-  input: {
-    readonly enabled: boolean;
-    readonly disconnectedEnvironmentIds: ReadonlySet<EnvironmentId>;
-    readonly isWorking: (thread: T) => boolean;
-  },
-): boolean {
-  return (
-    input.enabled &&
-    !input.disconnectedEnvironmentIds.has(thread.environmentId) &&
-    input.isWorking(thread)
-  );
 }
 
 const SIDEBAR_MARKER_PREFIX = "sidebar-marker-";
@@ -593,6 +573,96 @@ export async function deleteSelectedThreadEntries<
   return { deletedThreadKeys, firstFailure };
 }
 
+const NO_NATIVE_PARENTS: ReadonlyMap<string, string> = new Map();
+
+const LIVE_RUNTIME_STATUSES: ReadonlySet<string> = new Set([
+  "preparing",
+  "queued",
+  "starting",
+  "running",
+  "waiting",
+]);
+// Each owner holds a detail stream open; running threads already keep theirs.
+const MAX_LIVE_SUBSESSION_OWNERS = 8;
+
+type SubagentOwnerThread = SubsessionNestingThread & {
+  readonly runtime: Pick<NonNullable<SidebarThreadSummary["runtime"]>, "status"> | null;
+};
+
+/**
+ * Threads whose subagent records the sidebar reads: the open thread and each thread above it up
+ * to its listed row, then the running subsessions under that row. Native subagents keep no
+ * records; `routeNativeParent` names the open one's parent when its shell is not loaded.
+ */
+export function sidebarSubagentOwners(input: {
+  readonly route: { readonly environmentId: EnvironmentId; readonly threadId: ThreadId };
+  readonly routeNativeParent: ThreadId | null;
+  readonly threads: readonly SubagentOwnerThread[];
+}): Array<{ readonly environmentId: EnvironmentId; readonly threadId: ThreadId }> {
+  const keyOf = (environmentId: EnvironmentId, threadId: ThreadId) =>
+    scopedThreadKey(scopeThreadRef(environmentId, threadId));
+  const byKey = new Map(
+    input.threads.map((thread) => [keyOf(thread.environmentId, thread.id), thread] as const),
+  );
+  const owners: Array<{ readonly environmentId: EnvironmentId; readonly threadId: ThreadId }> = [];
+  const ownerKeys = new Set<string>();
+  const addOwner = (environmentId: EnvironmentId, threadId: ThreadId) => {
+    const key = keyOf(environmentId, threadId);
+    if (ownerKeys.has(key)) return;
+    ownerKeys.add(key);
+    owners.push({ environmentId, threadId });
+  };
+
+  let anchorKey = keyOf(input.route.environmentId, input.route.threadId);
+  const walked = new Set<string>();
+  let at: { environmentId: EnvironmentId; threadId: ThreadId } | null = input.route;
+  while (at !== null) {
+    const key = keyOf(at.environmentId, at.threadId);
+    if (walked.has(key)) break;
+    walked.add(key);
+    anchorKey = key;
+    const shell = byKey.get(key);
+    if (shell === undefined) {
+      if (at === input.route && input.routeNativeParent !== null) {
+        at = { environmentId: at.environmentId, threadId: input.routeNativeParent };
+        continue;
+      }
+      addOwner(at.environmentId, at.threadId);
+      break;
+    }
+    if (!isProviderNativeSubagentThread(shell)) addOwner(at.environmentId, at.threadId);
+    if (isListedThreadLineage(shell.lineage) || shell.lineage.parentThreadId === null) break;
+    at = { environmentId: at.environmentId, threadId: shell.lineage.parentThreadId };
+  }
+
+  const childrenByParent = new Map<string, SubagentOwnerThread[]>();
+  for (const thread of input.threads) {
+    if (thread.archivedAt !== null) continue;
+    const parent = subsessionParentRef(thread);
+    if (parent === null) continue;
+    const parentKey = keyOf(parent.environmentId, parent.threadId);
+    const siblings = childrenByParent.get(parentKey);
+    if (siblings) siblings.push(thread);
+    else childrenByParent.set(parentKey, [thread]);
+  }
+  let liveOwners = 0;
+  const visited = new Set([anchorKey]);
+  const queue = [anchorKey];
+  while (queue.length > 0 && liveOwners < MAX_LIVE_SUBSESSION_OWNERS) {
+    for (const child of childrenByParent.get(queue.shift()!) ?? []) {
+      const childKey = keyOf(child.environmentId, child.id);
+      if (visited.has(childKey)) continue;
+      visited.add(childKey);
+      queue.push(childKey);
+      if (child.runtime === null || !LIVE_RUNTIME_STATUSES.has(child.runtime.status)) continue;
+      if (liveOwners >= MAX_LIVE_SUBSESSION_OWNERS) break;
+      if (!ownerKeys.has(childKey)) liveOwners += 1;
+      addOwner(child.environmentId, child.id);
+    }
+  }
+  return owners;
+}
+
 export function isSidebarHiddenThread(thread: Pick<SidebarThreadSummary, "lineage">): boolean {
   return !isListedThreadLineage(thread.lineage);
 }
@@ -617,45 +687,149 @@ export function resolveSidebarRowThreadId(
   return thread?.id ?? threadId;
 }
 
+type SubsessionNestingThread = Pick<
+  SidebarThreadSummary,
+  | "archivedAt"
+  | "createdAt"
+  | "creationSource"
+  | "delegatedFrom"
+  | "environmentId"
+  | "id"
+  | "launchedFrom"
+  | "lineage"
+> & { projectId: string };
+
 /**
- * Children by parent thread key, oldest first, for the nested sidebar list: subagents, and tasks
- * linked environments delegated (`delegatedUnderParent`), which the thread list hides the same way.
+ * Threads nested under a shown parent (oldest first) and each one's parent: a thread whose
+ * `subsessionParentRef` is shown in the same project (a delegated task may sit elsewhere), or a
+ * provider-native subagent where `nativeParentKeyByChild` places it. Others stay top-level.
  */
-export function groupSidebarSubagents<
-  T extends Pick<
-    SidebarThreadSummary,
-    "archivedAt" | "createdAt" | "delegatedFrom" | "environmentId" | "id" | "lineage"
-  >,
->(
+export function nestSidebarSubsessions<T extends SubsessionNestingThread>(
   threads: readonly T[],
+  visibleThreads: readonly T[],
   delegatedUnderParent: ReadonlySet<string>,
-): ReadonlyMap<string, readonly T[]> {
-  const byParent = new Map<string, T[]>();
+  nativeParentKeyByChild: ReadonlyMap<string, string> = NO_NATIVE_PARENTS,
+): {
+  readonly subsessionsByParent: ReadonlyMap<string, readonly T[]>;
+  readonly parentKeyByChild: ReadonlyMap<string, string>;
+} {
+  const keyOf = (thread: Pick<T, "environmentId" | "id">) =>
+    scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
+  const live = new Map<string, T>();
   for (const thread of threads) {
-    if (thread.archivedAt !== null || thread.lineage.sideChat === true) continue;
-    const { parentThreadId, relationshipToParent } = thread.lineage;
-    const parent =
-      parentThreadId !== null && relationshipToParent === "subagent"
-        ? scopeThreadRef(thread.environmentId, parentThreadId)
-        : thread.delegatedFrom != null &&
-            delegatedUnderParent.has(
-              scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
-            )
-          ? thread.delegatedFrom
-          : null;
-    if (parent === null) continue;
-    const key = scopedThreadKey(parent);
-    const siblings = byParent.get(key);
-    if (siblings) siblings.push(thread);
-    else byParent.set(key, [thread]);
+    if (thread.archivedAt === null) live.set(keyOf(thread), thread);
   }
-  for (const siblings of byParent.values()) {
+  const listedKeys = new Set(visibleThreads.map(keyOf));
+  const candidateParentKey = new Map<string, string>();
+  for (const [key, thread] of live) {
+    const ref = subsessionParentRef(thread);
+    const parentKey = ref === null ? nativeParentKeyByChild.get(key) : scopedThreadKey(ref);
+    if (parentKey === undefined) continue;
+    const parent = live.get(parentKey);
+    if (parent === undefined) continue;
+    const sameProject =
+      parent.environmentId === thread.environmentId && parent.projectId === thread.projectId;
+    // delegatedUnderParent holds the client runtime's thread keys, not the sidebar's.
+    const delegated = delegatedUnderParent.has(
+      runtimeThreadKey({ environmentId: thread.environmentId, threadId: thread.id }),
+    );
+    if (sameProject || (thread.delegatedFrom != null && delegated)) {
+      candidateParentKey.set(key, parentKey);
+    }
+  }
+  // A cycle is cut where the walk returns to a thread already on its path.
+  const isShown = (key: string, path: ReadonlySet<string>): boolean => {
+    if (path.has(key)) return false;
+    const parentKey = candidateParentKey.get(key);
+    if (parentKey !== undefined && isShown(parentKey, new Set(path).add(key))) return true;
+    return listedKeys.has(key);
+  };
+  const nested: T[] = [];
+  const parentKeyByChild = new Map<string, string>();
+  // Two threads that launched each other would both nest and vanish; the first edge wins.
+  const closesLoop = (key: string, parentKey: string) => {
+    for (let at: string | undefined = parentKey; at !== undefined; at = parentKeyByChild.get(at)) {
+      if (at === key) return true;
+    }
+    return false;
+  };
+  for (const [key, parentKey] of candidateParentKey) {
+    if (closesLoop(key, parentKey) || !isShown(parentKey, new Set([key]))) continue;
+    nested.push(live.get(key)!);
+    parentKeyByChild.set(key, parentKey);
+  }
+  const subsessionsByParent = new Map<string, T[]>();
+  for (const thread of nested) {
+    const parentKey = parentKeyByChild.get(keyOf(thread))!;
+    const siblings = subsessionsByParent.get(parentKey);
+    if (siblings) siblings.push(thread);
+    else subsessionsByParent.set(parentKey, [thread]);
+  }
+  for (const siblings of subsessionsByParent.values()) {
     siblings.sort(
       (left, right) =>
         Date.parse(left.createdAt) - Date.parse(right.createdAt) || left.id.localeCompare(right.id),
     );
   }
-  return byParent;
+  return { subsessionsByParent, parentKeyByChild };
+}
+
+/** The persisted fold state of a thread's subsessions lives beside the project folders' open state. */
+export function subsessionsExpansionKey(threadKey: string): string {
+  return `subsessions:${threadKey}`;
+}
+
+const NATIVE_SUBAGENTS_OPEN_LIMIT = 5;
+
+/** A saved fold state wins; otherwise subsessions start open unless native subagents crowd them. */
+export function resolveSubsessionsOpen(
+  stored: boolean | undefined,
+  subsessions: readonly Pick<SidebarThreadSummary, "lineage" | "creationSource">[],
+): boolean {
+  if (stored !== undefined) return stored;
+  let native = 0;
+  for (const thread of subsessions) {
+    if (isProviderNativeSubagentThread(thread)) native += 1;
+  }
+  return native <= NATIVE_SUBAGENTS_OPEN_LIMIT;
+}
+
+/** The thread's subsessions at every depth, in tree order. */
+export function listSubsessionDescendants<
+  T extends Pick<SidebarThreadSummary, "environmentId" | "id">,
+>(
+  subsessionsByParent: ReadonlyMap<string, readonly T[]>,
+  threadKey: string,
+  isOpen: (threadKey: string) => boolean = () => true,
+): T[] {
+  const out: T[] = [];
+  const seen = new Set([threadKey]);
+  const visit = (key: string) => {
+    if (!isOpen(key)) return;
+    for (const child of subsessionsByParent.get(key) ?? []) {
+      const childKey = scopedThreadKey(scopeThreadRef(child.environmentId, child.id));
+      if (seen.has(childKey)) continue;
+      seen.add(childKey);
+      out.push(child);
+      visit(childKey);
+    }
+  };
+  visit(threadKey);
+  return out;
+}
+
+/** The dot a closed parent shows for work in its subsessions; a finished one stays quiet. */
+export function resolveSubsessionDot(
+  subsessionsByParent: ReadonlyMap<
+    string,
+    readonly (ThreadStatusInput &
+      SidebarThreadStatusInput &
+      Pick<SidebarThreadSummary, "environmentId" | "id">)[]
+  >,
+  threadKey: string,
+): "attention" | "failed" | "working" | null {
+  const dot = resolveSidebarFolderDot(listSubsessionDescendants(subsessionsByParent, threadKey));
+  return dot === "unread" ? null : dot;
 }
 
 /**
@@ -888,6 +1062,7 @@ export type SidebarThreadStatus =
   | "approval"
   | "input"
   | "request"
+  | "preparing"
   | "working"
   | "waiting"
   | "failed"
@@ -909,7 +1084,9 @@ export function shouldRecedeSidebarThread(input: {
   ) {
     return false;
   }
-  if (input.status === "working" || input.status === "waiting") return true;
+  if (input.status === "preparing" || input.status === "working" || input.status === "waiting") {
+    return true;
+  }
   if (input.status === "ready" || input.status === "approval") {
     return !input.isUnread && !input.isWoke;
   }
@@ -940,9 +1117,12 @@ export function resolveSidebarThreadStatus(thread: SidebarThreadStatusInput): Si
   if (thread.runtime?.status === "running" && thread.blockedOnThreadWait === true) {
     return "waiting";
   }
+  if (thread.runtime?.status === "preparing") {
+    return "preparing";
+  }
   if (
     thread.runtime !== null &&
-    ["preparing", "queued", "starting", "running", "waiting"].includes(thread.runtime.status)
+    ["queued", "starting", "running", "waiting"].includes(thread.runtime.status)
   ) {
     return "working";
   }
@@ -977,7 +1157,7 @@ export function resolveSidebarFolderDot(
     (thread) => resolveSidebarThreadStatus(thread) === "ready" && hasUnseenCompletion(thread),
   );
   if (hasUnread) return "unread";
-  if (statuses.has("working")) return "working";
+  if (statuses.has("working") || statuses.has("preparing")) return "working";
   return null;
 }
 
@@ -1414,5 +1594,26 @@ export function sortScopedProjectsForSidebar<
       left.title.localeCompare(right.title) ||
       left.environmentId.localeCompare(right.environmentId) ||
       left.id.localeCompare(right.id),
+  );
+}
+
+/** Every environment logged into the same Claude account mirrors the same cloud session; show it once. */
+export function dedupeClaudeCloudThreads<
+  T extends { readonly id: string; readonly environmentId: EnvironmentId },
+>(threads: readonly T[], preferredEnvironmentId: EnvironmentId | null): readonly T[] {
+  const chosen = new Map<string, T>();
+  let hasDuplicate = false;
+  for (const thread of threads) {
+    if (!isClaudeCloudThreadId(thread.id)) continue;
+    if (!chosen.has(thread.id)) {
+      chosen.set(thread.id, thread);
+      continue;
+    }
+    hasDuplicate = true;
+    if (thread.environmentId === preferredEnvironmentId) chosen.set(thread.id, thread);
+  }
+  if (!hasDuplicate) return threads;
+  return threads.filter(
+    (thread) => !isClaudeCloudThreadId(thread.id) || chosen.get(thread.id) === thread,
   );
 }

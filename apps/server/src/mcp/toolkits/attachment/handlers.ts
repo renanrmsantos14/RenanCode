@@ -7,6 +7,7 @@ import {
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as AssetSigner from "../../../assets/AssetSigner.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as Upload from "../../../assets/AttachmentUpload.ts";
 import { saveToDownloads } from "../../../assets/SaveToDownloads.ts";
@@ -49,6 +50,7 @@ export const layer = McpToolAccess.toLayer(
   Effect.gen(function* () {
     // Optional so the toolkit builds where no environment is linked.
     const transfer = yield* Effect.serviceOption(PeerFileTransfer.PeerFileTransfer);
+    const assetSigner = yield* AssetSigner.AssetSigner;
     const uploadOwners = new Map<string, { readonly owner: string; readonly issuedAt: number }>();
     return {
       // A pending upload belongs to its caller until a send claims it, so
@@ -57,6 +59,7 @@ export const layer = McpToolAccess.toLayer(
         (input) =>
           Effect.gen(function* () {
             const result = yield* Upload.issueAttachmentUploadUrl(input.upload).pipe(
+              Effect.provideService(AssetSigner.AssetSigner, assetSigner),
               Effect.mapError(unavailable),
             );
             const now = yield* Clock.currentTimeMillis;

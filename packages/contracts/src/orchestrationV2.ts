@@ -101,6 +101,12 @@ export type OrchestrationV2CreationSource = typeof OrchestrationV2CreationSource
 export const OrchestrationV2ThreadHistoryOrigin = Schema.Literals(["native", "v1_import"]);
 export type OrchestrationV2ThreadHistoryOrigin = typeof OrchestrationV2ThreadHistoryOrigin.Type;
 
+// Mirrored Claude Code cloud sessions are marked by id, not a new history origin,
+// so clients that predate them still decode the thread.
+export const CLAUDE_CLOUD_THREAD_ID_PREFIX = "claude-cloud:";
+export const isClaudeCloudThreadId = (threadId: string): boolean =>
+  threadId.startsWith(CLAUDE_CLOUD_THREAD_ID_PREFIX);
+
 const OrchestrationV2CreationFields = {
   createdBy: OrchestrationV2Actor,
   creationSource: OrchestrationV2CreationSource,
@@ -461,6 +467,8 @@ export const OrchestrationV2AppThread = Schema.Struct({
   historyOrigin: Schema.optional(OrchestrationV2ThreadHistoryOrigin),
   linkOrigin: Schema.optional(OrchestrationV2LinkOrigin),
   delegatedFrom: Schema.optional(OrchestrationV2DelegatedFrom),
+  /** Thread whose agent opened this one through MCP; only the server sets it. */
+  launchedFrom: Schema.optional(ThreadId),
   lineage: OrchestrationV2AppThreadLineage,
   forkedFrom: Schema.NullOr(
     Schema.Union([
@@ -2141,6 +2149,8 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   historyOrigin: Schema.optional(OrchestrationV2ThreadHistoryOrigin),
   linkOrigin: Schema.optional(OrchestrationV2LinkOrigin),
   delegatedFrom: Schema.optional(OrchestrationV2DelegatedFrom),
+  /** Thread whose agent opened this one through MCP; only the server sets it. */
+  launchedFrom: Schema.optional(ThreadId),
   latestRunId: Schema.NullOr(RunId),
   latestRunRequestedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   latestRunStartedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
@@ -2981,6 +2991,8 @@ export const OrchestrationV2Command = Schema.Union([
     linkOrigin: Schema.optional(OrchestrationV2LinkOrigin),
     /** Only the server sets this, with `linkOrigin`, for a linked environment's delegated task. */
     delegatedFrom: Schema.optional(OrchestrationV2DelegatedFrom),
+    /** Thread whose agent opened this one through MCP; only the server sets it. */
+    launchedFrom: Schema.optional(ThreadId),
     importedNativeThread: Schema.optional(
       Schema.Struct({
         ref: Schema.Struct({
@@ -3673,6 +3685,7 @@ export const ORCHESTRATION_V2_WS_METHODS = {
   searchThreadStream: "orchestration.searchThreadStream",
   getArchivedShellSnapshot: "orchestration.getArchivedShellSnapshot",
   getThreadFamily: "orchestration.getThreadFamily",
+  getThreadTitles: "orchestration.getThreadTitles",
   getWorktreeThreadIds: "orchestration.getWorktreeThreadIds",
   getOlderSettledThreads: "orchestration.getOlderSettledThreads",
   getThreadProjection: "orchestration.getThreadProjection",
@@ -3796,6 +3809,13 @@ export const OrchestrationV2ThreadFamily = Schema.Struct({
   threads: Schema.Array(OrchestrationV2ThreadShell),
 });
 export type OrchestrationV2ThreadFamily = typeof OrchestrationV2ThreadFamily.Type;
+
+export const OrchestrationV2GetThreadTitlesInput = Schema.Struct({
+  threadIds: Schema.Array(ThreadId),
+});
+
+/** Titles of the requested threads that exist, archived ones included. Deleted and unknown ids are absent. */
+export const OrchestrationV2ThreadTitles = Schema.Record(ThreadId, Schema.String);
 
 export const OrchestrationV2GetWorktreeThreadIdsInput = Schema.Struct({
   worktreePath: TrimmedNonEmptyString,
@@ -4318,6 +4338,10 @@ export const OrchestrationV2RpcSchemas = {
   getThreadFamily: {
     input: OrchestrationV2GetThreadFamilyInput,
     output: OrchestrationV2ThreadFamily,
+  },
+  getThreadTitles: {
+    input: OrchestrationV2GetThreadTitlesInput,
+    output: OrchestrationV2ThreadTitles,
   },
   getWorktreeThreadIds: {
     input: OrchestrationV2GetWorktreeThreadIdsInput,

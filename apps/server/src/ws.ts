@@ -1,4 +1,7 @@
-import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
+import {
+  ClaudeCloudStartSessionError,
+  OrchestrationDispatchCommandError,
+} from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
@@ -222,6 +225,7 @@ import * as NextActionSuggestionService from "./orchestration-v2/NextActionSugge
 import * as CacheKeepWarmService from "./orchestration-v2/CacheKeepWarmService.ts";
 import { KEEP_WARM_DEFAULT_HOURS } from "@t3tools/shared/promptCache";
 import * as ThreadHandoffService from "./orchestration-v2/ThreadHandoffService.ts";
+import * as ClaudeCloudSessions from "./claudeCloud/ClaudeCloudSessions.ts";
 import { mutateProjectWithClone } from "./project/ProjectMutation.ts";
 import * as ProjectCloneTracker from "./project/ProjectCloneTracker.ts";
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
@@ -266,6 +270,10 @@ import * as SessionStore from "./auth/SessionStore.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
 import { isNetworkPath } from "@t3tools/shared/path";
 import * as RelayClient from "@t3tools/shared/relayClient";
+import {
+  SOCKET_FRAME_PARTS_QUERY_PARAM,
+  splitLargeSocketFrames,
+} from "@t3tools/shared/socketFrameParts";
 import { isTelemetryIdHash } from "@t3tools/shared/telemetryId";
 import {
   sameUsageLimitCommandCoverage,
@@ -565,6 +573,7 @@ function filesystemBrowseFailureContext(error: WorkspaceEntries.WorkspaceEntries
   readonly failure: FilesystemBrowseFailure;
   readonly parentPath?: string;
   readonly platform?: string;
+  readonly pathMissing?: boolean;
 } {
   switch (error._tag) {
     case "WorkspaceEntriesWindowsPathUnsupportedError":
@@ -572,7 +581,11 @@ function filesystemBrowseFailureContext(error: WorkspaceEntries.WorkspaceEntries
     case "WorkspaceEntriesCurrentProjectRequiredError":
       return { failure: "current_project_required" };
     case "WorkspaceEntriesReadDirectoryError":
-      return { failure: "read_directory_failed", parentPath: error.parentPath };
+      return {
+        failure: "read_directory_failed",
+        parentPath: error.parentPath,
+        ...(error.pathMissing ? { pathMissing: true } : {}),
+      };
     default:
       return unexpectedCompatibilityError(error);
   }
@@ -1375,6 +1388,10 @@ export const layerWsRpc = (
       const nextActionSuggestions = yield* NextActionSuggestionService.NextActionSuggestionService;
       const cacheKeepWarm = yield* CacheKeepWarmService.CacheKeepWarmService;
       const threadHandoff = yield* ThreadHandoffService.ThreadHandoffService;
+      // Optional so test servers need not build the Claude cloud client.
+      const claudeCloudSessions = yield* Effect.serviceOption(
+        ClaudeCloudSessions.ClaudeCloudSessions,
+      );
       const eventLoopMonitor = yield* EventLoopMonitor.EventLoopMonitor;
       const threadSearch = yield* ThreadSearch.ThreadSearch;
 
@@ -2121,6 +2138,16 @@ export const layerWsRpc = (
           getOrchestrationV2ArchivedShellSnapshot,
         [ORCHESTRATION_V2_WS_METHODS.getThreadFamily]: (input) =>
           readOmittableShellRows({ familyOf: input.threadId }, "Failed to load the thread family"),
+        [ORCHESTRATION_V2_WS_METHODS.getThreadTitles]: (input) =>
+          threadManagement.getThreadTitles(input.threadIds).pipe(
+            Effect.mapError(
+              (cause) =>
+                new OrchestrationV2GetShellSnapshotError({
+                  message: "Failed to load thread titles",
+                  cause,
+                }),
+            ),
+          ),
         [ORCHESTRATION_V2_WS_METHODS.getOlderSettledThreads]: (input) =>
           loadOlderSettledThreadsPage({
             sql,
@@ -2875,6 +2902,23 @@ export const layerWsRpc = (
               ? cacheKeepWarm.stop(input.threadId)
               : cacheKeepWarm.status(input.threadId),
         [WS_METHODS.threadsHandoff]: (input) => threadHandoff.handoff(input),
+        [WS_METHODS.claudeCloudStartSession]: (input) =>
+          Option.isSome(claudeCloudSessions)
+            ? claudeCloudSessions.value.start(input)
+            : Effect.fail(
+                new ClaudeCloudStartSessionError({
+                  reason: "unavailable",
+                  detail: "Claude cloud sessions are not available on this server.",
+                }),
+              ),
+        [WS_METHODS.claudeCloudSuggestPlacement]: (input) =>
+          Option.isSome(claudeCloudSessions)
+            ? claudeCloudSessions.value.suggestPlacement(input)
+            : Effect.succeed({
+                placement: "local" as const,
+                reason: "Claude cloud sessions are not available on this server",
+                pushRequired: false,
+              }),
         [WS_METHODS.projectCloneCancel]: (input) =>
           projectCloneTracker.cancel(input.projectId).pipe(Effect.map((applied) => ({ applied }))),
         [WS_METHODS.projectCloneRetry]: (input) =>
@@ -3549,11 +3593,25 @@ export const layer = Layer.unwrap(
             ),
           ),
         );
+        const framedRpcWebSocketHttpEffect = url.value.searchParams.has(
+          SOCKET_FRAME_PARTS_QUERY_PARAM,
+        )
+          ? rpcWebSocketHttpEffect.pipe(
+              Effect.provideService(
+                HttpServerRequest.HttpServerRequest,
+                // The RPC server upgrades the request itself, so its socket is
+                // wrapped through the request it reads.
+                Object.create(request, {
+                  upgrade: { value: Effect.map(request.upgrade, splitLargeSocketFrames) },
+                }),
+              ),
+            )
+          : rpcWebSocketHttpEffect;
         return yield* Effect.acquireUseRelease(
           sessions.markConnected(session.sessionId),
           () =>
             Effect.raceFirst(
-              rpcWebSocketHttpEffect,
+              framedRpcWebSocketHttpEffect,
               sessions.awaitInvalidation(session.sessionId, session.proofKeyThumbprint).pipe(
                 Effect.as(HttpServerResponse.empty()),
                 Effect.catchTags({

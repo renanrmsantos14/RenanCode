@@ -144,8 +144,7 @@ export const make = Effect.fn("OpenCodeServerLedger.make")(function* (input: {
         Effect.orElseSucceed(() => undefined),
       );
     }
-    // @effect-diagnostics-next-line effectSucceedWithVoid:off - Missing process observations are undefined, not void.
-    return Effect.succeed(undefined);
+    return Effect.undefined;
   };
 
   const observeGroup = (pgid: number): Effect.Effect<ReadonlyArray<ObservedProcess>> => {
@@ -254,7 +253,7 @@ export const make = Effect.fn("OpenCodeServerLedger.make")(function* (input: {
     ) {
       return;
     }
-    yield* Effect.logInfo("Stopping an OpenCode server left by a previous T3 Code server", {
+    yield* Effect.logInfo("Stopping an OpenCode server left by a previous RenanCode server", {
       pid: entry.pgid,
       port: entry.port,
     });

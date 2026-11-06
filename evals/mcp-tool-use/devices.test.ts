@@ -175,11 +175,11 @@ it.effect("gives a native subagent T3's SubagentStart context instead of T3's ap
     );
     assert.include(reminders, subagentContext);
     // Claude Code 2.1.310 records the hook's context after the task, and sends it that way.
-    const blocks = shown({ ...native, subagentContext: "## T3 Code devices" }) ?? [];
+    const blocks = shown({ ...native, subagentContext: "## RenanCode devices" }) ?? [];
     assert.equal(blocks.at(-2), testCase.prompt);
     assert.equal(
       blocks.at(-1),
-      "<system-reminder>\nSubagentStart hook additional context: ## T3 Code devices\n</system-reminder>",
+      "<system-reminder>\nSubagentStart hook additional context: ## RenanCode devices\n</system-reminder>",
     );
   }),
 );
@@ -224,6 +224,9 @@ it("prints agent-device's own help for a lone help command on a returned launche
   assert.equal(asked(`${launcher} help open ${target}`), help("open"));
   assert.equal(asked(`${launcher} --help 2>&1`), help(""));
   assert.equal(asked(`${launcher} help settings --session=t3-1`), help("settings"));
+  // A password reaches fill from stdin, so request_secret's file never enters argv.
+  assert.equal(asked(`${launcher} fill --help ${target}`), help("fill"));
+  assert.include(help("fill"), "fill <x y|@ref|selector> --text-stdin");
   // Anything else stays with the simulator: other topics, pipes, aliases, other commands.
   assert.isUndefined(asked(`${launcher} metro --help ${target}`));
   assert.isUndefined(asked(`${launcher} help record 2>&1 | head -40`));
@@ -658,7 +661,7 @@ it.effect("denies every device tool with T3's own error when agent device access
       );
     }
     // T3 drops its device text for a thread without the capability, on refs that have it.
-    assert.notInclude(t3SystemAppend(model, false), "## T3 Code devices");
+    assert.notInclude(t3SystemAppend(model, false), "## RenanCode devices");
   }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );
 

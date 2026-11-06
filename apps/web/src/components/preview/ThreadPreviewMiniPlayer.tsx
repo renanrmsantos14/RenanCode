@@ -1,7 +1,13 @@
-import { FILL_PREVIEW_VIEWPORT, type ScopedThreadRef } from "@t3tools/contracts";
+import {
+  FILL_PREVIEW_VIEWPORT,
+  PREVIEW_VIEWPORT_MAX_DIMENSION,
+  PREVIEW_VIEWPORT_MIN_DIMENSION,
+  type ScopedThreadRef,
+} from "@t3tools/contracts";
 import { previewPdfAssetUrl } from "@t3tools/shared/preview";
 import { useEnvironmentHttpBaseUrl } from "~/state/environments";
-import { PanelRightIcon, PictureInPicture2, XIcon } from "lucide-react";
+import { PREVIEW_VIEWPORT_PRESETS, resolvePreviewViewport } from "@t3tools/shared/previewViewport";
+import { MonitorSmartphoneIcon, PanelRightIcon, PictureInPicture2, XIcon } from "lucide-react";
 import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
@@ -22,6 +28,7 @@ import {
 } from "~/browser/browserRecording";
 import { useBrowserSurfaceStore } from "~/browser/browserSurfaceStore";
 import type { BrowserViewportResizeDirection } from "~/browser/browserViewportLayout";
+import { commitBrowserViewportChange } from "~/browser/browserViewportActions";
 import { previewRuntimeTabId } from "~/browser/previewRuntimeTabId";
 import { rendersServerTabNatively } from "~/browser/previewRuntime";
 import { primaryEnvironmentIdAtom } from "~/state/primaryEnvironment";
@@ -35,6 +42,7 @@ import {
 } from "~/browser/serverPictureInPicture";
 import { useBrowserLayoutZoomFactor } from "~/browser/useBrowserLayoutZoomFactor";
 import { Button } from "~/components/ui/button";
+import { Menu, MenuPopup, MenuRadioGroup, MenuRadioItem, MenuTrigger } from "~/components/ui/menu";
 import { toastManager } from "~/components/ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
@@ -75,7 +83,9 @@ interface PointerGesture {
   readonly pointerY: number;
   readonly frame: PreviewMiniPlayerFrame;
   readonly direction: BrowserViewportResizeDirection | null;
+  readonly source: PreviewMiniPlayerSize;
   moved: boolean;
+  draft: PreviewMiniPlayerSize | null;
 }
 
 const HANDLE_TAP_SLOP_PX = 6;
@@ -101,6 +111,13 @@ const RESIZE_HANDLES: ReadonlyArray<{
   { direction: "southeast", className: "-bottom-2 -right-2 size-4 cursor-nwse-resize" },
 ];
 
+const EDGE_DIRECTIONS: ReadonlySet<BrowserViewportResizeDirection> = new Set([
+  "north",
+  "south",
+  "east",
+  "west",
+]);
+
 // What the stream reports about its source. It lives outside the player so the
 // chat canvas lays out the frame from the same source size the player uses. One
 // slot is enough, since only the shown thread renders a player, and it keeps the
@@ -109,6 +126,14 @@ const useStreamedSourceSize = create<{
   readonly key: string;
   readonly viewport: PreviewStreamViewport;
 } | null>(() => null);
+
+// Source size an edge drag stretches to until its viewport commit lands.
+const useDraftSourceSize = create<{
+  readonly key: string;
+  readonly size: PreviewMiniPlayerSize;
+} | null>(() => null);
+
+const RESPONSIVE_VIEWPORT = "responsive";
 
 const NO_DEVICE_SCREEN_ATOM = Atom.make<DeviceScreenSize | null>(null).pipe(
   Atom.withLabel("device-stream-screen:none"),
@@ -150,15 +175,31 @@ function useBrowserMiniPlayerSource(threadRef: ScopedThreadRef | null, tabId: st
       ? state.viewport
       : null,
   );
+  const draftSize = useDraftSourceSize((state) =>
+    threadRef &&
+    tabId !== null &&
+    state?.key ===
+      streamedSourceKey(threadRef, previewMiniPlayerSourceKey(browserMiniPlayerSource(tabId)))
+      ? state.size
+      : null,
+  );
   const sourceSize: PreviewMiniPlayerSize =
-    serverTab && streamViewport
+    draftSize ??
+    (serverTab && streamViewport
       ? streamViewport
       : resolvePreviewMiniPlayerSourceSize(
           snapshot?.viewport ?? FILL_PREVIEW_VIEWPORT,
           fittedSourceContent,
           layoutZoomFactor,
-        );
-  return { serverEpoch: previewState.serverEpoch, snapshot, desktopOverlay, serverTab, sourceSize };
+        ));
+  return {
+    serverEpoch: previewState.serverEpoch,
+    snapshot,
+    desktopOverlay,
+    serverTab,
+    sourceSize,
+    sourceZoomFactor: serverTab ? 1 : layoutZoomFactor,
+  };
 }
 
 /** The mini player as the chat canvas lays it out; null when no player renders. */
@@ -212,7 +253,7 @@ export function ThreadPreviewMiniPlayer({ threadRef, miniPlayer }: Props) {
 
 function BrowserMiniPlayer({ threadRef, tabId, miniPlayer }: Props & { readonly tabId: string }) {
   const httpBaseUrl = useEnvironmentHttpBaseUrl(threadRef.environmentId);
-  const { serverEpoch, snapshot, desktopOverlay, serverTab, sourceSize } =
+  const { serverEpoch, snapshot, desktopOverlay, serverTab, sourceSize, sourceZoomFactor } =
     useBrowserMiniPlayerSource(threadRef, tabId);
   const runtimeTabId = previewRuntimeTabId(threadRef, serverEpoch, tabId);
   const recordingTabIds = useActiveBrowserRecordingTabIds();
@@ -230,6 +271,38 @@ function BrowserMiniPlayer({ threadRef, tabId, miniPlayer }: Props & { readonly 
   const openInPanel = () => {
     usePreviewMiniPlayerStore.getState().close(threadRef);
     useRightPanelStore.getState().openBrowser(threadRef, tabId);
+  };
+
+  const viewportTarget = { threadRef, tabId, runtimeTabId };
+  const resizeSource = (size: PreviewMiniPlayerSize, commit: boolean) => {
+    useDraftSourceSize.setState({ key: viewportKey, size }, true);
+    if (!commit) return;
+    const dimension = (value: number) =>
+      Math.min(
+        PREVIEW_VIEWPORT_MAX_DIMENSION,
+        Math.max(PREVIEW_VIEWPORT_MIN_DIMENSION, Math.round(value / sourceZoomFactor)),
+      );
+    const clearDraft = () =>
+      useDraftSourceSize.setState(
+        (state) => (state?.key === viewportKey && state.size === size ? null : state),
+        true,
+      );
+    void commitBrowserViewportChange(viewportTarget, {
+      _tag: "freeform",
+      width: dimension(size.width),
+      height: dimension(size.height),
+    }).then(clearDraft, clearDraft);
+  };
+
+  const selectViewport = (value: string) => {
+    const preset = PREVIEW_VIEWPORT_PRESETS.find((candidate) => candidate.id === value);
+    if (value !== RESPONSIVE_VIEWPORT && !preset) return;
+    void commitBrowserViewportChange(
+      viewportTarget,
+      preset
+        ? resolvePreviewViewport({ mode: "preset", preset: preset.id })
+        : FILL_PREVIEW_VIEWPORT,
+    );
   };
 
   const toggleNativePictureInPicture = async () => {
@@ -258,6 +331,7 @@ function BrowserMiniPlayer({ threadRef, tabId, miniPlayer }: Props & { readonly 
   };
 
   if (!snapshot) return null;
+  const viewport = snapshot.viewport ?? FILL_PREVIEW_VIEWPORT;
   const pdfUrl =
     snapshot.navStatus._tag === "Success"
       ? previewPdfAssetUrl(snapshot.navStatus.url, httpBaseUrl)
@@ -275,30 +349,84 @@ function BrowserMiniPlayer({ threadRef, tabId, miniPlayer }: Props & { readonly 
       label="Floating browser preview"
       recording={recording}
       onOpenInPanel={openInPanel}
+      onResizeSource={resizeSource}
       pillActions={
-        canPopOut ? (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant={poppedOut ? "secondary" : "ghost"}
-                  size="icon-xs"
-                  aria-label={
-                    poppedOut ? "Close popped-out preview" : "Pop preview into separate window"
-                  }
-                  disabled={!serverTab && !desktopOverlay?.hasWebContents}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onClick={toggleNativePictureInPicture}
-                />
-              }
+        <>
+          <Menu>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <MenuTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label="Preview device size"
+                        onPointerDown={(event) => event.stopPropagation()}
+                      />
+                    }
+                  />
+                }
+              >
+                <MonitorSmartphoneIcon />
+              </TooltipTrigger>
+              <TooltipPopup side="top">Device size</TooltipPopup>
+            </Tooltip>
+            {/* Portaled, but React still bubbles pointerdown to the drag handle, which captures it. */}
+            <MenuPopup
+              side="bottom"
+              align="end"
+              className="max-h-80"
+              onPointerDown={(event) => event.stopPropagation()}
             >
-              <PictureInPicture2 />
-            </TooltipTrigger>
-            <TooltipPopup side="top">
-              {poppedOut ? "Close separate window" : "Pop into separate window"}
-            </TooltipPopup>
-          </Tooltip>
-        ) : null
+              <MenuRadioGroup
+                value={
+                  viewport._tag === "preset"
+                    ? viewport.presetId
+                    : viewport._tag === "fill"
+                      ? RESPONSIVE_VIEWPORT
+                      : ""
+                }
+                onValueChange={(value) => selectViewport(String(value))}
+              >
+                <MenuRadioItem value={RESPONSIVE_VIEWPORT} closeOnClick>
+                  Responsive
+                </MenuRadioItem>
+                {PREVIEW_VIEWPORT_PRESETS.map((preset) => (
+                  <MenuRadioItem key={preset.id} value={preset.id} closeOnClick>
+                    <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                      <span className="truncate">{preset.label}</span>
+                      <span className="text-xs text-muted-foreground">{preset.detail}</span>
+                    </span>
+                  </MenuRadioItem>
+                ))}
+              </MenuRadioGroup>
+            </MenuPopup>
+          </Menu>
+          {canPopOut ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant={poppedOut ? "secondary" : "ghost"}
+                    size="icon-xs"
+                    aria-label={
+                      poppedOut ? "Close popped-out preview" : "Pop preview into separate window"
+                    }
+                    disabled={!serverTab && !desktopOverlay?.hasWebContents}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={toggleNativePictureInPicture}
+                  />
+                }
+              >
+                <PictureInPicture2 />
+              </TooltipTrigger>
+              <TooltipPopup side="top">
+                {poppedOut ? "Close separate window" : "Pop into separate window"}
+              </TooltipPopup>
+            </Tooltip>
+          ) : null}
+        </>
       }
     >
       {(frame) =>
@@ -419,6 +547,7 @@ function MiniPlayerShell({
   sourceSize,
   label,
   onOpenInPanel,
+  onResizeSource,
   pillActions,
   recording = false,
   cornerRadius = frameCornerRadius,
@@ -429,6 +558,8 @@ function MiniPlayerShell({
   readonly sourceSize: PreviewMiniPlayerSize;
   readonly label: string;
   readonly onOpenInPanel: () => void;
+  /** Edge drags stretch the source itself; `commit` is true on release. */
+  readonly onResizeSource?: (size: PreviewMiniPlayerSize, commit: boolean) => void;
   readonly pillActions?: ReactNode;
   readonly recording?: boolean;
   readonly cornerRadius?: (frame: PreviewMiniPlayerSize) => number;
@@ -473,7 +604,9 @@ function MiniPlayerShell({
       pointerY: event.clientY,
       frame,
       direction,
+      source: sourceSize,
       moved: false,
+      draft: null,
     };
     event.currentTarget.setPointerCapture(event.pointerId);
     event.preventDefault();
@@ -503,9 +636,15 @@ function MiniPlayerShell({
       start: gesture.frame,
       direction: gesture.direction,
       delta,
-      source: sourceSize,
+      source: gesture.source,
       container,
+      freeEdges: onResizeSource !== undefined,
     });
+    if (onResizeSource && EDGE_DIRECTIONS.has(gesture.direction)) {
+      const scale = gesture.source.width / gesture.frame.width;
+      gesture.draft = { width: next.width * scale, height: next.height * scale };
+      onResizeSource(gesture.draft, false);
+    }
     store.resize(threadRef, sourceKey, next.width, { x: next.x, y: next.y });
   };
 
@@ -513,6 +652,7 @@ function MiniPlayerShell({
     const gesture = gestureRef.current;
     if (gesture?.pointerId !== event.pointerId) return;
     gestureRef.current = null;
+    if (gesture.draft) onResizeSource?.(gesture.draft, true);
     handleTappedRef.current =
       event.type === "pointerup" &&
       gesture.direction === null &&

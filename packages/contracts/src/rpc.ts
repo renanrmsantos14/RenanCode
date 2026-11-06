@@ -184,6 +184,13 @@ import {
   ThreadHandoffResult,
 } from "./promptCache.ts";
 import {
+  ClaudeCloudPlacementInput,
+  ClaudeCloudPlacementResult,
+  ClaudeCloudStartSessionError,
+  ClaudeCloudStartSessionInput,
+  ClaudeCloudStartSessionResult,
+} from "./claudeCloud.ts";
+import {
   PullRequestActionInput,
   PullRequestActivity,
   PullRequestChangeBreakdown,
@@ -431,6 +438,8 @@ export const WS_METHODS = {
   threadsSuggestNextAction: "threads.suggestNextAction",
   threadsCacheKeepWarm: "threads.cacheKeepWarm",
   threadsHandoff: "threads.handoff",
+  claudeCloudStartSession: "claudeCloud.startSession",
+  claudeCloudSuggestPlacement: "claudeCloud.suggestPlacement",
 
   shellOpenInEditor: "shell.openInEditor",
 
@@ -1391,6 +1400,18 @@ const WsThreadsHandoffRpc = Rpc.make(WS_METHODS.threadsHandoff, {
   error: Schema.Union([ThreadHandoffError, EnvironmentAuthorizationError]),
 });
 
+const WsClaudeCloudStartSessionRpc = Rpc.make(WS_METHODS.claudeCloudStartSession, {
+  payload: ClaudeCloudStartSessionInput,
+  success: ClaudeCloudStartSessionResult,
+  error: Schema.Union([ClaudeCloudStartSessionError, EnvironmentAuthorizationError]),
+});
+
+const WsClaudeCloudSuggestPlacementRpc = Rpc.make(WS_METHODS.claudeCloudSuggestPlacement, {
+  payload: ClaudeCloudPlacementInput,
+  success: ClaudeCloudPlacementResult,
+  error: EnvironmentAuthorizationError,
+});
+
 const WsServerEstimateInputCostRpc = Rpc.make(WS_METHODS.serverEstimateInputCost, {
   payload: EstimateInputCostInput,
   success: EstimateInputCostResult,
@@ -1824,6 +1845,12 @@ const WsOrchestrationV2GetThreadFamilyRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS
   error: Schema.Union([OrchestrationV2GetShellSnapshotError, EnvironmentAuthorizationError]),
 });
 
+const WsOrchestrationV2GetThreadTitlesRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.getThreadTitles, {
+  payload: OrchestrationV2RpcSchemas.getThreadTitles.input,
+  success: OrchestrationV2RpcSchemas.getThreadTitles.output,
+  error: Schema.Union([OrchestrationV2GetShellSnapshotError, EnvironmentAuthorizationError]),
+});
+
 const WsOrchestrationV2GetWorktreeThreadIdsRpc = Rpc.make(
   ORCHESTRATION_V2_WS_METHODS.getWorktreeThreadIds,
   {
@@ -2161,6 +2188,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsThreadsSuggestNextActionRpc,
   WsThreadsCacheKeepWarmRpc,
   WsThreadsHandoffRpc,
+  WsClaudeCloudStartSessionRpc,
+  WsClaudeCloudSuggestPlacementRpc,
   WsServerEstimateInputCostRpc,
   WsProjectsWriteFileRpc,
   WsProjectsMutateRpc,
@@ -2243,6 +2272,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2SearchThreadStreamRpc,
   WsOrchestrationV2GetArchivedShellSnapshotRpc,
   WsOrchestrationV2GetThreadFamilyRpc,
+  WsOrchestrationV2GetThreadTitlesRpc,
   WsOrchestrationV2GetWorktreeThreadIdsRpc,
   WsOrchestrationV2GetOlderSettledThreadsRpc,
   WsOrchestrationV2GetThreadProjectionRpc,

@@ -14,7 +14,12 @@ import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-import { createMuseSdkHost, createMuseSdkHostEffect, type MuseSdkHost } from "./sdk.ts";
+import {
+  createMuseSdkHost,
+  createMuseSdkHostEffect,
+  MuseSdkError,
+  type MuseSdkHost,
+} from "./sdk.ts";
 import { museModelCapabilities, resolveMuseReasoningEffort } from "./modelCatalog.ts";
 import type { ProviderTextGeneration } from "@t3tools/provider-core/server/textGeneration";
 import { investigationUnsupported } from "@t3tools/provider-core/server/textGenerationOperations";
@@ -22,6 +27,7 @@ import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildNextActionPrompt,
+  buildTaskPlacementPrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
 } from "@t3tools/provider-core/server/textGenerationPrompts";
@@ -114,7 +120,7 @@ async function generateMuseText(
       await host.connection.command("userInput/cancel", {
         sessionId,
         userInputId: request.userInputId,
-        reason: "T3 Code text generation cannot request user input.",
+        reason: "RenanCode text generation cannot request user input.",
       });
     }
   };
@@ -158,7 +164,7 @@ async function generateMuseText(
   });
   host.connection.onProtocolError(rejectCompletion);
   host.connection.onServerRequest(async () => {
-    const error = new Error("T3 Code text generation cannot approve interactive requests.");
+    const error = new Error("RenanCode text generation cannot approve interactive requests.");
     rejectCompletion(error);
     throw error;
   });
@@ -252,16 +258,18 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
         (host: MuseSdkHost) => Effect.promise(() => host.close()),
         { interruptible: true },
       );
-      return yield* Effect.tryPromise((signal) =>
-        generateMuseText(
-          host,
-          cwd,
-          `${input.prompt}\n\nReturn only a JSON object matching this schema, with no markdown fences. Do not use tools or ask questions.\n${jsonSchema}`,
-          modelId,
-          reasoningEffort,
-          signal,
-        ),
-      );
+      return yield* Effect.tryPromise({
+        try: (signal) =>
+          generateMuseText(
+            host,
+            cwd,
+            `${input.prompt}\n\nReturn only a JSON object matching this schema, with no markdown fences. Do not use tools or ask questions.\n${jsonSchema}`,
+            modelId,
+            reasoningEffort,
+            signal,
+          ),
+        catch: (cause) => new MuseSdkError({ operation: "generate text", cause }),
+      });
     }).pipe(
       Effect.scoped,
       Effect.mapError(
@@ -354,6 +362,16 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
     });
     return { suggestion: sanitizeNextAction(generated.suggestion) };
   });
+  const generateTaskPlacement: ProviderTextGeneration["generateTaskPlacement"] = Effect.fn(
+    "MuseTextGeneration.generateTaskPlacement",
+  )(function* (input) {
+    const generated = yield* runMuseJson({
+      operation: "generateTaskPlacement",
+      ...buildTaskPlacementPrompt(input),
+      modelSelection: input.modelSelection,
+    });
+    return { placement: generated.placement, reason: generated.reason.trim() };
+  });
   return {
     generateCommitMessage,
     generatePrContent,
@@ -361,5 +379,6 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
     generateThreadTitle,
     generateReviewGuide,
     generateNextAction,
+    generateTaskPlacement,
   } satisfies ProviderTextGeneration;
 });

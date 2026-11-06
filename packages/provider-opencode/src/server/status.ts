@@ -6,7 +6,7 @@ import {
 } from "@t3tools/contracts";
 import type { OpenCodeSettings } from "../settings.ts";
 import * as Cause from "effect/Cause";
-import * as Data from "effect/Data";
+import * as Schema from "effect/Schema";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Schedule from "effect/Schedule";
@@ -30,10 +30,12 @@ const OPENCODE_PRESENTATION = {
   showInteractionModeToggle: false,
 } as const;
 
-class OpenCodeProbeError extends Data.TaggedError("OpenCodeProbeError")<{
-  readonly cause?: unknown;
-  readonly detail: string;
-}> {}
+class OpenCodeProbeError extends Schema.TaggedError<OpenCodeProbeError>()("OpenCodeProbeError", {
+  cause: Schema.optional(Schema.Defect()),
+  detail: Schema.String,
+}) {}
+
+const isOpenCodeProbeError = Schema.is(OpenCodeProbeError);
 
 function normalizeProbeMessage(message: string): string | undefined {
   const trimmed = message.trim();
@@ -50,7 +52,7 @@ function normalizeProbeMessage(message: string): string | undefined {
 }
 
 function normalizedErrorMessage(cause: unknown): string | undefined {
-  if (cause instanceof OpenCodeProbeError) {
+  if (isOpenCodeProbeError(cause)) {
     return normalizeProbeMessage(cause.detail);
   }
 
@@ -427,8 +429,8 @@ export const makePendingOpenCodeProvider = Effect.fn(
         auth: { status: "unknown" },
         message:
           openCodeSettings.serverUrl.trim().length > 0
-            ? "OpenCode is disabled in T3 Code settings. A server URL is configured."
-            : "OpenCode is disabled in T3 Code settings.",
+            ? "OpenCode is disabled in RenanCode settings. A server URL is configured."
+            : "OpenCode is disabled in RenanCode settings.",
       },
     });
   }
@@ -735,8 +737,8 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
         status: "warning",
         auth: { status: "unknown" },
         message: isExternalServer
-          ? "OpenCode is disabled in T3 Code settings. A server URL is configured."
-          : "OpenCode is disabled in T3 Code settings.",
+          ? "OpenCode is disabled in RenanCode settings. A server URL is configured."
+          : "OpenCode is disabled in RenanCode settings.",
       },
     });
   }

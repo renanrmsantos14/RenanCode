@@ -25,6 +25,7 @@ import {
   RunId,
   ThreadId,
 } from "@t3tools/contracts";
+import type { MenuAction } from "@react-native-menu/menu";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
@@ -34,6 +35,7 @@ import {
   buildThreadListV2Items,
   buildThreadListV2ListItems,
   getThreadListV2OrderedSection,
+  layoutThreadListV2RowMenuActions,
   resolveThreadListV2SnoozeMenuSelection,
   resolveThreadListV2SnoozePresets,
   resolveThreadListV2Status,
@@ -96,6 +98,53 @@ describe("resolveThreadListV2SnoozePresets", () => {
     );
     // The evening preset is gone by 19:15; a reading from 10:00 would still offer it.
     expect(presets.map((preset) => preset.id)).not.toContain("at:today:18:00");
+  });
+});
+
+describe("layoutThreadListV2RowMenuActions", () => {
+  const actions = (...ids: string[]): MenuAction[] => ids.map((id) => ({ id, title: id }));
+  const leafIds = (items: readonly MenuAction[]): string[] =>
+    items.flatMap((item) => (item.subactions ? leafIds(item.subactions) : [item.id!]));
+
+  it("keeps every action once while nesting iOS secondary actions under More", () => {
+    const full = {
+      direct: actions("new-thread-on-branch", "copy-thread", "copy-thread-id", "settle", "snooze"),
+      reorder: actions("arrange", "move-up", "move-down"),
+      pin: actions("unpin"),
+      secondary: actions("rename", "regenerate-title", "turn-into-project", "archive", "delete"),
+    };
+    const flat = layoutThreadListV2RowMenuActions({ ...full, nested: false });
+    const nested = layoutThreadListV2RowMenuActions({ ...full, nested: true });
+
+    expect(flat.map((action) => action.id)).toEqual(
+      [...full.direct, ...full.reorder, ...full.pin, ...full.secondary].map((action) => action.id),
+    );
+    expect(nested.map((action) => action.id)).toEqual([
+      "new-thread-on-branch",
+      "copy-thread",
+      "copy-thread-id",
+      "settle",
+      "snooze",
+      "unpin",
+      "more",
+    ]);
+    expect(nested.at(-1)?.subactions?.map((action) => action.id)).toEqual([
+      "arrange-menu",
+      "rename",
+      "regenerate-title",
+      "turn-into-project",
+      "archive",
+      "delete",
+    ]);
+    expect(leafIds(nested).toSorted()).toEqual(leafIds(flat).toSorted());
+
+    // Slim rows only offer "Arrange threads…", which needs no submenu of its own.
+    const slim = layoutThreadListV2RowMenuActions({
+      ...full,
+      reorder: actions("arrange"),
+      nested: true,
+    });
+    expect(slim.at(-1)?.subactions?.[0]?.id).toBe("arrange");
   });
 });
 
@@ -1717,5 +1766,93 @@ describe("Working section beta", () => {
       "v2-settled-shelf",
       "settled",
     ]);
+  });
+});
+
+describe("buildThreadListV2Items subsessions", () => {
+  const parentId = ThreadId.make("parent");
+  const childId = ThreadId.make("child");
+  const grandchildId = ThreadId.make("grandchild");
+  const parent = makeThread({ id: parentId, title: "Parent" });
+  const launched = (id: ThreadId, from: ThreadId, createdAt: string) =>
+    makeThread({ id, title: id, launchedFrom: from, creationSource: "mcp", createdAt });
+  const build = (
+    threads: EnvironmentThreadShell[],
+    extra: Partial<Parameters<typeof buildThreadListV2Items>[0]> = {},
+  ) =>
+    buildThreadListV2Items({ threads, environmentId: null, searchQuery: "", now: NOW, ...extra });
+  const rows = (layout: ReturnType<typeof build>) =>
+    layout.items.map((item) => `${item.depth}:${item.thread.id}`);
+
+  it("lists a child under its listed parent, oldest first, and not at top level", () => {
+    const layout = build([
+      launched(grandchildId, childId, "2026-06-01T03:00:00.000Z"),
+      launched(ThreadId.make("older"), parentId, "2026-06-01T01:00:00.000Z"),
+      launched(childId, parentId, "2026-06-01T02:00:00.000Z"),
+      parent,
+    ]);
+    expect(rows(layout)).toEqual(["0:parent", "1:older", "1:child", "2:grandchild"]);
+    expect(layout.items[0]?.subsessions).toMatchObject({ count: 3, collapsed: false });
+  });
+
+  it("keeps a child top-level when its parent is not listed", () => {
+    expect(rows(build([launched(childId, parentId, "2026-06-01T02:00:00.000Z")]))).toEqual([
+      "0:child",
+    ]);
+  });
+
+  it("lists a delegated subagent lineage thread only under its listed parent", () => {
+    const delegated = makeThread({
+      id: childId,
+      title: "Delegated",
+      creationSource: "mcp",
+      lineage: {
+        rootThreadId: parentId,
+        parentThreadId: parentId,
+        relationshipToParent: "subagent",
+      },
+    });
+    expect(rows(build([parent, delegated]))).toEqual(["0:parent", "1:child"]);
+    expect(rows(build([delegated]))).toEqual([]);
+  });
+
+  it("never lists a native provider subagent", () => {
+    const native = makeThread({
+      id: childId,
+      title: "Native",
+      creationSource: "provider",
+      lineage: {
+        rootThreadId: parentId,
+        parentThreadId: parentId,
+        relationshipToParent: "subagent",
+      },
+    });
+    expect(rows(build([parent, native]))).toEqual(["0:parent"]);
+  });
+
+  it("hides children of a collapsed parent and surfaces their urgent status", () => {
+    const working = makeThread({
+      id: childId,
+      title: "Working",
+      launchedFrom: parentId,
+      creationSource: "mcp",
+      runtime: { status: "running" } as EnvironmentThreadShell["runtime"],
+    });
+    const layout = build([parent, working], {
+      collapsedSubsessionKeys: new Set([`${environmentId}:${parentId}`]),
+    });
+    expect(rows(layout)).toEqual(["0:parent"]);
+    expect(layout.items[0]?.subsessions).toEqual({
+      count: 1,
+      collapsed: true,
+      hiddenStatus: "working",
+    });
+  });
+
+  it("lists matches flat while searching", () => {
+    const layout = build([parent, launched(childId, parentId, "2026-06-01T02:00:00.000Z")], {
+      searchQuery: "child",
+    });
+    expect(rows(layout)).toEqual(["0:child"]);
   });
 });

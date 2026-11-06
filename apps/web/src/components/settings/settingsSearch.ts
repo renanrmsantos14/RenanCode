@@ -461,6 +461,30 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["hide fold running monitoring threads inbox sidebar shelf"],
   },
   {
+    id: "tree-children",
+    title: "Nested threads",
+    to: "/settings/general",
+    searchTerms: ["subsessions subagents children hide show sidebar tree"],
+  },
+  {
+    id: "tree-indent",
+    title: "Nested thread indent",
+    to: "/settings/general",
+    searchTerms: ["subsessions subagents indentation spacing sidebar tree"],
+  },
+  {
+    id: "tree-line-color",
+    title: "Tree line color",
+    to: "/settings/general",
+    searchTerms: ["subsessions subagents branch colour sidebar"],
+  },
+  {
+    id: "tree-line-width",
+    title: "Tree line width",
+    to: "/settings/general",
+    searchTerms: ["subsessions subagents branch thickness thick sidebar"],
+  },
+  {
     id: "boring-sidebar",
     title: "Boring sidebar (group by project)",
     to: "/settings/labs",
@@ -485,6 +509,20 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/labs",
     scope: "environment",
     searchTerms: ["beta link another machine vps peer agents work there delegate"],
+  },
+  {
+    id: "claude-cloud-sessions-beta",
+    title: "Claude cloud sessions",
+    to: "/settings/labs",
+    scope: "environment",
+    searchTerms: ["beta claude code web cloud remote sessions claude.ai sidebar"],
+  },
+  {
+    id: "claude-cloud-auto-routing-beta",
+    title: "Send tasks to the cloud automatically",
+    to: "/settings/labs",
+    scope: "environment",
+    searchTerms: ["beta claude cloud auto route task local machine resources push"],
   },
   {
     id: "simlock-hosts",
@@ -673,6 +711,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/threads",
     scope: "environment-defaults",
     searchTerms: ["base directory folder browser path home"],
+  },
+  {
+    id: "ghq-clone-layout",
+    title: "Clone into host folders",
+    to: "/settings/threads",
+    scope: "environment-defaults",
+    searchTerms: ["ghq clone destination host owner repository root layout"],
   },
   {
     id: "unpin-confirmation",

@@ -28,9 +28,12 @@ export function createRemoteVoiceTranscriber(input: {
           throwIfVoiceTranscriptionAborted(signal);
           if (result._tag === "Success") return result.text;
           if (result.reason === "rate-limited" || result.reason === "not-configured") {
-            throw new VoiceTranscriptionError(result.reason, result.reason);
+            throw new VoiceTranscriptionError({ code: result.reason, message: result.reason });
           }
-          throw new VoiceTranscriptionError("transcription-failed", result.reason ?? "failed");
+          throw new VoiceTranscriptionError({
+            code: "transcription-failed",
+            message: result.reason ?? "failed",
+          });
         },
       };
     },

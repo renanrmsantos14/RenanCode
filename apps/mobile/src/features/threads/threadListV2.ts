@@ -30,11 +30,17 @@ import {
 } from "@t3tools/client-runtime/state/thread-sort";
 import { isListedThreadLineage, type EnvironmentId, type ProjectId } from "@t3tools/contracts";
 import type { SnoozePresetSetting } from "@t3tools/contracts/settings";
+import type { MenuAction } from "@react-native-menu/menu";
 
 import type { ThreadListProvider } from "../../state/thread-list-environments";
 import type { ThreadMoveAvailability } from "./threadOrder";
 
 import { relativeTime } from "../../lib/time";
+import {
+  nestThreadListSubsessions,
+  THREAD_LIST_SUBSESSION_MAX_INDENT,
+  type ThreadListSubsessions,
+} from "./threadListSubsessions";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 
 import {
@@ -42,6 +48,10 @@ import {
   reconcilePendingThreadOrder,
   type PendingThreadOrder,
 } from "./threadOrder";
+
+const EMPTY_KEYS: ReadonlySet<string> = new Set();
+const keyOfThread = (thread: Pick<EnvironmentThreadShell, "environmentId" | "id">) =>
+  `${thread.environmentId}:${thread.id}`;
 
 export const threadListInboxReturns = createInboxReturnTracker();
 
@@ -132,6 +142,42 @@ export function resolveThreadListV2SwipeActions(input: {
     primary,
     secondary: input.snoozeSupported && input.snoozable ? "snooze" : null,
   };
+}
+
+// Nested keeps iOS menus short: UIKit scrolls a taller menu, and that scroll
+// cancels press-drag-release selection.
+export function layoutThreadListV2RowMenuActions(input: {
+  readonly nested: boolean;
+  readonly direct: readonly MenuAction[];
+  readonly reorder: readonly MenuAction[];
+  readonly pin: readonly MenuAction[];
+  readonly secondary: readonly MenuAction[];
+}): MenuAction[] {
+  if (!input.nested) {
+    return [...input.direct, ...input.reorder, ...input.pin, ...input.secondary];
+  }
+  return [
+    ...input.direct,
+    ...input.pin,
+    {
+      id: "more",
+      title: "More",
+      image: "ellipsis.circle",
+      subactions: [
+        ...(input.reorder.length > 1
+          ? [
+              {
+                id: "arrange-menu",
+                title: "Arrange",
+                image: "arrow.up.arrow.down",
+                subactions: [...input.reorder],
+              },
+            ]
+          : input.reorder),
+        ...input.secondary,
+      ],
+    },
+  ];
 }
 
 export function resolveThreadListV2SnoozeGateExpiryMs(
@@ -285,8 +331,10 @@ export function getThreadListV2OrderedSection(input: {
   readonly queuedThreadKeys?: ReadonlySet<string>;
 }): EnvironmentThreadShell[] {
   const queuedThreadKeys = input.queuedThreadKeys?.size ? input.queuedThreadKeys : undefined;
+  const { nestedKeys } = nestThreadListSubsessions(input.threads);
   const threads = input.threads.filter((thread) => {
     if (thread.archivedAt !== null || !isListedThreadLineage(thread.lineage)) return false;
+    if (nestedKeys.has(`${thread.environmentId}:${thread.id}`)) return false;
     if (
       (input.settlementEnvironmentIds?.has(thread.environmentId) ?? true) &&
       thread.settledOverride === "settled" &&
@@ -320,6 +368,17 @@ export interface ThreadListV2Item {
   readonly pinned: boolean;
   readonly wokeAt: string | null;
   readonly isLast: boolean;
+  /** Indent level of a subsession row, capped for display; 0 for a top-level row. */
+  readonly depth: number;
+  /** Set on a row that has subsessions listed under it (or folded away). */
+  readonly subsessions: ThreadListV2Subsessions | null;
+}
+
+export interface ThreadListV2Subsessions {
+  readonly count: number;
+  readonly collapsed: boolean;
+  /** The most urgent status among folded subsessions, so work does not hide. */
+  readonly hiddenStatus: ThreadListV2Status | null;
 }
 
 export interface ThreadListV2Layout {
@@ -420,6 +479,10 @@ export function threadListV2ListItemsAreEqual(
         previous.item.snoozed === item.item.snoozed &&
         previous.item.pinned === item.item.pinned &&
         previous.item.wokeAt === item.item.wokeAt &&
+        previous.item.depth === item.item.depth &&
+        previous.item.subsessions?.count === item.item.subsessions?.count &&
+        previous.item.subsessions?.collapsed === item.item.subsessions?.collapsed &&
+        previous.item.subsessions?.hiddenStatus === item.item.subsessions?.hiddenStatus &&
         previous.snoozeWakeLabelText === item.snoozeWakeLabelText &&
         previous.timeLabel === item.timeLabel &&
         previous.snoozePresetMinute === item.snoozePresetMinute &&
@@ -611,6 +674,53 @@ function sortSettledThreadsReusingLast(
   return lastSettledOutput;
 }
 
+const HIDDEN_STATUS_ORDER: ReadonlyArray<ThreadListV2Status> = [
+  "approval",
+  "input",
+  "request",
+  "failed",
+  "limited",
+  "working",
+];
+
+interface SubsessionEntry {
+  readonly thread: EnvironmentThreadShell;
+  readonly depth: number;
+  readonly subsessions: ThreadListV2Subsessions | null;
+}
+
+/** The thread followed by its subsessions in tree order; a folded thread lists none. */
+export function listThreadWithSubsessions(
+  thread: EnvironmentThreadShell,
+  nesting: ThreadListSubsessions<EnvironmentThreadShell>,
+  collapsedKeys: ReadonlySet<string>,
+): SubsessionEntry[] {
+  const visit = (
+    current: EnvironmentThreadShell,
+    level: number,
+  ): { shown: SubsessionEntry[]; all: EnvironmentThreadShell[] } => {
+    const key = `${current.environmentId}:${current.id}`;
+    const childThreads = nesting.childrenByParent.get(key) ?? [];
+    const children = childThreads.map((child) => visit(child, level + 1));
+    const all = childThreads.flatMap((child, index) => [child, ...children[index]!.all]);
+    const depth = Math.min(level, THREAD_LIST_SUBSESSION_MAX_INDENT);
+    if (all.length === 0) return { shown: [{ thread: current, depth, subsessions: null }], all };
+    const collapsed = collapsedKeys.has(key);
+    const statuses = collapsed ? all.map(resolveThreadListV2Status) : [];
+    const self: SubsessionEntry = {
+      thread: current,
+      depth,
+      subsessions: {
+        count: all.length,
+        collapsed,
+        hiddenStatus: HIDDEN_STATUS_ORDER.find((status) => statuses.includes(status)) ?? null,
+      },
+    };
+    return { shown: collapsed ? [self] : [self, ...children.flatMap((child) => child.shown)], all };
+  };
+  return visit(thread, 0).shown;
+}
+
 export function buildThreadListV2Items(input: {
   readonly pendingOrder?: PendingThreadOrder | null;
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
@@ -633,6 +743,8 @@ export function buildThreadListV2Items(input: {
   readonly settledShelfExpanded?: boolean;
   readonly selectedThreadKey?: string | null;
   readonly queuedThreadKeys?: ReadonlySet<string>;
+  /** Parent thread keys whose subsessions are folded. */
+  readonly collapsedSubsessionKeys?: ReadonlySet<string>;
   /** Whether the shelf may list a settled row yet; older settled rows load in pages. */
   readonly isListedSettled?: (thread: EnvironmentThreadShell) => boolean;
   /** Settled threads in scope that are not local (older settled threads not loaded). */
@@ -664,10 +776,16 @@ export function buildThreadListV2Items(input: {
   const snoozed: EnvironmentThreadShell[] = [];
   let nextSnoozeWakeAt: string | null = null;
   const queuedThreadKeys = input.queuedThreadKeys?.size ? input.queuedThreadKeys : undefined;
+  // A search lists matches flat; otherwise subsessions render under their parent.
+  const nesting = nestThreadListSubsessions(input.threads);
+  const flatSearch = query.length > 0;
+  const collapsedKeys = input.collapsedSubsessionKeys ?? EMPTY_KEYS;
   const listedThreads = input.threads.filter(
     (thread) =>
       thread.archivedAt === null &&
-      isListedThreadLineage(thread.lineage) &&
+      (flatSearch
+        ? isListedThreadLineage(thread.lineage) || nesting.nestedKeys.has(keyOfThread(thread))
+        : isListedThreadLineage(thread.lineage) && !nesting.nestedKeys.has(keyOfThread(thread))) &&
       (input.environmentId === null || thread.environmentId === input.environmentId) &&
       (projectKeys === null || projectKeys.has(`${thread.environmentId}:${thread.projectId}`)),
   );
@@ -747,6 +865,8 @@ export function buildThreadListV2Items(input: {
         pinned: pinnedThreads.has(thread),
         wokeAt: slim.has(thread) ? null : resolveThreadListV2WokeAt(thread, { now }),
         isLast: index === results.length - 1,
+        depth: 0,
+        subsessions: null,
       })),
       hiddenSettledCount: 0,
       listedSettledThreads: [],
@@ -808,62 +928,42 @@ export function buildThreadListV2Items(input: {
         );
 
   const items: ThreadListV2Item[] = [];
+  const pushWithSubsessions = (
+    thread: EnvironmentThreadShell,
+    shelf: { variant: "card" | "slim"; snoozed: boolean; pinned: boolean },
+  ) => {
+    for (const entry of listThreadWithSubsessions(thread, nesting, collapsedKeys)) {
+      const root = entry.depth === 0;
+      items.push({
+        thread: entry.thread,
+        variant: shelf.variant,
+        snoozed: root && shelf.snoozed,
+        pinned: root && shelf.pinned,
+        wokeAt: shelf.variant === "card" ? resolveThreadListV2WokeAt(entry.thread, { now }) : null,
+        isLast: false,
+        depth: entry.depth,
+        subsessions: entry.subsessions,
+      });
+    }
+  };
+  const cardShelf = { variant: "card", snoozed: false, pinned: false } as const;
   for (const thread of applyPendingThreadOrder(
     sortPinnedThreadsByOrderKey(pinned),
     "pinned",
     pending,
   )) {
-    items.push({
-      thread,
-      variant: "card",
-      snoozed: false,
-      pinned: true,
-      wokeAt: resolveThreadListV2WokeAt(thread, { now }),
-      isLast: false,
-    });
+    pushWithSubsessions(thread, { ...cardShelf, pinned: true });
   }
-  for (const thread of orderedActive) {
-    items.push({
-      thread,
-      variant: "card",
-      snoozed: false,
-      pinned: false,
-      wokeAt: resolveThreadListV2WokeAt(thread, { now }),
-      isLast: false,
-    });
-  }
+  for (const thread of orderedActive) pushWithSubsessions(thread, cardShelf);
   const workingShelfHeaderIndex = orderedWorking.length > 0 ? items.length : null;
-  for (const thread of visibleWorking) {
-    items.push({
-      thread,
-      variant: "card",
-      snoozed: false,
-      pinned: false,
-      wokeAt: resolveThreadListV2WokeAt(thread, { now }),
-      isLast: false,
-    });
-  }
+  for (const thread of visibleWorking) pushWithSubsessions(thread, cardShelf);
   const snoozedShelfHeaderIndex = orderedSnoozed.length > 0 ? items.length : null;
   for (const thread of visibleSnoozed) {
-    items.push({
-      thread,
-      variant: "slim",
-      snoozed: true,
-      pinned: false,
-      wokeAt: null,
-      isLast: false,
-    });
+    pushWithSubsessions(thread, { variant: "slim", snoozed: true, pinned: false });
   }
   const settledShelfHeaderIndex = settledTotal > 0 ? items.length : null;
   for (const thread of visibleSettled) {
-    items.push({
-      thread,
-      variant: "slim",
-      snoozed: false,
-      pinned: false,
-      wokeAt: null,
-      isLast: false,
-    });
+    pushWithSubsessions(thread, { variant: "slim", snoozed: false, pinned: false });
   }
   const last = items.at(-1);
   if (last) {

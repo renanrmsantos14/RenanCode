@@ -36,6 +36,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
@@ -977,6 +978,70 @@ it.layer(layerTest)("OrchestrationV2LayerLive", (it) => {
       yield* rollback(CommandId.make("runtime-rollback-failure-retry"));
       const retried = yield* orchestrator.getThreadProjection(threadId);
       assert.isNull(retried.thread.rollbackFailure);
+    }),
+  );
+
+  it.effect("runs Claude cloud prompts as normal turns on the thread's own account", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const outbox = yield* EffectOutbox.EffectOutboxV2;
+      const threadId = ThreadId.make("claude-cloud:runtime-session");
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make("runtime-cloud-create"),
+        threadId,
+        projectId: ProjectId.make("runtime-cloud-project"),
+        title: "Cloud session",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: process.cwd(),
+      });
+      const message = (suffix: string, extra: object = {}) => ({
+        type: "message.dispatch" as const,
+        createdBy: "user" as const,
+        creationSource: "web" as const,
+        commandId: CommandId.make(`runtime-cloud-message-${suffix}`),
+        threadId,
+        messageId: MessageId.make(`runtime-cloud-message-${suffix}`),
+        text: "Keep going.",
+        attachments: [],
+        dispatchMode: { type: "start_immediately" as const },
+        ...extra,
+      });
+      const switched = yield* Effect.exit(
+        orchestrator.dispatch(
+          message("switch", {
+            modelSelection: { ...modelSelection, instanceId: ProviderInstanceId.make("other") },
+          }),
+        ),
+      );
+      assert.isTrue(Exit.isFailure(switched));
+      const sent = yield* orchestrator.dispatch(message("plain"));
+      assert.include(
+        sent.storedEvents.map((stored) => stored.event.type),
+        "run.created",
+      );
+      assert.deepEqual(
+        (yield* outbox.listByCommandId(CommandId.make("runtime-cloud-message-plain"))).map(
+          (effect) => effect.request.type,
+        ),
+        ["provider-turn.start"],
+      );
+
+      const archiveCommandId = CommandId.make("runtime-cloud-archive");
+      yield* orchestrator.dispatch({
+        type: "thread.archive",
+        commandId: archiveCommandId,
+        threadId,
+      });
+      assert.deepEqual(
+        (yield* outbox.listByCommandId(archiveCommandId)).map((effect) => effect.request.type),
+        ["claude-cloud.archive", "terminal.cleanup"],
+      );
     }),
   );
 
@@ -4406,7 +4471,7 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
           notification: {
             source: { kind: "system" as const },
             outcome: "updated" as const,
-            summary: "T3 Code restarted and resumed this turn",
+            summary: "RenanCode restarted and resumed this turn",
             detail: "Continue where you left off.",
           },
           attachments: [],
@@ -4427,7 +4492,7 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
           continuationItems.flatMap((item) =>
             item.type === "notification" ? [[item.summary, item.detail]] : [],
           ),
-          ["T3 Code restarted and resumed this turn", "Continue where you left off."],
+          ["RenanCode restarted and resumed this turn", "Continue where you left off."],
         );
         yield* orchestrator.dispatch({
           ...command,
@@ -8496,6 +8561,13 @@ it.layer(layerTest)("usage-limit recovery", (it) => {
         yield* orchestrator.dispatch(resume);
       }
       const after = yield* orchestrator.getThreadProjection(threadId);
+      if (scenario === "resume") {
+        assert.deepInclude(after.messages.at(-1), {
+          text: "Continue where you left off.",
+          createdBy: "agent",
+          creationSource: "server",
+        });
+      }
       assert.lengthOf(
         after.runs,
         before.runs.length +

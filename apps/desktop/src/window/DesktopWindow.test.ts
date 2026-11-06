@@ -30,6 +30,7 @@ vi.mock("electron", async (importOriginal) => ({
         bounds: { x: 0, y: 0, width: 1920, height: 1080 },
       },
     ]),
+    getPrimaryDisplay: vi.fn(() => ({ workArea: { x: 0, y: 0, width: 1920, height: 1040 } })),
   },
 }));
 
@@ -473,13 +474,22 @@ describe("DesktopWindow", () => {
     ];
 
     assert.deepEqual(
-      DesktopWindow.resolveInitialMainWindowBounds(persistedBounds, displays),
+      DesktopWindow.resolveInitialMainWindowBounds(persistedBounds, displays, displays[0]!),
       persistedBounds,
     );
     assert.deepEqual(
-      DesktopWindow.resolveInitialMainWindowBounds(persistedBounds, [displays[0]!]),
+      DesktopWindow.resolveInitialMainWindowBounds(persistedBounds, [displays[0]!], displays[0]!),
       DesktopAppSettings.DEFAULT_MAIN_WINDOW_SIZE,
     );
+  });
+
+  it("shrinks the default window size to fit a portrait primary display", () => {
+    const portrait = { x: 0, y: 0, width: 864, height: 1490 };
+
+    assert.deepEqual(DesktopWindow.resolveInitialMainWindowBounds(null, [portrait], portrait), {
+      width: 864,
+      height: DesktopAppSettings.DEFAULT_MAIN_WINDOW_SIZE.height,
+    });
   });
 
   it("rejects renderer navigations whose origin only serializes as null", () => {

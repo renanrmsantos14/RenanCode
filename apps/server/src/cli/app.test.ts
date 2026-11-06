@@ -41,6 +41,16 @@ const liveProcess = Effect.acquireRelease(
 
 const encodeRuntimeState = Schema.encodeEffect(Schema.fromJsonString(PersistedServerRuntimeState));
 
+// Node reads this variable itself, so the test must set the real process environment.
+const setProcessEnv = (name: string, value: string) => {
+  const previous = process.env[name];
+  process.env[name] = value;
+  return () => {
+    if (previous === undefined) delete process.env[name];
+    else process.env[name] = previous;
+  };
+};
+
 const runCli = (args: ReadonlyArray<string>, env: Record<string, string> = {}) =>
   Command.runWith(makeCli(), { version: "0.0.0" })(args).pipe(
     Effect.provide(
@@ -206,7 +216,7 @@ describe("t3 server command safety", () => {
             ),
             Effect.flip,
           );
-          expect(String(error)).toContain("A T3 Code server is already running");
+          expect(String(error)).toContain("A RenanCode server is already running");
           expect(yield* Effect.promise(() => NodeFSP.readFile(statePath, "utf8"))).toBe(record);
           expect(yield* pathExists(newDirectory)).toBe(false);
           expect(yield* Effect.promise(() => NodeFSP.readdir(stateDir))).toEqual([
@@ -229,16 +239,9 @@ describe("t3 app", () => {
           "t3-app-unsafe-",
           (root) =>
             Effect.gen(function* () {
-              const previousTmpdir = process.env.TMPDIR;
               yield* Effect.acquireRelease(
-                Effect.sync(() => {
-                  process.env.TMPDIR = root;
-                }),
-                () =>
-                  Effect.sync(() => {
-                    if (previousTmpdir === undefined) delete process.env.TMPDIR;
-                    else process.env.TMPDIR = previousTmpdir;
-                  }),
+                Effect.sync(() => setProcessEnv("TMPDIR", root)),
+                (restore) => Effect.sync(restore),
               );
               const baseDir = NodePath.join(root, ".t3");
               const userId = yield* HostProcess.UserId;

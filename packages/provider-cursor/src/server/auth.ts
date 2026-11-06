@@ -142,7 +142,7 @@ export const makeCursorAuth = Effect.fn("makeCursorAuth")(function* (options: Cu
           Effect.forkIn(child),
         );
         return yield* restore(Fiber.await(fiber)).pipe(
-          Effect.flatMap((result) => result),
+          Effect.flatten,
           Effect.onExit((result) =>
             Exit.isFailure(result) ? Scope.close(child, Exit.void) : Effect.void,
           ),
@@ -195,7 +195,7 @@ export const makeCursorAuth = Effect.fn("makeCursorAuth")(function* (options: Cu
             openBrowser: false,
             store: pendingStore,
             signal,
-            apiKeyName: `T3 Code - ${options.displayName}`,
+            apiKeyName: `RenanCode - ${options.displayName}`,
             onLoginUrl: (authorizationUrl) => {
               if (active === flow) Queue.offerUnsafe(urls, authorizationUrl);
             },

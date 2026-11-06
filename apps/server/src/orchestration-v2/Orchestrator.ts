@@ -63,6 +63,7 @@ import {
   orchestrationV2WorktreePending,
   ProviderInstanceId,
   ProviderInteractionMode,
+  isClaudeCloudThreadId,
   isRuntimeModeAbove,
   resolveProviderInstanceEnabled,
   resolveProjectProviderInstanceEnabled,
@@ -477,6 +478,10 @@ export interface OrchestratorV2Shape {
   readonly findGuestShareThreadId: (
     shareId: GuestShareId,
   ) => Effect.Effect<ThreadId | null, OrchestratorV2Error>;
+  /** Titles of the given threads that exist, archived ones included. */
+  readonly getThreadTitles: (
+    threadIds: ReadonlyArray<ThreadId>,
+  ) => Effect.Effect<Record<ThreadId, string>, OrchestratorV2Error>;
   readonly getThreadEventSequence: (
     threadId: ThreadId,
   ) => Effect.Effect<number, OrchestratorV2Error>;
@@ -666,6 +671,14 @@ function pendingThreadTitleGenerationEffect(
   };
 }
 
+function claudeCloudEffect(
+  commandId: CommandId,
+  threadId: ThreadId,
+  request: Extract<OrchestrationEffectRequestV2, { readonly type: `claude-cloud.${string}` }>,
+): PendingOrchestrationEffectV2 {
+  return { id: `effect:${commandId}:${request.type}`, commandId, threadId, request };
+}
+
 function delegatedTasksStopEffect(command: {
   readonly commandId: CommandId;
   readonly threadId: ThreadId;
@@ -684,7 +697,7 @@ function delegatedTasksStopEffect(command: {
 
 const WORKSPACE_PREPARATION_INPUT = "Preparing workspace";
 const RUNTIME_REQUEST_DELIVERY_FAILED_MESSAGE =
-  "T3 Code could not confirm that your answer reached the agent. If the run stays stuck, stop it and try again.";
+  "RenanCode could not confirm that your answer reached the agent. If the run stays stuck, stop it and try again.";
 
 function withoutPreparationResult(
   item: Extract<OrchestrationV2TurnItem, { readonly type: "command_execution" }>,
@@ -715,7 +728,11 @@ function mayStartSubagentFollowup(
   if (command.scheduledTaskId !== undefined || command.restartContinuationOfRunId !== undefined)
     return false;
   if (command.notification !== undefined) return command.notification.source.kind !== "monitor";
-  return command.createdBy === "user" || command.creationSource === "mcp";
+  return (
+    command.createdBy === "user" ||
+    command.creationSource === "mcp" ||
+    command.usageLimitContinuationOfRunId !== undefined
+  );
 }
 
 /** Waiting runs only drain post-terminal output; their agent turn is over and still needs a wake. */
@@ -2714,6 +2731,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     readonly disposition: "stopped" | "disposed";
     readonly now: DateTime.Utc;
     readonly cancelQueuedDelivery?: boolean;
+    // An interrupted wake disposes only the results it carried. The cohort stays open, and its
+    // delivery stays the wake's, so the wake's terminal reserves any sibling's result.
+    readonly interruptedWakeTaskIds?: ReadonlyArray<NodeId>;
   }) {
     const parentRun = input.projection.runs.find((candidate) => candidate.id === input.parentRunId);
     if (parentRun === undefined) {
@@ -2727,12 +2747,28 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       return;
     }
     const emitEvent = emit(input.events, input.command);
-    const nextDisposition = cohort?.disposition === "disposed" ? "disposed" : input.disposition;
-    const nextCohort = {
-      disposition: nextDisposition,
-      nextGeneration: cohort?.nextGeneration ?? 1,
-      delivery: null,
-    } as const;
+    const wakeTaskIds = input.interruptedWakeTaskIds;
+    const keptTaskIds = new Set(
+      wakeTaskIds !== undefined && cohort?.disposition === "open"
+        ? tasks
+            .filter(
+              (task) =>
+                !wakeTaskIds.includes(task.id) &&
+                task.completionDelivery?.state !== "acknowledged" &&
+                task.completionDelivery?.state !== "delivered" &&
+                task.completionDelivery?.state !== "disposed",
+            )
+            .map((task) => task.id)
+        : [],
+    );
+    const nextCohort =
+      keptTaskIds.size > 0
+        ? cohort!
+        : ({
+            disposition: cohort?.disposition === "disposed" ? "disposed" : input.disposition,
+            nextGeneration: cohort?.nextGeneration ?? 1,
+            delivery: null,
+          } as const);
     yield* emitEvent({
       type: "run.updated",
       threadId: parentRun.threadId,
@@ -2747,6 +2783,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     });
     for (const task of tasks) {
       if (
+        keptTaskIds.has(task.id) ||
         task.completionDelivery?.state === "acknowledged" ||
         task.completionDelivery?.state === "delivered" ||
         task.completionDelivery?.state === "disposed"
@@ -2772,7 +2809,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       });
     }
     const deliveryRun = completionDeliveryRun(input.projection, cohort?.delivery ?? null);
-    if (input.cancelQueuedDelivery !== false && deliveryRun?.status === "queued") {
+    if (
+      keptTaskIds.size === 0 &&
+      input.cancelQueuedDelivery !== false &&
+      deliveryRun?.status === "queued"
+    ) {
       yield* emitQueuedRunCancellation({
         command: input.command,
         events: input.events,
@@ -2859,6 +2900,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       ...(command.linkOrigin === undefined || command.delegatedFrom === undefined
         ? {}
         : { delegatedFrom: command.delegatedFrom }),
+      ...(command.launchedFrom === undefined ? {} : { launchedFrom: command.launchedFrom }),
       lineage: {
         parentThreadId: null,
         relationshipToParent: null,
@@ -4140,6 +4182,13 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         pendingThreadTitleGenerationEffect(command.commandId, command.threadId, {
           type: "regenerate",
         }),
+      ]);
+    }
+
+    if (command.type === "thread.archive" && isClaudeCloudThreadId(command.threadId)) {
+      yield* Ref.update(effects, (existing) => [
+        ...existing,
+        claudeCloudEffect(command.commandId, command.threadId, { type: "claude-cloud.archive" }),
       ]);
     }
 
@@ -5525,6 +5574,22 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     effects: Ref.Ref<Array<PendingOrchestrationEffectV2>>,
   ) {
     let projection = yield* getProjectionWithPendingEvents(command.threadId, events);
+    if (isClaudeCloudThreadId(command.threadId)) {
+      // The Claude adapter runs cloud turns through the session's login; it cannot upload files
+      // there or hand the session to another provider or account.
+      const switchesAccount =
+        command.modelSelection !== undefined &&
+        command.modelSelection.instanceId !== projection.thread.providerInstanceId;
+      if (command.attachments.length > 0 || switchesAccount) {
+        return yield* new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          cause: switchesAccount
+            ? "A Claude cloud session stays on its Claude account. Pick a model from the same account."
+            : "Claude cloud sessions take text messages only.",
+        });
+      }
+    }
     if (command.manualContinuationOfRunId !== undefined) {
       const source = projection.runs.find((run) => run.id === command.manualContinuationOfRunId);
       const limited = latestRootProviderFailure(source ?? null, projection.turnItems);
@@ -8073,6 +8138,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       parentThreadId === null ||
       (command.notification === undefined &&
         command.createdBy !== "user" &&
+        command.usageLimitContinuationOfRunId === undefined &&
         command.senderThreadId !== parentThreadId)
     )
       return;
@@ -11591,6 +11657,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                 parentRunId,
                 disposition: "stopped",
                 now,
+                ...(parentRunId !== run.id && completionMessage?.delegatedCompletion !== undefined
+                  ? { interruptedWakeTaskIds: completionMessage.delegatedCompletion.taskIds }
+                  : {}),
               });
             }
           });
@@ -14462,6 +14531,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       return projectionStore
         .findGuestShareThreadId(shareId)
         .pipe(Effect.mapError(shellProjectionError));
+    }),
+    getThreadTitles: Effect.fn("OrchestratorV2.getThreadTitles")(function (threadIds) {
+      return projectionStore.getThreadTitles(threadIds).pipe(Effect.mapError(shellProjectionError));
     }),
     getThreadEventSequence: Effect.fn("OrchestratorV2.getThreadEventSequence")(function (threadId) {
       return eventSink
