@@ -69,6 +69,8 @@ const clientSettings: ClientSettings = {
   sidebarTreeLineWidth: 3,
   boringSidebarEnabled: false,
   boringSidebarMultilineRows: false,
+  sidebarRowItems: {},
+  sidebarRowHighlight: false,
   threadDetailsUsageEnabled: false,
   threadDetailsItems: {},
   legacySidebarEnabled: false,

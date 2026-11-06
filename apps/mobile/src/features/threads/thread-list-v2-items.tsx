@@ -92,7 +92,7 @@ import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
 import { PullRequestGlyph } from "../pull-requests/pullRequestGlyphs";
 import { pullRequestStatus } from "../pull-requests/pullRequestStatus";
 import {
-  threadPullRequestDelivery,
+  threadPullRequestDeliveryForStatus,
   type ThreadPullRequestDelivery,
 } from "@t3tools/client-runtime/thread-pull-requests";
 
@@ -874,13 +874,15 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const isUnread = status === "ready" && threadHasUnseenCompletion(thread);
   const workingLabel = STATUS_LABEL_BY_STATUS[status];
   const showsWoke = status === "ready" && props.wokeAt !== null;
+  // "Done" or "Waiting" is not the end while the pull request still runs checks or awaits a merge.
+  const deliveryLabel = deliveryStatusLabel(
+    threadPullRequestDeliveryForStatus(thread.pullRequests, status),
+  );
   const statusLabel =
+    deliveryLabel ??
     (status === "working" && workingLabel !== undefined && thread.goal?.status === "active"
       ? { ...workingLabel, label: "Goal" }
       : workingLabel) ??
-    (status === "ready"
-      ? deliveryStatusLabel(threadPullRequestDelivery(thread.pullRequests))
-      : null) ??
     (isUnread ? DONE_STATUS_LABEL : undefined);
   const recede = shouldRecedeThreadRow({ status, selected });
   const isRegeneratingTitle = thread.titleRegeneration != null;
@@ -1381,7 +1383,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
                 )}
               >
                 {statusLabel.label}
-                {status === "working" ? (
+                {deliveryLabel !== null ? null : status === "working" ? (
                   <ThreadListV2Duration startedAt={resolveThreadWorkingStartedAt(thread)} />
                 ) : status === "waiting" ? (
                   <ThreadListV2Duration startedAt={thread.latestRun?.completedAt ?? null} />

@@ -3,7 +3,7 @@ import { makeThreadPullRequests } from "@t3tools/source-control-core/shared/thre
 import { sourceControlClients } from "./sourceControlClients.ts";
 
 export {
-  threadPullRequestDelivery,
+  threadPullRequestDeliveryForStatus,
   threadPullRequestLinkDelivery,
   threadPullRequestSearchTerms,
   visibleThreadPullRequests,

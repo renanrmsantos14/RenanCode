@@ -150,7 +150,7 @@ cannot drag or move threads within it. Your saved order returns when you turn it
 
 ### Group threads by project (beta)
 
-Turn on **Settings → Labs → Boring sidebar (group by project)** on web and desktop to put active
+Turn on **Settings → Sidebar → Boring sidebar (group by project)** on web and desktop to put active
 threads in a folder for each project. Pinned projects come first. A project with no active
 threads has no folder unless it is pinned or you pick it in the project filter. An archived
 project's folder comes last and shows only while it has active threads. Click a folder to open or
@@ -158,6 +158,10 @@ close it. A closed folder shows how many threads it holds, and a dot when one of
 needs you. Use the pen button on a folder, or right-click it, to start a thread in that project.
 Pinned threads stay above the folders, and Snoozed and Settled stay below them. In this mode you
 cannot drag threads, and the Working section is off. Each device keeps its own choice.
+
+The same page previews folder rows with your recent threads in each pull request state. Choose
+two-line rows, which details a row shows, and whether rows ready to merge or with failed checks
+are tinted; the preview follows each change.
 
 ## Settle finished work
 
@@ -219,8 +223,10 @@ On web and desktop, right-click a pull request link in a thread and choose
 same link to return to the branch PR, if one exists.
 The linked pull request participates in automatic settlement.
 
-Once the agent is idle, a thread row in a project folder, and a thread row on mobile, shows where
-its pull request stands in place of **Done**: **Checks** while they run or once they fail,
+When the agent is done or waiting on background work, such as watching its pull request, a thread
+row in a project folder, and a thread row on mobile, shows where its pull request stands in place
+of **Done** or **Waiting**. While the agent works, the row shows **Checks** or **Deploy** only
+when those are running. The labels are **Checks** while they run or once they fail,
 **Conflict**, **Ready** to merge, and **Deploy** while the checks that run on the base branch after
 the merge are going, or once they fail. A later run on the base branch carries the merge too, so
 when it passes, a failed or cancelled **Deploy** clears. With several pull requests, the most urgent one shows;

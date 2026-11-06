@@ -76,6 +76,20 @@ export function threadPullRequestDelivery(
   return urgent;
 }
 
+/**
+ * The delivery a thread row shows in place of its agent's status. An idle or waiting agent defers
+ * to its pull request; a working one only to checks it is likely waiting on.
+ */
+export function threadPullRequestDeliveryForStatus(
+  links: ReadonlyArray<ThreadPullRequestLink> | undefined,
+  status: string,
+): ThreadPullRequestDelivery | null {
+  if (status !== "ready" && status !== "waiting" && status !== "working") return null;
+  const delivery = threadPullRequestDelivery(links);
+  if (status !== "working") return delivery;
+  return delivery?.stage === "checks" || delivery?.stage === "merge-checks" ? delivery : null;
+}
+
 function latestUpdatedAt(link: ThreadPullRequestLink): number {
   const value = link.snapshot?.updatedAt ?? link.linkedAt;
   const ms = Date.parse(value);
