@@ -189,13 +189,9 @@ jobs:
                 -q '.commits[] | select(.parents | length == 1) | .commit.message | split("\n")[0]' |
                 grep -v '^chore(release)' | sed 's/^/- /' || true)
               echo "${changes:-- Sem mudanças de código desde $prev.}"
-              echo
-              echo "Comparação completa: https://github.com/$GITHUB_REPOSITORY/compare/$prev...v$VERSION"
             else
               echo "- Primeira versão publicada."
             fi
-            echo
-            echo "Instaladores Windows x64 (não assinado) e Linux x64 (AppImage), gerados de $GITHUB_SHA."
           } > notes.md
           # gh retries a dropped upload, fails with "ReleaseAsset.name already exists",
           # and deletes the release. Upload into a draft with --clobber so a retry is safe.
