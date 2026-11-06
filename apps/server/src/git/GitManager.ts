@@ -2644,13 +2644,23 @@ export const make = Effect.gen(function* () {
         .split("\n")
         .filter((candidate) => candidate.length > 0);
       if (matchingRemoteNames.length > 1) {
-        return yield* new GitManagerError({
-          operation: "branchPullRequest",
-          cwd: cacheCwd,
-          detail: `Multiple remotes track ${branch}. Its pull request is ambiguous.`,
-        });
+        const repositories = yield* Effect.forEach(matchingRemoteNames, (candidate) =>
+          resolveRemoteRepositoryContext(cacheCwd, candidate).pipe(
+            Effect.map((repository) => repository.remoteUrlKey),
+          ),
+        );
+        // Two names for one repository leave only one place its pull request can be.
+        if (new Set(repositories).size > 1) {
+          return yield* new GitManagerError({
+            operation: "branchPullRequest",
+            cwd: cacheCwd,
+            detail: `Multiple remotes track ${branch}. Its pull request is ambiguous.`,
+          });
+        }
       }
-      remoteName = matchingRemoteNames[0] ?? null;
+      remoteName = matchingRemoteNames.includes("origin")
+        ? "origin"
+        : (matchingRemoteNames[0] ?? null);
       if (remoteName !== null) {
         upstreamRef = `${remoteName}/${branch}`;
       }
