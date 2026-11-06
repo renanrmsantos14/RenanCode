@@ -16,13 +16,17 @@ import {
   toPullRequestCore,
   toPullRequestFilesViewedPage,
   toPullRequestRows,
+  toPullRequestSummary,
   toReviewerCandidates,
   toReviewThreadCommentsPage,
   toCanWrite,
   toReviewThreadPage,
   toViewerPermissions,
 } from "./gitHubPullRequestJson.ts";
-import { PullRequestWatchFingerprint } from "./pullRequestBatches.graphql.ts";
+import {
+  PullRequestSummaryRepositoryPullRequestPullRequest,
+  PullRequestWatchFingerprint,
+} from "./pullRequestBatches.graphql.ts";
 import {
   LabelCandidates,
   PullRequestActivity,
@@ -298,6 +302,83 @@ describe("pull request list decoding", () => {
     );
     expect(batch.items).toHaveLength(1);
     expect(batch.rawCount).toBe(2);
+  });
+});
+
+const decodeSummarizedPullRequest = Schema.decodeSync(
+  PullRequestSummaryRepositoryPullRequestPullRequest,
+);
+
+describe("pull request summary decoding", () => {
+  const rollup = (state: string | null) => (state === null ? null : { state });
+  const summary = (input: {
+    readonly state: "OPEN" | "MERGED";
+    readonly mergeCommit: string | null;
+    readonly baseHead: string | null;
+  }) =>
+    toPullRequestSummary(
+      decodeSummarizedPullRequest({
+        number: 1,
+        title: "Pull request",
+        url: "https://github.com/acme/web/pull/1",
+        state: input.state,
+        isDraft: false,
+        mergeable: "UNKNOWN",
+        reviewDecision: null,
+        additions: 1,
+        deletions: 1,
+        changedFiles: 1,
+        updatedAt: "2026-11-05T00:00:00Z",
+        mergedAt: input.state === "MERGED" ? "2026-11-05T00:00:00Z" : null,
+        closedAt: null,
+        headRefName: "feature",
+        baseRefName: "main",
+        author: null,
+        latestReviews: { nodes: [] },
+        commits: { nodes: [] },
+        mergeCommit:
+          input.state === "MERGED" ? { statusCheckRollup: rollup(input.mergeCommit) } : null,
+        baseRef: {
+          target: { __typename: "Commit", statusCheckRollup: rollup(input.baseHead) },
+        },
+      }),
+    ).mergeCommitChecksState;
+
+  it.each([
+    ["open, before any merge", { state: "OPEN", mergeCommit: null, baseHead: "SUCCESS" }, null],
+    [
+      "its own run passed",
+      { state: "MERGED", mergeCommit: "SUCCESS", baseHead: "FAILURE" },
+      "passing",
+    ],
+    [
+      "its own run is going",
+      { state: "MERGED", mergeCommit: "PENDING", baseHead: "PENDING" },
+      "pending",
+    ],
+    [
+      "a later run that carries it passed after its own was cancelled",
+      { state: "MERGED", mergeCommit: "FAILURE", baseHead: "SUCCESS" },
+      "passing",
+    ],
+    [
+      "a later run that carries it is going",
+      { state: "MERGED", mergeCommit: "FAILURE", baseHead: "PENDING" },
+      "pending",
+    ],
+    [
+      "its own run and the latest both failed",
+      { state: "MERGED", mergeCommit: "FAILURE", baseHead: "FAILURE" },
+      "failing",
+    ],
+    [
+      "a later push took over before its own checks registered",
+      { state: "MERGED", mergeCommit: null, baseHead: "SUCCESS" },
+      "passing",
+    ],
+    ["neither has checks yet", { state: "MERGED", mergeCommit: null, baseHead: null }, null],
+  ] as const)("%s", (_name, input, expected) => {
+    expect(summary(input)).toBe(expected);
   });
 });
 

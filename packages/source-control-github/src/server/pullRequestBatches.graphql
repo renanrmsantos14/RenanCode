@@ -44,10 +44,20 @@ query PullRequestSummary($owner: String!, $name: String!, $number: Int!, $stacks
           }
         }
       }
-      # Checks that run on the base branch after the merge, such as a deploy workflow.
+      # Checks that run on the base branch after the merge, such as a deploy workflow. A later
+      # push's run carries this merge too, and often cancels this one, so the head counts as well.
       mergeCommit {
         statusCheckRollup {
           state
+        }
+      }
+      baseRef {
+        target {
+          ... on Commit {
+            statusCheckRollup {
+              state
+            }
+          }
         }
       }
       stack @include(if: $stacks) {

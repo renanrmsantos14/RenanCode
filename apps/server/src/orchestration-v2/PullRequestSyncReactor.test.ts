@@ -1116,6 +1116,44 @@ describe("PullRequestSyncReactor", () => {
       ),
   );
 
+  it.effect(
+    "rereads a merged pull request whose base branch checks failed, until a later run passes",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* TestClock.setTime(Date.parse(NOW));
+          const failed = {
+            state: "merged",
+            mergedAt: NOW,
+            mergeCommitChecksState: "failing",
+          } as const;
+          const host = yield* Ref.make<Partial<PullRequestSummary>>(failed);
+          const fixture = yield* makeHarness({
+            snapshot: makeSnapshot([makeThread("deploy", { pullRequests: [makeLink(1, failed)] })]),
+            summary: (input) =>
+              Ref.get(host).pipe(Effect.map((fields) => makeSummary(input, fields))),
+          });
+          const reads = Ref.get(fixture.summaryCalls).pipe(Effect.map((calls) => calls.length));
+
+          yield* Effect.gen(function* () {
+            const reactor = yield* startAndSweep(fixture);
+            assert.strictEqual(yield* reads, 1);
+            yield* sweepAgain(fixture, reactor);
+            assert.strictEqual(yield* reads, 2);
+
+            // The next push's run, which carries this merge, passes.
+            yield* Ref.set(host, { ...failed, mergeCommitChecksState: "passing" });
+            yield* sweepAgain(fixture, reactor);
+            yield* applyRecordedSyncs(fixture);
+            assert.strictEqual(yield* reads, 3);
+
+            for (let index = 0; index < 5; index += 1) yield* sweepAgain(fixture, reactor);
+            assert.strictEqual(yield* reads, 3);
+          }).pipe(Effect.provide(fixture.layer));
+        }),
+      ),
+  );
+
   it.effect("syncs a pull request a reader saw merge without waiting for the sweep", () =>
     Effect.scoped(
       Effect.gen(function* () {

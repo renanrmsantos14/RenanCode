@@ -905,11 +905,23 @@ export interface GitHubPullRequestSummary {
   readonly changedFiles: number;
   readonly reviewDecision: PullRequestReviewDecision | null;
   readonly checksState: PullRequestChecksState | null;
-  /** Checks on the merge commit in the base branch; null before the merge or with none. */
+  /** Checks that carry the merge on the base branch; null before the merge or with none. */
   readonly mergeCommitChecksState: PullRequestChecksState | null;
   readonly mergeability: PullRequestMergeability;
   /** Null means no stack; absent means not requested. */
   readonly stack?: PullRequestStackMembership | null;
+}
+
+/**
+ * The merge commit's checks, or the base branch head's once those did not pass: a later push's
+ * run carries this merge too, and a deploy workflow often cancels the earlier run for it.
+ */
+function mergedChecksState(pr: SummarizedPullRequest): PullRequestChecksState | null {
+  if (pr.mergeCommit === null) return null;
+  const merged = rollupChecksState(rollupStates({ nodes: [{ commit: pr.mergeCommit }] }));
+  const target = pr.baseRef?.target;
+  if (merged === "passing" || target?.__typename !== "Commit") return merged;
+  return rollupChecksState(rollupStates({ nodes: [{ commit: target }] })) ?? merged;
 }
 
 export function toPullRequestSummary(pr: SummarizedPullRequest): GitHubPullRequestSummary {
@@ -930,9 +942,7 @@ export function toPullRequestSummary(pr: SummarizedPullRequest): GitHubPullReque
     changedFiles: pr.changedFiles,
     reviewDecision: toReviewDecisionWithReviews(pr.reviewDecision, nodesOf(pr.latestReviews)),
     checksState: rollupChecksState(rollupStates(pr.commits)),
-    mergeCommitChecksState: rollupChecksState(
-      rollupStates({ nodes: pr.mergeCommit === null ? [] : [{ commit: pr.mergeCommit }] }),
-    ),
+    mergeCommitChecksState: mergedChecksState(pr),
     mergeability: toMergeability(pr.mergeable),
     ...(pr.stack === undefined ? {} : { stack: toStackMembership(pr) ?? null }),
   };
