@@ -123,21 +123,31 @@ export function resolveUsageLimitsAfterProbe(input: {
   return probed;
 }
 
-/** Keeps the windows and `checkedAt` of the last good reading; only the first failure of a given reason is recorded. */
+/**
+ * Keeps the windows and `checkedAt` of the last good reading. A repeated reason publishes
+ * nothing until its retry time passes, so a backoff does not republish on every poll.
+ */
 export function applyUsageReadFailure(input: {
   readonly previous: ServerProviderUsageLimits | undefined;
   readonly at: string;
   readonly reason: NonNullable<ServerProviderUsageLimits["lastError"]>["reason"];
+  readonly retryAt?: string | undefined;
 }): ServerProviderUsageLimits | undefined {
-  const { previous, at, reason } = input;
+  const { previous, at, reason, retryAt } = input;
+  if (previous === undefined || previous.unavailable !== undefined) return previous;
+  const last = previous.lastError;
+  const sameFailure = last?.reason === reason;
   if (
-    previous === undefined ||
-    previous.unavailable !== undefined ||
-    previous.lastError?.reason === reason
+    sameFailure &&
+    (retryAt === undefined ||
+      (last.retryAt !== undefined && Date.parse(at) < Date.parse(last.retryAt)))
   ) {
     return previous;
   }
-  return { ...previous, lastError: { at, reason } };
+  return {
+    ...previous,
+    lastError: { at: sameFailure ? last.at : at, reason, ...(retryAt ? { retryAt } : {}) },
+  };
 }
 
 // Below the 3 minutes after which clients mark a reading stale, so an unchanged reading never reads as old.

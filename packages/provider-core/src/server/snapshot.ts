@@ -32,6 +32,7 @@ export interface ManagedServerProvider {
           readonly _tag: "failed";
           readonly at: string;
           readonly reason: NonNullable<ServerProviderUsageLimits["lastError"]>["reason"];
+          readonly retryAt?: string;
         },
   ) => Effect.Effect<void>;
 }

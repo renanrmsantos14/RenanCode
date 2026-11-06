@@ -91,6 +91,7 @@ const layerBackgroundPolicyAlwaysRun = Layer.mock(BackgroundPolicy.BackgroundPol
     updatedAt: TEST_EPOCH,
   }),
   shouldRunScopeWork: () => Effect.succeed(true),
+  scopeDemand: () => Effect.succeed("none"),
   shouldRunOpportunisticWork: Effect.succeed(true),
 });
 
@@ -625,6 +626,7 @@ describe("ProviderInstanceRegistry — multi-instance codex slice", () => {
             return HttpClientResponse.fromWeb(
               request,
               Response.json({
+                seven_day: { utilization: 100, resets_at: "2099-01-01T00:00:00.000000+00:00" },
                 cedar_ember: {
                   eligible: true,
                   next_grant_id: "grant_a",

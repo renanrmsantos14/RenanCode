@@ -58,6 +58,8 @@ export const BackgroundScope = Schema.Union([
 ]);
 export type BackgroundScope = typeof BackgroundScope.Type;
 
+export type BackgroundDemand = "foreground" | "background" | "none";
+
 export const ClientKind = Schema.Literals(["web", "desktop-renderer", "mobile", "unknown"]);
 export type ClientKind = typeof ClientKind.Type;
 

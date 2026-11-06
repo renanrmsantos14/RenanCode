@@ -166,6 +166,33 @@ describe("usage readings", () => {
     ).toBe("requestFailed");
   });
 
+  it("refreshes the retry time of a repeated failure only after it passes", () => {
+    const retryAt = "2026-09-03T12:03:00.000Z";
+    const failed = applyUsageReadFailure({
+      previous: published,
+      at: later,
+      reason: "rateLimited",
+      retryAt,
+    });
+    expect(failed?.lastError).toEqual({ at: later, reason: "rateLimited", retryAt });
+    expect(
+      applyUsageReadFailure({
+        previous: failed,
+        at: "2026-09-03T12:02:00.000Z",
+        reason: "rateLimited",
+        retryAt: "2026-09-03T12:04:00.000Z",
+      }),
+    ).toBe(failed);
+    expect(
+      applyUsageReadFailure({
+        previous: failed,
+        at: retryAt,
+        reason: "rateLimited",
+        retryAt: "2026-09-03T12:07:00.000Z",
+      })?.lastError,
+    ).toEqual({ at: later, reason: "rateLimited", retryAt: "2026-09-03T12:07:00.000Z" });
+  });
+
   it("ignores failures without a good reading to attach to and readings older than the published one", () => {
     expect(applyUsageReadFailure({ previous: undefined, at: later, reason: "signedOut" })).toBe(
       undefined,

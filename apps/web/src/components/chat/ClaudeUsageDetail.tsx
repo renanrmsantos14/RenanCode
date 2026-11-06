@@ -3,18 +3,18 @@ import {
   type EnvironmentId,
   type ProviderConsumeResetCreditInput,
   type ServerProviderResetCredits,
-  type ServerProviderUsageWindow,
 } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { normalizeProviderAccentColor } from "@t3tools/client-runtime/state/provider-instance-display";
 import {
   type ClaudeAccountUsage,
   limitInstanceName,
-  CLAUDE_USAGE_ERROR_TEXT,
-  claudeGoalSummary,
-  forecastText,
+  claudeUsageStatusText,
+  claudeUsageValueText,
+  claudeVerdictText,
+  claudeWindowsText,
+  forecastWarningText,
   weeklyBarLabel,
-  windowUsedText,
   claudeWeeklyReading,
   collectLimitAccounts,
   collectLimitNotices,
@@ -32,7 +32,7 @@ import { usePrimarySettings } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
 import { environmentPresentations } from "../../state/presentation";
 import { useEnvironmentScope } from "../../state/session";
-import { formatRelativeTimeLabel, formatUpcomingTimestamp } from "../../timestampFormat";
+import { formatUpcomingTimestamp } from "../../timestampFormat";
 import { providerClients } from "../settings/providerDriverMeta";
 import { RedactedSensitiveText } from "../settings/RedactedSensitiveText";
 import { Button } from "../ui/button";
@@ -133,62 +133,72 @@ function ClaudeAccountBlock({
   const color =
     normalizeProviderAccentColor(account.accentColor) ?? PROVIDER_PRESENTATION.claude.color;
   const reading = claudeWeeklyReading(account);
-  const { weekly, session } = account;
-  const forecast = weekly ? exhaustionForecast(weekly, now) : undefined;
+  const { weekly } = account;
+  const verdict = reading ? claudeVerdictText(reading) : null;
+  const forecastWarning = forecastWarningText(
+    weekly ? exhaustionForecast(weekly, now) : undefined,
+    (at) =>
+      formatUpcomingTimestamp(
+        new Date(at).toISOString(),
+        timestampFormat,
+        now,
+        USAGE_GOAL_TIME_ZONE,
+      ),
+  );
   const resetsAt = weekly?.resetsAt ? Date.parse(weekly.resetsAt) : Number.NaN;
   return (
-    <section className="flex min-w-0 flex-col gap-2">
-      <h3 className="truncate text-xs font-medium text-foreground">
-        <AccountName label={account.label} />
-      </h3>
-      {weekly && reading ? (
-        <div className="flex flex-col gap-1">
-          <UsageBar
-            used={reading.used}
-            goal={reading.goal}
-            over={reading.over}
-            color={color}
-            label={weeklyBarLabel(reading)}
-          />
-          <span className="text-xs text-foreground tabular-nums">
-            {claudeGoalSummary(weekly, now, account.goal) ?? `Used ${reading.used}%`}
+    <section className="flex min-w-0 flex-col gap-1.5">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="min-w-0 truncate text-xs font-medium text-foreground">
+          <AccountName label={account.label} />
+        </h3>
+        {verdict ? (
+          <span
+            className={cn(
+              "shrink-0 text-xs tabular-nums",
+              reading?.over ? "text-warning-foreground" : "text-muted-foreground",
+            )}
+          >
+            {verdict}
           </span>
+        ) : null}
+      </div>
+      {weekly && reading ? (
+        <>
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <UsageBar
+                used={reading.used}
+                goal={reading.goal}
+                over={reading.over}
+                color={color}
+                label={weeklyBarLabel(reading)}
+              />
+            </div>
+            <span className="shrink-0 text-xs text-foreground tabular-nums">
+              {claudeUsageValueText(reading)}
+            </span>
+          </div>
           {Number.isFinite(resetsAt) && weekly.resetsAt ? (
             <span className="text-xs text-muted-foreground">
               Resets{" "}
-              {formatUpcomingTimestamp(weekly.resetsAt, timestampFormat, now, USAGE_GOAL_TIME_ZONE)}{" "}
-              (São Paulo)
+              {formatUpcomingTimestamp(weekly.resetsAt, timestampFormat, now, USAGE_GOAL_TIME_ZONE)}
               {resetsAt > now ? ` · in ${formatDuration(resetsAt - now)}` : ""}
             </span>
           ) : null}
-          <span className="text-xs text-muted-foreground">
-            {forecastText(forecast, (at) =>
-              formatUpcomingTimestamp(
-                new Date(at).toISOString(),
-                timestampFormat,
-                now,
-                USAGE_GOAL_TIME_ZONE,
-              ),
-            )}
-          </span>
-        </div>
+          {forecastWarning ? (
+            <span className="text-xs text-warning-foreground">{forecastWarning}</span>
+          ) : null}
+        </>
       ) : (
         <span className="text-xs text-muted-foreground">No weekly reading yet</span>
       )}
-      <WindowLine window={session} label="5-hour window" emptyText="No active window" now={now} />
-      {account.scoped.map((window) => (
-        <WindowLine key={window.id} window={window} label={window.label} now={now} />
-      ))}
-      <span
-        className={cn("text-xs text-muted-foreground", account.stale && "text-warning-foreground")}
-      >
-        Updated {formatRelativeTimeLabel(account.limits.checkedAt, now) || "n/a"}
-      </span>
-      {account.limits.lastError ? (
-        <span className="text-xs text-warning-foreground">
-          {CLAUDE_USAGE_ERROR_TEXT[account.limits.lastError.reason]}
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-xs tabular-nums">
+        <span className="text-muted-foreground">{claudeWindowsText(account)}</span>
+        <span className={account.stale ? "text-warning-foreground" : "text-muted-foreground"}>
+          {claudeUsageStatusText(account, now)}
         </span>
-      ) : null}
+      </div>
       {account.limits.resetCredits ? (
         <CreditsRow
           credits={account.limits.resetCredits}
@@ -198,27 +208,6 @@ function ClaudeAccountBlock({
         />
       ) : null}
     </section>
-  );
-}
-
-function WindowLine({
-  window,
-  label,
-  emptyText,
-  now,
-}: {
-  readonly window: ServerProviderUsageWindow | undefined;
-  readonly label: string;
-  readonly emptyText?: string;
-  readonly now: number;
-}) {
-  return (
-    <span className="flex items-baseline justify-between gap-3 text-xs">
-      <span className="truncate text-muted-foreground">{label}</span>
-      <span className="shrink-0 text-foreground tabular-nums">
-        {window ? windowUsedText(window, now) : (emptyText ?? "")}
-      </span>
-    </span>
   );
 }
 

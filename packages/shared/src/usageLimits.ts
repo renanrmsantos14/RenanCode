@@ -1010,13 +1010,15 @@ export function exhaustionForecast(
   return { kind: "at", at: now + (advanceBusinessMillis(nowWall, needed) - nowWall) };
 }
 
+export const CLAUDE_WEEKLY_MODEL_LABEL_PREFIX = "Weekly · ";
+
 export interface ClaudeAccountUsage {
   readonly instanceId: ProviderInstanceId;
   readonly label: string;
   readonly accentColor: string | undefined;
   readonly weekly: ServerProviderUsageWindow | undefined;
   readonly session: ServerProviderUsageWindow | undefined;
-  /** "Weekly · <model>" windows, ordered by id. */
+  /** `CLAUDE_WEEKLY_MODEL_LABEL_PREFIX` + model windows, ordered by id. */
   readonly scoped: readonly ServerProviderUsageWindow[];
   readonly goal: number | null;
   /** The last good reading is older than three minutes. */
@@ -1089,7 +1091,7 @@ export function claudeWeeklyReading(
   return { used, goal: account.goal, over: account.goal !== null && used > account.goal };
 }
 
-/** "Used 36% · today's goal 60%" for a weekly window, for surfaces that show the goal as text. */
+/** "Used 36% · today's goal 60%" for the account's weekly window; model windows have no goal. */
 export function claudeGoalSummary(
   window: ServerProviderUsageWindow,
   now: number,
@@ -1097,7 +1099,7 @@ export function claudeGoalSummary(
     ? goalPercent({ resetsAt: window.resetsAt, now })
     : null,
 ): string | null {
-  if (!window.resetsAt) return null;
+  if (!window.resetsAt || window.id !== "seven_day") return null;
   const used = usedPercent(window);
   return goal === null ? `Used ${used}%` : `Used ${used}% · today's goal ${goal}%`;
 }
@@ -1110,25 +1112,58 @@ export function weeklyBarLabel(reading: {
   return `Weekly: ${reading.used}% used${reading.goal === null ? "" : `, today's goal ${reading.goal}%`}`;
 }
 
-/** "36% used · resets in 2h" for a window, or "36% used" when it has no reset time. */
-export function windowUsedText(window: ServerProviderUsageWindow, now: number): string {
-  const resetsIn = formatResetsIn(window, now);
-  return `${usedPercent(window)}% used${resetsIn ? ` · ${resetsIn}` : ""}`;
+/** The block's headline: "On pace" or "14% over goal"; null without a goal to compare against. */
+export function claudeVerdictText(reading: {
+  readonly used: number;
+  readonly goal: number | null;
+  readonly over: boolean;
+}): string | null {
+  if (reading.goal === null) return null;
+  return reading.over ? `${reading.used - reading.goal}% over goal` : "On pace";
 }
 
-/** The projected-exhaustion line; `formatInstant` renders a millisecond instant the client's way. */
-export function forecastText(
+/** "14 / 100" against today's goal, "14%" without one. */
+export function claudeUsageValueText(reading: {
+  readonly used: number;
+  readonly goal: number | null;
+}): string {
+  return reading.goal === null ? `${reading.used}%` : `${reading.used} / ${reading.goal}`;
+}
+
+/** The secondary windows on one line: "5h 0% · Fable 12%". A model window with no use is left out. */
+export function claudeWindowsText(account: Pick<ClaudeAccountUsage, "session" | "scoped">): string {
+  return [
+    ...(account.session ? [`5h ${usedPercent(account.session)}%`] : []),
+    ...account.scoped.flatMap((window) => {
+      const used = usedPercent(window);
+      return used > 0
+        ? [`${window.label.replace(CLAUDE_WEEKLY_MODEL_LABEL_PREFIX, "")} ${used}%`]
+        : [];
+    }),
+  ].join(" · ");
+}
+
+/** The account's freshness. A failed read only shows once the last good reading is stale. */
+export function claudeUsageStatusText(
+  account: Pick<ClaudeAccountUsage, "stale" | "limits">,
+  now: number,
+): string {
+  const updated = `Updated ${formatAgo(account.limits.checkedAt, now) || "n/a"}`;
+  const { lastError } = account.limits;
+  if (!account.stale || !lastError) return updated;
+  if (lastError.reason === "signedOut") return `${updated} · open Claude to sign in`;
+  const retryAt = lastError.retryAt ? Date.parse(lastError.retryAt) : Number.NaN;
+  return retryAt > now
+    ? `${updated} · retrying in ${formatDuration(Math.max(retryAt - now, MINUTE))}`
+    : updated;
+}
+
+/** The warning line for a projected run-out; a safe or unknown forecast adds nothing to the verdict. */
+export function forecastWarningText(
   forecast: ExhaustionForecast | undefined,
   formatInstant: (ms: number) => string,
-): string {
-  switch (forecast?.kind) {
-    case "at":
-      return `Projected to run out ${formatInstant(forecast.at)}`;
-    case "safe":
-      return "Not projected to run out before the reset";
-    default:
-      return "Not enough use yet to project";
-  }
+): string | null {
+  return forecast?.kind === "at" ? `Projected to run out ${formatInstant(forecast.at)}` : null;
 }
 
 /** Composer text for one account: "Claude 36/60", with its age when the reading is stale. */
@@ -1147,12 +1182,6 @@ export function claudeAccountValue(account: Pick<ClaudeAccountUsage, "weekly" | 
   if (!reading) return "n/a";
   return `${reading.used}${reading.goal === null ? "%" : `/${reading.goal}`}`;
 }
-
-export const CLAUDE_USAGE_ERROR_TEXT = {
-  rateLimited: "Claude limited the usage check; trying again",
-  signedOut: "Signed out; open Claude to renew the login",
-  requestFailed: "Usage check failed",
-} as const satisfies Record<NonNullable<ServerProviderUsageLimits["lastError"]>["reason"], string>;
 
 /** "just now", "14m ago", "3h ago", "2d ago". */
 export function formatAgo(isoDate: string, now: number): string {

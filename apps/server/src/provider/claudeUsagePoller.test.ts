@@ -1,6 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it as effectIt } from "@effect/vitest";
-import type { ServerProvider } from "@t3tools/contracts";
+import type { BackgroundDemand, ServerProvider } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -9,10 +9,14 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as TestClock from "effect/testing/TestClock";
-import { HttpClient, HttpClientResponse } from "effect/http";
+import { HttpClient, HttpClientResponse, UrlParams } from "effect/http";
 import { expect } from "vite-plus/test";
 
-import { makeClaudeUsagePollTick } from "./claudeUsagePoller.ts";
+import {
+  expireSharedClaudeUsage,
+  makeClaudeUsagePollTick,
+  readClaudeResetCreditsShared,
+} from "./claudeUsagePoller.ts";
 
 const START = Date.parse("2026-09-22T12:00:00.000Z");
 const MINUTE = 60_000;
@@ -20,6 +24,13 @@ const good = {
   five_hour: { utilization: null, resets_at: null },
   seven_day: { utilization: 41, resets_at: "2026-09-26T11:00:00Z" },
 };
+
+const failure = (at: string, reason: string, retryAt: string) => ({
+  _tag: "failed",
+  at: `2026-09-22T${at}:00.000Z`,
+  reason,
+  retryAt: `2026-09-22T${retryAt}:00.000Z`,
+});
 
 const setup = (input: {
   readonly responses: ReadonlyArray<{
@@ -30,7 +41,7 @@ const setup = (input: {
     hangBody?: Deferred.Deferred<void>;
   }>;
   readonly platform?: "linux" | "darwin";
-  readonly shouldRun?: boolean;
+  readonly demand?: Effect.Effect<BackgroundDemand>;
   /** Reuse another instance's config directory (same account). */
   readonly configDir?: string;
   readonly snapshot?: Partial<ServerProvider>;
@@ -47,9 +58,11 @@ const setup = (input: {
     }
     yield* TestClock.setTime(START);
     const requests = yield* Ref.make(0);
+    const urls = yield* Ref.make<Array<string>>([]);
     const recorded = yield* Ref.make<Array<unknown>>([]);
     const client = HttpClient.make((request) =>
-      Ref.getAndUpdate(requests, (count) => count + 1).pipe(
+      Ref.update(urls, (all) => [...all, UrlParams.toString(request.urlParams)]).pipe(
+        Effect.andThen(Ref.getAndUpdate(requests, (count) => count + 1)),
         Effect.map((index) => {
           const next = input.responses[Math.min(index, input.responses.length - 1)]!;
           const { hangBody } = next;
@@ -81,14 +94,14 @@ const setup = (input: {
         version: "2.1.0",
         ...input.snapshot,
       } as ServerProvider),
-      shouldRun: Effect.succeed(input.shouldRun ?? true),
+      demand: input.demand ?? Effect.succeed("foreground"),
       record: (reading) => Ref.update(recorded, (all) => [...all, reading]),
     });
     const run = tick.pipe(
       Effect.provideService(HostProcess.Platform, input.platform ?? "linux"),
       Effect.provideService(HttpClient.HttpClient, client),
     );
-    return { run, requests, recorded, configDir };
+    return { run, requests, urls, recorded, configDir };
   });
 
 effectIt.layer(NodeServices.layer)("Claude usage poller", (it) => {
@@ -128,9 +141,9 @@ effectIt.layer(NodeServices.layer)("Claude usage poller", (it) => {
       yield* run;
       expect(yield* Ref.get(requests)).toBe(2);
       expect(yield* Ref.get(recorded)).toEqual([
-        { _tag: "failed", at: "2026-09-22T12:00:00.000Z", reason: "signedOut" },
-        { _tag: "failed", at: "2026-09-22T12:01:00.000Z", reason: "signedOut" },
-        { _tag: "failed", at: "2026-09-22T12:05:00.000Z", reason: "signedOut" },
+        failure("12:00", "signedOut", "12:05"),
+        failure("12:01", "signedOut", "12:05"),
+        failure("12:05", "signedOut", "12:10"),
       ]);
     }),
   );
@@ -156,9 +169,9 @@ effectIt.layer(NodeServices.layer)("Claude usage poller", (it) => {
       yield* without.run;
       expect(yield* Ref.get(without.requests)).toBe(2);
       expect(yield* Ref.get(without.recorded)).toEqual([
-        { _tag: "failed", at: "2026-09-22T12:00:00.000Z", reason: "rateLimited" },
-        { _tag: "failed", at: "2026-09-22T12:02:00.000Z", reason: "rateLimited" },
-        { _tag: "failed", at: "2026-09-22T12:05:00.000Z", reason: "rateLimited" },
+        failure("12:00", "rateLimited", "12:02"),
+        failure("12:02", "rateLimited", "12:06"),
+        failure("12:05", "rateLimited", "12:06"),
       ]);
     }),
   );
@@ -169,9 +182,7 @@ effectIt.layer(NodeServices.layer)("Claude usage poller", (it) => {
         responses: [{ status: 200, body: { unexpected: true } }],
       });
       yield* run;
-      expect(yield* Ref.get(recorded)).toEqual([
-        { _tag: "failed", at: "2026-09-22T12:00:00.000Z", reason: "requestFailed" },
-      ]);
+      expect(yield* Ref.get(recorded)).toEqual([failure("12:00", "requestFailed", "12:01")]);
     }),
   );
 
@@ -185,20 +196,158 @@ effectIt.layer(NodeServices.layer)("Claude usage poller", (it) => {
       yield* Deferred.await(reading);
       yield* TestClock.adjust("10 seconds");
       yield* Fiber.join(fiber);
+      expect(yield* Ref.get(recorded)).toEqual([failure("12:00", "requestFailed", "12:01")]);
+    }),
+  );
+
+  it.effect("reads every minute in focus, every 5 minutes without it, and never unwatched", () =>
+    Effect.gen(function* () {
+      const demand = yield* Ref.make<BackgroundDemand>("none");
+      const { run, requests } = yield* setup({
+        responses: [{ status: 200, body: good }],
+        demand: Ref.get(demand),
+      });
+      yield* run;
+      expect(yield* Ref.get(requests)).toBe(0);
+
+      yield* Ref.set(demand, "foreground");
+      yield* run;
+      yield* TestClock.adjust(MINUTE - 1);
+      yield* run;
+      expect(yield* Ref.get(requests)).toBe(1);
+      yield* TestClock.adjust(1);
+      yield* run;
+      expect(yield* Ref.get(requests)).toBe(2);
+
+      yield* Ref.set(demand, "background");
+      yield* TestClock.adjust(4 * MINUTE);
+      yield* run;
+      expect(yield* Ref.get(requests)).toBe(2);
+      yield* TestClock.adjust(MINUTE);
+      yield* run;
+      expect(yield* Ref.get(requests)).toBe(3);
+
+      yield* Ref.set(demand, "foreground");
+      yield* TestClock.adjust(MINUTE);
+      yield* run;
+      expect(yield* Ref.get(requests)).toBe(4);
+    }),
+  );
+
+  it.effect("carries reset credits in the same request, also serving the CLI probe", () =>
+    Effect.gen(function* () {
+      const { run, requests, urls, recorded, configDir } = yield* setup({
+        responses: [
+          {
+            status: 200,
+            body: {
+              ...good,
+              cedar_ember: {
+                eligible: true,
+                next_grant_id: "grant_1",
+                grants: [{ id: "grant_1", resets_left: 2, usable_now: true }],
+              },
+            },
+          },
+        ],
+      });
+      yield* run;
+      const credits = yield* readClaudeResetCreditsShared(configDir, "2.1.0").pipe(
+        Effect.provideService(HostProcess.Platform, "linux"),
+        Effect.provideService(
+          HttpClient.HttpClient,
+          HttpClient.make(() => Effect.die("the probe must reuse the shared read")),
+        ),
+      );
+      expect(credits).toEqual({ availableCount: 2, nextCreditId: "grant_1" });
+      expect(yield* Ref.get(requests)).toBe(1);
+      expect((yield* Ref.get(urls))[0]).toBe("cedar_ember=1");
       expect(yield* Ref.get(recorded)).toEqual([
-        { _tag: "failed", at: "2026-09-22T12:00:00.000Z", reason: "requestFailed" },
+        { _tag: "ok", limits: expect.objectContaining({ resetCredits: credits }) },
       ]);
     }),
   );
 
-  it.effect("reads nothing while no client is watching, and reads at once when one is", () =>
+  it.effect("keeps reset credits through a 429 and refetches them after a redemption", () =>
     Effect.gen(function* () {
-      const idle = yield* setup({ responses: [{ status: 200, body: good }], shouldRun: false });
-      expect(yield* idle.run).toBe(false);
-      expect([yield* Ref.get(idle.requests), yield* Ref.get(idle.recorded)]).toEqual([0, []]);
-      const watched = yield* setup({ responses: [{ status: 200, body: good }] });
-      expect(yield* watched.run).toBe(true);
-      expect(yield* Ref.get(watched.requests)).toBe(1);
+      const cedar = {
+        eligible: true,
+        next_grant_id: "grant_1",
+        grants: [{ id: "grant_1", resets_left: 1, usable_now: true }],
+      };
+      const { run, requests, configDir } = yield* setup({
+        responses: [
+          { status: 200, body: { ...good, cedar_ember: cedar } },
+          { status: 429, body: {}, headers: { "retry-after": "120" } },
+          { status: 200, body: { ...good, cedar_ember: { eligible: true } } },
+        ],
+      });
+      const probe = readClaudeResetCreditsShared(configDir, "2.1.0").pipe(
+        Effect.provideService(HostProcess.Platform, "linux"),
+        Effect.provideService(
+          HttpClient.HttpClient,
+          HttpClient.make(() => Effect.die("no request while the 429 backoff holds")),
+        ),
+      );
+      yield* run;
+      yield* TestClock.adjust(MINUTE);
+      yield* run;
+      expect(yield* probe).toEqual({ availableCount: 1, nextCreditId: "grant_1" });
+
+      yield* expireSharedClaudeUsage(configDir);
+      yield* TestClock.adjust(MINUTE);
+      expect(yield* probe).toEqual({ availableCount: 1, nextCreditId: "grant_1" });
+      yield* TestClock.adjust(MINUTE);
+      yield* run;
+      expect(yield* Ref.get(requests)).toBe(3);
+    }),
+  );
+
+  it.effect("drops reset credits once the account signs out", () =>
+    Effect.gen(function* () {
+      const cedar = {
+        eligible: true,
+        next_grant_id: "grant_1",
+        grants: [{ id: "grant_1", resets_left: 1, usable_now: true }],
+      };
+      const { run, configDir } = yield* setup({
+        responses: [
+          { status: 200, body: { ...good, cedar_ember: cedar } },
+          { status: 401, body: {} },
+        ],
+      });
+      yield* run;
+      yield* TestClock.adjust(MINUTE);
+      yield* run;
+      const credits = yield* readClaudeResetCreditsShared(configDir, "2.1.0").pipe(
+        Effect.provideService(HostProcess.Platform, "linux"),
+        Effect.provideService(
+          HttpClient.HttpClient,
+          HttpClient.make(() => Effect.die("no request while signed out")),
+        ),
+      );
+      expect(credits).toBeUndefined();
+    }),
+  );
+
+  it.effect("expires a read that was in flight when a credit was redeemed", () =>
+    Effect.gen(function* () {
+      const bodyStarted = yield* Deferred.make<void>();
+      const first = yield* setup({
+        responses: [{ status: 200, body: good, hangBody: bodyStarted }],
+      });
+      const poll = yield* Effect.forkChild(first.run);
+      yield* Deferred.await(bodyStarted);
+      const expired = yield* Effect.forkChild(expireSharedClaudeUsage(first.configDir));
+      yield* TestClock.adjust("10 seconds");
+      yield* Fiber.join(poll);
+      yield* Fiber.join(expired);
+      const second = yield* setup({
+        responses: [{ status: 200, body: good }],
+        configDir: first.configDir,
+      });
+      yield* second.run;
+      expect(yield* Ref.get(second.requests)).toBe(1);
     }),
   );
 
@@ -230,9 +379,7 @@ effectIt.layer(NodeServices.layer)("Claude usage poller", (it) => {
       yield* TestClock.adjust(MINUTE);
       yield* second.run;
       expect(yield* Ref.get(second.requests)).toBe(0);
-      expect(yield* Ref.get(second.recorded)).toEqual([
-        { _tag: "failed", at: "2026-09-22T12:01:00.000Z", reason: "rateLimited" },
-      ]);
+      expect(yield* Ref.get(second.recorded)).toEqual([failure("12:01", "rateLimited", "12:03")]);
       yield* TestClock.adjust(2 * MINUTE);
       yield* second.run;
       expect(yield* Ref.get(second.requests)).toBe(1);

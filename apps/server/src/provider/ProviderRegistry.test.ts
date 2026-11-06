@@ -143,6 +143,7 @@ const layerBackgroundPolicyAlwaysRun = Layer.mock(BackgroundPolicy.BackgroundPol
     updatedAt: TEST_EPOCH,
   }),
   shouldRunScopeWork: () => Effect.succeed(true),
+  scopeDemand: () => Effect.succeed("none"),
   shouldRunOpportunisticWork: Effect.succeed(true),
 });
 

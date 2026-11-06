@@ -29,7 +29,11 @@ import {
 import { ProviderDriverError } from "../Errors.ts";
 import { claudeUsageReader } from "./claudeUsage.ts";
 import { makeClaudeScopedLimitNames } from "../claudeUsageLimits.ts";
-import { startClaudeUsagePoller } from "../claudeUsagePoller.ts";
+import {
+  expireSharedClaudeUsage,
+  readClaudeResetCreditsShared,
+  startClaudeUsagePoller,
+} from "../claudeUsagePoller.ts";
 import * as ClaudeResetCredits from "../claudeResetCredits.ts";
 import * as ResetCreditCoordinator from "../resetCreditCoordinator.ts";
 import {
@@ -41,7 +45,7 @@ import {
 } from "../ClaudeProvider.ts";
 import {
   makeManagedServerProvider,
-  shouldRunProviderStatusWork,
+  providerStatusDemand,
 } from "@t3tools/provider-core/server/managedProvider";
 import * as ModelCatalog from "@t3tools/provider-core/server/ModelCatalog";
 import { resolveClaudeModelCatalog } from "../ClaudeModelCatalog.ts";
@@ -268,7 +272,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
               catalog,
               scopedLimitNames,
               (version) =>
-                ClaudeResetCredits.readClaudeResetCredits(configDir, version).pipe(
+                readClaudeResetCreditsShared(configDir, version).pipe(
                   Effect.provideService(HttpClient.HttpClient, httpClient),
                   Effect.provideService(FileSystem.FileSystem, fileSystem),
                   Effect.provideService(Path.Path, path),
@@ -329,7 +333,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
       configDir,
       scopedLimitNames,
       getSnapshot: snapshot.getSnapshot,
-      shouldRun: shouldRunProviderStatusWork(host, instanceId),
+      demand: providerStatusDemand(host, instanceId),
       record: (reading) => snapshot.recordUsageReading?.(reading) ?? Effect.void,
     }).pipe(
       Effect.provideService(HttpClient.HttpClient, httpClient),
@@ -380,6 +384,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
         Effect.gen(function* () {
           const before = (yield* snapshot.getSnapshot).usageLimits?.checkedAt;
           yield* Cache.invalidateAll(capabilitiesProbeCache);
+          yield* expireSharedClaudeUsage(configDir);
           const refreshed = yield* snapshot.refresh;
           const after = refreshed.usageLimits?.checkedAt;
           if (
