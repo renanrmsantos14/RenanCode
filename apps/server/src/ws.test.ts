@@ -1389,6 +1389,9 @@ it.effect("a publish whose push fails still refreshes the new remote", () =>
       Layer.mock(DirectEndpoints.DirectEndpoints)({}),
       Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({ namedProjectsRoot: "/unused" }),
       Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
+      Layer.mock(NextActionSuggestionService.NextActionSuggestionService)({}),
+      Layer.mock(CacheKeepWarmService.CacheKeepWarmService)({}),
+      Layer.mock(ThreadHandoffService.ThreadHandoffService)({}),
       Layer.mock(ServerEnvironment.ServerEnvironment)({}),
       Layer.mock(EnvironmentAuth.EnvironmentAuth)({}),
     );

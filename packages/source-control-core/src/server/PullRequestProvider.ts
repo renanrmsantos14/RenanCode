@@ -197,6 +197,7 @@ export interface ProviderChangeRequestStat {
 }
 
 export interface ProviderChangeRequestDetail extends ProviderChangeRequest {
+  readonly mergeCommitChecksState?: PullRequestChecksState | null | undefined;
   readonly maintainerCanModify?: boolean;
   readonly headSha?: string | null;
   readonly body: string;
