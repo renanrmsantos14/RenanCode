@@ -62,7 +62,10 @@ export function pullRequestMatchesProject(
   pullRequest: GitManager.GitBranchPullRequest,
   project: {
     readonly repositoryIdentity?:
-      | Pick<NonNullable<OrchestrationProjectShell["repositoryIdentity"]>, "canonicalKey" | "origin">
+      | Pick<
+          NonNullable<OrchestrationProjectShell["repositoryIdentity"]>,
+          "canonicalKey" | "origin"
+        >
       | null
       | undefined;
   },
@@ -213,17 +216,16 @@ export const make = Effect.gen(function* () {
           if (detected !== null && !pullRequestMatchesProject(detected, resolvedProject)) {
             return finishBackfill(group);
           }
+          const forkLink =
+            detected === null ||
+            pullRequestIsInRepository(detected, resolvedProject.repositoryIdentity?.canonicalKey)
+              ? undefined
+              : sourceControlDefinitions.parseChangeRequestUrl(detected.url)?.link;
           const detectedReference =
             detected !== null && repository !== null
               ? {
                   projectId: project.id,
-                  repository: pullRequestIsInRepository(
-                    detected,
-                    resolvedProject.repositoryIdentity?.canonicalKey,
-                  )
-                    ? repository
-                    : (sourceControlDefinitions.parseChangeRequestUrl(detected.url)?.link
-                        .repository ?? repository),
+                  repository: forkLink?.repository ?? repository,
                   number: detected.number,
                   url: detected.url,
                 }

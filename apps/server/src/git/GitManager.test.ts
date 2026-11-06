@@ -459,11 +459,11 @@ function createFakeSourceControlProvider(scenario: FakeProviderScenario = {}): {
           Effect.map(() =>
             (input.repository !== undefined
               ? (scenario.prListByRepository?.[input.repository] ?? [])
-              : prListQueueByHeadSelector.get(input.headSelector)?.shift() ??
-              scenario.prListByHeadSelector?.[input.headSelector] ??
-              prListQueue.shift() ??
-              scenario.prListOtherwise ??
-              []
+              : (prListQueueByHeadSelector.get(input.headSelector)?.shift() ??
+                scenario.prListByHeadSelector?.[input.headSelector] ??
+                prListQueue.shift() ??
+                scenario.prListOtherwise ??
+                [])
             ).map(toChangeRequest),
           ),
           Effect.tap(() =>
