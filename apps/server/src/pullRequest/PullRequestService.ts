@@ -96,7 +96,6 @@ import {
   type ProviderChangeRequestWatchFingerprint,
   type PullRequestProviderApi,
   PullRequestProviderError,
-  type ProviderChangeRequestSummary,
 } from "@t3tools/source-control-core/server/PullRequestProvider";
 import * as PullRequestReadCache from "./PullRequestReadCache.ts";
 import * as PullRequestProviderRegistry from "./PullRequestProviderRegistry.ts";

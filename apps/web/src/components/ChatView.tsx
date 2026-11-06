@@ -3758,7 +3758,7 @@ export default function ChatView(props: ChatViewProps) {
                                     ? EMPTY_COMPOSER_BANNER_ITEMS
                                     : composerBannerItems
                                 }
-                              resumeCompactionTokens={inlineCompactionTokens}
+                                resumeCompactionTokens={inlineCompactionTokens}
                                 keepFullHistory={keepFullHistory}
                                 onToggleKeepFullHistory={toggleKeepFullHistoryStable}
                                 sideChatAvailable={sideChat.available}
@@ -3804,13 +3804,14 @@ export default function ChatView(props: ChatViewProps) {
                                 contextWindowEntries={serverVisibleTurnItems}
                                 contextWindowLiveUsage={activeThreadLiveTokenUsage}
                                 contextWindowProviderThread={activeProviderThread}
-                              mcpServers={activeProviderThread?.mcpServers ?? EMPTY_MCP_SERVERS}
-                              enabledMcpServers={
-                                serverProjection?.thread.enabledMcpServers ?? EMPTY_MCP_SERVER_NAMES
-                              }
-                              pinnedMcpServers={settings.pinnedMcpServers}
-                              onMcpServerChange={onMcpServerChange}
-                              onMcpServerPinnedChange={onMcpServerPinnedChange}
+                                mcpServers={activeProviderThread?.mcpServers ?? EMPTY_MCP_SERVERS}
+                                enabledMcpServers={
+                                  serverProjection?.thread.enabledMcpServers ??
+                                  EMPTY_MCP_SERVER_NAMES
+                                }
+                                pinnedMcpServers={settings.pinnedMcpServers}
+                                onMcpServerChange={onMcpServerChange}
+                                onMcpServerPinnedChange={onMcpServerPinnedChange}
                                 compactThreadUnavailable={compactThreadUnavailable}
                                 compactDisabled={compactDisabled}
                                 compactDisabledReason={compactDisabledReason}
@@ -3840,11 +3841,11 @@ export default function ChatView(props: ChatViewProps) {
                                 onPageScrollKeyUp={onComposerPageScrollKeyUpStable}
                                 onPageScrollRelease={onComposerPageScrollReleaseStable}
                                 onCompactContext={onComposerCompactContextStable}
-                              cacheControl={coldCache.control}
+                                cacheControl={coldCache.control}
                                 onSend={onComposerSendStable}
                                 onResume={onComposerResumeStable}
                                 onInterrupt={onInterruptStable}
-                              onSteerQueuedMessage={steerQueuedMessageStable}
+                                onSteerQueuedMessage={steerQueuedMessageStable}
                                 onImplementPlanInNewThread={onImplementPlanInNewThreadStable}
                                 onSelectActivePendingUserInputOption={
                                   onSelectActivePendingUserInputOptionStable
@@ -3886,9 +3887,9 @@ export default function ChatView(props: ChatViewProps) {
                             {showComposerContextStrip && (
                               <div className="pointer-events-auto">
                                 <BranchToolbar
-                                onClaudeCloud={onClaudeCloudStable}
-                                claudeCloudSelected={claudeCloudSelected}
-                                autoEnvironmentCloud={taskRoutedToCloud}
+                                  onClaudeCloud={onClaudeCloudStable}
+                                  claudeCloudSelected={claudeCloudSelected}
+                                  autoEnvironmentCloud={taskRoutedToCloud}
                                   forceNewWorktree={multipleModelSelections !== null}
                                   ref={branchToolbarRef}
                                   environmentId={activeThread.environmentId}
@@ -3914,16 +3915,16 @@ export default function ChatView(props: ChatViewProps) {
                                   {...(canCheckoutPullRequestIntoThread
                                     ? { onCheckoutPullRequestRequest: openPullRequestDialogStable }
                                     : {})}
-                                {...(canChangeEnvironment || taskRoutingOffered
+                                  {...(canChangeEnvironment || taskRoutingOffered
                                     ? { onEnvironmentChange: onEnvironmentChangeStable }
                                     : {})}
                                   autoEnvironmentLabel={autoEnvironmentLabel}
                                   onAutoEnvironment={
                                     draftId &&
                                     !envLocked &&
-                                  ((canAutoBalanceEnvironments &&
-                                    loadBalancingSettings.loadBalancingEnabled) ||
-                                    taskRoutingOffered)
+                                    ((canAutoBalanceEnvironments &&
+                                      loadBalancingSettings.loadBalancingEnabled) ||
+                                      taskRoutingOffered)
                                       ? onAutoEnvironmentStable
                                       : undefined
                                   }

@@ -28,6 +28,7 @@ export const postEnvironmentVoiceTranscription = Effect.fn(
     method: "POST",
     url: (urls) => urls.transcribeApiKey({ query }),
     timeoutMs: 120_000,
-    request: ({ client, headers }) => client.transcribeApiKey({ query, payload: input.audio, headers }),
+    request: ({ client, headers }) =>
+      client.transcribeApiKey({ query, payload: input.audio, headers }),
   });
 });

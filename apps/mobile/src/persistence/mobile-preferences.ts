@@ -118,6 +118,7 @@ export interface Preferences {
   readonly projectGroupingMode?: SidebarProjectGroupingMode;
   readonly planModeEnabled?: boolean;
   readonly toolCallVisibility?: ToolCallVisibility;
+  readonly nextActionSuggestionsEnabled?: boolean;
   readonly workingShelfEnabled?: boolean;
   readonly useLastProjectForNewThreads?: boolean;
   readonly lastThreadProject?: typeof ThreadProject.Type;
@@ -128,6 +129,8 @@ export interface Preferences {
   readonly threadListSettledShelfExpanded?: boolean;
   readonly threadListSnoozedShelfExpanded?: boolean;
   readonly threadListWorkingShelfExpanded?: boolean;
+  /** Parent thread keys (`environmentId:threadId`) whose subsessions are folded in the list. */
+  readonly threadListCollapsedSubsessions?: readonly string[];
   readonly threadListFilters?: ThreadListFilters;
   readonly pullRequestListFilters?: PullRequestListPreferences;
   readonly workspaceSelections?: WorkspaceSelections;
@@ -203,6 +206,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     projectGroupingMode?: SidebarProjectGroupingMode;
     planModeEnabled?: boolean;
     toolCallVisibility?: ToolCallVisibility;
+    nextActionSuggestionsEnabled?: boolean;
     workingShelfEnabled?: boolean;
     useLastProjectForNewThreads?: boolean;
     lastThreadProject?: typeof ThreadProject.Type;
@@ -210,6 +214,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     threadListSettledShelfExpanded?: boolean;
     threadListSnoozedShelfExpanded?: boolean;
     threadListWorkingShelfExpanded?: boolean;
+    threadListCollapsedSubsessions?: readonly string[];
     threadListFilters?: ThreadListFilters;
     pullRequestListFilters?: PullRequestListPreferences;
     workspaceSelections?: WorkspaceSelections;
@@ -332,6 +337,9 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   if (isToolCallVisibility(parsed.toolCallVisibility)) {
     preferences.toolCallVisibility = parsed.toolCallVisibility;
   }
+  if (typeof parsed.nextActionSuggestionsEnabled === "boolean") {
+    preferences.nextActionSuggestionsEnabled = parsed.nextActionSuggestionsEnabled;
+  }
   if (typeof parsed.workingShelfEnabled === "boolean") {
     preferences.workingShelfEnabled = parsed.workingShelfEnabled;
   }
@@ -360,6 +368,11 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   }
   if (typeof parsed.threadListWorkingShelfExpanded === "boolean") {
     preferences.threadListWorkingShelfExpanded = parsed.threadListWorkingShelfExpanded;
+  }
+  if (Array.isArray(parsed.threadListCollapsedSubsessions)) {
+    preferences.threadListCollapsedSubsessions = parsed.threadListCollapsedSubsessions.filter(
+      (key): key is string => typeof key === "string",
+    );
   }
   if (isThreadListFilters(parsed.threadListFilters)) {
     preferences.threadListFilters = parsed.threadListFilters;
