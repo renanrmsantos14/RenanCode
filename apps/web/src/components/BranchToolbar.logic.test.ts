@@ -49,6 +49,7 @@ describe("resolveLocalCheckoutBranchMismatch", () => {
   it("detects when a local thread is associated with a different branch than the checkout", () => {
     expect(
       resolveLocalCheckoutBranchMismatch({
+        threadId: "thread-1",
         effectiveEnvMode: "local",
         activeWorktreePath: null,
         activeThreadBranch: "feature/thread",
@@ -60,9 +61,22 @@ describe("resolveLocalCheckoutBranchMismatch", () => {
     });
   });
 
+  it("ignores cloud sessions because their branch is not on this checkout", () => {
+    expect(
+      resolveLocalCheckoutBranchMismatch({
+        threadId: "claude-cloud:cse_1",
+        effectiveEnvMode: "local",
+        activeWorktreePath: null,
+        activeThreadBranch: "claude/feature-abc",
+        currentGitBranch: "feature/current",
+      }),
+    ).toBeNull();
+  });
+
   it("ignores dedicated worktrees because their checkout is already thread-scoped", () => {
     expect(
       resolveLocalCheckoutBranchMismatch({
+        threadId: "thread-1",
         effectiveEnvMode: "worktree",
         activeWorktreePath: "/repo/.t3/worktrees/feature-thread",
         activeThreadBranch: "feature/thread",

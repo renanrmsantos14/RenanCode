@@ -82,6 +82,7 @@ interface FakeProviderScenario {
   /** Answers to successive change request listings, whatever their head selector. */
   prListSequence?: ReadonlyArray<ReadonlyArray<FakeChangeRequest>>;
   prListByHeadSelector?: Record<string, ReadonlyArray<FakeChangeRequest>>;
+  prListByRepository?: Record<string, ReadonlyArray<FakeChangeRequest>>;
   prListSequenceByHeadSelector?: Record<string, ReadonlyArray<ReadonlyArray<FakeChangeRequest>>>;
   /** The answer to every listing the other lists leave unanswered. */
   prListOtherwise?: ReadonlyArray<FakeChangeRequest>;
@@ -456,12 +457,13 @@ function createFakeSourceControlProvider(scenario: FakeProviderScenario = {}): {
           limit: input.limit,
         }).pipe(
           Effect.map(() =>
-            (
-              prListQueueByHeadSelector.get(input.headSelector)?.shift() ??
-              scenario.prListByHeadSelector?.[input.headSelector] ??
-              prListQueue.shift() ??
-              scenario.prListOtherwise ??
-              []
+            (input.repository !== undefined
+              ? (scenario.prListByRepository?.[input.repository] ?? [])
+              : (prListQueueByHeadSelector.get(input.headSelector)?.shift() ??
+                scenario.prListByHeadSelector?.[input.headSelector] ??
+                prListQueue.shift() ??
+                scenario.prListOtherwise ??
+                [])
             ).map(toChangeRequest),
           ),
           Effect.tap(() =>
@@ -1392,6 +1394,67 @@ it.layer(layerGitManagerTest)("GitManager", (it) => {
         detail: "Multiple remotes track feature/ambiguous-remote. Its pull request is ambiguous.",
       });
       expect(providerCalls).toHaveLength(0);
+    }),
+  );
+
+  it.effect("finds a pull request inside the fork when upstream has none", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("t3code-git-manager-");
+      yield* initRepo(repoDir);
+      const originDir = yield* createBareRemote();
+      const upstreamDir = yield* createBareRemote();
+      yield* runGit(repoDir, ["remote", "add", "origin", originDir]);
+      yield* runGit(repoDir, ["remote", "add", "upstream", upstreamDir]);
+      yield* configureVisibleRemoteUrlWithLocalRewrite(
+        repoDir,
+        "origin",
+        "git@github.com:contributor/codething-mvp.git",
+        originDir,
+      );
+      yield* configureVisibleRemoteUrlWithLocalRewrite(
+        repoDir,
+        "upstream",
+        "git@github.com:pingdotgg/codething-mvp.git",
+        upstreamDir,
+      );
+      const inFork = {
+        title: "Fork work",
+        baseRefName: "main",
+        headRefName: "claude/remote-only",
+        state: "merged" as const,
+      };
+      const { manager } = yield* makeManager({
+        providerScenario: {
+          prListByRepository: {
+            "contributor/codething-mvp": [
+              {
+                ...inFork,
+                number: 40,
+                url: "https://github.com/contributor/codething-mvp/pull/40",
+                isCrossRepository: true,
+                headRepositoryNameWithOwner: "someone-else/codething-mvp",
+                headRepositoryOwnerLogin: "someone-else",
+              },
+              {
+                ...inFork,
+                number: 41,
+                url: "https://github.com/contributor/codething-mvp/pull/41",
+                isCrossRepository: false,
+              },
+            ],
+          },
+        },
+      });
+
+      const pullRequest = yield* manager.branchPullRequest({
+        cwd: repoDir,
+        branch: "claude/remote-only",
+      });
+
+      expect(pullRequest).toMatchObject({
+        number: 41,
+        repositoryKey: "github.com/contributor/codething-mvp",
+      });
     }),
   );
 

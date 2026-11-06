@@ -175,6 +175,8 @@ export class SourceControlProvider extends Context.Service<
       readonly headSelector: string;
       readonly state: ChangeRequestState | "all";
       readonly limit?: number;
+      /** Overrides the repository the host's tools default to. Only GitHub honors it. */
+      readonly repository?: string;
     }) => Effect.Effect<ReadonlyArray<ChangeRequest>, SourceControlProviderError>;
     readonly getChangeRequest: (input: {
       readonly cwd: string;

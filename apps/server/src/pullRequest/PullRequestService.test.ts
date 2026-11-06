@@ -49,6 +49,7 @@ function project(input: {
   readonly provider?: string;
   readonly host?: string;
   readonly remoteUrl?: string;
+  readonly origin?: string;
 }): OrchestrationProjectShell {
   const host = input.host ?? (input.provider === "gitlab" ? "gitlab.com" : "github.com");
   return {
@@ -66,6 +67,7 @@ function project(input: {
             },
             provider: SourceControlProviderKind.make(input.provider ?? "github"),
             displayName: input.repository,
+            ...(input.origin ? { origin: { canonicalKey: `${host}/${input.origin}` } } : {}),
           },
         }
       : {}),
@@ -1560,6 +1562,41 @@ it.effect("refuses a repository that does not belong to the requested project", 
       .pipe(Effect.flip);
 
     assert.strictEqual(error._tag, "PullRequestOperationError");
+  }),
+);
+
+it.effect("reads a pull request stored against a fork's own origin", () =>
+  Effect.gen(function* () {
+    const repositories: string[] = [];
+    const service = yield* makeService({
+      projects: [
+        project({
+          id: "p1",
+          title: "t3code",
+          workspaceRoot: "/a",
+          repository: "pingdotgg/t3code",
+          origin: "contributor/t3code",
+        }),
+      ],
+      providers: [
+        fakePullRequestProvider(SourceControlProviderKind.make("github"), {
+          getChangeRequest: (input) =>
+            Effect.sync(() => {
+              repositories.push(input.repository);
+              return { ...hostedChangeRequest("Fork work"), number: 7 };
+            }),
+        }),
+      ],
+    });
+
+    const summary = yield* service.summary({
+      projectId: "p1" as ProjectId,
+      repository: "Contributor/T3Code",
+      number: 7,
+    });
+
+    assert.deepStrictEqual(repositories, ["Contributor/T3Code"]);
+    assert.strictEqual(summary.repository, "Contributor/T3Code");
   }),
 );
 

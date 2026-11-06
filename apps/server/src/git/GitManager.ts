@@ -1540,6 +1540,19 @@ export const make = Effect.gen(function* () {
     };
   });
 
+  const resolveForkRepository = Effect.fn("resolveForkRepository")(function* (cwd: string) {
+    const [upstream, origin] = yield* Effect.all(
+      [
+        resolveRemoteRepositoryContext(cwd, "upstream"),
+        resolveRemoteRepositoryContext(cwd, "origin"),
+      ],
+      { concurrency: "unbounded" },
+    );
+    return upstream.remoteUrlKey === null || upstream.remoteUrlKey === origin.remoteUrlKey
+      ? null
+      : origin.repositoryNameWithOwner;
+  });
+
   const resolveHeadAndOriginContexts = (cwd: string, remoteName: string | null) =>
     remoteName === "origin"
       ? resolveRemoteRepositoryContext(cwd, "origin").pipe(
@@ -1913,6 +1926,25 @@ export const make = Effect.gen(function* () {
           continue;
         }
         parsedByNumber.set(pr.number, pr);
+      }
+    }
+
+    // Hosts default to `upstream`, so a pull request inside the fork itself needs its own search.
+    if (parsedByNumber.size === 0) {
+      const repository = yield* resolveForkRepository(cwd);
+      if (repository !== null) {
+        const pullRequests = yield* provider.listChangeRequests({
+          cwd,
+          headSelector: headContext.headBranch,
+          state: "all",
+          limit: probe.limit,
+          repository,
+        });
+        for (const pr of pullRequests.map(toPullRequestInfo)) {
+          if (pr.isCrossRepository !== true && matchesBranchHeadContext(pr, headContext)) {
+            parsedByNumber.set(pr.number, pr);
+          }
+        }
       }
     }
 

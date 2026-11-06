@@ -48,15 +48,33 @@ function samePullRequest(
   );
 }
 
-function pullRequestMatchesProject(
+const pullRequestIsInRepository = (
   pullRequest: GitManager.GitBranchPullRequest,
-  project: OrchestrationProjectShell,
+  canonicalKey: string | undefined,
+): boolean =>
+  pullRequest.repositoryKey !== null &&
+  canonicalKey !== undefined &&
+  sourceControlDefinitions.canonicalRepositoryKey(pullRequest.repositoryKey) ===
+    sourceControlDefinitions.canonicalRepositoryKey(canonicalKey);
+
+/** A fork's identity names `upstream`, yet its own `origin` holds pull requests too. */
+export function pullRequestMatchesProject(
+  pullRequest: GitManager.GitBranchPullRequest,
+  project: {
+    readonly repositoryIdentity?:
+      | Pick<
+          NonNullable<OrchestrationProjectShell["repositoryIdentity"]>,
+          "canonicalKey" | "origin"
+        >
+      | null
+      | undefined;
+  },
 ): boolean {
+  const identity = project.repositoryIdentity;
   return (
-    pullRequest.repositoryKey !== null &&
-    project.repositoryIdentity != null &&
-    sourceControlDefinitions.canonicalRepositoryKey(pullRequest.repositoryKey) ===
-      sourceControlDefinitions.canonicalRepositoryKey(project.repositoryIdentity.canonicalKey)
+    identity != null &&
+    (pullRequestIsInRepository(pullRequest, identity.canonicalKey) ||
+      pullRequestIsInRepository(pullRequest, identity.origin?.canonicalKey))
   );
 }
 
@@ -198,11 +216,16 @@ export const make = Effect.gen(function* () {
           if (detected !== null && !pullRequestMatchesProject(detected, resolvedProject)) {
             return finishBackfill(group);
           }
+          const forkLink =
+            detected === null ||
+            pullRequestIsInRepository(detected, resolvedProject.repositoryIdentity?.canonicalKey)
+              ? undefined
+              : sourceControlDefinitions.parseChangeRequestUrl(detected.url)?.link;
           const detectedReference =
             detected !== null && repository !== null
               ? {
                   projectId: project.id,
-                  repository,
+                  repository: forkLink?.repository ?? repository,
                   number: detected.number,
                   url: detected.url,
                 }
