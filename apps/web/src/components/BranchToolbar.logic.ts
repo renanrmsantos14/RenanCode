@@ -56,8 +56,9 @@ export function resolveEnvironmentOptionLabel(input: {
 export function shouldShowEnvironmentIndicator(input: {
   activeEnvironment: Pick<EnvironmentOption, "isPrimary"> | null;
   canPickEnvironment: boolean;
+  isCloudSession: boolean;
 }): boolean {
-  if (input.canPickEnvironment) return true;
+  if (input.canPickEnvironment || input.isCloudSession) return true;
   return input.activeEnvironment !== null && !input.activeEnvironment.isPrimary;
 }
 

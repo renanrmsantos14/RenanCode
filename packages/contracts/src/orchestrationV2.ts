@@ -106,6 +106,12 @@ export type OrchestrationV2ThreadHistoryOrigin = typeof OrchestrationV2ThreadHis
 export const CLAUDE_CLOUD_THREAD_ID_PREFIX = "claude-cloud:";
 export const isClaudeCloudThreadId = (threadId: string): boolean =>
   threadId.startsWith(CLAUDE_CLOUD_THREAD_ID_PREFIX);
+// The web app addresses sessions as session_*, while the API can also report them as cse_*.
+export const claudeCloudSessionUrl = (threadId: string): string | null => {
+  if (!isClaudeCloudThreadId(threadId)) return null;
+  const sessionId = threadId.slice(CLAUDE_CLOUD_THREAD_ID_PREFIX.length);
+  return `https://claude.ai/code/${sessionId.replace(/^cse_/, "session_")}`;
+};
 
 const OrchestrationV2CreationFields = {
   createdBy: OrchestrationV2Actor,

@@ -4,6 +4,7 @@ import * as Schema from "effect/Schema";
 
 import { NodeId, RunAttemptId, TrimmedNonEmptyString } from "./index.ts";
 import {
+  claudeCloudSessionUrl,
   latestProviderTurnForAttempt,
   OrchestrationV2ProviderCapabilities,
   OrchestrationV2ProviderThread,
@@ -624,6 +625,18 @@ describe("background work kinds from older or newer servers", () => {
         pendingBackgroundTasks: [{ taskId: "", kind: "command" }],
       }),
     ).toThrow();
+  });
+});
+
+describe("claudeCloudSessionUrl", () => {
+  it("links cloud threads to their web session and leaves local threads alone", () => {
+    expect(claudeCloudSessionUrl("claude-cloud:session_01abc")).toBe(
+      "https://claude.ai/code/session_01abc",
+    );
+    expect(claudeCloudSessionUrl("claude-cloud:cse_01abc")).toBe(
+      "https://claude.ai/code/session_01abc",
+    );
+    expect(claudeCloudSessionUrl("thread-1")).toBeNull();
   });
 });
 

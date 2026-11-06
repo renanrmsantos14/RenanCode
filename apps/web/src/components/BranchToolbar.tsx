@@ -1,11 +1,25 @@
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import { formatFilePathForClipboard } from "@t3tools/client-runtime/media-actions";
 import { readLocalApi } from "../localApi";
+import { useOpenLink } from "../browser/useOpenLink";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
-import type { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
-import { FolderGit2Icon, FolderGitIcon, FolderIcon, PlusIcon, ScaleIcon } from "lucide-react";
+import {
+  claudeCloudSessionUrl,
+  type EnvironmentId,
+  type ProjectId,
+  type ScopedThreadRef,
+  type ThreadId,
+} from "@t3tools/contracts";
+import {
+  ExternalLinkIcon,
+  FolderGit2Icon,
+  FolderGitIcon,
+  FolderIcon,
+  PlusIcon,
+  ScaleIcon,
+} from "lucide-react";
 import {
   type Ref,
   type MouseEvent as ReactMouseEvent,
@@ -36,7 +50,10 @@ import {
   BranchToolbarBranchSelector,
   type BranchToolbarBranchSelectorHandle,
 } from "./BranchToolbarBranchSelector";
-import { BranchToolbarEnvironmentSelector } from "./BranchToolbarEnvironmentSelector";
+import {
+  BranchToolbarEnvironmentSelector,
+  CLAUDE_CLOUD_LABEL,
+} from "./BranchToolbarEnvironmentSelector";
 import { openAddProjectToMachine } from "./AddProjectToMachineDialog";
 import { type AddProjectTarget, useAddProjectTargets } from "../hooks/useAddProjectTargets";
 import { BranchToolbarEnvModeSelector } from "./BranchToolbarEnvModeSelector";
@@ -595,6 +612,53 @@ function useLabelsOverflow(): readonly [
   return [attach, overflows] as const;
 }
 
+function ClaudeCloudSessionLink({
+  displayMode = "toolbar",
+  threadRef,
+  url,
+}: {
+  displayMode?: "toolbar" | "panel";
+  threadRef: ScopedThreadRef;
+  url: string;
+}) {
+  const openLink = useOpenLink(threadRef);
+  const open = (event: ReactMouseEvent) => {
+    void openLink(url, { event }).catch((error: unknown) => {
+      console.error(error);
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Unable to open Claude cloud session",
+          description: error instanceof Error ? error.message : "An error occurred.",
+        }),
+      );
+    });
+  };
+  if (displayMode === "toolbar") {
+    return (
+      <ComposerControl
+        size="xs"
+        title="Open session in browser"
+        onClick={open}
+        data-composer-context-control
+      >
+        <EnvironmentMachineIcon kind="cloud" className="size-3 shrink-0" />
+        <ComposerContextLabel>{CLAUDE_CLOUD_LABEL}</ComposerContextLabel>
+      </ComposerControl>
+    );
+  }
+  return (
+    <ThreadDetailsControl size="sm" variant="ghost" title="Open session in browser" onClick={open}>
+      <EnvironmentMachineIcon
+        kind="cloud"
+        className={cn(THREAD_DETAILS_PANEL_ICON_CLASS, "-mx-px size-4.5")}
+      />
+      <ComposerContextLabel displayMode="panel">{CLAUDE_CLOUD_LABEL}</ComposerContextLabel>
+      <ExternalLinkIcon className={cn(THREAD_DETAILS_PANEL_ICON_CLASS, "ms-auto")} aria-hidden />
+    </ThreadDetailsControl>
+  );
+}
+
 export const BranchToolbar = memo(function BranchToolbar({
   onClaudeCloud,
   claudeCloudSelected,
@@ -684,11 +748,13 @@ export const BranchToolbar = memo(function BranchToolbar({
   const showEnvironmentPicker = hasMultipleEnvironments && onEnvironmentChange !== undefined;
   const activeEnvironmentOption =
     availableEnvironments?.find((env) => env.environmentId === environmentId) ?? null;
+  const cloudSessionUrl = claudeCloudSessionUrl(threadId);
   // Started threads get no handler but still show which machine they run on,
   // matching the strip visibility ChatView computes from the same inputs.
   const showEnvironmentIndicator = shouldShowEnvironmentIndicator({
     activeEnvironment: activeEnvironmentOption,
     canPickEnvironment: hasMultipleEnvironments || onClaudeCloud !== undefined,
+    isCloudSession: cloudSessionUrl !== null,
   });
   const [attachStrip, labelsOverflow] = useLabelsOverflow();
 
@@ -697,7 +763,9 @@ export const BranchToolbar = memo(function BranchToolbar({
   if (layout === "panel") {
     return (
       <div className="flex w-full flex-col" data-thread-panel-run-context>
-        {panelSection !== "branch" ? (
+        {panelSection === "branch" ? null : cloudSessionUrl ? (
+          <ClaudeCloudSessionLink displayMode="panel" threadRef={threadRef} url={cloudSessionUrl} />
+        ) : (
           <RunContextSelector
             displayMode="panel"
             workspaceRoot={activeProject.workspaceRoot}
@@ -720,7 +788,7 @@ export const BranchToolbar = memo(function BranchToolbar({
             addTargets={addTargets}
             onAddToMachine={onAddToMachine}
           />
-        ) : null}
+        )}
         {panelSection !== "workspace" ? (
           <BranchToolbarBranchSelector
             displayMode="panel"
@@ -748,7 +816,10 @@ export const BranchToolbar = memo(function BranchToolbar({
       data-compact={labelsOverflow ? "" : undefined}
       className={cn("gap-1 text-xs font-normal text-foreground/70 dark:text-muted-foreground")}
     >
-      {showGitControls ? (
+      {cloudSessionUrl ? (
+        <ClaudeCloudSessionLink threadRef={threadRef} url={cloudSessionUrl} />
+      ) : null}
+      {showGitControls && !cloudSessionUrl ? (
         <div className="contents @xl/composer-surface:hidden">
           <RunContextSelector
             forceNewWorktree={forceNewWorktree}
@@ -772,7 +843,7 @@ export const BranchToolbar = memo(function BranchToolbar({
           />
         </div>
       ) : null}
-      {showGitControls || showEnvironmentIndicator ? (
+      {!cloudSessionUrl && (showGitControls || showEnvironmentIndicator) ? (
         <div
           className={cn(
             "min-h-7 min-w-10 items-center gap-1 sm:min-h-6",

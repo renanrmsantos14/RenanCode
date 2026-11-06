@@ -75,6 +75,7 @@ import {
   ProviderInteractionMode,
   resolveIdleCompaction,
   RuntimeMode,
+  isClaudeCloudThreadId,
 } from "@t3tools/contracts";
 import {
   deriveProviderSubagentStatus,
@@ -1227,6 +1228,7 @@ export default function ChatView(props: ChatViewProps) {
   const showComposerEnvironmentIndicator = shouldShowEnvironmentIndicator({
     activeEnvironment: activeEnvironmentOption,
     canPickEnvironment: hasMultipleEnvironments || claudeCloudOffered,
+    isCloudSession: activeThread !== undefined && isClaudeCloudThreadId(activeThread.id),
   });
 
   const { handlePreparedPullRequestThreadStable, openPullRequestDialogStable } =

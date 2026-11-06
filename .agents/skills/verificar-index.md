@@ -1,0 +1,1 @@
+- verificar-claude-cloud-link | apps/web/src/components/BranchToolbar*, packages/contracts/src/orchestrationV2* | Controle "Claude cloud" no popup e no composer, abre a sessão no navegador
