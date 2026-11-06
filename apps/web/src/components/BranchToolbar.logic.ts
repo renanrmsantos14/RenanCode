@@ -151,6 +151,11 @@ export function resolvePreviousWorktreeSeed(input: {
   return latest === null ? null : { branch: latest.branch, worktreePath: latest.worktreePath };
 }
 
+/** One machine has nothing to balance, so its automatic choice only decides machine or cloud. */
+export function resolveAutoChoiceLabel(label: string | undefined, environmentCount: number) {
+  return label ?? (environmentCount > 1 ? "Auto balance" : "Auto");
+}
+
 export function resolvePreviousWorktreeLabel(seed: PreviousWorktreeSeed): string {
   return seed.branch ? `Previous worktree (${seed.branch})` : "Previous worktree";
 }

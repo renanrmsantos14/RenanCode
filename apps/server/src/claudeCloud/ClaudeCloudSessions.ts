@@ -204,9 +204,15 @@ export function branchNeedsPush(status: PlacementStatus): boolean {
 }
 
 /** Checks that need no model. A reason keeps the task on this machine; null asks the classifier. */
-export function localOnlyReason(status: PlacementStatus): string | null {
+export function localOnlyReason(
+  status: PlacementStatus,
+  worktreeBaseBranch?: string,
+): string | null {
   if (status.refName === null) return "No branch is checked out";
-  if (status.hasWorkingTreeChanges) return "Uncommitted changes exist only on this machine";
+  // The cloud clones the root's branch, so a worktree based elsewhere is not what it would run.
+  if (status.hasWorkingTreeChanges && worktreeBaseBranch !== status.refName) {
+    return "Uncommitted changes exist only on this machine";
+  }
   // Pushing for the user is fine on a feature branch, never straight onto the default branch.
   if (status.isDefaultRef && branchNeedsPush(status)) {
     return "Unpushed commits on the default branch stay local";
@@ -787,7 +793,7 @@ const make = Effect.gen(function* () {
       const found = yield* findGitHubProject(input.projectId);
       if (found === null) return local("The project has no GitHub remote");
       const status = yield* vcsStatus.getStatus({ cwd: found.project.workspaceRoot });
-      const reason = localOnlyReason(status);
+      const reason = localOnlyReason(status, input.worktreeBaseBranch);
       if (reason !== null) return local(reason);
       const generated = yield* textGeneration
         .generateTaskPlacement({

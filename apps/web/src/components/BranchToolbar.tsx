@@ -38,6 +38,7 @@ import {
   ADD_TO_MACHINE_LABEL_CLASS,
   type EnvMode,
   type EnvironmentOption,
+  resolveAutoChoiceLabel,
   resolveContextStripLabelsCompact,
   resolveCurrentWorkspaceLabel,
   resolveEnvModeLabel,
@@ -363,7 +364,7 @@ const RunContextSelector = memo(function RunContextSelector({
                     <span className="flex min-w-0 items-center gap-1.5">
                       <ScaleIcon className="size-3" aria-hidden="true" />
                       <span className="min-w-0 truncate">
-                        {autoEnvironmentLabel ?? "Auto balance"}
+                        {resolveAutoChoiceLabel(autoEnvironmentLabel, availableEnvironments.length)}
                       </span>
                     </span>
                   </MenuRadioItem>
@@ -745,7 +746,10 @@ export const BranchToolbar = memo(function BranchToolbar({
     openAddProjectToMachine({ projectRef: activeProjectRef, targetEnvironmentId });
   // A project on one machine still gets the picker when it can be added to another.
   const hasMultipleEnvironments = (availableEnvironments?.length ?? 0) > 1 || addTargets.length > 0;
-  const showEnvironmentPicker = hasMultipleEnvironments && onEnvironmentChange !== undefined;
+  // Automatic routing works on one machine too, and picking that machine is the way out of it.
+  const showEnvironmentPicker =
+    (hasMultipleEnvironments || onAutoEnvironment !== undefined) &&
+    onEnvironmentChange !== undefined;
   const activeEnvironmentOption =
     availableEnvironments?.find((env) => env.environmentId === environmentId) ?? null;
   const cloudSessionUrl = claudeCloudSessionUrl(threadId);

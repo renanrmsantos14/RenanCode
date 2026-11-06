@@ -18,6 +18,8 @@ export type ClaudeCloudStartSessionInput = typeof ClaudeCloudStartSessionInput.T
 export const ClaudeCloudPlacementInput = Schema.Struct({
   projectId: ProjectId,
   text: TrimmedNonEmptyString,
+  /** The task opens a fresh worktree from this branch, leaving the project root's uncommitted files behind. */
+  worktreeBaseBranch: Schema.optional(TrimmedNonEmptyString),
 });
 export type ClaudeCloudPlacementInput = typeof ClaudeCloudPlacementInput.Type;
 

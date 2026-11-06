@@ -49,6 +49,14 @@ describe("Claude cloud session mirroring", () => {
     expect(localOnlyReason({ ...status, aheadCount: 2 })).toBeNull();
     expect(branchNeedsPush({ ...status, hasUpstream: false })).toBe(true);
     expect(localOnlyReason({ ...status, hasWorkingTreeChanges: true })).not.toBeNull();
+    // A new worktree leaves the root's uncommitted files behind only when the cloud clones its base.
+    const dirty = { ...status, hasWorkingTreeChanges: true };
+    expect(localOnlyReason(dirty, "feature/x")).toBeNull();
+    expect(localOnlyReason(dirty, "main")).not.toBeNull();
+    expect(localOnlyReason({ ...dirty, refName: null }, "feature/x")).not.toBeNull();
+    expect(
+      localOnlyReason({ ...dirty, isDefaultRef: true, aheadCount: 1 }, "feature/x"),
+    ).not.toBeNull();
     expect(localOnlyReason({ ...status, refName: null })).not.toBeNull();
     expect(localOnlyReason({ ...status, isDefaultRef: true })).toBeNull();
     expect(localOnlyReason({ ...status, isDefaultRef: true, aheadCount: 1 })).not.toBeNull();

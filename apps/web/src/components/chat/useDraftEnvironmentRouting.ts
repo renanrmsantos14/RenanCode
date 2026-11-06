@@ -20,6 +20,7 @@ import { useComposerDraftStore, DraftId } from "../../composerDraftStore";
 import { type EnvironmentPresentation, useEnvironmentProviders } from "../../state/environments";
 import { useProjects } from "../../state/entities";
 import type { DraftSessionState } from "../../composerDraftStore";
+import { draftWorktreeBaseBranch, isAutoRoutedDraft } from "./taskRouting";
 import { useTaskCloudPlacement } from "./useTaskCloudPlacement";
 
 interface DraftEnvironmentRoutingInput {
@@ -37,6 +38,8 @@ interface DraftEnvironmentRoutingInput {
   readonly activeProviderInstanceId: ProviderInstanceId | null;
   readonly selectedProvider: ProviderDriverKind;
   readonly composerHasAttachments: boolean;
+  /** Plan mode and model fan-out exist only on a machine; a cloud session takes one plain prompt. */
+  readonly composerNeedsMachine: boolean;
   readonly activeProjectKey: string | null;
   readonly activeProjectIsScratch: boolean;
   readonly projectGroupingSettings: ReturnType<typeof selectProjectGroupingSettings>;
@@ -62,6 +65,7 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
     activeProviderInstanceId,
     selectedProvider,
     composerHasAttachments,
+    composerNeedsMachine,
     activeProjectKey,
     activeProjectIsScratch,
     projectGroupingSettings,
@@ -207,6 +211,16 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
       (env) => env.environmentId === nextEnvironmentId,
     );
     if (!target) return;
+    // Staying on this machine only leaves automatic routing; the draft keeps its project and branch.
+    if (target.environmentId === originalDraft.environmentId) {
+      environmentChangeRef.current = null;
+      setBusyEnvironmentChange(null);
+      setDraftThreadContext(draftId, {
+        environmentSelection: "manual",
+        loadBalancedEnvironmentId: null,
+      });
+      return;
+    }
     const request = { environmentId: target.environmentId, scope: environmentChangeScope };
     environmentChangeRef.current = request;
     setBusyEnvironmentChange(null);
@@ -294,19 +308,20 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
     !envLocked &&
     environmentById.get(draftThread.environmentId)?.serverConfig?.settings
       .claudeCloudAutoRouting === true;
-  // Only an Auto choice, including the automatic load-balanced default, may go to the cloud.
-  const taskRoutingAuto = taskRoutingOffered && draftThread.environmentSelection === "auto";
+  // Only a draft with no explicit machine, branch or worktree choice may go to the cloud; a manual pick stays put.
+  const taskRoutingAuto = taskRoutingOffered && isAutoRoutedDraft(draftThread);
   const taskRoutingActive =
     taskRoutingAuto &&
     selectedProvider === "claudeAgent" &&
     !composerHasAttachments &&
-    referencedThreadContexts.length === 0 &&
-    !draftThread.worktreePath;
+    !composerNeedsMachine &&
+    referencedThreadContexts.length === 0;
   const taskPlacement = useTaskCloudPlacement({
     active: taskRoutingActive,
     environmentId: draftThread?.environmentId ?? null,
     projectId: draftThread?.projectId ?? null,
     draftId,
+    worktreeBaseBranch: draftThread ? draftWorktreeBaseBranch(draftThread) : null,
   });
 
   const taskRoutedToCloud = taskPlacement.placement?.placement === "cloud";
