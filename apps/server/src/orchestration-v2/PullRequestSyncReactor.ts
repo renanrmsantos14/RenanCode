@@ -47,6 +47,13 @@ const QUIET_SYNC_INTERVAL_MS = 5 * 60 * 1_000;
 // A pull request closed this long ago is rarely reopened, so the sweep stops reading it, as it
 // does merged ones. A reader that sees it open, or a requested refresh, still reads it at once.
 const CLOSED_FINAL_AFTER_MS = 24 * 60 * 60 * 1_000;
+// Someone is usually waiting on running checks, so those pull requests are read past the cache
+// this often; the rest keep the sweep's cadence.
+const RUNNING_CHECKS_SYNC_INTERVAL = "15 seconds";
+// After a merge, the base branch's checks (often a deploy) are read until they finish, this long.
+const MERGE_CHECKS_WINDOW_MS = 2 * 60 * 60 * 1_000;
+// A push to the base branch takes a moment to register its checks, so none yet is not final.
+const MERGE_CHECKS_GRACE_MS = 3 * 60 * 1_000;
 
 const isChangeRequestCloseCommand = (command: string) =>
   sourceControlDefinitions.definitions.some(
@@ -213,6 +220,9 @@ function snapshotFieldsOf(summary: PullRequestSummary): SnapshotFields {
     ...(summary.changedFiles === undefined ? {} : { changedFiles: summary.changedFiles }),
     ...(summary.reviewDecision === undefined ? {} : { reviewDecision: summary.reviewDecision }),
     ...(summary.checksState === undefined ? {} : { checksState: summary.checksState }),
+    ...(summary.mergeCommitChecksState === undefined
+      ? {}
+      : { mergeCommitChecksState: summary.mergeCommitChecksState }),
     ...(summary.mergeability === undefined ? {} : { mergeability: summary.mergeability }),
   };
 }
@@ -262,6 +272,7 @@ function snapshotFieldsEqual(left: SnapshotFields, right: SnapshotFields): boole
     left.changedFiles === right.changedFiles &&
     (left.reviewDecision ?? null) === (right.reviewDecision ?? null) &&
     (left.checksState ?? null) === (right.checksState ?? null) &&
+    (left.mergeCommitChecksState ?? null) === (right.mergeCommitChecksState ?? null) &&
     left.mergeability === right.mergeability
   );
 }
@@ -316,6 +327,27 @@ function rateLimitRetryAt(cause: Cause.Cause<unknown>): number | undefined {
   return undefined;
 }
 
+/** Checks still running on the head commit, or on the base branch after the merge. */
+function awaitsRunningChecks(
+  snapshot: Pick<
+    ThreadPullRequestSnapshot,
+    "state" | "checksState" | "mergedAt" | "mergeCommitChecksState"
+  > | null,
+  nowMs: number,
+): boolean {
+  if (snapshot === null) return false;
+  if (snapshot.state === "open") return snapshot.checksState === "pending";
+  // Hosts that do not report merge commit checks leave the field out.
+  if (snapshot.state !== "merged" || snapshot.mergedAt == null) return false;
+  if (snapshot.mergeCommitChecksState === undefined) return false;
+  const sinceMergeMs = nowMs - Date.parse(snapshot.mergedAt);
+  if (!(sinceMergeMs < MERGE_CHECKS_WINDOW_MS)) return false;
+  return (
+    snapshot.mergeCommitChecksState === "pending" ||
+    (snapshot.mergeCommitChecksState === null && sinceMergeMs < MERGE_CHECKS_GRACE_MS)
+  );
+}
+
 function isUnsettled(thread: ProjectionStore.ProjectionThreadPullRequests): boolean {
   return thread.settledOverride !== "settled" && thread.settledAt === null;
 }
@@ -346,6 +378,8 @@ export const make = Effect.gen(function* () {
   // linking dozens of pull requests) is read together and shares the summary batches.
   let requestedSweepQueued = false;
   const retryStacks = new Set<string>();
+  // Pull requests with running checks, by host key, which the fast loop asks to refresh.
+  const runningChecks = new Map<string, ThreadPullRequestKey>();
   // Pause per project and host because credentials are project-specific; leave paused PRs due until reset.
   const pausedUntil = new Map<string, number>();
 
@@ -400,6 +434,14 @@ export const make = Effect.gen(function* () {
       if (pendingRequests.has(threadPullRequestKeyOf(entries[0]!.link))) requested.add(key);
     }
     pendingRequests.clear();
+
+    runningChecks.clear();
+    for (const entries of groups.values()) {
+      const { link } = entries[0]!;
+      if (entries.some((entry) => awaitsRunningChecks(entry.link.snapshot, nowMs))) {
+        runningChecks.set(threadPullRequestKeyOf(link), normalizeThreadPullRequestKey(link));
+      }
+    }
 
     for (const key of lastSyncedAt.keys()) if (!groups.has(key)) lastSyncedAt.delete(key);
     for (const key of retryStacks) if (!groups.has(key)) retryStacks.delete(key);
@@ -562,6 +604,14 @@ export const make = Effect.gen(function* () {
       }
       // The host answered, so the cadence clock ticks even if a dispatch below is rejected.
       lastSyncedAt.set(key, nowMs);
+      if (awaitsRunningChecks(fields, nowMs)) {
+        runningChecks.set(
+          threadPullRequestKeyOf(first.link),
+          normalizeThreadPullRequestKey(first.link),
+        );
+      } else {
+        runningChecks.delete(threadPullRequestKeyOf(first.link));
+      }
       requested.delete(key);
       yield* Effect.forEach(
         entries,
@@ -728,6 +778,11 @@ export const make = Effect.gen(function* () {
         yield* worker.enqueue("all");
         yield* worker.drain;
       }).pipe(Effect.repeat(Schedule.spaced("1 minute")), Effect.asVoid),
+    );
+    yield* forkParked(
+      Effect.suspend(() =>
+        Effect.forEach([...runningChecks.values()], requestSync, { discard: true }),
+      ).pipe(Effect.repeat(Schedule.spaced(RUNNING_CHECKS_SYNC_INTERVAL)), Effect.asVoid),
     );
   });
 

@@ -1053,6 +1053,69 @@ describe("PullRequestSyncReactor", () => {
     ),
   );
 
+  it.effect(
+    "reads running checks every 15 seconds past the cache, through the merge's checks",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* TestClock.setTime(Date.parse(NOW));
+          const invalidated = yield* Ref.make(0);
+          const host = yield* Ref.make<Partial<PullRequestSummary>>({ checksState: "pending" });
+          // Untouched for a day, so only running checks bring the PR in before the quiet cadence.
+          const fixture = yield* makeHarness({
+            snapshot: makeSnapshot([makeThread("checks", { pullRequests: [makeLink(1, {})] })]),
+            invalidate: () => Ref.update(invalidated, (count) => count + 1),
+            summary: (input) =>
+              Ref.get(host).pipe(Effect.map((fields) => makeSummary(input, fields))),
+          });
+          const reads = Ref.get(fixture.summaryCalls).pipe(Effect.map((calls) => calls.length));
+          const tick = Effect.fn("tickRunningChecks")(function* (
+            reactor: PullRequestSyncReactor.PullRequestSyncReactor["Service"],
+          ) {
+            yield* TestClock.adjust("15 seconds");
+            yield* Queue.take(fixture.snapshotReads);
+            yield* reactor.drain;
+            yield* applyRecordedSyncs(fixture);
+          });
+
+          yield* Effect.gen(function* () {
+            const reactor = yield* startAndSweep(fixture);
+            yield* applyRecordedSyncs(fixture);
+            assert.strictEqual(yield* reads, 1);
+
+            yield* tick(reactor);
+            assert.strictEqual(yield* reads, 2);
+
+            // Merged with the base branch's checks still running, so reads continue.
+            yield* Ref.set(host, {
+              state: "merged",
+              mergedAt: NOW,
+              mergeCommitChecksState: "pending",
+            });
+            yield* tick(reactor);
+            assert.strictEqual(yield* reads, 3);
+
+            yield* Ref.set(host, {
+              state: "merged",
+              mergedAt: NOW,
+              mergeCommitChecksState: "passing",
+            });
+            yield* tick(reactor);
+            assert.strictEqual(yield* reads, 4);
+            assert.strictEqual(yield* Ref.get(invalidated), 3);
+            assert.strictEqual(
+              (yield* Ref.get(fixture.syncCommands)).at(-1)?.snapshot.mergeCommitChecksState,
+              "passing",
+            );
+
+            // Finished and merged: neither the fast loop nor the sweep reads it again.
+            for (let index = 0; index < 5; index += 1) yield* sweepAgain(fixture, reactor);
+            assert.strictEqual(yield* reads, 4);
+          }).pipe(Effect.provide(fixture.layer));
+        }),
+      ),
+  );
+
   it.effect("syncs a pull request a reader saw merge without waiting for the sweep", () =>
     Effect.scoped(
       Effect.gen(function* () {

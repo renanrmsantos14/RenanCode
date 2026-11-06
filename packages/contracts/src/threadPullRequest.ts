@@ -50,6 +50,8 @@ export const ThreadPullRequestSnapshot = Schema.Struct({
   changedFiles: Schema.optional(NonNegativeInt),
   reviewDecision: Schema.optional(Schema.NullOr(PullRequestReviewDecision)),
   checksState: Schema.optional(Schema.NullOr(PullRequestChecksState)),
+  /** Checks on the merge commit in the base branch, such as a deploy run after the merge. */
+  mergeCommitChecksState: Schema.optional(Schema.NullOr(PullRequestChecksState)),
   mergeability: Schema.optional(PullRequestMergeability),
 });
 export type ThreadPullRequestSnapshot = typeof ThreadPullRequestSnapshot.Type;

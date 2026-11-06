@@ -92,7 +92,11 @@ import {
   useSidebarRowSubscriptionLease,
   setFileDragActive,
 } from "../Sidebar.logic";
-import { visibleThreadPullRequests } from "@t3tools/client-runtime/thread-pull-requests";
+import {
+  threadPullRequestDelivery,
+  visibleThreadPullRequests,
+} from "@t3tools/client-runtime/thread-pull-requests";
+import { pullRequestDeliveryPresentation } from "../pullRequest/pullRequestPresentation";
 import { resolveLocalCheckoutBranchMismatch } from "../BranchToolbar.logic";
 import {
   ThreadPullRequestBadgeControl,
@@ -848,6 +852,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     currentGitBranch: visibleGitStatus?.refName ?? null,
   });
   const prStatus = prStatusIndicator(pr, linkedPullRequestStatus?.sourceControlProvider);
+  // An idle agent's "Done" is not the end while its pull request still runs checks or awaits a merge.
+  const deliveryStatus =
+    topStatus === null || topStatus.icon === "done"
+      ? pullRequestDeliveryPresentation(threadPullRequestDelivery(thread.pullRequests))
+      : null;
 
   const modelInstanceId = thread.runtime?.providerInstanceId ?? thread.modelSelection.instanceId;
   const providerEntry = props.providerEntryByInstanceId.get(modelInstanceId) ?? null;
@@ -1398,6 +1407,17 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                         />
                         <TooltipPopup side="top">Dismiss Woke notification</TooltipPopup>
                       </Tooltip>
+                    ) : inFolder && deliveryStatus ? (
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1 text-xs font-medium",
+                          deliveryStatus.toneClassName,
+                        )}
+                      >
+                        <deliveryStatus.Icon aria-hidden className="size-3" />
+                        {deliveryStatus.label}
+                        <span className="sr-only">, {deliveryStatus.tooltip}</span>
+                      </span>
                     ) : (inFolder || isNativeSubagent) && topStatus ? (
                       // Folder and subagent rows have no status line, so the status takes the time slot.
                       <span

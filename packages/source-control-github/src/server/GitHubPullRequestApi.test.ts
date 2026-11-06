@@ -948,6 +948,7 @@ layer("GitHubPullRequestApi.layer", (it) => {
         mergedAt: null,
         closedAt: null,
         commits: { nodes: [{ commit: { statusCheckRollup: { state: "SUCCESS" } } }] },
+        mergeCommit: number === 8 ? { statusCheckRollup: { state: "PENDING" } } : null,
       });
       mockedExecute.mockReturnValueOnce(
         Effect.succeed(
@@ -986,6 +987,7 @@ layer("GitHubPullRequestApi.layer", (it) => {
           changedFiles: seven?.changedFiles,
           reviewDecision: seven?.reviewDecision,
           checksState: seven?.checksState,
+          mergeCommitChecksState: seven?.mergeCommitChecksState,
           mergeability: seven?.mergeability,
         },
         {
@@ -996,10 +998,12 @@ layer("GitHubPullRequestApi.layer", (it) => {
           changedFiles: 2,
           reviewDecision: "approved",
           checksState: "passing",
+          mergeCommitChecksState: null,
           mergeability: "mergeable",
         },
       );
       assert.strictEqual(eight?.headBranch, "feat/8");
+      assert.strictEqual(eight?.mergeCommitChecksState, "pending");
       expect(mockedExecute).toHaveBeenCalledOnce();
       expect(queryAt(0)).toContain(
         "_0_repository:repository(owner:$_0_owner name:$_0_name){pullRequest(number:$_0_number)",
@@ -1044,6 +1048,7 @@ layer("GitHubPullRequestApi.layer", (it) => {
                       mergedAt: null,
                       closedAt: null,
                       commits: { nodes: [] },
+                      mergeCommit: null,
                       stack: null,
                       stackEntry: null,
                     },

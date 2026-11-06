@@ -119,6 +119,8 @@ export interface ProviderChangeRequestSummary {
   readonly changedFiles?: number | undefined;
   readonly reviewDecision?: PullRequestReviewDecision | null | undefined;
   readonly checksState?: PullRequestChecksState | null | undefined;
+  /** Checks on the merge commit in the base branch; absent where the host is not read for them. */
+  readonly mergeCommitChecksState?: PullRequestChecksState | null | undefined;
   readonly mergeability?: PullRequestMergeability | undefined;
   /** Null means no stack; absent means not requested. */
   readonly stack?: PullRequestStackMembership | null | undefined;

@@ -10,6 +10,7 @@ import type {
   PullRequestState,
 } from "@t3tools/contracts";
 import { formatDiffCount } from "@t3tools/client-runtime/diff-count";
+import type { ThreadPullRequestDelivery } from "@t3tools/client-runtime/thread-pull-requests";
 import {
   CircleCheckIcon,
   CircleDashedIcon,
@@ -259,6 +260,70 @@ const CHECKS_STATE_PRESENTATION = {
 
 export function pullRequestChecksStatePresentation(state: PullRequestChecksState) {
   return CHECKS_STATE_PRESENTATION[state];
+}
+
+export interface PullRequestDeliveryPresentation {
+  readonly label: string;
+  readonly tooltip: string;
+  readonly Icon: typeof CircleCheckIcon | PullRequestGlyphIcon;
+  readonly toneClassName: string;
+}
+
+/** A thread row's short delivery status; null once nothing is left to wait on or act on. */
+export function pullRequestDeliveryPresentation(
+  delivery: ThreadPullRequestDelivery | null,
+): PullRequestDeliveryPresentation | null {
+  if (delivery === null) return null;
+  const { link } = delivery;
+  const subject = `#${link.number}${link.snapshot ? ` ${link.snapshot.title}` : ""}`;
+  const base = link.snapshot?.baseBranch ?? "the base branch";
+  switch (delivery.stage) {
+    case "failed":
+      return delivery.reason === "conflict"
+        ? {
+            label: "Conflict",
+            tooltip: `${subject}: conflicts with ${base}`,
+            Icon: PullRequestGlyph.conflicting,
+            toneClassName: CHECKS_STATE_PRESENTATION.failing.toneClassName,
+          }
+        : delivery.reason === "checks"
+          ? {
+              label: "Checks",
+              tooltip: `${subject}: checks failed`,
+              Icon: CHECKS_STATE_PRESENTATION.failing.Icon,
+              toneClassName: CHECKS_STATE_PRESENTATION.failing.toneClassName,
+            }
+          : {
+              label: "Deploy",
+              tooltip: `${subject}: merged, but checks on ${base} failed`,
+              Icon: CHECKS_STATE_PRESENTATION.failing.Icon,
+              toneClassName: CHECKS_STATE_PRESENTATION.failing.toneClassName,
+            };
+    case "checks":
+      return {
+        label: "Checks",
+        tooltip: `${subject}: checks running`,
+        Icon: CHECKS_STATE_PRESENTATION.pending.Icon,
+        toneClassName: CHECKS_STATE_PRESENTATION.pending.toneClassName,
+      };
+    case "ready":
+      return {
+        label: "Ready",
+        tooltip: `${subject}: ready to merge`,
+        Icon: PullRequestGlyph.merged,
+        toneClassName: PULL_REQUEST_STATE_PRESENTATION.open.toneClassName,
+      };
+    case "merge-checks":
+      return {
+        label: "Deploy",
+        tooltip: `${subject}: merged, checks running on ${base}`,
+        Icon: CHECKS_STATE_PRESENTATION.pending.Icon,
+        toneClassName: CHECKS_STATE_PRESENTATION.pending.toneClassName,
+      };
+    case "delivered":
+    case "closed":
+      return null;
+  }
 }
 
 export function pullRequestChecksState(

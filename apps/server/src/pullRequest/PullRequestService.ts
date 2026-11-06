@@ -92,6 +92,7 @@ import {
   type ProviderChangeRequestWatchFingerprint,
   type PullRequestProviderApi,
   PullRequestProviderError,
+  type ProviderChangeRequestSummary,
 } from "@t3tools/source-control-core/server/PullRequestProvider";
 import * as PullRequestReadCache from "./PullRequestReadCache.ts";
 import * as PullRequestProviderRegistry from "./PullRequestProviderRegistry.ts";
@@ -1659,7 +1660,8 @@ export const make = Effect.gen(function* () {
           host: project.host,
           number: input.number,
         };
-        const read =
+        // A detail read is a summary too, though it leaves out the merge commit's checks.
+        const read: Effect.Effect<ProviderChangeRequestSummary, PullRequestProviderError> =
           project.api.getChangeRequestSummary === undefined
             ? project.api.getChangeRequest(providerInput)
             : project.api.getChangeRequestSummary(providerInput);
@@ -1697,6 +1699,9 @@ export const make = Effect.gen(function* () {
             ...(changeRequest.checksState === undefined
               ? {}
               : { checksState: changeRequest.checksState }),
+            ...(changeRequest.mergeCommitChecksState === undefined
+              ? {}
+              : { mergeCommitChecksState: changeRequest.mergeCommitChecksState }),
             ...(changeRequest.mergeability === undefined
               ? {}
               : { mergeability: changeRequest.mergeability }),
