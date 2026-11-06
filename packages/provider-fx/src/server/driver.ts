@@ -59,6 +59,7 @@ const unsupportedTextGeneration: ProviderTextGeneration = (() => {
     generateReviewGuide: () => unsupported("generateReviewGuide"),
     generateNextAction: () => unsupported("generateNextAction"),
     generateTaskPlacement: () => unsupported("generateTaskPlacement"),
+    generateTranscriptionPostProcessing: () => unsupported("generateTranscriptionPostProcessing"),
   };
 })();
 

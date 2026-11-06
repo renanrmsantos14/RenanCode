@@ -288,6 +288,11 @@ export const makeManagedCodexProvider = Effect.fn("makeManagedCodexProvider")(fu
       protect("generateNextAction", nativeGeneration.generateNextAction(value)),
     generateTaskPlacement: (value) =>
       protect("generateTaskPlacement", nativeGeneration.generateTaskPlacement(value)),
+    generateTranscriptionPostProcessing: (value) =>
+      protect(
+        "generateTranscriptionPostProcessing",
+        nativeGeneration.generateTranscriptionPostProcessing(value),
+      ),
   };
   return {
     instanceId,

@@ -26,8 +26,8 @@ export const postEnvironmentVoiceTranscription = Effect.fn(
     ...(input.remoteAuthorization ? { remoteAuthorization: input.remoteAuthorization } : {}),
     group: "voice",
     method: "POST",
-    url: (urls) => urls.transcribe({ query }),
+    url: (urls) => urls.transcribeApiKey({ query }),
     timeoutMs: 120_000,
-    request: ({ client, headers }) => client.transcribe({ query, payload: input.audio, headers }),
+    request: ({ client, headers }) => client.transcribeApiKey({ query, payload: input.audio, headers }),
   });
 });
