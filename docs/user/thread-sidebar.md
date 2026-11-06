@@ -219,8 +219,10 @@ On web and desktop, right-click a pull request link in a thread and choose
 same link to return to the branch PR, if one exists.
 The linked pull request participates in automatic settlement.
 
-Once the agent is idle, a thread row in a project folder, and a thread row on mobile, shows where
-its pull request stands in place of **Done**: **Checks** while they run or once they fail,
+When the agent is done or waiting on background work, such as watching its pull request, a thread
+row in a project folder, and a thread row on mobile, shows where its pull request stands in place
+of **Done** or **Waiting**. While the agent works, the row shows **Checks** or **Deploy** only
+when those are running. The labels are **Checks** while they run or once they fail,
 **Conflict**, **Ready** to merge, and **Deploy** while the checks that run on the base branch after
 the merge are going, or once they fail. A later run on the base branch carries the merge too, so
 when it passes, a failed or cancelled **Deploy** clears. With several pull requests, the most urgent one shows;

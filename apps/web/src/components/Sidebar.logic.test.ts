@@ -1692,6 +1692,13 @@ describe("resolveSidebarFolderDot", () => {
     expect(
       resolveSidebarFolderDot([{ ...withPullRequest({ checksState: "failing" }), runtime }]),
     ).toBe("working");
+    // An agent waiting on background work, such as watching its pull request, defers to it.
+    const waitingOn = (snapshot: Partial<ThreadPullRequestSnapshot>) => ({
+      ...withPullRequest(snapshot),
+      runtime: { ...runtime, status: "idle" as const },
+    });
+    expect(resolveSidebarFolderDot([waitingOn({ checksState: "failing" })])).toBe("failed");
+    expect(resolveSidebarFolderDot([waitingOn({ checksState: "pending" })])).toBe("working");
   });
 });
 

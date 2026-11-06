@@ -93,7 +93,7 @@ import {
   setFileDragActive,
 } from "../Sidebar.logic";
 import {
-  threadPullRequestDelivery,
+  threadPullRequestDeliveryForStatus,
   visibleThreadPullRequests,
 } from "@t3tools/client-runtime/thread-pull-requests";
 import { pullRequestDeliveryPresentation } from "../pullRequest/pullRequestPresentation";
@@ -853,11 +853,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     currentGitBranch: visibleGitStatus?.refName ?? null,
   });
   const prStatus = prStatusIndicator(pr, linkedPullRequestStatus?.sourceControlProvider);
-  // An idle agent's "Done" is not the end while its pull request still runs checks or awaits a merge.
+  // "Done" or "Waiting" is not the end while the pull request still runs checks or awaits a merge.
   const deliveryStatus =
-    topStatus === null || topStatus.icon === "done"
-      ? pullRequestDeliveryPresentation(threadPullRequestDelivery(thread.pullRequests))
-      : null;
+    isNativeSubagent || isWokeStatus
+      ? null
+      : pullRequestDeliveryPresentation(
+          threadPullRequestDeliveryForStatus(thread.pullRequests, status),
+        );
 
   const modelInstanceId = thread.runtime?.providerInstanceId ?? thread.modelSelection.instanceId;
   const providerEntry = props.providerEntryByInstanceId.get(modelInstanceId) ?? null;

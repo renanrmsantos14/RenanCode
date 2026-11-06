@@ -1,7 +1,10 @@
 import type { ThreadPullRequestLink, ThreadPullRequestSnapshot } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { threadPullRequestDelivery } from "./threadPullRequests.ts";
+import {
+  threadPullRequestDelivery,
+  threadPullRequestDeliveryForStatus,
+} from "./threadPullRequests.ts";
 
 function link(
   number: number,
@@ -96,5 +99,21 @@ describe("threadPullRequestDelivery", () => {
     ],
   ] as const)("%s", (_name, links, expected) => {
     expect(stageOf(links)).toBe(expected);
+  });
+});
+
+describe("threadPullRequestDeliveryForStatus", () => {
+  const running = [link(1, { checksState: "pending" })];
+  const ready = [link(1, {})];
+  it.each([
+    ["an idle agent shows a ready pull request", "ready", ready, "ready"],
+    ["an agent waiting on the pull request shows its checks", "waiting", running, "checks"],
+    ["an agent waiting on background work shows a ready one too", "waiting", ready, "ready"],
+    ["a working agent shows checks it is likely waiting on", "working", running, "checks"],
+    ["a working agent stays Working while the pull request awaits it", "working", ready, null],
+    ["a question for the user outranks the pull request", "input", running, null],
+    ["a failed run outranks the pull request", "failed", running, null],
+  ] as const)("%s", (_name, status, links, expected) => {
+    expect(threadPullRequestDeliveryForStatus(links, status)?.stage ?? null).toBe(expected);
   });
 });
