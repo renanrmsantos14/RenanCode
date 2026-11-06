@@ -54,6 +54,10 @@ const RUNNING_CHECKS_SYNC_INTERVAL = "15 seconds";
 const MERGE_CHECKS_WINDOW_MS = 2 * 60 * 60 * 1_000;
 // A push to the base branch takes a moment to register its checks, so none yet is not final.
 const MERGE_CHECKS_GRACE_MS = 3 * 60 * 1_000;
+// Failed checks after a merge are often redone by the next push's run, which carries the merge
+// and may have cancelled them, so they are reread each sweep, then slowly, until this long.
+const FAILED_MERGE_CHECKS_WATCH_MS = 24 * 60 * 60 * 1_000;
+const FAILED_MERGE_CHECKS_SYNC_INTERVAL_MS = 60 * 1_000;
 
 const isChangeRequestCloseCommand = (command: string) =>
   sourceControlDefinitions.definitions.some(
@@ -348,6 +352,13 @@ function awaitsRunningChecks(
   );
 }
 
+/** How long ago a merged snapshot whose merge checks failed was merged, or null otherwise. */
+function failedMergeChecksAgeMs(snapshot: ThreadPullRequestSnapshot | null, nowMs: number) {
+  if (snapshot?.state !== "merged" || snapshot.mergeCommitChecksState !== "failing") return null;
+  const ageMs = nowMs - Date.parse(snapshot.mergedAt ?? "");
+  return ageMs < FAILED_MERGE_CHECKS_WATCH_MS ? ageMs : null;
+}
+
 function isUnsettled(thread: ProjectionStore.ProjectionThreadPullRequests): boolean {
   return thread.settledOverride !== "settled" && thread.settledAt === null;
 }
@@ -386,6 +397,20 @@ export const make = Effect.gen(function* () {
   const isDue = (key: string, entries: ReadonlyArray<LinkEntry>, nowMs: number): boolean => {
     if (requested.has(key) || retryStacks.has(key)) return true;
     if (entries.some((entry) => entry.link.snapshot === null)) return true;
+    const last = lastSyncedAt.get(key);
+    const sinceLastMs = last === undefined ? Number.POSITIVE_INFINITY : nowMs - last;
+    // Settled threads count: merging often settles the thread before its deploy is known.
+    const failedAges = entries.flatMap(
+      (entry) => failedMergeChecksAgeMs(entry.link.snapshot, nowMs) ?? [],
+    );
+    if (failedAges.length > 0) {
+      return (
+        sinceLastMs >=
+        (Math.min(...failedAges) < MERGE_CHECKS_WINDOW_MS
+          ? FAILED_MERGE_CHECKS_SYNC_INTERVAL_MS
+          : SLOW_SYNC_INTERVAL_MS)
+      );
+    }
     const active = entries.filter((entry) => isUnsettled(entry.thread));
     // Merged snapshots without mergedAt cannot settle threads; reread slowly until supplied.
     const isFinal = ({ link: { snapshot } }: LinkEntry) =>
@@ -394,8 +419,6 @@ export const make = Effect.gen(function* () {
         : snapshot?.state === "closed" &&
           nowMs - Date.parse(snapshot.closedAt ?? "") >= CLOSED_FINAL_AFTER_MS;
     if (active.every(isFinal)) return false;
-    const last = lastSyncedAt.get(key);
-    const sinceLastMs = last === undefined ? Number.POSITIVE_INFINITY : nowMs - last;
     const open = active.filter((entry) => entry.link.snapshot?.state === "open");
     if (open.length > 0) {
       const quiet = open.every((entry) => {

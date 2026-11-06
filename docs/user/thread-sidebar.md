@@ -222,7 +222,8 @@ The linked pull request participates in automatic settlement.
 Once the agent is idle, a thread row in a project folder, and a thread row on mobile, shows where
 its pull request stands in place of **Done**: **Checks** while they run or once they fail,
 **Conflict**, **Ready** to merge, and **Deploy** while the checks that run on the base branch after
-the merge are going, or once they fail. With several pull requests, the most urgent one shows;
+the merge are going, or once they fail. A later run on the base branch carries the merge too, so
+when it passes, a failed or cancelled **Deploy** clears. With several pull requests, the most urgent one shows;
 hover the thread to see each. Checks after the merge are read for GitHub pull requests only.
 
 ## Find and reference work

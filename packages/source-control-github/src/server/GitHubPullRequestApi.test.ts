@@ -949,6 +949,7 @@ layer("GitHubPullRequestApi.layer", (it) => {
         closedAt: null,
         commits: { nodes: [{ commit: { statusCheckRollup: { state: "SUCCESS" } } }] },
         mergeCommit: number === 8 ? { statusCheckRollup: { state: "PENDING" } } : null,
+        baseRef: null,
       });
       mockedExecute.mockReturnValueOnce(
         Effect.succeed(
@@ -1049,6 +1050,7 @@ layer("GitHubPullRequestApi.layer", (it) => {
                       closedAt: null,
                       commits: { nodes: [] },
                       mergeCommit: null,
+                      baseRef: null,
                       stack: null,
                       stackEntry: null,
                     },
