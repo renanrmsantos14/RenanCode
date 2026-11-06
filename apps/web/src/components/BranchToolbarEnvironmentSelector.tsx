@@ -8,7 +8,11 @@ import type { EnvironmentId } from "@t3tools/contracts";
 import { PlusIcon, ScaleIcon } from "lucide-react";
 import { memo } from "react";
 
-import { ADD_TO_MACHINE_LABEL_CLASS, type EnvironmentOption } from "./BranchToolbar.logic";
+import {
+  ADD_TO_MACHINE_LABEL_CLASS,
+  type EnvironmentOption,
+  resolveAutoChoiceLabel,
+} from "./BranchToolbar.logic";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useComposerMenuProps } from "./chat/composerEventScope";
 import {
@@ -62,10 +66,12 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   const activeEnvironment =
     availableEnvironments.find((env) => env.environmentId === environmentId) ?? null;
 
+  const autoChoiceLabel = resolveAutoChoiceLabel(
+    autoEnvironmentLabel,
+    availableEnvironments.length,
+  );
   const environmentItems = [
-    ...(onAutoEnvironment
-      ? [{ value: AUTO_VALUE, label: autoEnvironmentLabel ?? "Auto balance" }]
-      : []),
+    ...(onAutoEnvironment ? [{ value: AUTO_VALUE, label: autoChoiceLabel }] : []),
     ...availableEnvironments.map((env) => ({
       value: environmentValue(env.environmentId),
       label: env.label,
@@ -170,7 +176,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
             >
               <span className="inline-flex items-center gap-1.5">
                 <ScaleIcon className="size-3" aria-hidden="true" />
-                {autoEnvironmentLabel ?? "Auto balance"}
+                {autoChoiceLabel}
               </span>
             </SelectItem>
           )}

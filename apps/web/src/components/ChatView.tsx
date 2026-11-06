@@ -6,6 +6,7 @@ import { sourceControlClients } from "@t3tools/client-runtime/source-control-cli
 import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
 import { queuedRunEditBlockedReason } from "@t3tools/client-runtime/queued-run-edit";
 import { ScrollToEndButton, WorkspaceFileDropOverlay } from "./chat/TimelineOverlays";
+import { isAutoRoutedDraft } from "./chat/taskRouting";
 import { usePasteToFocusComposer } from "./chat/usePasteToFocusComposer";
 import { configuredHostedAppUrl } from "../hostedPairing";
 import { announcedRun, isDetailBehindShell } from "./chat/threadActivityAnnouncement";
@@ -1293,11 +1294,8 @@ export default function ChatView(props: ChatViewProps) {
     !envLocked &&
     canAutoBalanceEnvironments &&
     loadBalancingSettings.loadBalancingEnabled &&
-    draftThread?.environmentSelection !== "manual" &&
-    draftThread?.environmentSelection !== "claude-cloud" &&
-    (!composerHasAttachments || Boolean(draftThread?.loadBalancedEnvironmentId)) &&
-    (!draftThread?.branch || draftThread.environmentSelection === "auto") &&
-    !draftThread?.worktreePath,
+    (!draftThread || isAutoRoutedDraft(draftThread)) &&
+    (!composerHasAttachments || Boolean(draftThread?.loadBalancedEnvironmentId)),
   );
   const autoUpdateEnvironments = automaticEnvironment
     ? logicalProjectEnvironments.flatMap(({ environmentId }) => {
@@ -1846,6 +1844,7 @@ export default function ChatView(props: ChatViewProps) {
     activeProviderInstanceId,
     selectedProvider,
     composerHasAttachments,
+    composerNeedsMachine: multipleModelSelections !== null || interactionMode === "plan",
     activeProjectKey,
     activeProjectIsScratch,
     projectGroupingSettings,

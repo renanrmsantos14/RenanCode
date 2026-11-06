@@ -17,17 +17,18 @@ interface TaskCloudPlacementInput {
   readonly environmentId: EnvironmentId | null;
   readonly projectId: ProjectId | null;
   readonly draftId: DraftId | null;
+  readonly worktreeBaseBranch: string | null;
 }
 
 type PlacementRequest = Promise<ClaudeCloudPlacementResult | null>;
 
 /** Asks the draft's machine whether the typed task can run in a Claude cloud session. */
 export function useTaskCloudPlacement(input: TaskCloudPlacementInput) {
-  const { active, environmentId, projectId, draftId } = input;
+  const { active, environmentId, projectId, draftId, worktreeBaseBranch } = input;
   const suggest = useAtomCommand(claudeCloudEnvironment.suggestPlacement, {
     reportFailure: false,
   });
-  const scope = `${environmentId ?? ""}:${projectId ?? ""}:${draftId ?? ""}`;
+  const scope = `${environmentId ?? ""}:${projectId ?? ""}:${draftId ?? ""}:${worktreeBaseBranch ?? ""}`;
   const [placement, setPlacement] = useState<{
     readonly scope: string;
     readonly text: string;
@@ -51,7 +52,10 @@ export function useTaskCloudPlacement(input: TaskCloudPlacementInput) {
     const key = `${scope}\n${text}`;
     const existing = requestsRef.current.get(key);
     if (existing) return existing;
-    const call = suggest({ environmentId, input: { projectId, text } }).then((result) => {
+    const call = suggest({
+      environmentId,
+      input: { projectId, text, ...(worktreeBaseBranch ? { worktreeBaseBranch } : {}) },
+    }).then((result) => {
       if (result._tag === "Failure") return null;
       setPlacement({ scope, text, result: result.value });
       return result.value;
@@ -100,7 +104,8 @@ export function useTaskCloudPlacement(input: TaskCloudPlacementInput) {
       clearTimeout(timer);
       unsubscribe();
     };
-  }, [active, draftId, classifyWhileTyping]);
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- a new scope must classify the unchanged text again
+  }, [active, draftId, scope, classifyWhileTyping]);
 
   return {
     /** The latest answer for this draft, possibly for slightly older text. */

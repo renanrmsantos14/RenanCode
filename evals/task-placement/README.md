@@ -13,8 +13,8 @@ pnpm task-placement --model <codex model> --out runs/placement-one --case ios-si
 - It uses your local Codex login, like the server does.
 - `--samples <n>` (default 3). A case fails when half or more of its samples answer the wrong placement.
 - A run writes `results.json` (every answer and reason) and `summary.md`.
-- Cost: one short call per sample, about 1K input tokens each. A full run is 30 calls.
+- Cost: one short call per sample, about 1K input tokens each. A full run is 63 calls.
 
 ## Add a case
 
-Add an entry to `cases.ts` with an `id`, a `source`, the `task` text, and the `expected` placement. Keep ambiguous tasks out: the classifier answers `local` for those by design. Add a control on the other side for every new case.
+Add an entry to `cases.ts` with an `id`, a `source`, the `task` text, and the `expected` placement. Keep tasks that name no clear need out of the `local` side: the classifier answers `cloud` when nothing clearly requires this machine. Add a control on the other side for every new case.
