@@ -33,7 +33,13 @@ import * as ProjectFaviconResolver from "../project/ProjectFaviconResolver.ts";
 import * as T3ProjectFileLoader from "../project/T3ProjectFileLoader.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 import { assetFileResponse } from "../http.ts";
-import { ASSET_ROUTE_PREFIX, issueAssetUrl, readMcpAppHtml, resolveAsset } from "./AssetAccess.ts";
+import {
+  ASSET_DOWNLOAD_MAX_BYTES,
+  ASSET_ROUTE_PREFIX,
+  issueAssetUrl,
+  readMcpAppHtml,
+  resolveAsset,
+} from "./AssetAccess.ts";
 import * as NativeAppIconResolver from "./NativeAppIconResolver.ts";
 import { symlinksSupported } from "@t3tools/shared/testing/symlinks";
 import { fakeSourceControlDriverInstance } from "@t3tools/source-control-testing/fakeSourceControlDriver";
@@ -321,6 +327,23 @@ describe("AssetAccess", () => {
         },
       }).pipe(Effect.flip);
       expect(directoryError._tag).toBe("AssetWorkspaceAssetNotFoundError");
+      const hugePath = path.join(root, "huge.bin");
+      yield* fs.writeFileString(hugePath, "x");
+      yield* fs.truncate(hugePath, ASSET_DOWNLOAD_MAX_BYTES + 1);
+      const tooLarge = yield* issueAssetUrl({
+        resource: {
+          _tag: "media-file",
+          threadId: ThreadId.make("thread-1"),
+          path: "huge.bin",
+          disposition: "attachment",
+        },
+        workspaceRoot: root,
+      }).pipe(Effect.flip);
+      expect(tooLarge).toMatchObject({
+        _tag: "AssetDownloadTooLargeError",
+        sizeBytes: ASSET_DOWNLOAD_MAX_BYTES + 1,
+        maxBytes: ASSET_DOWNLOAD_MAX_BYTES,
+      });
     }).pipe(Effect.provide(layerTest)),
   );
 

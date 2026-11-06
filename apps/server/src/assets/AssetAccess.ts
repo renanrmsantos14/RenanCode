@@ -1,6 +1,7 @@
 import type { AssetResource } from "@t3tools/contracts";
 import {
   AssetAttachmentNotFoundError,
+  AssetDownloadTooLargeError,
   AssetSourceControlMediaUrlValidationError,
   AssetPreviewTypeValidationError,
   AssetProjectFaviconInspectionError,
@@ -65,6 +66,7 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 
 export const ASSET_ROUTE_PREFIX = "/api/assets";
 
+export const ASSET_DOWNLOAD_MAX_BYTES = 512 * 1024 * 1024;
 const ASSET_TOKEN_TTL_MS = 60 * 60 * 1000;
 const PROJECT_FAVICON_TOKEN_BUCKET_MS = 30 * 60 * 1000;
 const HTML_ATTACHMENT_TOKEN_BUCKET_MS = 30 * 60 * 1000;
@@ -403,6 +405,7 @@ const finalizeAbsoluteMediaFileAsset = Effect.fn("AssetAccess.finalizeAbsoluteMe
                 identity: { device: file.info.dev.toString(), inode: file.info.ino.toString() },
                 fileRevision: `${file.info.dev}:${file.info.ino}:${file.info.size}:${file.info.mtimeNs}:${file.info.ctimeNs}`,
                 dimensions,
+                sizeBytes: Number(file.info.size),
               }),
             ),
       ),
@@ -415,6 +418,13 @@ const finalizeAbsoluteMediaFileAsset = Effect.fn("AssetAccess.finalizeAbsoluteMe
       return yield* new AssetWorkspaceAssetNotFoundError({
         resource: input.resource,
         checkedPath: input.requestedPath,
+      });
+    }
+    if (download && opened.sizeBytes > ASSET_DOWNLOAD_MAX_BYTES) {
+      return yield* new AssetDownloadTooLargeError({
+        resource: input.resource,
+        sizeBytes: opened.sizeBytes,
+        maxBytes: ASSET_DOWNLOAD_MAX_BYTES,
       });
     }
     return {
@@ -657,6 +667,19 @@ export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (i
         input.resource.disposition === "inline" && extension !== null
           ? inlinePreviewMimeTypeForExtension(extension)
           : undefined;
+      if (isGenericFile && !isVideo && inlinePreviewMimeType === undefined) {
+        const sizeBytes = yield* fileSystem.stat(attachmentPath).pipe(
+          Effect.map((info) => Number(info.size)),
+          Effect.orElseSucceed(() => 0),
+        );
+        if (sizeBytes > ASSET_DOWNLOAD_MAX_BYTES) {
+          return yield* new AssetDownloadTooLargeError({
+            resource: input.resource,
+            sizeBytes,
+            maxBytes: ASSET_DOWNLOAD_MAX_BYTES,
+          });
+        }
+      }
       if (!isGenericFile) {
         imageDimensions = yield* fileSystem.realPath(attachmentPath).pipe(
           Effect.flatMap(readImageDimensionsFromHeader),

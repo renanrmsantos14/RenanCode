@@ -1,4 +1,8 @@
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+
+import * as DesktopAssets from "../app/DesktopAssets.ts";
+import { installFileDrag } from "../fileDrag.ts";
 
 import { receiveProviderAuthCallback, cancelProviderAuthCallback } from "./methods/providerAuth.ts";
 import * as DesktopIpc from "./DesktopIpc.ts";
@@ -83,6 +87,8 @@ import {
 export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers")(function* () {
   const ipc = yield* DesktopIpc.DesktopIpc;
   yield* installNotificationBadge();
+  const iconPaths = yield* (yield* DesktopAssets.DesktopAssets).iconPaths;
+  installFileDrag(Option.getOrUndefined(iconPaths.png));
   yield* PreviewIpc.installPreviewEventForwarding();
 
   yield* ipc.handle(AppActivationIpc.setReady);

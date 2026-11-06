@@ -14,6 +14,7 @@ import {
 } from "react";
 
 import { useAssetUrlRefresh, useAssetUrlState } from "../../assets/assetUrls";
+import { useFileDrag } from "../../assets/useFileDrag";
 import { cn } from "../../lib/utils";
 import { useRightPanelStore } from "../../rightPanelStore";
 import { MediaActions, type MediaActionSource } from "../media/MediaActions";
@@ -169,7 +170,13 @@ export function ChatMarkdownImage(props: {
   readonly actionsSource: MediaActionSource;
   readonly originalUrl?: string | undefined;
   readonly onImageExpand?: ((preview: ExpandedImagePreview) => void) | undefined;
+  readonly dragSource?: { readonly environmentId: EnvironmentId; readonly resource: AssetResource };
 }) {
+  const dragProps = useFileDrag(
+    props.dragSource?.environmentId ?? null,
+    props.dragSource?.resource ?? null,
+    props.alt.trim() || "image",
+  );
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const src = props.src ?? loadedSrc;
@@ -209,6 +216,7 @@ export function ChatMarkdownImage(props: {
           decoding="async"
           loading="lazy"
           draggable={false}
+          {...dragProps}
           className={cn(
             CHAT_MARKDOWN_IMAGE_SIZE_CLASS_NAME,
             props.className,
@@ -443,6 +451,13 @@ export const ChatMarkdownAssetImage = memo(function ChatMarkdownAssetImage(props
       actionsSource={actionsSource}
       originalUrl={props.originalUrl}
       onImageExpand={props.onImageExpand}
+      dragSource={{
+        environmentId: props.environmentId,
+        resource: {
+          ...props.resource,
+          ...(props.resource._tag === "media-file" ? { disposition: "attachment" as const } : {}),
+        },
+      }}
     />
   );
 });

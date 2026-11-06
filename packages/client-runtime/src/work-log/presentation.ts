@@ -527,7 +527,9 @@ function summaryActionPriority(action: ToolGroupAction | T3McpToolSummaryAction)
     case "environment-update":
     case "attachment-prepare":
     case "attachment-discard":
+    case "attachment-save":
     case "attachment-send":
+    case "file-send":
       return 0;
     case "other":
     case "update":

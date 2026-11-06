@@ -57,7 +57,9 @@ export type T3McpToolSummaryAction =
   | "environment-update"
   | "attachment-prepare"
   | "attachment-discard"
+  | "attachment-save"
   | "attachment-send"
+  | "file-send"
   | "link-pr"
   | "unlink-pr"
   | "list-prs"
@@ -369,6 +371,11 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
     ["Discard", "Discarding", "Discarded", "a pending attachment"],
     "attachment-discard",
   ),
+  t3_attachment_save_to_downloads: tool(
+    ["Save", "Saving", "Saved", "a file to Downloads"],
+    "attachment-save",
+  ),
+  t3_file_send: tool(["Send", "Sending", "Sent", "a file to a linked environment"], "file-send"),
   t3_thread_send_attachments: tool(["Send", "Sending", "Sent", "attachments"], "attachment-send"),
   html_preview: tool(["Preview", "Previewing", "Previewed", "an HTML page"], "html-preview"),
   html_render: tool(["Render", "Rendering", "Rendered", "an HTML page"], "html-render"),

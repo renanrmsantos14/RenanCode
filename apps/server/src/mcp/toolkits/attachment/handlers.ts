@@ -6,9 +6,12 @@ import {
 } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as AssetSigner from "../../../assets/AssetSigner.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as Upload from "../../../assets/AttachmentUpload.ts";
+import { saveToDownloads } from "../../../assets/SaveToDownloads.ts";
+import * as PeerFileTransfer from "../../../peer/PeerFileTransfer.ts";
 import * as Claims from "../../../orchestration-v2/AttachmentClaims.ts";
 import * as ThreadMessageIntake from "../../../orchestration-v2/ThreadMessageIntake.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
@@ -45,6 +48,8 @@ const uploadOwner = McpInvocationContext.McpInvocationContext.pipe(
 export const layer = McpToolAccess.toLayer(
   AttachmentToolkit,
   Effect.gen(function* () {
+    // Optional so the toolkit builds where no environment is linked.
+    const transfer = yield* Effect.serviceOption(PeerFileTransfer.PeerFileTransfer);
     const assetSigner = yield* AssetSigner.AssetSigner;
     const uploadOwners = new Map<string, { readonly owner: string; readonly issuedAt: number }>();
     return {
@@ -80,6 +85,35 @@ export const layer = McpToolAccess.toLayer(
             return {};
           }),
         { linkedCallers: "allowed" },
+      ),
+      // Writes outside T3's state, so a fenced link may not.
+      t3_attachment_save_to_downloads: McpToolAccess.writes((input) =>
+        Effect.gen(function* () {
+          if (uploadOwners.get(input.attachmentId)?.owner !== (yield* uploadOwner)) {
+            return yield* new OrchestratorMcpFailure({
+              code: "invalid_request",
+              message: "Only the caller that prepared a pending upload can save it.",
+            });
+          }
+          const path = yield* saveToDownloads(input.attachmentId, input.fileName);
+          uploadOwners.delete(input.attachmentId);
+          return { path };
+        }),
+      ),
+      // Reads this host's disk, so a fenced link may not.
+      t3_file_send: McpToolAccess.writes((input) =>
+        Effect.gen(function* () {
+          if (Option.isNone(transfer)) {
+            return yield* new OrchestratorMcpFailure({
+              code: "orchestration_error",
+              message: "This environment cannot reach linked environments.",
+            });
+          }
+          return yield* transfer.value.send(
+            yield* McpInvocationContext.McpInvocationContext,
+            input,
+          );
+        }),
       ),
       t3_thread_send_attachments: McpToolAccess.writesThreads(
         (input) => [input.threadId],

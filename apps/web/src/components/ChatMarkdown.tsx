@@ -895,6 +895,7 @@ function useChatMarkdownState({
             : undefined
         }
         revealLabel={revealInFileManagerLabel}
+        downloadPath={threadRef ? mediaPath : undefined}
         onOpenInBrowser={
           threadRef &&
           canOperatePreview &&
