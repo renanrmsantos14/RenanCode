@@ -241,6 +241,8 @@ export function composerCommandKeyHandler(input: {
       !event.ctrlKey
     ) {
       replacePromptFromHistory(nextActionSuggestion);
+      // Sending clears the composer before the new run lands, which would bring the accepted text back.
+      dismissNextActionSuggestion();
       return true;
     }
     if (key === "Escape") {

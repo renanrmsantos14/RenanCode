@@ -547,6 +547,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     onMultipleModelSelectionsChange: setMultipleModelSelections,
     activeThreadId,
     activeThread,
+    activeThreadShell,
     promptHistoryEntries,
     forceExpandedOnMobile,
     projectSelectionRequired,
@@ -1231,20 +1232,18 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const isChoiceOnlyPendingQuestion =
     activePendingProgress?.activeQuestion?.allowCustomAnswer === false;
   const nextAction = useNextActionSuggestion({
-    enabled: settings.nextActionSuggestionsEnabled,
-    environmentId,
-    thread: activeThread,
-    prompt,
-    promptRef,
+    threadRef: activeThreadShell === null ? null : routeThreadRef,
+    promptEmpty: prompt.length === 0,
   });
-  const nextActionGhost =
+  const nextActionBlocked =
     isComposerApprovalState ||
     activePendingProgress ||
     (showPlanFollowUpPrompt && activeProposedPlan) ||
     projectSelectionRequired ||
-    showProviderUnavailable
-      ? null
-      : nextAction.suggestion;
+    showProviderUnavailable;
+  const nextActionGhost =
+    !nextActionBlocked && nextAction.display?.status === "ready" ? nextAction.display.text : null;
+  const nextActionPending = !nextActionBlocked && nextAction.display?.status === "pending";
   const showComposerTopDrawer =
     pendingUserInputs.length > 0 ||
     (!isComposerCollapsedMobile && showPlanFollowUpPrompt && activeProposedPlan !== null);
@@ -3600,7 +3599,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                               ? "Choose a project above to start a thread"
                               : showProviderUnavailable
                                 ? "Enable a provider in Settings to send a message"
-                                : (nextActionGhost ?? DEFAULT_COMPOSER_PLACEHOLDER)
+                                : (nextActionGhost ??
+                                  (nextActionPending
+                                    ? "Sugerindo\u2026"
+                                    : DEFAULT_COMPOSER_PLACEHOLDER))
                     }
                     placeholderHint={nextActionGhost ? <Kbd>Tab</Kbd> : null}
                     disabled={

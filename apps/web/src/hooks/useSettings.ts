@@ -40,6 +40,7 @@ import {
 } from "~/themePalette";
 import {
   modelPreferencesMigrationPatch,
+  nextActionSuggestionsMigrationPatch,
   resolveModelPreferences,
 } from "@t3tools/shared/serverSettings";
 import * as Equal from "effect/Equal";
@@ -315,6 +316,8 @@ export function mergeEnvironmentSettings(
     ...clientSettings,
     ...serverSettings,
     ...resolveModelPreferences(serverSettings, clientSettings),
+    nextActionSuggestionsEnabled:
+      serverSettings.nextActionSuggestionsEnabled ?? clientSettings.nextActionSuggestionsEnabled,
   };
 }
 
@@ -348,8 +351,10 @@ function migrateModelPreferences(): void {
     modelPreferencesMigrationTargetsAtom,
   )) {
     if (attemptedMigrationGenerations.get(environmentId) === generation) continue;
-    const patch = modelPreferencesMigrationPatch(settings, clientSettingsSnapshot);
-    if (!patch) continue;
+    const modelPatch = modelPreferencesMigrationPatch(settings, clientSettingsSnapshot);
+    const suggestionPatch = nextActionSuggestionsMigrationPatch(settings, clientSettingsSnapshot);
+    if (!modelPatch && !suggestionPatch) continue;
+    const patch = { ...modelPatch, ...suggestionPatch };
     attemptedMigrationGenerations.set(environmentId, generation);
     void runAtomCommand(
       appAtomRegistry,

@@ -123,6 +123,9 @@ function summarizeThreadRun(
     ...(turnStatus === undefined || turnStatus === "pending" || turnStatus === "running"
       ? {}
       : { turnEnded: true }),
+    ...(run.nextActionSuggestion === undefined
+      ? {}
+      : { nextActionSuggestion: run.nextActionSuggestion }),
     ...(run.sourcePlanRef === undefined ? {} : { sourcePlanRef: run.sourcePlanRef }),
   };
 }

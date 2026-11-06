@@ -723,3 +723,14 @@ export function modelPreferencesMigrationPatch(
         },
       };
 }
+
+/** A client's saved "on" claims a server that was never asked; "off" is already the default. */
+export function nextActionSuggestionsMigrationPatch(
+  settings: Pick<ServerSettings, "nextActionSuggestionsEnabled">,
+  legacy: { readonly nextActionSuggestionsEnabled?: boolean | undefined },
+): ServerSettingsPatch | null {
+  return settings.nextActionSuggestionsEnabled === null &&
+    legacy.nextActionSuggestionsEnabled === true
+    ? { nextActionSuggestionsEnabled: true }
+    : null;
+}

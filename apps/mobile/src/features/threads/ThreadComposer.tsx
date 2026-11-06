@@ -462,11 +462,10 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     (queuedEdit?.existingAttachments.length ?? 0) > 0;
   const nextAction = useNextActionSuggestion({
     environmentId: props.environmentId,
-    thread: props.selectedThread,
-    draftKey: composerDraftKey,
-    draftText: draftMessage,
+    threadId: props.isDraft ? null : props.selectedThread.id,
+    promptEmpty: !hasContent,
   });
-  const nextActionSuggestion = props.isDraft || hasContent ? null : nextAction.suggestion;
+  const nextActionSuggestion = nextAction.display;
   const stripAttachments = composerStripAttachments(draftAttachments);
   const showStopAction = !hasContent && props.canStopThread && queuedEdit === null;
   const onResumeQueue = props.onResumeQueue;
@@ -767,17 +766,25 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
         <View className="flex-row items-center gap-1 px-[14px] pt-2">
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Use suggested message: ${nextActionSuggestion}`}
+            accessibilityLabel={
+              nextActionSuggestion.status === "ready"
+                ? `Use suggested message: ${nextActionSuggestion.text}`
+                : "Sugerindo uma mensagem"
+            }
             accessibilityHint="Puts the suggestion in the composer without sending"
+            disabled={nextActionSuggestion.status !== "ready"}
             className="min-w-0 flex-1 rounded-full bg-subtle px-3 py-1.5 active:opacity-70"
             onPress={() => {
-              props.onChangeDraftMessage(nextActionSuggestion);
+              if (nextActionSuggestion.status !== "ready") return;
+              props.onChangeDraftMessage(nextActionSuggestion.text);
               nextAction.dismiss();
               inputRef.current?.focus();
             }}
           >
             <Text numberOfLines={1} className="text-sm text-foreground-muted">
-              {nextActionSuggestion}
+              {nextActionSuggestion.status === "ready"
+                ? nextActionSuggestion.text
+                : "Sugerindo\u2026"}
             </Text>
           </Pressable>
           <Pressable

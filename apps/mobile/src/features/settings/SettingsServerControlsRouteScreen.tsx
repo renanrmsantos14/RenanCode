@@ -394,6 +394,19 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
                     onValueChange={(value) => write({ enableAgentBrowserAccess: value })}
                   />
                 </SettingsSection>
+                <SettingsSection title="After a turn">
+                  <SettingsSwitchRow
+                    icon="sparkles"
+                    label="Suggest next message"
+                    subtitle={managedSubtitle(
+                      "nextActionSuggestionsEnabled",
+                      "Offer a likely next message when a turn finishes. Each suggestion is a small request to the text generation model.",
+                    )}
+                    value={uniform("nextActionSuggestionsEnabled") === true}
+                    disabled={disabledFor("nextActionSuggestionsEnabled")}
+                    onValueChange={(value) => write({ nextActionSuggestionsEnabled: value })}
+                  />
+                </SettingsSection>
                 <AutoSettleSettingsRows write={write} pending={pendingWrites > 0} />
               </>
             ) : null}

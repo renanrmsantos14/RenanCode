@@ -1,39 +1,49 @@
-import type { OrchestrationV2RunStatus } from "@t3tools/contracts";
+import type { ThreadRunSummary } from "./models.ts";
 
-/** What a composer last saw of a thread's latest run. */
-export interface NextActionRunObservation {
-  readonly threadKey: string;
-  readonly runId: string | null;
-  readonly status: OrchestrationV2RunStatus | null;
-}
+export type NextActionDisplay =
+  | { readonly status: "pending" }
+  | { readonly status: "ready"; readonly text: string };
 
 /**
- * A suggestion is requested only when this client watched the latest run finish, so opening
- * or switching to an already finished thread costs nothing.
+ * What the composer shows for a thread's latest run. Typing only hides the suggestion, so
+ * clearing the draft brings it back; a dismissal is final for that run.
  */
-export function shouldRequestNextAction(
-  previous: NextActionRunObservation | null,
-  current: NextActionRunObservation,
-): boolean {
-  return (
-    previous !== null &&
-    previous.threadKey === current.threadKey &&
-    current.runId !== null &&
-    current.status === "completed" &&
-    (previous.runId !== current.runId || previous.status !== "completed")
-  );
+export function resolveNextActionDisplay(input: {
+  readonly run: Pick<ThreadRunSummary, "status" | "nextActionSuggestion"> | null;
+  readonly dismissed: boolean;
+  readonly promptEmpty: boolean;
+}): NextActionDisplay | null {
+  const suggestion = input.run?.nextActionSuggestion;
+  if (
+    input.run?.status !== "completed" ||
+    suggestion === undefined ||
+    suggestion.status === "none" ||
+    input.dismissed ||
+    !input.promptEmpty
+  ) {
+    return null;
+  }
+  return suggestion;
 }
 
-/** A suggestion is stale once the thread moved on or the user started typing. */
-export function isNextActionSuggestionCurrent(
-  requestedFor: NextActionRunObservation,
-  current: NextActionRunObservation,
-  prompt: string,
-): boolean {
-  return (
-    requestedFor.threadKey === current.threadKey &&
-    requestedFor.runId === current.runId &&
-    current.status === "completed" &&
-    prompt.length === 0
-  );
+export const nextActionDismissalKey = (threadKey: string, runId: string): string =>
+  `${threadKey}:${runId}`;
+
+const dismissed = new Set<string>();
+const listeners = new Set<() => void>();
+
+/** Device-local: Esc on one client does not hide the suggestion on another. */
+export function dismissNextAction(key: string): void {
+  if (dismissed.has(key)) return;
+  dismissed.add(key);
+  for (const listener of listeners) listener();
+}
+
+export const isNextActionDismissed = (key: string): boolean => dismissed.has(key);
+
+export function subscribeNextActionDismissals(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }

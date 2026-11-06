@@ -1,91 +1,75 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import {
-  isNextActionSuggestionCurrent,
-  type NextActionRunObservation,
-  shouldRequestNextAction,
+  dismissNextAction,
+  isNextActionDismissed,
+  nextActionDismissalKey,
+  resolveNextActionDisplay,
+  subscribeNextActionDismissals,
+  type NextActionDisplay,
 } from "@t3tools/client-runtime/state/next-action-suggestion";
-import type { EnvironmentId } from "@t3tools/contracts";
+import { deriveLatestThreadRun } from "@t3tools/client-runtime/state/thread-execution";
+import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { nextActionSuggestionsMigrationPatch } from "@t3tools/shared/serverSettings";
 import { AsyncResult } from "effect/reactivity";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
+import { environmentCatalog } from "../../connection/catalog";
 import { mobilePreferencesAtom } from "../../state/preferences";
-import { threadEnvironment } from "../../state/threads";
+import { useEnvironmentQuery } from "../../state/query";
+import { environmentServerConfigsAtom, serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { getComposerDraftSnapshot } from "../../state/use-composer-drafts";
+import { useQuietThreadStructure } from "../../state/use-thread-detail";
 
-interface Suggestion {
-  readonly requestedFor: NextActionRunObservation;
-  readonly text: string;
-}
+const attemptedMigrationGenerations = new Map<EnvironmentId, number>();
 
-/** Suggested next message, requested when a turn this composer watched completes. */
+/**
+ * Suggested next message the server stored on the thread's latest run. Only the thread detail
+ * carries it; the shell's latest run does not.
+ */
 export function useNextActionSuggestion(input: {
   readonly environmentId: EnvironmentId;
-  readonly thread: EnvironmentThreadShell;
-  readonly draftKey: string;
-  readonly draftText: string;
-}): { readonly suggestion: string | null; readonly dismiss: () => void } {
-  const { environmentId, thread, draftKey, draftText } = input;
+  readonly threadId: ThreadId | null;
+  readonly promptEmpty: boolean;
+}): { readonly display: NextActionDisplay | null; readonly dismiss: () => void } {
+  const { environmentId, threadId, promptEmpty } = input;
   const preferences = useAtomValue(mobilePreferencesAtom);
-  const enabled =
-    AsyncResult.isSuccess(preferences) && preferences.value.nextActionSuggestionsEnabled === true;
-  const canSuggest = useAtomValue(
-    threadEnvironment.suggestNextAction.permissionAtom(environmentId),
-  );
-  const suggestNextAction = useAtomCommand(threadEnvironment.suggestNextAction, {
+  const configs = useAtomValue(environmentServerConfigsAtom);
+  const settings = configs.get(environmentId)?.settings;
+  const connection = useEnvironmentQuery(environmentCatalog.stateAtom(environmentId)).data;
+  const connectionGeneration = connection?.phase === "connected" ? connection.generation : null;
+  const saveSettings = useAtomCommand(serverEnvironment.updateSettings, {
+    label: "next action suggestions migration",
     reportFailure: false,
   });
-  const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
-  const previousRef = useRef<NextActionRunObservation | null>(null);
+  const legacyEnabled = AsyncResult.isSuccess(preferences)
+    ? preferences.value.nextActionSuggestionsEnabled
+    : undefined;
 
-  const threadId = thread.id;
-  const threadKey = `${environmentId}:${threadId}`;
-  const runId = thread.latestRun?.runId ?? null;
-  const status = thread.latestRun?.status ?? null;
-  const current: NextActionRunObservation = { threadKey, runId, status };
-
-  if (suggestion && !isNextActionSuggestionCurrent(suggestion.requestedFor, current, draftText)) {
-    setSuggestion(null);
-  }
-
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- requests a server suggestion when a watched run finishes; cleanup drops replies for a superseded run.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- writes the one-time legacy toggle migration to server settings once per connection
   useEffect(() => {
-    const observation: NextActionRunObservation = { threadKey, runId, status };
-    const previous = previousRef.current;
-    previousRef.current = observation;
-    const draftIsEmpty = () => getComposerDraftSnapshot(draftKey).text.length === 0;
     if (
-      !enabled ||
-      !canSuggest ||
-      !draftIsEmpty() ||
-      !shouldRequestNextAction(previous, observation)
-    ) {
+      !settings ||
+      connectionGeneration === null ||
+      attemptedMigrationGenerations.get(environmentId) === connectionGeneration
+    )
       return;
-    }
-    let superseded = false;
-    void suggestNextAction({ environmentId, input: { threadId } }).then((result) => {
-      if (superseded || result._tag !== "Success" || result.value.suggestion.length === 0) return;
-      if (!draftIsEmpty()) return;
-      setSuggestion({ requestedFor: observation, text: result.value.suggestion });
+    const patch = nextActionSuggestionsMigrationPatch(settings, {
+      nextActionSuggestionsEnabled: legacyEnabled,
     });
-    return () => {
-      superseded = true;
-    };
-  }, [
-    enabled,
-    canSuggest,
-    environmentId,
-    threadId,
-    threadKey,
-    runId,
-    status,
-    draftKey,
-    suggestNextAction,
-  ]);
+    if (!patch) return;
+    attemptedMigrationGenerations.set(environmentId, connectionGeneration);
+    void saveSettings({ environmentId, input: { patch } });
+  }, [connectionGeneration, environmentId, legacyEnabled, saveSettings, settings]);
 
-  return {
-    suggestion: enabled ? (suggestion?.text ?? null) : null,
-    dismiss: () => setSuggestion(null),
+  const structure = useQuietThreadStructure(threadId === null ? null : { environmentId, threadId });
+  const run = structure === null ? null : deriveLatestThreadRun(structure.projection);
+  const key = run ? nextActionDismissalKey(`${environmentId}:${threadId}`, run.runId) : null;
+  const dismissed = useSyncExternalStore(subscribeNextActionDismissals, () =>
+    key === null ? false : isNextActionDismissed(key),
+  );
+  const dismiss = () => {
+    if (key !== null) dismissNextAction(key);
   };
+
+  return { display: resolveNextActionDisplay({ run, dismissed, promptEmpty }), dismiss };
 }
