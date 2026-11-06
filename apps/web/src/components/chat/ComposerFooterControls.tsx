@@ -1,4 +1,5 @@
 import type {
+  EnvironmentId,
   ModelSelection,
   ProviderInstanceId,
   ProviderInteractionMode,
@@ -12,6 +13,7 @@ import type { ContextWindowSnapshot } from "@t3tools/client-runtime/state/contex
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import { Menu, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { ClaudeUsageIndicator, type ClaudeUsageDetailControl } from "./ClaudeUsageIndicator";
 import { ComposerControl, ComposerControlIcon } from "./ComposerControl";
 import { focusRequestedPermission, useComposerMenuProps } from "./composerEventScope";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
@@ -240,6 +242,8 @@ export function ComposerPermissionsSection(props: {
 
 export const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(props: {
   children?: React.ReactNode;
+  environmentId: EnvironmentId;
+  usageDetail: ClaudeUsageDetailControl;
   compact: boolean;
   canOperateThread: boolean;
   activeContextWindow: ContextWindowSnapshot | null;
@@ -283,6 +287,11 @@ export const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryA
 }) {
   return (
     <>
+      <ClaudeUsageIndicator
+        environmentId={props.environmentId}
+        compact={props.compact}
+        detail={props.usageDetail}
+      />
       {props.activeContextWindow ? (
         <ContextWindowMeter
           usage={props.activeContextWindow}

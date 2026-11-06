@@ -14,12 +14,24 @@ import {
   sameUsageLimitCommandCoverage,
   withUsageLimitsCommands,
   collectLimitAccounts,
+  limitAccountsBesideClaude,
   collectExternalUsageLinks,
   collectLimitNotices,
   collectLimitPools,
   elapsedShare,
   exhaustedUsageWindow,
+  claudeGoalSummary,
+  forecastText,
+  limitInstanceName,
+  weeklyBarLabel,
+  claudeAccountValue,
+  claudeWeeklyReading,
+  formatAgo,
+  formatGoalZoneInstant,
+  goalPercent,
   paceOf,
+  exhaustionForecast,
+  selectClaudeUsageAccounts,
   paceRemainingPercent,
   usesChatGptSharing,
   resolveNewThreadModelSelection,
@@ -434,6 +446,18 @@ describe("pools", () => {
       input: { sourceId: "hub", accountId: "claude-same@example.com.json", creditId: "hub-credit" },
     });
     expect(account?.limits.resetCredits?.availableCount).toBe(3);
+
+    const [selected] = selectClaudeUsageAccounts({
+      providers: [native],
+      sources: input.get(EnvironmentId.make("env-a"))?.serverConfig.usageLimitSources,
+      now: Date.parse(checkedAt),
+    });
+    expect(selected?.resetCreditInput).toEqual({
+      sourceId: "hub",
+      accountId: "claude-same@example.com.json",
+      creditId: "hub-credit",
+    });
+    expect(limitAccountsBesideClaude(collectLimitAccounts(input))).toEqual([]);
   });
 
   it("redeems on the environment whose snapshot supplied the credits on show", () => {
@@ -645,6 +669,11 @@ describe("pools", () => {
       "env-a:codex",
       "hub:claude.json",
     ]);
+    expect(
+      limitAccountsBesideClaude(collectLimitAccounts(withOther(unreadable))).map(
+        (account) => account.key,
+      ),
+    ).toContain("hub:claude.json");
   });
 
   it("keys a hub account without an email by hub, so two environments on one hub share it", () => {
@@ -1504,5 +1533,246 @@ describe("ChatGPT sharing presentation", () => {
         auth: { status: "unauthenticated", subscriptionSharing: true },
       }),
     ).toBe(false);
+  });
+});
+
+describe("weekly goal", () => {
+  // Cycles are anchored on the next reset; America/Sao_Paulo is UTC-3 all year.
+  const thursdayReset = "2026-09-17T18:00:00.000Z";
+  const saturdayReset = "2026-09-19T15:00:00.000Z";
+  const sundayReset = "2026-09-20T15:00:00.000Z";
+
+  it.each([
+    [
+      "Thu reset: reset day counts as the 1st, even before the reset hour",
+      thursdayReset,
+      "2026-09-10T00:05:00-03:00",
+      20,
+    ],
+    ["Thu reset: Thursday afternoon", thursdayReset, "2026-09-10T15:30:00-03:00", 20],
+    ["Fri", thursdayReset, "2026-09-11T09:00:00-03:00", 40],
+    ["Sat keeps Friday's goal", thursdayReset, "2026-09-12T09:00:00-03:00", 40],
+    ["Sun keeps Friday's goal", thursdayReset, "2026-09-13T23:59:59-03:00", 40],
+    ["Mon", thursdayReset, "2026-09-14T00:00:00-03:00", 60],
+    ["Tue", thursdayReset, "2026-09-15T12:00:00-03:00", 80],
+    ["Wed", thursdayReset, "2026-09-16T12:00:00-03:00", 100],
+    ["Thu morning before the reset stays capped", thursdayReset, "2026-09-17T08:00:00-03:00", 100],
+    ["Sat reset: Saturday", saturdayReset, "2026-09-12T10:00:00-03:00", 0],
+    ["Sat reset: Sunday", saturdayReset, "2026-09-13T23:59:00-03:00", 0],
+    ["Sat reset: Monday", saturdayReset, "2026-09-14T00:00:00-03:00", 20],
+    ["Sat reset: next Friday", saturdayReset, "2026-09-18T20:00:00-03:00", 100],
+    ["Sun reset: Sunday", sundayReset, "2026-09-13T12:00:00-03:00", 0],
+    ["Sun reset: Monday", sundayReset, "2026-09-14T12:00:00-03:00", 20],
+  ] as const)("%s", (_name, resetsAt, at, expected) => {
+    expect(goalPercent({ resetsAt, now: Date.parse(at) })).toBe(expected);
+  });
+
+  it("follows the local day, not the UTC day", () => {
+    // 02:59Z Monday is still Sunday night in Sao Paulo; 03:00Z is Monday.
+    expect(goalPercent({ resetsAt: thursdayReset, now: Date.parse("2026-09-14T02:59:59Z") })).toBe(
+      40,
+    );
+    expect(goalPercent({ resetsAt: thursdayReset, now: Date.parse("2026-09-14T03:00:00Z") })).toBe(
+      60,
+    );
+    // A reset at 01:00Z Friday is still Thursday locally and counts as day 1 of its cycle.
+    expect(
+      goalPercent({
+        resetsAt: "2026-09-18T01:00:00Z",
+        now: Date.parse("2026-09-10T12:00:00-03:00"),
+      }),
+    ).toBe(20);
+    expect(
+      goalPercent({
+        resetsAt: thursdayReset,
+        now: Date.parse("2026-09-10T00:30:00Z"),
+        timeZone: "UTC",
+      }),
+    ).toBe(20);
+  });
+
+  it("returns null for invalid dates or time zones", () => {
+    expect(goalPercent({ resetsAt: "soon", now })).toBeNull();
+    expect(goalPercent({ resetsAt: thursdayReset, now: Number.NaN })).toBeNull();
+    expect(goalPercent({ resetsAt: thursdayReset, now, timeZone: "Not/AZone" })).toBeNull();
+  });
+});
+
+describe("projected exhaustion", () => {
+  // Reset Wed 2026-11-11 06:00 São Paulo (UTC-3); the cycle began Wed 11/04 06:00.
+  const weekly = {
+    id: "seven_day",
+    kind: "weekly",
+    label: "Weekly",
+    usedPercent: 37,
+    windowDurationMins: 10_080,
+    resetsAt: "2026-11-11T09:00:00.000Z",
+  } as const;
+  const projectedExhaustAt = (
+    window: Parameters<typeof exhaustionForecast>[0],
+    now: number,
+  ): number | undefined => {
+    const forecast = exhaustionForecast(window, now);
+    return forecast.kind === "at" ? forecast.at : undefined;
+  };
+  const at = (iso: string, usedPercent: number) =>
+    projectedExhaustAt({ ...weekly, usedPercent }, Date.parse(iso));
+
+  it("projects over business time only: Friday noon at 37% does not run out before the reset", () => {
+    // 2.26 business days elapsed -> 16.4%/day; 3.85 days needed, only 2.74 left.
+    expect(at("2026-11-06T15:10:00Z", 37)).toBeUndefined();
+    expect(exhaustionForecast(weekly, Date.parse("2026-11-06T15:10:00Z"))).toEqual({
+      kind: "safe",
+    });
+  });
+
+  it("skips the weekend when the pace runs out on a Tuesday", () => {
+    const next = { ...weekly, resetsAt: "2026-11-18T09:00:00.000Z" };
+    // 54 business hours at 54% -> 1%/h; Fri noon + 12h, Monday + 24h, Tuesday 10:00.
+    expect(
+      projectedExhaustAt({ ...next, usedPercent: 54 }, Date.parse("2026-11-13T15:00:00Z")),
+    ).toBe(Date.parse("2026-11-17T13:00:00Z"));
+  });
+
+  it("keeps the pace on a weekend instead of diluting it", () => {
+    const next = { ...weekly, resetsAt: "2026-11-18T09:00:00.000Z", usedPercent: 60 };
+    const saturdayNoon = projectedExhaustAt(next, Date.parse("2026-11-14T15:00:00Z"));
+    expect(saturdayNoon).toBe(Date.parse("2026-11-17T23:00:00Z"));
+    expect(projectedExhaustAt(next, Date.parse("2026-11-14T23:00:00Z"))).toBe(saturdayNoon);
+  });
+
+  it("gives no estimate without business-time history, usage, a reset, or headroom", () => {
+    const sundayCycle = { ...weekly, resetsAt: "2026-11-21T09:00:00.000Z", usedPercent: 10 };
+    // 30 calendar hours in, zero business time.
+    expect(projectedExhaustAt(sundayCycle, Date.parse("2026-11-15T15:00:00Z"))).toBeUndefined();
+    expect(exhaustionForecast(sundayCycle, Date.parse("2026-11-15T15:00:00Z"))).toEqual({
+      kind: "unknown",
+    });
+    expect(at("2026-11-06T15:10:00Z", 0)).toBeUndefined();
+    expect(at("2026-11-06T15:10:00Z", 100)).toBeUndefined();
+    expect(at("2026-11-04T10:00:00Z", 30)).toBeUndefined();
+    const { resetsAt: _resetsAt, ...undated } = weekly;
+    expect(projectedExhaustAt(undated, Date.parse("2026-11-06T15:10:00Z"))).toBeUndefined();
+  });
+});
+
+describe("Claude account selection", () => {
+  const claude = (instanceId: string, overrides: Partial<ServerProvider> = {}) =>
+    provider({
+      instanceId: ProviderInstanceId.make(instanceId),
+      driver: ProviderDriverKind.make("claudeAgent"),
+      auth: { status: "authenticated", email: `${instanceId}@example.com` },
+      ...overrides,
+    });
+  const limits = (checkedAt: string) => ({
+    checkedAt,
+    windows: [
+      { ...window, usedPercent: 12 },
+      {
+        id: "seven_day",
+        kind: "weekly" as const,
+        label: "Weekly",
+        usedPercent: 50,
+        windowDurationMins: 10_080,
+        resetsAt: "2026-09-17T18:00:00.000Z",
+      },
+      {
+        id: "seven_day_fable",
+        kind: "weekly" as const,
+        label: "Weekly · Fable",
+        usedPercent: 70,
+        windowDurationMins: 10_080,
+      },
+    ],
+  });
+  const at = Date.parse("2026-09-14T15:00:00Z");
+
+  it("lists enabled Claude instances in a stable order with goal, staleness and last error", () => {
+    const accounts = selectClaudeUsageAccounts({
+      now: at,
+      providers: [
+        claude("claudeAgent_claude_renan", {
+          displayName: "Renan",
+          accentColor: "#ff8800",
+          usageLimits: {
+            ...limits("2026-09-14T14:55:00.000Z"),
+            lastError: { at: "2026-09-14T14:59:00.000Z", reason: "rateLimited" },
+          },
+        }),
+        claude("claudeAgent", { usageLimits: limits("2026-09-14T14:58:00.000Z") }),
+        claude("claudeAgent_off", {
+          enabled: false,
+          usageLimits: limits("2026-09-14T14:58:00.000Z"),
+        }),
+        provider({ usageLimits: limits("2026-09-14T14:58:00.000Z") }),
+      ],
+    });
+    expect(accounts.map((account) => account.instanceId)).toEqual([
+      "claudeAgent",
+      "claudeAgent_claude_renan",
+    ]);
+    expect(accounts[0]).toMatchObject({
+      label: "Claude",
+      accentColor: undefined,
+      goal: 60,
+      stale: false,
+      limits: { checkedAt: "2026-09-14T14:58:00.000Z" },
+      weekly: { id: "seven_day" },
+      session: { id: "five_hour" },
+      scoped: [{ id: "seven_day_fable" }],
+      resetCreditInput: { instanceId: "claudeAgent" },
+    });
+    expect(accounts[1]).toMatchObject({
+      label: "Renan",
+      accentColor: "#ff8800",
+      stale: true,
+      limits: { lastError: { reason: "rateLimited" } },
+    });
+  });
+
+  it("returns nothing when no Claude instance is available", () => {
+    expect(selectClaudeUsageAccounts({ now: at, providers: [provider({})] })).toEqual([]);
+  });
+
+  it("reads the weekly window as used percent against today's goal", () => {
+    const [account] = selectClaudeUsageAccounts({
+      now: at,
+      providers: [claude("claudeAgent", { usageLimits: limits("2026-09-14T14:58:00.000Z") })],
+    });
+    expect(account && claudeWeeklyReading(account)).toEqual({ used: 50, goal: 60, over: false });
+    expect(claudeWeeklyReading({ weekly: account?.weekly, goal: 40 })).toMatchObject({
+      over: true,
+    });
+    expect(claudeWeeklyReading({ weekly: undefined, goal: 40 })).toBeNull();
+    expect(account?.weekly && claudeGoalSummary(account.weekly, at)).toBe(
+      "Used 50% · today's goal 60%",
+    );
+    expect(account?.weekly && claudeGoalSummary(account.weekly, at, null)).toBe("Used 50%");
+    expect(weeklyBarLabel({ used: 50, goal: 60 })).toBe("Weekly: 50% used, today's goal 60%");
+    expect(weeklyBarLabel({ used: 50, goal: null })).toBe("Weekly: 50% used");
+    const at9 = (ms: number) => `@${ms}`;
+    expect(forecastText({ kind: "at", at: 5 }, at9)).toBe("Projected to run out @5");
+    expect(forecastText({ kind: "safe" }, at9)).toBe("Not projected to run out before the reset");
+    expect(forecastText(undefined, at9)).toBe("Not enough use yet to project");
+    const named = { displayName: " Renan ", email: "r@x.com" } as LimitAccount;
+    expect(limitInstanceName(named, "Claude")).toBe("Renan");
+    expect(limitInstanceName(named, "renan")).toBeNull();
+    expect(limitInstanceName({ email: "r@x.com" } as LimitAccount, "Codex")).toBe("r@x.com");
+    expect(limitInstanceName({} as LimitAccount, "Codex")).toBeNull();
+    expect(claudeAccountValue({ weekly: account?.weekly, goal: 60 })).toBe("50/60");
+    expect(claudeAccountValue({ weekly: account?.weekly, goal: null })).toBe("50%");
+    expect(claudeAccountValue({ weekly: undefined, goal: 60 })).toBe("n/a");
+  });
+
+  it("labels ages and São Paulo instants", () => {
+    const now = Date.parse("2026-09-10T15:00:00.000Z");
+    expect(formatAgo("2026-09-10T14:46:00.000Z", now)).toBe("14m ago");
+    expect(formatAgo("2026-09-10T14:59:50.000Z", now)).toBe("just now");
+    expect(formatAgo("2026-09-10T10:00:00.000Z", now)).toBe("5h ago");
+    expect(formatGoalZoneInstant(Date.parse("2026-09-10T21:30:00.000Z"), now)).toBe("today 18:30");
+    expect(formatGoalZoneInstant(Date.parse("2026-09-11T12:00:00.000Z"), now)).toBe(
+      "tomorrow 09:00",
+    );
+    expect(formatGoalZoneInstant(Date.parse("2026-09-14T12:00:00.000Z"), now)).toBe("Mon 09:00");
   });
 });

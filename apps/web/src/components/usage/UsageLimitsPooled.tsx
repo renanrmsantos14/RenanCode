@@ -13,6 +13,7 @@ import {
   type LimitPoolWindow,
   paceRemainingPercent,
   remainingPercent,
+  claudeGoalSummary,
 } from "@t3tools/shared/usageLimits";
 import type { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 import { normalizeProviderAccentColor } from "@t3tools/client-runtime/state/provider-instance-display";
@@ -534,12 +535,14 @@ function PoolWindowCard({
   now,
   label,
   description,
+  goalLines,
 }: {
   readonly pool: LimitPoolWindow;
   readonly color: string;
   readonly now: number;
   readonly label?: string | undefined;
   readonly description?: string | undefined;
+  readonly goalLines?: readonly { readonly key: string; readonly text: string }[] | undefined;
 }) {
   const nextRefill = pool.resets.find((reset) => reset.restoresPercent > 0);
   return (
@@ -565,6 +568,11 @@ function PoolWindowCard({
       {description ? (
         <p className="text-xs text-muted-foreground md:col-span-2">{description}</p>
       ) : null}
+      {goalLines?.map((line) => (
+        <p key={line.key} className="text-xs text-muted-foreground tabular-nums md:col-span-2">
+          {line.text}
+        </p>
+      ))}
     </div>
   );
 }
@@ -595,6 +603,21 @@ function PoolSection({ pool, now }: { readonly pool: LimitPool; readonly now: nu
             now={now}
             label={details?.label}
             description={details?.description}
+            goalLines={
+              pool.driver === "claudeAgent" && window.kind === "weekly"
+                ? window.members.flatMap((member) => {
+                    const summary = claudeGoalSummary(member.window, now);
+                    return summary
+                      ? [
+                          {
+                            key: member.account.key,
+                            text: `${member.account.displayName ?? member.account.email ?? "Claude"}: ${summary}`,
+                          },
+                        ]
+                      : [];
+                  })
+                : undefined
+            }
           />
         );
       })}

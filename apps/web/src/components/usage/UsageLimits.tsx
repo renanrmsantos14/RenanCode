@@ -247,22 +247,22 @@ export function useResetCredit(
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
-  const redeem = async () => {
+  /** Resolves to the outcome text, also kept in `status`. */
+  const redeem = async (): Promise<string | null> => {
     setConfirming(false);
-    if (!readEnvironmentScope(environmentId, AuthProvidersManageScope)) return;
+    if (!readEnvironmentScope(environmentId, AuthProvidersManageScope)) return null;
     setBusy(true);
     setStatus(null);
     const result = await consume({ environmentId, input });
     setBusy(false);
-    if (result._tag === "Success") {
-      setStatus(result.value.warning ?? OUTCOME_TEXT[result.value.outcome]);
-      return;
-    }
-    setStatus(
-      "error" in result.cause && result.cause.error instanceof Error
-        ? result.cause.error.message
-        : "Could not use the reset credit.",
-    );
+    const text =
+      result._tag === "Success"
+        ? (result.value.warning ?? OUTCOME_TEXT[result.value.outcome])
+        : "error" in result.cause && result.cause.error instanceof Error
+          ? result.cause.error.message
+          : "Could not use the reset credit.";
+    setStatus(text);
+    return text;
   };
 
   return { canManageProviders, confirming, setConfirming, busy, status, redeem };
@@ -316,48 +316,6 @@ export function resetCreditsSummary(
   return `${credits.availableCount} ${credits.availableCount === 1 ? "reset credit" : "reset credits"} banked${
     expiresIn ? ` · next expires in ${expiresIn}` : ""
   }`;
-}
-
-export function ResetCredits({
-  environmentId,
-  input,
-  credits,
-  now,
-}: {
-  readonly environmentId: EnvironmentId;
-  readonly input: ProviderConsumeResetCreditInput;
-  readonly credits: ServerProviderResetCredits;
-  readonly now: number;
-}) {
-  const { canManageProviders, confirming, setConfirming, busy, status, redeem } = useResetCredit(
-    environmentId,
-    input,
-  );
-  if (credits.availableCount === 0 && status === null) return null;
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-      <span className="tabular-nums">{resetCreditsSummary(credits, now)}</span>
-      {credits.availableCount > 0 ? (
-        <Button
-          size="xs"
-          variant="outline"
-          disabled={busy || !canManageProviders}
-          onClick={() => {
-            if (readEnvironmentScope(environmentId, AuthProvidersManageScope)) setConfirming(true);
-          }}
-        >
-          {busy ? "Using…" : "Use reset"}
-        </Button>
-      ) : null}
-      {status ? <span className="text-foreground">{status}</span> : null}
-      <ResetCreditDialog
-        open={confirming}
-        onOpenChange={setConfirming}
-        onConfirm={() => void redeem()}
-        disabled={!canManageProviders}
-      />
-    </div>
-  );
 }
 
 /** Advance now only on explicit refresh to avoid page repaints from ticking. */

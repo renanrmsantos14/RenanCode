@@ -29,6 +29,7 @@ import {
 import { ProviderDriverError } from "../Errors.ts";
 import { claudeUsageReader } from "./claudeUsage.ts";
 import { makeClaudeScopedLimitNames } from "../claudeUsageLimits.ts";
+import { startClaudeUsagePoller } from "../claudeUsagePoller.ts";
 import * as ClaudeResetCredits from "../claudeResetCredits.ts";
 import * as ResetCreditCoordinator from "../resetCreditCoordinator.ts";
 import {
@@ -38,7 +39,10 @@ import {
   probeClaudeWorkspaceSnapshot,
   type ClaudeCapabilitiesProbe,
 } from "../ClaudeProvider.ts";
-import { makeManagedServerProvider } from "@t3tools/provider-core/server/managedProvider";
+import {
+  makeManagedServerProvider,
+  shouldRunProviderStatusWork,
+} from "@t3tools/provider-core/server/managedProvider";
 import * as ModelCatalog from "@t3tools/provider-core/server/ModelCatalog";
 import { resolveClaudeModelCatalog } from "../ClaudeModelCatalog.ts";
 import {
@@ -103,6 +107,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
     enabled,
     config,
   }) {
+    const host = yield* ProviderHost.ProviderHost;
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -317,6 +322,19 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
             cause,
           }),
       ),
+    );
+
+    // Disabled instances keep the loop idle; it reads the instance's own login, not the CLI.
+    yield* startClaudeUsagePoller({
+      configDir,
+      scopedLimitNames,
+      getSnapshot: snapshot.getSnapshot,
+      shouldRun: shouldRunProviderStatusWork(host, instanceId),
+      record: (reading) => snapshot.recordUsageReading?.(reading) ?? Effect.void,
+    }).pipe(
+      Effect.provideService(HttpClient.HttpClient, httpClient),
+      Effect.provideService(FileSystem.FileSystem, fileSystem),
+      Effect.provideService(Path.Path, path),
     );
 
     // Same rules as Codex: serialised on the config directory that holds the

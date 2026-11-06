@@ -115,14 +115,46 @@ interface ModelScopedWindow {
 }
 
 function readModelScoped(rateLimits: object): ReadonlyArray<ModelScopedWindow> {
-  const raw = (rateLimits as { readonly model_scoped?: unknown }).model_scoped;
-  if (!Array.isArray(raw)) return [];
-  return raw.filter(
-    (entry): entry is ModelScopedWindow =>
-      typeof entry === "object" &&
-      entry !== null &&
-      typeof (entry as ModelScopedWindow).display_name === "string",
-  );
+  const found = new Map<string, ModelScopedWindow>();
+  const add = (entry: ModelScopedWindow) => {
+    const id = scopedWindowId(entry.display_name);
+    if (!found.has(id)) found.set(id, entry);
+  };
+  const { model_scoped, limits } = rateLimits as {
+    readonly model_scoped?: unknown;
+    readonly limits?: unknown;
+  };
+  if (Array.isArray(model_scoped)) {
+    for (const entry of model_scoped) {
+      if (
+        typeof entry === "object" &&
+        entry !== null &&
+        typeof (entry as ModelScopedWindow).display_name === "string"
+      ) {
+        add(entry as ModelScopedWindow);
+      }
+    }
+  }
+  // The HTTP endpoint has no `model_scoped`; the same rows come as `limits[]` entries.
+  if (Array.isArray(limits)) {
+    for (const entry of limits) {
+      if (typeof entry !== "object" || entry === null) continue;
+      const { kind, scope, percent, resets_at } = entry as {
+        readonly kind?: unknown;
+        readonly scope?: { readonly model?: { readonly display_name?: unknown } | null } | null;
+        readonly percent?: unknown;
+        readonly resets_at?: unknown;
+      };
+      const name = scope?.model?.display_name;
+      if (kind !== "weekly_scoped" || typeof name !== "string") continue;
+      add({
+        display_name: name,
+        utilization: typeof percent === "number" ? percent : null,
+        resets_at: typeof resets_at === "string" ? resets_at : null,
+      });
+    }
+  }
+  return [...found.values()];
 }
 
 function isoFromEpochSeconds(value: number | undefined): string | undefined {
@@ -189,8 +221,12 @@ export function claudeUsageResponseToLimits(input: {
   const windows: ServerProviderUsageWindow[] = [];
   for (const id of Object.keys(WINDOWS)) {
     const window = response.rate_limits[id as "five_hour" | "seven_day"];
-    if (!window || typeof window.utilization !== "number") continue;
-    windows.push(makeWindow(id, window.utilization, isoFromString(window.resets_at)));
+    if (!window) continue;
+    // A session window with no utilization has not started yet: 0% used, so the row stays.
+    const utilization =
+      typeof window.utilization === "number" ? window.utilization : id === "five_hour" ? 0 : null;
+    if (utilization === null) continue;
+    windows.push(makeWindow(id, utilization, isoFromString(window.resets_at)));
   }
   // The CLI's overage allowlist currently has one model; events refer to its first entry.
   let overageIncluded: string | undefined;

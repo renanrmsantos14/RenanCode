@@ -145,7 +145,6 @@ import type { useLocalDispatchState } from "./useLocalDispatchState";
 import type { usePendingThreadRequests } from "./usePendingThreadRequests";
 import type { useQueuedRunEdit } from "./useQueuedRunEdit";
 import type { useTimelineFollow } from "./useTimelineFollow";
-import type { useUsageLimitsPanel } from "./useUsageLimitsPanel";
 import type { useWorktreeSetup } from "./useWorktreeSetup";
 
 const ENVIRONMENT_UNAVAILABLE_SEND_TOAST_TRAIL_SIZE = 3;
@@ -164,7 +163,6 @@ function draftHasNonPromptContent(target: ComposerThreadTarget) {
 type PendingThreadRequests = ReturnType<typeof usePendingThreadRequests>;
 type LocalDispatchState = ReturnType<typeof useLocalDispatchState>;
 type DraftEnvironmentRouting = ReturnType<typeof useDraftEnvironmentRouting>;
-type UsageLimitsPanel = ReturnType<typeof useUsageLimitsPanel>;
 type TimelineFollow = ReturnType<typeof useTimelineFollow>;
 
 interface ComposerSendInput {
@@ -216,10 +214,8 @@ interface ComposerSendInput {
   /** Resolves null when sending needs no cold-cache warning. */
   readonly confirmColdCache: (text: string) => Promise<"send" | "compact" | "cancel" | null>;
   readonly showPlanFollowUpPrompt: boolean;
-  readonly usageLimitsKey: string | null;
   readonly usageLimitsOffered: boolean;
-  readonly openUsageLimits: UsageLimitsPanel["open"];
-  readonly clearUsageLimitsFor: UsageLimitsPanel["clearFor"];
+  readonly openUsageLimits: () => void;
   readonly needsLoadBalancing: boolean;
   readonly loadBalancing: DraftEnvironmentRouting["loadBalancing"];
   readonly readPendingEnvironmentChange: DraftEnvironmentRouting["readPendingEnvironmentChange"];
@@ -314,10 +310,8 @@ export function useComposerSend(input: ComposerSendInput) {
     resumeCompactionTokens,
     confirmColdCache,
     showPlanFollowUpPrompt,
-    usageLimitsKey,
     usageLimitsOffered,
     openUsageLimits,
-    clearUsageLimitsFor,
     needsLoadBalancing,
     loadBalancing,
     readPendingEnvironmentChange,
@@ -431,16 +425,14 @@ export function useComposerSend(input: ComposerSendInput) {
     const promptAtSend = promptRef.current;
     if (
       usageLimitsOffered &&
-      usageLimitsKey !== null &&
       !directAnnotation &&
       !draftHasNonPromptContent(composerDraftTarget) &&
       isUsageLimitsCommand(promptRef.current)
     ) {
-      if (openUsageLimits()) {
-        promptRef.current = "";
-        setComposerDraftPrompt(composerDraftTarget, "");
-        composerRef.current?.resetCursorState();
-      }
+      openUsageLimits();
+      promptRef.current = "";
+      setComposerDraftPrompt(composerDraftTarget, "");
+      composerRef.current?.resetCursorState();
       return;
     }
 
@@ -1505,7 +1497,6 @@ export function useComposerSend(input: ComposerSendInput) {
         turnStartSucceeded = true;
         setKeepFullHistory(routeThreadKey, false);
         if (freshArm !== undefined) disarmFreshSession(routeThreadKey, freshArm);
-        clearUsageLimitsFor(routeThreadKey);
         if (turnUsesAttachmentUploads) {
           releaseDraftAttachments(composerAttachmentsSnapshot);
         }

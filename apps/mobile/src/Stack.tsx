@@ -122,6 +122,7 @@ import {
 import { SettingsProjectGroupingRouteScreen } from "./features/settings/SettingsProjectGroupingRouteScreen";
 import { SettingsProjectOverviewRouteScreen } from "./features/settings/SettingsProjectOverviewRouteScreen";
 import { UsageLimitAccountScreen } from "./features/usage/UsageLimitsPooled";
+import { ClaudeUsageSheet } from "./features/usage/ClaudeUsageSheet";
 import { UsageRouteScreen } from "./features/usage/UsageRouteScreen";
 import { SettingsAboutRouteScreen } from "./features/settings/SettingsAboutRouteScreen";
 import { SettingsNotificationsRouteScreen } from "./features/settings/SettingsNotificationsRouteScreen";
@@ -671,6 +672,10 @@ const RootStackConfig = createWorkspaceStackNavigator({
     ThreadAgents: createNativeStackScreen({
       screen: ThreadAgentsSheet,
       options: sheetRoute({ detent: 0.5, androidMaxDetent: 0.9 }),
+    }),
+    ClaudeUsage: createNativeStackScreen({
+      screen: ClaudeUsageSheet,
+      options: { ...sheetRoute({ detent: 0.6, androidMaxDetent: 0.95 }), headerShown: false },
     }),
     GitOverview: createNativeStackScreen({
       screen: GitOverviewSheet,

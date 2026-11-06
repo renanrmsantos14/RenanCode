@@ -877,3 +877,329 @@ export function collectProviderUsageLimits(
   }
   return { createdAt: DateTime.formatIso(DateTime.makeUnsafe(now)), accounts, notices };
 }
+
+export const USAGE_GOAL_TIME_ZONE = "America/Sao_Paulo";
+const USAGE_GOAL_PER_BUSINESS_DAY = 20;
+const WEEK = 7 * DAY;
+const STALE_AFTER = 3 * MINUTE;
+const MIN_PROJECTION_ELAPSED = 2 * HOUR;
+
+const wallFormats = new Map<string, Intl.DateTimeFormat>();
+
+/** Wall-clock time in `timeZone` as a UTC-style millisecond count, so day arithmetic ignores offsets. */
+function wallMillis(ms: number, timeZone: string): number | null {
+  if (!Number.isFinite(ms)) return null;
+  try {
+    let format = wallFormats.get(timeZone);
+    if (!format) {
+      format = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        hourCycle: "h23",
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+        hour: "numeric",
+        minute: "numeric",
+        second: "numeric",
+      });
+      wallFormats.set(timeZone, format);
+    }
+    const parts = Object.fromEntries(
+      format.formatToParts(ms).map((part) => [part.type, part.value]),
+    );
+    const wall = Date.UTC(
+      Number(parts.year),
+      Number(parts.month) - 1,
+      Number(parts.day),
+      Number(parts.hour),
+      Number(parts.minute),
+      Number(parts.second),
+    );
+    return Number.isFinite(wall) ? wall : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Weekly goal: 20% per business day (Mon-Fri, no holidays) from the day the current cycle began,
+ * capped at 100% and stepping up at the start of the local day. `resetsAt` is the NEXT reset, so the
+ * cycle began a week earlier. A cycle that begins on a weekend starts counting on Monday.
+ * Returns null for an invalid date or time zone.
+ */
+export function goalPercent(input: {
+  readonly resetsAt: string;
+  readonly now: number;
+  readonly timeZone?: string;
+}): number | null {
+  const timeZone = input.timeZone ?? USAGE_GOAL_TIME_ZONE;
+  const start = wallMillis(Date.parse(input.resetsAt) - WEEK, timeZone);
+  const today = wallMillis(input.now, timeZone);
+  if (start === null || today === null) return null;
+  let businessDays = 0;
+  for (
+    let day = Math.floor(start / DAY);
+    day <= Math.floor(today / DAY) && businessDays < 5;
+    day++
+  ) {
+    if (isBusinessDay(day)) businessDays++;
+  }
+  return Math.min(100, businessDays * USAGE_GOAL_PER_BUSINESS_DAY);
+}
+
+function isBusinessDay(dayIndex: number): boolean {
+  // Day 0 (1970-01-01) was a Thursday.
+  const weekday = (((dayIndex + 4) % 7) + 7) % 7;
+  return weekday !== 0 && weekday !== 6;
+}
+
+/** Mon-Fri milliseconds between two wall-clock instants. */
+function businessMillis(from: number, to: number): number {
+  let total = 0;
+  for (let day = Math.floor(from / DAY); day * DAY < to; day++) {
+    if (isBusinessDay(day)) total += Math.min(to, (day + 1) * DAY) - Math.max(from, day * DAY);
+  }
+  return total;
+}
+
+/** The wall-clock instant reached after spending `amount` business milliseconds from `from`. */
+function advanceBusinessMillis(from: number, amount: number): number {
+  let at = from;
+  let left = amount;
+  while (left > 0) {
+    const day = Math.floor(at / DAY);
+    if (!isBusinessDay(day)) {
+      at = (day + 1) * DAY;
+      continue;
+    }
+    const step = Math.min(left, (day + 1) * DAY - at);
+    at += step;
+    left -= step;
+  }
+  return at;
+}
+
+export type ExhaustionForecast =
+  | { readonly kind: "unknown" }
+  | { readonly kind: "safe" }
+  | { readonly kind: "at"; readonly at: number };
+
+/**
+ * Pace is percent per business hour (Mon-Fri in `timeZone`, from the cycle start) and the
+ * projection advances over business time only. "unknown": too little history; "safe": reset first.
+ */
+export function exhaustionForecast(
+  window: ServerProviderUsageWindow,
+  now: number,
+  timeZone: string = USAGE_GOAL_TIME_ZONE,
+): ExhaustionForecast {
+  const resetsAt = resetMillis(window);
+  if (resetsAt === null || window.usedPercent <= 0 || window.usedPercent >= 100) {
+    return { kind: "unknown" };
+  }
+  const nowWall = wallMillis(now, timeZone);
+  const startWall = wallMillis(resetsAt - WEEK, timeZone);
+  const resetWall = wallMillis(resetsAt, timeZone);
+  if (nowWall === null || startWall === null || resetWall === null || nowWall >= resetWall) {
+    return { kind: "unknown" };
+  }
+  const elapsed = businessMillis(startWall, nowWall);
+  if (elapsed < MIN_PROJECTION_ELAPSED) return { kind: "unknown" };
+  const needed = ((100 - window.usedPercent) * elapsed) / window.usedPercent;
+  if (needed > businessMillis(nowWall, resetWall)) return { kind: "safe" };
+  return { kind: "at", at: now + (advanceBusinessMillis(nowWall, needed) - nowWall) };
+}
+
+export interface ClaudeAccountUsage {
+  readonly instanceId: ProviderInstanceId;
+  readonly label: string;
+  readonly accentColor: string | undefined;
+  readonly weekly: ServerProviderUsageWindow | undefined;
+  readonly session: ServerProviderUsageWindow | undefined;
+  /** "Weekly · <model>" windows, ordered by id. */
+  readonly scoped: readonly ServerProviderUsageWindow[];
+  readonly goal: number | null;
+  /** The last good reading is older than three minutes. */
+  readonly stale: boolean;
+  readonly limits: ServerProviderUsageLimits;
+  readonly resetCreditInput: ProviderConsumeResetCreditInput;
+}
+
+/**
+ * One entry per enabled Claude account with subscription limits, ordered by instance id.
+ * `sources` are needed to show a hub's reset credits and redeem through it.
+ */
+export function selectClaudeUsageAccounts(input: {
+  readonly providers: readonly ServerProvider[];
+  readonly sources?: UsageLimitSourceSnapshots | undefined;
+  readonly now: number;
+}): readonly ClaudeAccountUsage[] {
+  const first = input.providers.find((provider) => provider.driver === "claudeAgent");
+  if (!first) return [];
+  const report = collectProviderUsageLimits(
+    first.instanceId,
+    input.providers,
+    input.sources ?? [],
+    input.now,
+  );
+  return (report?.accounts ?? [])
+    .flatMap(({ instanceId, displayName, accentColor, limits, resetCreditInput }) => {
+      if (!instanceId || limits.unavailable?.reason === "unsupported") return [];
+      const weekly = limits.windows.find((window) => window.id === "seven_day");
+      const checked = Date.parse(limits.checkedAt);
+      return [
+        {
+          instanceId,
+          label: displayName?.trim() || "Claude",
+          accentColor,
+          weekly,
+          session: limits.windows.find((window) => window.id === "five_hour"),
+          scoped: limits.windows
+            .filter((window) => window.kind === "weekly" && window.id.startsWith("seven_day_"))
+            .sort((a, b) => a.id.localeCompare(b.id)),
+          goal: weekly?.resetsAt
+            ? goalPercent({ resetsAt: weekly.resetsAt, now: input.now })
+            : null,
+          stale: !Number.isFinite(checked) || input.now - checked > STALE_AFTER,
+          limits,
+          resetCreditInput: resetCreditInput ?? { instanceId },
+        } satisfies ClaudeAccountUsage,
+      ];
+    })
+    .sort((a, b) => a.instanceId.localeCompare(b.instanceId));
+}
+
+/** What `selectClaudeUsageAccounts` leaves out: other drivers and Claude accounts known only to a hub. */
+export function limitAccountsBesideClaude(
+  accounts: readonly LimitAccount[],
+): readonly LimitAccount[] {
+  return accounts.filter(
+    (account) => account.driver !== "claudeAgent" || account.environments.length === 0,
+  );
+}
+
+const usedPercent = (window: ServerProviderUsageWindow) => 100 - remainingPercent(window);
+
+/** The weekly reading the composer shows: percent used, today's goal and whether use is past it. */
+export function claudeWeeklyReading(
+  account: Pick<ClaudeAccountUsage, "weekly" | "goal">,
+): { readonly used: number; readonly goal: number | null; readonly over: boolean } | null {
+  if (!account.weekly) return null;
+  const used = usedPercent(account.weekly);
+  return { used, goal: account.goal, over: account.goal !== null && used > account.goal };
+}
+
+/** "Used 36% · today's goal 60%" for a weekly window, for surfaces that show the goal as text. */
+export function claudeGoalSummary(
+  window: ServerProviderUsageWindow,
+  now: number,
+  goal: number | null | undefined = window.resetsAt
+    ? goalPercent({ resetsAt: window.resetsAt, now })
+    : null,
+): string | null {
+  if (!window.resetsAt) return null;
+  const used = usedPercent(window);
+  return goal === null ? `Used ${used}%` : `Used ${used}% · today's goal ${goal}%`;
+}
+
+/** The accessible label of the weekly bar: "Weekly: 36% used, today's goal 60%". */
+export function weeklyBarLabel(reading: {
+  readonly used: number;
+  readonly goal: number | null;
+}): string {
+  return `Weekly: ${reading.used}% used${reading.goal === null ? "" : `, today's goal ${reading.goal}%`}`;
+}
+
+/** "36% used · resets in 2h" for a window, or "36% used" when it has no reset time. */
+export function windowUsedText(window: ServerProviderUsageWindow, now: number): string {
+  const resetsIn = formatResetsIn(window, now);
+  return `${usedPercent(window)}% used${resetsIn ? ` · ${resetsIn}` : ""}`;
+}
+
+/** The projected-exhaustion line; `formatInstant` renders a millisecond instant the client's way. */
+export function forecastText(
+  forecast: ExhaustionForecast | undefined,
+  formatInstant: (ms: number) => string,
+): string {
+  switch (forecast?.kind) {
+    case "at":
+      return `Projected to run out ${formatInstant(forecast.at)}`;
+    case "safe":
+      return "Not projected to run out before the reset";
+    default:
+      return "Not enough use yet to project";
+  }
+}
+
+/** Composer text for one account: "Claude 36/60", with its age when the reading is stale. */
+export function claudeAccountText(
+  account: ClaudeAccountUsage,
+  formatAge: (isoDate: string) => string,
+  withName = true,
+): string {
+  const age = account.stale ? ` ${formatAge(account.limits.checkedAt)}` : "";
+  return `${withName ? `${account.label} ` : ""}${claudeAccountValue(account)}${age}`;
+}
+
+/** Weekly use as the composer shows it: "72/80" against today's goal, "72%" without one, "n/a" with no reading. */
+export function claudeAccountValue(account: Pick<ClaudeAccountUsage, "weekly" | "goal">): string {
+  const reading = claudeWeeklyReading(account);
+  if (!reading) return "n/a";
+  return `${reading.used}${reading.goal === null ? "%" : `/${reading.goal}`}`;
+}
+
+export const CLAUDE_USAGE_ERROR_TEXT = {
+  rateLimited: "Claude limited the usage check; trying again",
+  signedOut: "Signed out; open Claude to renew the login",
+  requestFailed: "Usage check failed",
+} as const satisfies Record<NonNullable<ServerProviderUsageLimits["lastError"]>["reason"], string>;
+
+/** "just now", "14m ago", "3h ago", "2d ago". */
+export function formatAgo(isoDate: string, now: number): string {
+  const at = Date.parse(isoDate);
+  if (!Number.isFinite(at)) return "";
+  const minutes = Math.floor(Math.max(0, now - at) / MINUTE);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  return hours < 24 ? `${hours}h ago` : `${Math.floor(hours / 24)}d ago`;
+}
+
+const goalZoneFormats = new Map<
+  string,
+  readonly [day: Intl.DateTimeFormat, time: Intl.DateTimeFormat, weekday: Intl.DateTimeFormat]
+>();
+
+/** "today 18:30", "tomorrow 09:00" or "Mon 09:00" in the goal time zone (America/Sao_Paulo). */
+export function formatGoalZoneInstant(
+  ms: number,
+  now: number,
+  timeZone: string = USAGE_GOAL_TIME_ZONE,
+): string {
+  let formats = goalZoneFormats.get(timeZone);
+  if (!formats) {
+    formats = [
+      new Intl.DateTimeFormat("en-CA", { timeZone }),
+      new Intl.DateTimeFormat("en-GB", {
+        timeZone,
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      }),
+      new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }),
+    ];
+    goalZoneFormats.set(timeZone, formats);
+  }
+  const [dayFormat, timeFormat, weekdayFormat] = formats;
+  const time = timeFormat.format(ms);
+  const day = dayFormat.format(ms);
+  if (day === dayFormat.format(now)) return `today ${time}`;
+  if (day === dayFormat.format(now + DAY)) return `tomorrow ${time}`;
+  return `${weekdayFormat.format(ms)} ${time}`;
+}
+
+/** The account owner's name or email when it differs from the driver label (case-insensitive). */
+export function limitInstanceName(account: LimitAccount, driverLabel: string): string | null {
+  const who = account.displayName?.trim() || account.email;
+  return who && who.toLowerCase() !== driverLabel.toLowerCase() ? who : null;
+}

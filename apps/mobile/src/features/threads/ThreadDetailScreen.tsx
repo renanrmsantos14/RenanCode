@@ -45,7 +45,6 @@ import type {
   RuntimeRequestId,
   ScopedThreadRef,
   ServerConfig as T3ServerConfig,
-  UsageLimitsReport,
   RunId,
 } from "@t3tools/contracts";
 import {
@@ -127,7 +126,8 @@ import {
   useNativeLayoutMetrics,
 } from "../../native/native-layout-metrics";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
-import { collectProviderUsageLimits } from "@t3tools/shared/usageLimits";
+import { selectClaudeUsageAccounts } from "@t3tools/shared/usageLimits";
+import { openSettings } from "../settings/settings-navigation";
 import type { ComposerEditorHandle } from "../../components/ComposerEditor";
 import type { StatusTone } from "../../components/StatusPill";
 import { getComposerDraftSnapshot, setFreshSessionPending } from "../../state/use-composer-drafts";
@@ -177,7 +177,6 @@ import { ComposerErrorNotice } from "./ComposerErrorNotice";
 import { ManagedRuntimeModeNotice } from "./ManagedRuntimeModeNotice";
 import { FreshSessionNotice } from "./FreshSessionNotice";
 import { ComposerFeedback } from "./ComposerFeedback";
-import { ComposerUsageLimits } from "./ComposerUsageLimits";
 import { PendingUserInputCard } from "./PendingUserInputCard";
 import { ProviderSubagentBar } from "./ProviderSubagentBar";
 import { ThreadCreationFailedCard } from "./ThreadCreationFailedCard";
@@ -188,7 +187,6 @@ import {
 import { connectionFloatingStatus, type FloatingWorkingStatus } from "./floating-working-status";
 import {
   derivePendingUserInputMaxHeight,
-  ESTIMATED_KEYBOARD_HEIGHT,
   USER_INPUT_TOGGLE_DURATION_MS,
 } from "./pendingUserInputLayout";
 import {
@@ -320,8 +318,6 @@ export interface ThreadDetailScreenProps {
 
 // iOS questions overlay the controls; Android questions stack with child approvals.
 const ComposerPanels = Platform.OS === "android" ? Animated.ScrollView : Animated.View;
-const USAGE_LIMITS_PANEL_GAP = 12;
-const USAGE_LIMITS_PANEL_MIN_HEIGHT = 44;
 
 const USER_INPUT_TOGGLE_TIMING = {
   duration: USER_INPUT_TOGGLE_DURATION_MS,
@@ -959,57 +955,20 @@ function ThreadDetailBody(
   const pendingMessageEditBlocked =
     queuedRunEditBlockedReason({ openQuestionCount: activeUserInputRequestId === null ? 0 : 1 }) !==
     null;
-  const [usageLimitsPanel, setUsageLimitsPanel] = useState<{
-    readonly key: string;
-    readonly threadKey: string;
-    readonly now: number;
-  } | null>(null);
-  // Approval/question identity invalidates quota: answering on any client resumes spending.
-  const usageLimitsKey = [
-    selectedThreadKey,
-    props.selectedThread.modelSelection.instanceId,
-    props.selectedThread.latestRun?.runId ?? "",
-    props.activePendingApproval?.requestId ?? props.activePendingUserInput?.requestId ?? "",
-  ].join(":");
-  if (usageLimitsPanel !== null && usageLimitsPanel.key !== usageLimitsKey) {
-    setUsageLimitsPanel(null);
-  }
-  const usageLimitsReport =
-    usageLimitsPanel !== null && usageLimitsPanel.key === usageLimitsKey
-      ? collectProviderUsageLimits(
-          props.selectedThread.modelSelection.instanceId,
-          props.serverConfig?.providers ?? [],
-          props.serverConfig?.usageLimitSources ?? [],
-          usageLimitsPanel.now,
-        )
-      : null;
-  const showUsageLimits = (report: UsageLimitsReport | null) =>
-    setUsageLimitsPanel(
-      report === null
-        ? null
-        : {
-            key: usageLimitsKey,
-            threadKey: selectedThreadKey,
-            now: Date.parse(report.createdAt),
-          },
-    );
-  const dismissUsageLimits = () => setUsageLimitsPanel(null);
-  // Late sends clear only their originating thread's limits panel.
-  const clearUsageLimitsFor = (threadKey: string) =>
-    setUsageLimitsPanel((current) =>
-      current !== null && current.threadKey === threadKey ? null : current,
-    );
+  const openUsageLimits = () => {
+    Keyboard.dismiss();
+    // Without a Claude account the detail has nothing to show; open the Usage page instead.
+    const hasClaude =
+      selectClaudeUsageAccounts({
+        providers: props.serverConfig?.providers ?? [],
+        now: Date.now(),
+      }).length > 0;
+    if (hasClaude) navigation.navigate("ClaudeUsage", { environmentId: props.environmentId });
+    else openSettings(navigation, "SettingsUsage");
+  };
   const userInputToggled =
     userInputToggle !== null && userInputToggle.requestId === activeUserInputRequestId;
   const userInputCollapsed = userInputToggled && userInputToggle.collapsed;
-  // A height React sets from keyboard state lags the sticky translation by a Yoga pass and
-  // flashes over the nav header on the way up, so the usage panel reserves the keyboard instead.
-  const [lastKnownKeyboardHeight, setLastKnownKeyboardHeight] = useState(0);
-  if (liveKeyboardHeight > 0 && liveKeyboardHeight !== lastKnownKeyboardHeight) {
-    setLastKnownKeyboardHeight(liveKeyboardHeight);
-  }
-  const reservedKeyboardHeight =
-    lastKnownKeyboardHeight > 0 ? lastKnownKeyboardHeight : ESTIMATED_KEYBOARD_HEIGHT;
   // Waiting for a visibility render misses the first keyboard frames.
   const keyboardStickyEnabled =
     Platform.OS === "ios"
@@ -1061,39 +1020,6 @@ function ThreadDetailBody(
     }),
     flexGrow: 0,
   }));
-  // The usage panel stacks with the composer and any approval card, so it gets
-  // whatever room they leave below the header. Measured only while it is open
-  // so typing in the composer does not re-render the screen.
-  const usageLimitsOpen = usageLimitsReport !== null && activeUserInputRequestId === null;
-  const [usageLimitsLayout, setUsageLimitsLayout] = useState({ overlay: 0, panel: 0 });
-  const handleComposerOverlayLayout = (event: LayoutChangeEvent) => {
-    if (!questionInFlow) onComposerLayout(event);
-    if (!usageLimitsOpen) return;
-    const overlay = event.nativeEvent.layout.height;
-    setUsageLimitsLayout((current) =>
-      current.overlay === overlay ? current : { ...current, overlay },
-    );
-  };
-  const handleUsageLimitsLayout = (event: LayoutChangeEvent) => {
-    const panel = event.nativeEvent.layout.height;
-    setUsageLimitsLayout((current) => (current.panel === panel ? current : { ...current, panel }));
-  };
-  const overlayBesideUsageLimits =
-    usageLimitsLayout.overlay > 0
-      ? usageLimitsLayout.overlay - usageLimitsLayout.panel
-      : composerOverlapHeight;
-  // The floor keeps the close row on screen when the stack below leaves no room at all.
-  const usageLimitsMaxHeight = Math.max(
-    USAGE_LIMITS_PANEL_MIN_HEIGHT,
-    Math.min(
-      Math.round(screenAreaHeight * 0.4),
-      screenAreaHeight -
-        navigationHeaderHeight -
-        reservedKeyboardHeight -
-        overlayBesideUsageLimits -
-        USAGE_LIMITS_PANEL_GAP * 2,
-    ),
-  );
   // A toggle animates the card; a new request starts expanded at once.
   const userInputMotion = !userInputToggled
     ? "fresh"
@@ -1281,7 +1207,6 @@ function ThreadDetailBody(
     stillSendable?: () => boolean,
   ) => {
     const scope = threadScope.current.signal;
-    const targetThreadKey = selectedThreadKey;
     const hasUserMessage = selectedThreadFeed.some(
       (entry) => entry.type === "message" && entry.message.role === "user",
     );
@@ -1336,8 +1261,6 @@ function ThreadDetailBody(
     if (messageId === null || scope.aborted) {
       return messageId;
     }
-
-    clearUsageLimitsFor(targetThreadKey);
 
     const nextAnchorMessageId = resolveThreadFeedSubmissionAnchor({
       currentAnchorMessageId: anchorMessageId,
@@ -1619,7 +1542,9 @@ function ThreadDetailBody(
                 pushes the resting content floor up by the same amount. */}
               <View
                 ref={composerOverlayRef}
-                onLayout={handleComposerOverlayLayout}
+                onLayout={(event) => {
+                  if (!questionInFlow) onComposerLayout(event);
+                }}
                 className="w-full"
               >
                 <View className="w-full self-center" style={{ maxWidth: contentMaxWidth }}>
@@ -1739,22 +1664,6 @@ function ThreadDetailBody(
                         <ComposerErrorNotice
                           message={composerError}
                           onDismiss={() => clearThreadComposerError(selectedThreadKey)}
-                        />
-                      </Animated.View>
-                    ) : null}
-                    {usageLimitsReport && activeUserInputRequestId === null ? (
-                      <Animated.View
-                        className="shrink-0 px-4"
-                        style={{ paddingBottom: USAGE_LIMITS_PANEL_GAP }}
-                        onLayout={handleUsageLimitsLayout}
-                        entering={FadeInDown.duration(220)}
-                        exiting={FadeOut.duration(140)}
-                      >
-                        <ComposerUsageLimits
-                          report={usageLimitsReport}
-                          environmentId={props.environmentId}
-                          maxHeight={usageLimitsMaxHeight}
-                          onClose={dismissUsageLimits}
                         />
                       </Animated.View>
                     ) : null}
@@ -1944,7 +1853,7 @@ function ThreadDetailBody(
                         onStopThread={props.onStopThread}
                         onResumeQueue={props.onResumeQueue}
                         onSendMessage={handleSendMessage}
-                        onShowUsageLimits={showUsageLimits}
+                        onOpenUsageLimits={openUsageLimits}
                         canSwitchProvider={props.canSwitchThreadProvider}
                         onUpdateInteractionMode={props.onUpdateThreadInteractionMode}
                         onHeightChange={handleComposerHeightChange}

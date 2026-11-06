@@ -142,17 +142,15 @@ Opening Limits checks the selected connected environments automatically. Each cl
 least five minutes between automatic checks of an environment, including after a failed check.
 If a window still looks stale, refresh Limits to re-check every provider and hub.
 
-Pick `/usage-limits` from the composer's command menu, or send it as a message, to check the
-current model's limits without leaving the conversation. The result opens above the composer and
-closes when you dismiss it or send your next message. It uses the same snapshot as **Usage → Limits**, so it does not run the agent or refresh
-anything. The command is offered only for providers that appear under **Usage → Limits**.
+With a Claude account connected, the composer shows each account's weekly use next to today's
+goal, for example `Claude 36/60`. Select it, or pick `/usage-limits` from the command menu, to
+open the details: reset time, the 5-hour window, the exhaustion forecast and the limits of your
+other providers. The goal grows by 20% each business day of the cycle (Monday to Friday, America/Sao_Paulo time).
+The numbers dim and show their age when the last reading is more than three minutes old.
 
-To keep them in view on web and desktop, turn on **Usage limits** in **Settings → Appearance → Thread details**, or right-click the thread details card.
-The bottom of the thread details card then shows how much is left in each limit window of the
-current provider account. Some windows, such as a weekly Opus limit, count only one model. Hover a
-row to see when it resets and your pace. Turn on **Context window** to also show the thread's
-context use against the model's limit. A tick on the bar marks where the provider compacts
-automatically, when it reports that point.
+Turn on **Context window** in **Settings → Appearance → Thread details**, or right-click the
+thread details card, to show the thread's context use against the model's limit. A tick on the bar
+marks where the provider compacts automatically, when it reports that point.
 
 OpenCode Go reports its session, weekly, and monthly allowance when OpenCode runs locally in
 the environment. T3 cannot report limits for external OpenCode servers because their credentials

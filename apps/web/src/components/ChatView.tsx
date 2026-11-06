@@ -3,7 +3,10 @@ import { useJustCompleted } from "./mascot/useJustCompleted";
 import { ChildThreadApprovals } from "./chat/ChildThreadApprovals";
 import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
-import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
+import {
+  hasProviderUsageLimits,
+  resolveNewThreadModelSelection,
+} from "@t3tools/shared/usageLimits";
 import { queuedRunEditBlockedReason } from "@t3tools/client-runtime/queued-run-edit";
 import { ScrollToEndButton, WorkspaceFileDropOverlay } from "./chat/TimelineOverlays";
 import { isAutoRoutedDraft } from "./chat/taskRouting";
@@ -53,7 +56,7 @@ import type {
 import { feedbackBannerItem } from "./chat/ComposerFeedback";
 import { freshSessionBannerItem } from "./chat/ComposerFreshSession";
 import { armFreshSession, disarmFreshSession, useFreshSessionArmed } from "./chat/freshSessionArms";
-import { useUsageLimitsPanel } from "./chat/useUsageLimitsPanel";
+import { createClaudeUsageDetail } from "./chat/ClaudeUsageIndicator";
 import { useWorktreeSetup } from "./chat/useWorktreeSetup";
 import { useChatShortcuts } from "./chat/useChatShortcuts";
 import { ChatBannerLane } from "./chat/ChatBannerLane";
@@ -324,7 +327,7 @@ import { useProactivePanels } from "../hooks/useProactivePanels";
 import { useIncrementalTimelineEntries } from "../hooks/useIncrementalTimelineEntries";
 import { useRightPanelSurfaceClose } from "../hooks/useRightPanelSurfaceClose";
 import { ComposerBannerStack, type ComposerBannerStackItem } from "./chat/ComposerBannerStack";
-import { modelFallbackBannerItem } from "./chat/ComposerUsageLimits";
+import { modelFallbackBannerItem } from "./chat/ComposerModelFallbackBanner";
 import { ComposerSurface } from "./chat/ComposerSurface";
 import { resolveThreadSyncPhase } from "../threadSync";
 import { hasAvailableCompactionProvider } from "./chat/ContextWindowMeter.logic";
@@ -1420,29 +1423,17 @@ export default function ChatView(props: ChatViewProps) {
     hasActionableProposedPlan: hasActionableProposedPlan(activeProposedPlan),
     hasComposerAttachments: composerHasAttachments,
   });
-  // Answering an approval or question on any client resumes quota spending, so include it in the key.
-  const usageLimitsKey =
-    activeProviderInstanceId === null || (isServerThread && activeThread === undefined)
-      ? null
-      : [
-          routeThreadKey,
-          activeProviderInstanceId,
-          activeThread?.latestRun?.runId ?? "",
-          activePendingApproval?.requestId ?? activePendingUserInput?.requestId ?? "",
-        ].join(":");
-  const {
-    banner: usageLimitsBanner,
-    offered: usageLimitsOffered,
-    open: openUsageLimits,
-    clearFor: clearUsageLimitsFor,
-  } = useUsageLimitsPanel({
-    environmentId,
-    threadKey: routeThreadKey,
-    panelKey: usageLimitsKey,
-    providerInstanceId: activeProviderInstanceId,
-    providerDriver: activeProviderStatus?.driver ?? null,
-    providers: providerStatuses,
-    sources: serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES,
+  // Without a mounted Claude indicator (no Claude account) the detail has nothing to open; show the page.
+  const usageLimitsOffered =
+    activeProviderStatus !== null &&
+    hasProviderUsageLimits(
+      activeProviderStatus.driver,
+      providerStatuses,
+      serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES,
+    );
+  const [usageDetail] = useState(createClaudeUsageDetail);
+  const openUsageLimits = useStableCallback(() => {
+    if (!usageDetail.open()) void navigate({ to: "/usage" });
   });
   const {
     beginLocalDispatch,
@@ -2512,7 +2503,6 @@ export default function ChatView(props: ChatViewProps) {
     sendInFlightRef,
     setOptimisticUserMessages,
     setThreadError,
-    clearUsageLimitsFor,
     beginLocalDispatch,
     resetLocalDispatch,
     scrollToEnd,
@@ -2695,7 +2685,6 @@ export default function ChatView(props: ChatViewProps) {
       deriveProviderExtensionStatuses(serverProjection),
     );
     const extensionStatusItems = extensionStatusBanner === null ? [] : [extensionStatusBanner];
-    const usageLimitsItems = usageLimitsBanner === null ? [] : [usageLimitsBanner];
     const projectCloneItems = projectCloneBannerItem === null ? [] : [projectCloneBannerItem];
     // An approval's feedback goes to that approval; the armed session waits for the next message.
     const freshSessionItems =
@@ -2708,7 +2697,6 @@ export default function ChatView(props: ChatViewProps) {
         ...fallbackItems,
         ...limitRecoveryItems,
         ...extensionStatusItems,
-        ...usageLimitsItems,
         ...projectCloneItems,
         ...freshSessionItems,
         ...systemComposerBannerItems,
@@ -2719,7 +2707,6 @@ export default function ChatView(props: ChatViewProps) {
       ...fallbackItems,
       ...limitRecoveryItems,
       ...extensionStatusItems,
-      ...usageLimitsItems,
       ...projectCloneItems,
       ...freshSessionItems,
       ...systemComposerBannerItems,
@@ -2966,7 +2953,6 @@ export default function ChatView(props: ChatViewProps) {
     localCheckoutBranchMismatch,
     composerRef,
     persistThreadSettingsForNextTurn,
-    clearUsageLimitsFor,
     scrollToEnd,
     setThreadError,
   });
@@ -3042,10 +3028,8 @@ export default function ChatView(props: ChatViewProps) {
     freshSessionAvailable: freshSessionCommandAvailable,
     resumeCompactionTokens: inlineCompactionTokens,
     showPlanFollowUpPrompt,
-    usageLimitsKey,
     usageLimitsOffered,
     openUsageLimits,
-    clearUsageLimitsFor,
     needsLoadBalancing,
     loadBalancing,
     readPendingEnvironmentChange,
@@ -3766,10 +3750,9 @@ export default function ChatView(props: ChatViewProps) {
                                 onFreshSession={
                                   freshSessionCommandAvailable ? armFreshSessionStable : undefined
                                 }
+                                usageDetail={usageDetail}
                                 onUsageLimitsCommand={
-                                  usageLimitsOffered &&
-                                  usageLimitsKey !== null &&
-                                  !composerHasNonPromptContent
+                                  usageLimitsOffered && !composerHasNonPromptContent
                                     ? openUsageLimits
                                     : undefined
                                 }
@@ -4049,12 +4032,7 @@ export default function ChatView(props: ChatViewProps) {
                   onAddProjectScript={saveProjectScriptStable}
                   onUpdateProjectScript={updateProjectScriptStable}
                   onDeleteProjectScript={deleteProjectScriptStable}
-                  usage={{
-                    providerInstanceId: activeProviderInstanceId,
-                    providers: providerStatuses,
-                    sources: serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES,
-                    contextWindow: activeContextWindow,
-                  }}
+                  contextWindow={activeContextWindow}
                 />
 
                 <PullRequestThreadDialogHost

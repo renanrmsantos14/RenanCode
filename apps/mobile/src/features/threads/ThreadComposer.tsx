@@ -23,13 +23,8 @@ import {
   type ModelSelection,
   type ProviderInteractionMode,
   type ServerConfig as T3ServerConfig,
-  type UsageLimitsReport,
 } from "@t3tools/contracts";
-import {
-  collectProviderUsageLimits,
-  hasProviderUsageLimits,
-  isUsageLimitsCommand,
-} from "@t3tools/shared/usageLimits";
+import { hasProviderUsageLimits, isUsageLimitsCommand } from "@t3tools/shared/usageLimits";
 import { StackActions, useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { ReactNode } from "react";
 import { useEffect, useEffectEvent, useRef, useState, type RefObject } from "react";
@@ -118,6 +113,7 @@ import {
 } from "../voice-input/ComposerDictationControl";
 import { useVoiceInputController } from "../voice-input/useVoiceInputController";
 import { resolveVoiceComposerPresentation } from "../voice-input/voiceInputPresentation";
+import { ClaudeUsageIndicator } from "../usage/ClaudeUsageIndicator";
 import type { ExistingThreadSettingsRouteParams } from "./ThreadSettingsSheet";
 import {
   useThreadSettingsSheetPresentation,
@@ -253,7 +249,7 @@ export interface ThreadComposerProps {
     followUp?: ActiveTurnComposerAction,
     stillSendable?: () => boolean,
   ) => Promise<MessageId | null>;
-  readonly onShowUsageLimits: (report: UsageLimitsReport | null) => void;
+  readonly onOpenUsageLimits: () => void;
   readonly canSwitchProvider: boolean;
   readonly onUpdateInteractionMode?: (interactionMode: ProviderInteractionMode) => void;
   readonly onHeightChange?: (height: number) => void;
@@ -525,7 +521,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
       draftKey: composerDraftKey,
     });
   };
-  const { onSendMessage, onChangeDraftMessage, onShowUsageLimits } = props;
+  const { onSendMessage, onChangeDraftMessage, onOpenUsageLimits } = props;
   const usageLimitsOffered =
     selectedProviderStatus !== null &&
     hasProviderUsageLimits(
@@ -533,19 +529,6 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
       props.serverConfig?.providers ?? [],
       props.serverConfig?.usageLimitSources ?? [],
     );
-  const openUsageLimits = () => {
-    const report = collectProviderUsageLimits(
-      currentModelSelection.instanceId,
-      props.serverConfig?.providers ?? [],
-      props.serverConfig?.usageLimitSources ?? [],
-      Date.now(),
-    );
-    onShowUsageLimits(report);
-    if (!report) {
-      Dialog.alert("Usage limits unavailable", "This provider does not currently report limits.");
-    }
-    return report !== null;
-  };
 
   const mentionableEnvironments = useMentionableEnvironments();
   const composerMenu = useComposerCommandMenu({
@@ -572,7 +555,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
         : props.onUpdateInteractionMode,
     offersUsageLimits: usageLimitsOffered,
     onUsageLimits:
-      usageLimitsOffered && draftAttachments.length === 0 ? openUsageLimits : undefined,
+      usageLimitsOffered && draftAttachments.length === 0 ? onOpenUsageLimits : undefined,
     ...(props.onFreshSession === undefined ? {} : { onFreshSession: props.onFreshSession }),
     offersSideChat: props.offersSideChat === true,
   });
@@ -685,7 +668,8 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     )
       return;
     if (usageLimitsOffered && isUsageLimitsCommand(draftMessage) && draftAttachments.length === 0) {
-      if (openUsageLimits()) onChangeDraftMessage("");
+      onOpenUsageLimits();
+      onChangeDraftMessage("");
       return;
     }
     const threadKey = scopedThreadKey(props.environmentId, props.selectedThread.id);
@@ -924,6 +908,8 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
             onPress={openSettings}
           />
         ) : null}
+
+        <ClaudeUsageIndicator environmentId={props.environmentId} onPress={onOpenUsageLimits} />
 
         <ComposerSurface
           animateLayout={false}

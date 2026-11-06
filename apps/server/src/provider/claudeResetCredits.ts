@@ -11,7 +11,7 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
-const API_BASE = "https://api.anthropic.com";
+export const API_BASE = "https://api.anthropic.com";
 const PROGRAM = "cedar_ember";
 const GRANT_ID = /^[a-z0-9_-]{1,40}$/;
 const REQUEST_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -134,7 +134,7 @@ const readJson = Effect.fn("claudeResetCredits.readJson")(function* <S extends S
   );
 });
 
-const readAccessToken = Effect.fn("claudeResetCredits.readAccessToken")(function* (
+export const readAccessToken = Effect.fn("claudeResetCredits.readAccessToken")(function* (
   configDir: string,
 ) {
   if ((yield* HostProcess.Platform) === "darwin") return undefined;
@@ -143,7 +143,7 @@ const readAccessToken = Effect.fn("claudeResetCredits.readAccessToken")(function
   return credentials.claudeAiOauth?.accessToken?.trim() || undefined;
 });
 
-const withClaudeHeaders = (token: string, version: string) =>
+export const withClaudeHeaders = (token: string, version: string) =>
   HttpClientRequest.setHeaders({
     authorization: `Bearer ${token}`,
     "anthropic-beta": "oauth-2025-04-20",
