@@ -26,6 +26,7 @@ import { VOICE_WAVEFORM_SAMPLE_COUNT } from "./voiceInputMetering";
 import { VoiceInputSession } from "./voiceInputSession";
 import { createVoiceRecordingPermission } from "./voiceRecordingPermission";
 import { voiceRouteAtom } from "./voiceDestination";
+import { getServerVoiceTranscriber, SERVER_VOICE_TRANSCRIPTION } from "./serverVoiceTranscriber";
 import { makePermissionStatusAtom } from "../../lib/permissionStatusAtom";
 import {
   acquireAudioSession,
@@ -67,6 +68,7 @@ export const localVoiceTranscriberAtom = makePermissionStatusAtom<
 const voiceInputAvailableAtom = Atom.make((get) => {
   const route = get(voiceRouteAtom);
   if (route) return route.transcriber !== null;
+  if (SERVER_VOICE_TRANSCRIPTION) return true;
   const transcriber = get(localVoiceTranscriberAtom);
   return transcriber !== null && transcriber !== "checking";
 });
@@ -89,7 +91,10 @@ const voiceInputAtom = Atom.make((get) => {
     void session.controller.appMovedToBackground();
   });
   const recorder = createLazyVoiceRecorder({
-    getDestination: () => (registry.get(voiceRouteAtom) === null ? "local" : "environment"),
+    getDestination: () =>
+      registry.get(voiceRouteAtom) === null && !SERVER_VOICE_TRANSCRIPTION
+        ? "local"
+        : "environment",
     create: (destination) =>
       destination === "local"
         ? createVoiceRecorder(VOICE_RECORDING_OPTIONS)
@@ -120,9 +125,10 @@ const voiceInputAtom = Atom.make((get) => {
   });
   const session: VoiceInputSession = new VoiceInputSession({
     recorder,
-    getTranscriber: () => {
+    getTranscriber: (environmentId) => {
       const route = registry.get(voiceRouteAtom);
       if (route) return route.transcriber;
+      if (SERVER_VOICE_TRANSCRIPTION) return getServerVoiceTranscriber(environmentId);
       const transcriber = registry.get(localVoiceTranscriberAtom);
       return transcriber === "checking" ? null : transcriber;
     },
@@ -163,10 +169,13 @@ const voiceInputAtom = Atom.make((get) => {
 export function useGlobalVoiceInput() {
   const { session, audioLevels } = useAtomValue(voiceInputAtom);
   const isTranscriberAvailable = useAtomValue(voiceInputAvailableAtom);
+  const route = useAtomValue(voiceRouteAtom);
   const snapshot = useSyncExternalStore(session.subscribe, session.getSnapshot);
   return {
     ...snapshot,
     isAvailable: isTranscriberAvailable || getNativeShowcaseScene() !== null,
+    requiresEnvironment:
+      SERVER_VOICE_TRANSCRIPTION && route === null && getNativeShowcaseScene() === null,
     audioLevels,
     isBusy: voiceInputBlocksSubmission(snapshot.state),
     session,
