@@ -1,3 +1,4 @@
+import { EnvironmentId } from "@t3tools/contracts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { PreparedVoiceTranscription } from "@t3tools/client-runtime/voice-input";
 import { Atom, AtomRegistry } from "effect/reactivity";
@@ -40,7 +41,7 @@ function createSession(
   overrides?: Partial<
     Pick<
       VoiceInputSessionDependencies,
-      "configureRecording" | "releaseRecording" | "sampleRecording"
+      "configureRecording" | "releaseRecording" | "sampleRecording" | "getTranscriber"
     >
   >,
 ) {
@@ -57,9 +58,9 @@ function createSession(
     locale: "en-US",
     transcribe: async () => "spoken text",
   }));
-  const session = new VoiceInputSession({
+  const dependencies: VoiceInputSessionDependencies = {
     recorder,
-    getTranscriber: () => ({ prepare }),
+    getTranscriber: vi.fn(() => ({ prepare })),
     requestPermission: async () => ({ granted: true, canAskAgain: true }),
     configureRecording: async () => {},
     releaseRecording: vi.fn(async () => {}),
@@ -68,8 +69,17 @@ function createSession(
     publishAudioLevels,
     keepAwake,
     ...overrides,
-  });
-  return { session, recorder, prepare, keepAwake, releaseKeepAwake, publishAudioLevels };
+  };
+  const session = new VoiceInputSession(dependencies);
+  return {
+    session,
+    recorder,
+    prepare,
+    keepAwake,
+    releaseKeepAwake,
+    publishAudioLevels,
+    getTranscriber: dependencies.getTranscriber,
+  };
 }
 
 describe("global voice input", () => {
@@ -167,26 +177,28 @@ describe("global voice input", () => {
   );
 
   it("appends to the starting draft after its screen leaves and another draft opens", async () => {
-    const { session, recorder } = createSession();
+    const { session, recorder, getTranscriber } = createSession();
     const drafts = new Map([
       ["first", "original prompt"],
       ["second", "other prompt"],
     ]);
     let visibleDraft = "first";
     const targetKey = visibleDraft;
-    await session.start(
-      createTarget(
+    await session.start({
+      ...createTarget(
         targetKey,
         () => drafts.get(targetKey) ?? null,
         (text) => drafts.set(targetKey, text),
         { start: 15, end: 15 },
       ),
-    );
+      environmentId: EnvironmentId.make("env-first"),
+    });
     visibleDraft = "second";
     expect(session.controller.currentState.phase).toBe("recording");
     expect(recorder.stop).not.toHaveBeenCalled();
     await session.controller.stop();
 
+    expect(getTranscriber).toHaveBeenCalledWith("env-first");
     expect(drafts.get("first")).toBe("original prompt spoken text");
     expect(drafts.get(visibleDraft)).toBe("other prompt");
     expect(session.controller.currentState.phase).toBe("idle");

@@ -1,3 +1,4 @@
+import type { EnvironmentId } from "@t3tools/contracts";
 import {
   VOICE_RECORDING_LIMIT_SECONDS,
   VoiceInputController,
@@ -6,6 +7,7 @@ import {
   type VoiceInputControllerDependencies,
   type VoiceInputPhase,
   type VoiceInputState,
+  type VoiceTranscriber,
 } from "@t3tools/client-runtime/voice-input";
 
 import { normalizeVoiceInputDecibels, VOICE_WAVEFORM_SAMPLE_COUNT } from "./voiceInputMetering";
@@ -16,6 +18,7 @@ const SILENT_LEVELS: ReadonlyArray<number> = Array<number>(VOICE_WAVEFORM_SAMPLE
 
 export type VoiceInputTarget = {
   readonly ownerKey: string;
+  readonly environmentId?: EnvironmentId | null;
   readonly label?: string;
   readonly readDraft: () => VoiceDraftSnapshot | null;
   readonly commitDraft: VoiceInputControllerDependencies["commitDraft"];
@@ -37,8 +40,9 @@ export type VoiceRecordingSample = {
 
 export type VoiceInputSessionDependencies = Omit<
   VoiceInputControllerDependencies,
-  "readDraft" | "commitDraft" | "onStateChange"
+  "readDraft" | "commitDraft" | "onStateChange" | "getTranscriber"
 > & {
+  readonly getTranscriber: (environmentId: EnvironmentId | null) => VoiceTranscriber | null;
   /** Reads the live recorder, or null when it is not capturing. */
   readonly sampleRecording: () => VoiceRecordingSample | null;
   /** Levels change every metering tick, so they bypass React state. */
@@ -101,6 +105,7 @@ export class VoiceInputSession {
     this.dependencies = dependencies;
     this.controller = new VoiceInputController({
       ...dependencies,
+      getTranscriber: () => dependencies.getTranscriber(this.target?.environmentId ?? null),
       onStateChange: (state) => this.handleStateChange(state),
       readDraft: () => this.target?.readDraft() ?? null,
       commitDraft: (text, selection) => this.target?.commitDraft(text, selection),
