@@ -78,11 +78,19 @@ jobs:
         with:
           install: "false"
 
+      # The image tries azure.archive.ubuntu.com first, which stalls at ~20 kB/s
+      # for long stretches (one release spent 16 minutes here). The mirror list
+      # is in apt-mirrors.txt, not ubuntu.sources. Only PNG resizing needs ImageMagick.
       - name: Install Linux desktop build libraries
         if: runner.os == 'Linux'
         run: |
+          printf '%s\tpriority:%s\n' \
+            https://archive.ubuntu.com/ubuntu/ 1 \
+            https://mirrors.edge.kernel.org/ubuntu/ 2 \
+            http://azure.archive.ubuntu.com/ubuntu/ 3 \
+            | sudo tee /etc/apt/apt-mirrors.txt > /dev/null
           sudo apt-get update
-          sudo apt-get install -y libsecret-1-dev pkg-config imagemagick
+          sudo apt-get install -y --no-install-recommends libsecret-1-dev pkg-config imagemagick
 
       - name: Cache Electron and electron-builder downloads
         uses: actions/cache@v6
@@ -189,5 +197,12 @@ jobs:
             echo
             echo "Instaladores Windows x64 (não assinado) e Linux x64 (AppImage), gerados de $GITHUB_SHA."
           } > notes.md
-          gh release create "v$VERSION" release/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+          # gh retries a dropped upload, fails with "ReleaseAsset.name already exists",
+          # and deletes the release. Upload into a draft with --clobber so a retry is safe.
+          gh release create "v$VERSION" --draft --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "RenanCode $VERSION" --notes-file notes.md
+          for attempt in 1 2 3; do
+            gh release upload "v$VERSION" release/* --clobber --repo "$GITHUB_REPOSITORY" && break
+            [ "$attempt" -lt 3 ] || exit 1
+          done
+          gh release edit "v$VERSION" --draft=false --latest --repo "$GITHUB_REPOSITORY"
