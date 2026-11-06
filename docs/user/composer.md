@@ -214,8 +214,9 @@ Use the composer's microphone to record, then confirm to transcribe. Text is
 inserted where your selection was when recording started, ready for you to review
 and edit before sending.
 
-By default, audio stays on the phone. Local transcription needs a supported iPhone
-with iOS 26 or later, or Android 12 or later with compatible Google speech services.
+On iPhone, audio stays on the phone by default. Local transcription needs a
+supported iPhone with iOS 26 or later. On Android, the recording goes to the
+thread's server and needs the key from [Dictate a prompt](#dictate-a-prompt).
 To use a paired environment instead, open **Settings → Voice → Transcribe on**,
 choose the environment, and confirm. Finished recordings go only to that environment,
 even when a draft belongs to another one. This also works on phones without local
@@ -227,8 +228,7 @@ On-device dictation may need a network connection to download a speech model the
 first time. After that it works offline for that language. iPhone dictates in the
 first of your preferred languages (**Settings → General → Language & Region**)
 that Apple’s speech model supports. If none is supported, it tries the app’s
-language. Android transcribes on the device while you
-record and finishes after you stop. Recordings can be up to five
+language. Recordings can be up to five
 minutes long. Canceling or an audio interruption discards the recording and
 preserves your existing draft. Navigating to another screen keeps dictation active;
 use the floating controls to finish or cancel. While recording, the screen stays
