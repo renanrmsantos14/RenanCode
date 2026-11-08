@@ -41,7 +41,7 @@ const readView = (): View => {
 
 const ALL_PROJECTS = "all";
 
-export const moduleThreadPrompt = (path: string[], note: string) =>
+const moduleThreadPrompt = (path: string[], note: string) =>
   [`Módulo: ${path.join(" › ")}`, note.trim() === "" ? null : `Nota: ${note.trim()}`]
     .filter((line) => line !== null)
     .join("\n") + "\n\n";

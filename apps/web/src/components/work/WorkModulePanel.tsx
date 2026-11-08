@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { isOverdue, type WorkModuleNode } from "@t3tools/client-runtime/workModuleTree";
 import type { ThreadId, WorkModuleId } from "@t3tools/contracts";
@@ -28,7 +28,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Sheet, SheetHeader, SheetPopup, SheetTitle } from "~/components/ui/sheet";
 import { Textarea } from "~/components/ui/textarea";
-import { useThreadShells } from "~/state/entities";
+import { useThreadShellsForProjectRefs } from "~/state/entities";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { workModuleEnvironment } from "~/state/workModules";
 import { buildThreadRouteParams } from "~/threadRoutes";
@@ -117,7 +117,10 @@ export function WorkModulePanel(props: {
     useAtomValue(workModuleEnvironment.live({ environmentId, input: {} })),
     () => null,
   );
-  const threads = useThreadShells();
+  // The family keys on the refs' string form, so a fresh array each render reuses the atom.
+  const threads = useThreadShellsForProjectRefs([
+    scopeProjectRef(environmentId, project.project.id),
+  ]);
   const navigate = useNavigate();
   const linkThread = useAtomCommand(workModuleEnvironment.linkThread, {
     label: "work module link",
