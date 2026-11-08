@@ -39,6 +39,8 @@ const readView = (): View => {
   }
 };
 
+const ALL_PROJECTS = "all";
+
 const boardProjectKey = (project: WorkBoardProject) =>
   `${project.project.environmentId}:${project.project.id}`;
 
@@ -88,6 +90,7 @@ export function WorkPage() {
   const [view, setView] = useState<View>(readView);
   const [dueThisMonth, setDueThisMonth] = useState(false);
   const [hideDone, setHideDone] = useState(false);
+  const [projectFilter, setProjectFilter] = useState(ALL_PROJECTS);
   const [creating, setCreating] = useState(false);
   const [open, setOpen] = useState<{ project: WorkBoardProject; moduleId: WorkModuleId } | null>(
     null,
@@ -100,6 +103,10 @@ export function WorkPage() {
   const today = new Date(`${nowMinute}Z`).toLocaleDateString("sv-SE");
   const filters = { dueThisMonth, hideDone, today };
   const writableProjects = board.projects.filter((project) => project.canWrite);
+  const filteredProject = board.projects.find(
+    (project) => boardProjectKey(project) === projectFilter,
+  );
+  const shownProjects = filteredProject === undefined ? board.projects : [filteredProject];
 
   const changeView = (next: View) => {
     setView(next);
@@ -144,19 +151,36 @@ export function WorkPage() {
           <ToggleGroupItem value="tree">Árvore</ToggleGroupItem>
           <ToggleGroupItem value="kanban">Kanban</ToggleGroupItem>
         </ToggleGroup>
-        <div className="ms-auto">
-          <Button
-            size="xs"
-            variant="outline"
-            disabled={writableProjects.length === 0}
-            onClick={() => setCreating(true)}
-          >
-            <PlusIcon />
-            Módulo
-          </Button>
-        </div>
+        {writableProjects.length === 0 ? null : (
+          <div className="ms-auto">
+            <Button size="xs" variant="outline" onClick={() => setCreating(true)}>
+              <PlusIcon />
+              Módulo
+            </Button>
+          </div>
+        )}
       </WorkspacePageHeader>
       <div className="flex flex-wrap items-center gap-2 px-4 py-2">
+        <div className="w-56">
+          <Select
+            value={filteredProject === undefined ? ALL_PROJECTS : projectFilter}
+            onValueChange={(value) => {
+              if (typeof value === "string") setProjectFilter(value);
+            }}
+          >
+            <SelectTrigger size="sm" aria-label="Projeto">
+              <SelectValue>{filteredProject?.project.title ?? "Todos os projetos"}</SelectValue>
+            </SelectTrigger>
+            <SelectPopup>
+              <SelectItem value={ALL_PROJECTS}>Todos os projetos</SelectItem>
+              {board.projects.map((project) => (
+                <SelectItem key={boardProjectKey(project)} value={boardProjectKey(project)}>
+                  {project.project.title}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        </div>
         <Toggle
           variant="outline"
           size="sm"
@@ -172,13 +196,13 @@ export function WorkPage() {
       <div className="min-h-0 flex-1 overflow-auto">
         {view === "tree" ? (
           <WorkTree
-            projects={board.projects}
+            projects={shownProjects}
             filters={filters}
             loading={board.loading}
             {...handlers}
           />
         ) : (
-          <WorkKanban projects={board.projects} filters={filters} {...handlers} />
+          <WorkKanban projects={shownProjects} filters={filters} {...handlers} />
         )}
       </div>
       {open === null ? null : (
