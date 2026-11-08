@@ -27,21 +27,30 @@ export class WorkModuleService extends Context.Service<
     readonly subscribe: () => Stream.Stream<WorkModuleSnapshot, WorkModuleError>;
     readonly upsert: (input: WorkModuleUpsertInput) => Effect.Effect<WorkModule, WorkModuleError>;
     readonly move: (input: WorkModuleMoveInput) => Effect.Effect<WorkModule, WorkModuleError>;
-    readonly delete: (id: WorkModuleId) => Effect.Effect<ReadonlyArray<WorkModuleId>, WorkModuleError>;
+    readonly delete: (
+      id: WorkModuleId,
+    ) => Effect.Effect<ReadonlyArray<WorkModuleId>, WorkModuleError>;
     readonly linkThread: (input: {
       readonly threadId: ThreadId;
       readonly moduleId: WorkModuleId;
       readonly suggested: boolean;
     }) => Effect.Effect<WorkModuleThreadLink, WorkModuleError>;
-    readonly unlinkThreads: (threadIds: ReadonlyArray<ThreadId>) => Effect.Effect<void, WorkModuleError>;
-    readonly confirmSuggestion: (threadId: ThreadId) => Effect.Effect<WorkModuleThreadLink, WorkModuleError>;
+    readonly unlinkThreads: (
+      threadIds: ReadonlyArray<ThreadId>,
+    ) => Effect.Effect<void, WorkModuleError>;
+    readonly confirmSuggestion: (
+      threadId: ThreadId,
+    ) => Effect.Effect<WorkModuleThreadLink, WorkModuleError>;
     readonly appendAgentNote: (input: {
       readonly moduleId: WorkModuleId;
       readonly text: string;
     }) => Effect.Effect<WorkModule, WorkModuleError>;
     readonly moduleForThread: (
       threadId: ThreadId,
-    ) => Effect.Effect<{ readonly module: WorkModule; readonly link: WorkModuleThreadLink } | null, WorkModuleError>;
+    ) => Effect.Effect<
+      { readonly module: WorkModule; readonly link: WorkModuleThreadLink } | null,
+      WorkModuleError
+    >;
   }
 >()("t3/workModules/WorkModuleService") {}
 
@@ -140,7 +149,9 @@ export const layer = Layer.effect(
       const modules = yield* sql<ModuleRow>`
         SELECT * FROM work_modules ORDER BY project_id, parent_module_id, position
       `.pipe(Effect.mapError(storage));
-      const links = yield* sql<LinkRow>`SELECT * FROM work_module_threads`.pipe(Effect.mapError(storage));
+      const links = yield* sql<LinkRow>`SELECT * FROM work_module_threads`.pipe(
+        Effect.mapError(storage),
+      );
       return { modules: modules.map(toModule), links: links.map(toLink) };
     });
 
@@ -164,7 +175,9 @@ export const layer = Layer.effect(
         if (parentId !== null) {
           const parent = yield* readModule(parentId);
           if (parent.projectId !== input.projectId) {
-            return yield* fail("Modules can only move within their project.", { moduleId: parentId });
+            return yield* fail("Modules can only move within their project.", {
+              moduleId: parentId,
+            });
           }
         }
         const status = input.status ?? "idea";
@@ -293,14 +306,17 @@ export const layer = Layer.effect(
     }) {
       const module = yield* readModule(input.moduleId);
       const shell = yield* threads.getThreadShell(input.threadId).pipe(Effect.mapError(storage));
-      if (shell === null || shell.deletedAt !== null) return yield* fail("The thread was not found.");
+      if (shell === null || shell.deletedAt !== null)
+        return yield* fail("The thread was not found.");
       if (shell.projectId !== module.projectId) {
         return yield* fail("The thread belongs to another project.", { moduleId: input.moduleId });
       }
       if (input.suggested) {
         const current = yield* readLink(input.threadId);
         if (current !== null && !current.suggested) {
-          return yield* fail("The user already linked this thread; a suggestion cannot replace it.");
+          return yield* fail(
+            "The user already linked this thread; a suggestion cannot replace it.",
+          );
         }
       }
       const now = iso(yield* DateTime.now);
@@ -317,7 +333,12 @@ export const layer = Layer.effect(
           linked_at = excluded.linked_at
       `.pipe(Effect.mapError(storage));
       yield* notify;
-      return { threadId: input.threadId, moduleId: input.moduleId, suggested: input.suggested, linkedAt: now };
+      return {
+        threadId: input.threadId,
+        moduleId: input.moduleId,
+        suggested: input.suggested,
+        linkedAt: now,
+      };
     });
 
     const unlinkThreads = Effect.fn("WorkModuleService.unlinkThreads")(function* (

@@ -66,7 +66,9 @@ it.effect("requires a reason for waiting and clears it when leaving waiting", ()
   withService((service) =>
     Effect.gen(function* () {
       const m = yield* service.upsert({ projectId: app, title: "Domain" });
-      const refused = yield* service.upsert({ id: m.id, projectId: app, status: "waiting" }).pipe(Effect.flip);
+      const refused = yield* service
+        .upsert({ id: m.id, projectId: app, status: "waiting" })
+        .pipe(Effect.flip);
       assert.strictEqual(refused.message, "A waiting module needs a reason.");
       const waiting = yield* service.upsert({
         id: m.id,
@@ -102,13 +104,19 @@ it.effect("refuses moving a module under itself or its grandchild, and across pr
     Effect.gen(function* () {
       const root = yield* service.upsert({ projectId: app, title: "Board" });
       const child = yield* service.upsert({ projectId: app, parentId: root.id, title: "Web" });
-      const grandchild = yield* service.upsert({ projectId: app, parentId: child.id, title: "Tree" });
+      const grandchild = yield* service.upsert({
+        projectId: app,
+        parentId: child.id,
+        title: "Tree",
+      });
       const other = yield* service.upsert({ projectId: site, title: "Checkout" });
       for (const parentId of [root.id, grandchild.id]) {
         const error = yield* service.move({ id: root.id, parentId, index: 0 }).pipe(Effect.flip);
         assert.strictEqual(error.message, "A module cannot move inside itself.");
       }
-      const across = yield* service.move({ id: child.id, parentId: other.id, index: 0 }).pipe(Effect.flip);
+      const across = yield* service
+        .move({ id: child.id, parentId: other.id, index: 0 })
+        .pipe(Effect.flip);
       assert.strictEqual(across.message, "Modules can only move within their project.");
     }),
   ),
@@ -142,7 +150,10 @@ it.effect("deletes descendants and their links but keeps the threads' other data
       const deleted = yield* service.delete(root.id);
       assert.sameMembers([...deleted], [root.id, child.id]);
       const snapshot = yield* service.snapshot();
-      assert.deepStrictEqual(snapshot.modules.map((m) => m.id), [keep.id]);
+      assert.deepStrictEqual(
+        snapshot.modules.map((m) => m.id),
+        [keep.id],
+      );
       assert.lengthOf(snapshot.links, 0);
     }),
   ),
@@ -156,7 +167,10 @@ it.effect("keeps one module per thread and refuses cross-project links", () =>
       yield* service.linkThread({ threadId: threadInApp, moduleId: a.id, suggested: false });
       yield* service.linkThread({ threadId: threadInApp, moduleId: b.id, suggested: false });
       const { links } = yield* service.snapshot();
-      assert.deepStrictEqual(links.map((l) => l.moduleId), [b.id]);
+      assert.deepStrictEqual(
+        links.map((l) => l.moduleId),
+        [b.id],
+      );
       const error = yield* service
         .linkThread({ threadId: threadInSite, moduleId: a.id, suggested: false })
         .pipe(Effect.flip);
@@ -178,7 +192,10 @@ it.effect("lets a suggestion replace a suggestion but never a confirmed link", (
       const refused = yield* service
         .linkThread({ threadId: threadInApp, moduleId: a.id, suggested: true })
         .pipe(Effect.flip);
-      assert.strictEqual(refused.message, "The user already linked this thread; a suggestion cannot replace it.");
+      assert.strictEqual(
+        refused.message,
+        "The user already linked this thread; a suggestion cannot replace it.",
+      );
     }),
   ),
 );
@@ -190,7 +207,10 @@ it.effect("appends agent notes without rewriting the note", () =>
       const once = yield* service.appendAgentNote({ moduleId: m.id, text: "PR opened" });
       const twice = yield* service.appendAgentNote({ moduleId: m.id, text: "CI green" });
       assert.strictEqual(once.note, "Mine\n1970-01-01 · agent: PR opened");
-      assert.strictEqual(twice.note, "Mine\n1970-01-01 · agent: PR opened\n1970-01-01 · agent: CI green");
+      assert.strictEqual(
+        twice.note,
+        "Mine\n1970-01-01 · agent: PR opened\n1970-01-01 · agent: CI green",
+      );
     }),
   ),
 );

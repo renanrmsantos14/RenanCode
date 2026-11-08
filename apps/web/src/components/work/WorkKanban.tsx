@@ -130,11 +130,7 @@ export function WorkKanban(
   );
 }
 
-function KanbanColumn(props: {
-  status: WorkModuleStatus;
-  count: number;
-  children: ReactNode;
-}) {
+function KanbanColumn(props: { status: WorkModuleStatus; count: number; children: ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: props.status });
   return (
     <section

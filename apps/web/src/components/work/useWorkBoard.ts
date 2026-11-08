@@ -68,8 +68,7 @@ export function useWorkBoard(): { projects: WorkBoardProject[]; loading: boolean
           nodes: forests.get(project.environmentId)?.get(project.id) ?? [],
           connected: index >= 0,
           unavailable: index >= 0 && queries[index]!._tag === "Failure",
-          canWrite:
-            index >= 0 && queries[index]!._tag === "Success" && permissions[index] === true,
+          canWrite: index >= 0 && queries[index]!._tag === "Success" && permissions[index] === true,
         };
       }),
   };

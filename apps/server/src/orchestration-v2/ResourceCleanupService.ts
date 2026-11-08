@@ -16,7 +16,13 @@ import * as WorkModuleService from "../workModules/WorkModuleService.ts";
 export class ResourceCleanupError extends Schema.TaggedError<ResourceCleanupError>()(
   "ResourceCleanupError",
   {
-    operation: Schema.Literals(["terminal", "preview", "attachment", "scheduled-tasks", "work-modules"]),
+    operation: Schema.Literals([
+      "terminal",
+      "preview",
+      "attachment",
+      "scheduled-tasks",
+      "work-modules",
+    ]),
     threadId: Schema.optional(Schema.String),
     attachmentId: Schema.optional(Schema.String),
     cause: Schema.Defect(),
@@ -25,7 +31,9 @@ export class ResourceCleanupError extends Schema.TaggedError<ResourceCleanupErro
 
 export class ResourceCleanupService extends Context.Reference<{
   readonly cleanupScheduledTasks: (threadId: ThreadId) => Effect.Effect<void, ResourceCleanupError>;
-  readonly cleanupWorkModuleLinks: (threadId: ThreadId) => Effect.Effect<void, ResourceCleanupError>;
+  readonly cleanupWorkModuleLinks: (
+    threadId: ThreadId,
+  ) => Effect.Effect<void, ResourceCleanupError>;
   readonly cleanupTerminals: (threadId: string) => Effect.Effect<void, ResourceCleanupError>;
   readonly cleanupPreviews: (threadId: string) => Effect.Effect<void, ResourceCleanupError>;
   readonly cleanupAttachments: (

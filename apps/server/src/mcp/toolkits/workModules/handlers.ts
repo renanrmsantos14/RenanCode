@@ -1,8 +1,4 @@
-import {
-  OrchestratorMcpFailure,
-  type WorkModule,
-  WorkModuleError,
-} from "@t3tools/contracts";
+import { OrchestratorMcpFailure, type WorkModule, WorkModuleError } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import * as WorkModuleService from "../../../workModules/WorkModuleService.ts";
@@ -62,7 +58,9 @@ const handlers = {
       const suffix = found.link.suggested
         ? "\n(Suggested link, not yet confirmed by the user.)"
         : "";
-      return { text: formatWorkModule(found.module, ancestors(found.module, modules), links) + suffix };
+      return {
+        text: formatWorkModule(found.module, ancestors(found.module, modules), links) + suffix,
+      };
     }),
   ),
   t3_work_module_suggest: McpToolAccess.writes((input) =>
@@ -94,7 +92,11 @@ const handlers = {
           return { text: "Suggested. The user confirms or discards it on the board." };
         }
         case "note": {
-          if (input.moduleId === undefined || input.text === undefined || input.text.trim() === "") {
+          if (
+            input.moduleId === undefined ||
+            input.text === undefined ||
+            input.text.trim() === ""
+          ) {
             return yield* invalid("note needs moduleId and text.");
           }
           yield* service

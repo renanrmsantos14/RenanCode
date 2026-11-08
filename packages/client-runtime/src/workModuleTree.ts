@@ -98,9 +98,7 @@ export function filterWorkModuleForest(
   });
 }
 
-export function kanbanColumns(
-  nodes: WorkModuleNode[],
-): Record<WorkModuleStatus, WorkModuleNode[]> {
+export function kanbanColumns(nodes: WorkModuleNode[]): Record<WorkModuleStatus, WorkModuleNode[]> {
   const columns = Object.fromEntries(
     WORK_MODULE_STATUSES.map((s) => [s, [] as WorkModuleNode[]]),
   ) as Record<WorkModuleStatus, WorkModuleNode[]>;

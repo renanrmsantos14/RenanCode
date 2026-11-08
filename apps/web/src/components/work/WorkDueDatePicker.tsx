@@ -29,7 +29,7 @@ export function WorkDueDatePicker(props: {
         render={<Button variant="ghost" size="sm" aria-label="Prazo" />}
       >
         <span className={props.overdue ? "text-destructive" : "text-muted-foreground"}>
-          {props.value === null ? "—" : shortLabel(props.value)}
+          {props.value === null ? "Sem prazo" : shortLabel(props.value)}
         </span>
       </PopoverTrigger>
       <PopoverPopup align="start" aria-label="Escolher prazo">
