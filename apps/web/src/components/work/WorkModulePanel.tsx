@@ -76,7 +76,7 @@ function LinkThreadDialog(props: {
           <DialogTitle>Ligar thread existente</DialogTitle>
         </DialogHeader>
         <DialogPanel>
-          <Combobox
+          <Combobox<EnvironmentThreadShell>
             items={props.threads}
             itemToStringLabel={(thread) => thread.title}
             onValueChange={(thread) => {

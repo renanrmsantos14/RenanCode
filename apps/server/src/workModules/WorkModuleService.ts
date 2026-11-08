@@ -148,12 +148,10 @@ export const layer = Layer.effect(
     const snapshot = Effect.fn("WorkModuleService.snapshot")(function* () {
       const modules = yield* sql<ModuleRow>`
         SELECT * FROM work_modules ORDER BY project_id, parent_module_id, position
-      `.pipe(Effect.mapError(storage));
-      const links = yield* sql<LinkRow>`SELECT * FROM work_module_threads`.pipe(
-        Effect.mapError(storage),
-      );
+      `;
+      const links = yield* sql<LinkRow>`SELECT * FROM work_module_threads`;
       return { modules: modules.map(toModule), links: links.map(toLink) };
-    });
+    }, Effect.mapError(storage));
 
     const subscribe = () =>
       Stream.unwrap(

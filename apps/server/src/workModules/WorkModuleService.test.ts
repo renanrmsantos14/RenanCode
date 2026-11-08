@@ -1,11 +1,6 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { assert, it } from "@effect/vitest";
-import {
-  type OrchestrationV2ThreadShell,
-  ProjectId,
-  ThreadId,
-  type WorkModuleError,
-} from "@t3tools/contracts";
+import { type OrchestrationV2ThreadShell, ProjectId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as TestClock from "effect/testing/TestClock";
@@ -40,10 +35,8 @@ const layer = WorkModuleService.layer.pipe(
   Layer.provideMerge(SqlitePersistence.layerMemory),
 );
 
-const withService = <A>(
-  body: (
-    service: WorkModuleService.WorkModuleService["Service"],
-  ) => Effect.Effect<A, WorkModuleError>,
+const withService = <A, E>(
+  body: (service: WorkModuleService.WorkModuleService["Service"]) => Effect.Effect<A, E>,
 ) =>
   Effect.gen(function* () {
     return yield* body(yield* WorkModuleService.WorkModuleService);

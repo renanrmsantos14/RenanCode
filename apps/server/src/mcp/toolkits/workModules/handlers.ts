@@ -1,5 +1,6 @@
 import { OrchestratorMcpFailure, type WorkModule, WorkModuleError } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import * as WorkModuleService from "../../../workModules/WorkModuleService.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
@@ -11,10 +12,10 @@ const invalid = (message: string) =>
   new OrchestratorMcpFailure({ code: "invalid_request", message });
 
 // WorkModuleError messages are written for people; anything else stays private.
+const isWorkModuleError = Schema.is(WorkModuleError);
+
 const domain = (error: unknown) =>
-  error instanceof WorkModuleError && error.cause === undefined
-    ? invalid(error.message)
-    : unavailable();
+  isWorkModuleError(error) && error.cause === undefined ? invalid(error.message) : unavailable();
 
 const ancestors = (module: WorkModule, modules: ReadonlyArray<WorkModule>) => {
   const titles: string[] = [];
