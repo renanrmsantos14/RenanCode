@@ -13,5 +13,6 @@ describe("t3_work_module_suggest parameters", () => {
       true,
     );
     expect(Exit.isFailure(decode({ action: "set_status", moduleId: "m:1" }))).toBe(true);
+    expect(Exit.isFailure(decode({ action: "create", projectId: "p", title: "   " }))).toBe(true);
   });
 });

@@ -1,4 +1,10 @@
-import { OrchestratorMcpFailure, ProjectId, ThreadId, WorkModuleId } from "@t3tools/contracts";
+import {
+  OrchestratorMcpFailure,
+  ProjectId,
+  ThreadId,
+  TrimmedNonEmptyString,
+  WorkModuleId,
+} from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { Tool, Toolkit } from "effect/ai";
 
@@ -40,7 +46,7 @@ const WorkModuleSuggestTool = Tool.make("t3_work_module_suggest", {
     parentModuleId: Schema.optional(WorkModuleId),
     moduleId: Schema.optional(WorkModuleId),
     threadId: Schema.optional(ThreadId),
-    title: Schema.optional(Schema.String.check(Schema.isMaxLength(200))),
+    title: Schema.optional(TrimmedNonEmptyString.check(Schema.isMaxLength(200))),
     text: Schema.optional(Schema.String.check(Schema.isMaxLength(2000))),
   }),
 })
