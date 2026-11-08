@@ -73,7 +73,7 @@ export function buildWorkModuleForest(
   return forest;
 }
 
-const matches = (module: WorkModule, filters: WorkModuleFilters) => {
+export const workModuleMatchesFilters = (module: WorkModule, filters: WorkModuleFilters) => {
   if (filters.hideDone && module.status === "done") return false;
   if (filters.dueThisMonth) {
     if (module.dueDate === null) return false;
@@ -90,8 +90,8 @@ export function filterWorkModuleForest(
   if (!filters.dueThisMonth && !filters.hideDone) return nodes;
   return nodes.flatMap((node) => {
     const children = filterWorkModuleForest(node.children, filters);
-    if (matches(node.module, filters)) return [{ ...node, children }];
-    if (children.length > 0 && !(filters.hideDone && node.module.status === "done")) {
+    if (workModuleMatchesFilters(node.module, filters)) return [{ ...node, children }];
+    if (children.length > 0) {
       return [{ ...node, children }];
     }
     return [];

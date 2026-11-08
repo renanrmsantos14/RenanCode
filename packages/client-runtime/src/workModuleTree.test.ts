@@ -12,6 +12,7 @@ import {
   filterWorkModuleForest,
   isOverdue,
   kanbanColumns,
+  workModuleMatchesFilters,
 } from "./workModuleTree.ts";
 
 const app = ProjectId.make("project:app");
@@ -89,6 +90,21 @@ describe("work module tree", () => {
     });
     expect(open.map((n) => n.module.title)).toEqual(["board"]);
     expect(open[0]!.children.map((n) => n.module.title)).toEqual(["web", "mobile"]);
+
+    const doneParent = buildWorkModuleForest({
+      modules: [mod("p", null, 0, { status: "done" }), mod("c", "p", 0)],
+      links: [],
+    }).get(app)!;
+    const hidden = filterWorkModuleForest(doneParent, {
+      dueThisMonth: false,
+      hideDone: true,
+      today: "2026-11-08",
+    });
+    expect(hidden.map((n) => n.module.title)).toEqual(["p"]);
+    expect(hidden[0]!.children.map((n) => n.module.title)).toEqual(["c"]);
+    const filters = { dueThisMonth: false, hideDone: true, today: "2026-11-08" };
+    expect(workModuleMatchesFilters(doneParent[0]!.module, filters)).toBe(false);
+    expect(workModuleMatchesFilters(doneParent[0]!.children[0]!.module, filters)).toBe(true);
   });
 
   it("flattens into status columns ordered by due date, then tree order", () => {
