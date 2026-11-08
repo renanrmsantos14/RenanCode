@@ -51,7 +51,18 @@ describe("parseNewThreadLink", () => {
         repository: { owner: "pingdotgg", name: "t3code" },
         provider: "codex",
         model: "gpt-5",
+        moduleId: null,
       },
+    });
+  });
+
+  it("reads an optional work module and rejects a malformed one", () => {
+    const ok = parseNewThreadLink("?prompt=Go&module=work-module:abc-123");
+    expect(ok).toMatchObject({ ok: true, value: { kind: "new", moduleId: "work-module:abc-123" } });
+    expect(parseNewThreadLink("?prompt=Go")).toMatchObject({ ok: true, value: { moduleId: null } });
+    expect(parseNewThreadLink("?prompt=Go&module=%3Cscript%3E")).toEqual({
+      ok: false,
+      error: "This link names a work module RenanCode cannot read.",
     });
   });
 

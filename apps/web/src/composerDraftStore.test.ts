@@ -28,6 +28,7 @@ import {
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   RunId,
   ThreadId,
+  WorkModuleId,
   type OrchestrationV2ThreadShell,
   type OrchestrationV2ShellSnapshot,
   type ModelSelection,
@@ -1265,6 +1266,25 @@ describe("composerDraftStore project draft thread mapping", () => {
       loadBalancedEnvironmentId: null,
     });
     expect(store.getComposerDraft(draftId)?.prompt).toBe("keep this prompt");
+  });
+
+  it("keeps a draft's work module through context changes and a reload, but not across projects", () => {
+    const store = useComposerDraftStore.getState();
+    const moduleId = WorkModuleId.make("work-module-a");
+    store.setProjectDraftThreadId(projectRef, draftId, { threadId });
+    store.setDraftWorkModule(draftId, moduleId);
+    store.setDraftThreadContext(draftId, { branch: "feature/module" });
+    store.setProjectDraftThreadId(projectRef, draftId, { threadId });
+    const merge = useComposerDraftStore.persist.getOptions().merge!;
+    const hydrated = merge(
+      JSON.parse(
+        JSON.stringify(partializeComposerDraftStoreState(useComposerDraftStore.getState())),
+      ),
+      useComposerDraftStore.getInitialState(),
+    );
+    expect(hydrated.draftThreadsByThreadKey[draftId]?.workModuleId).toBe(moduleId);
+    store.setDraftThreadContext(draftId, { projectRef: otherProjectRef });
+    expect(store.getDraftThread(draftId)?.workModuleId).toBeUndefined();
   });
 });
 

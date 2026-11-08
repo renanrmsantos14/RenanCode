@@ -26,6 +26,7 @@ import {
   type ScopedThreadRef,
   ThreadId,
   SnapShotSource,
+  WorkModuleId,
 } from "@t3tools/contracts";
 import {
   parseScopedProjectKey,
@@ -319,6 +320,7 @@ const PersistedDraftThreadState = Schema.Struct({
   worktreePath: Schema.NullOr(Schema.String),
   envMode: DraftThreadEnvModeSchema,
   startFromOrigin: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  workModuleId: Schema.optionalKey(Schema.String),
   promotedTo: Schema.optionalKey(
     Schema.NullOr(
       Schema.Struct({
@@ -415,6 +417,7 @@ export interface DraftSessionState {
   worktreePath: string | null;
   envMode: DraftThreadEnvMode;
   startFromOrigin: boolean;
+  workModuleId?: WorkModuleId;
   promotedTo?: ScopedThreadRef | null;
 }
 
@@ -502,6 +505,7 @@ interface ComposerDraftStoreState {
       loadBalancedEnvironmentId?: EnvironmentId | null;
     },
   ) => void;
+  setDraftWorkModule: (threadRef: ComposerThreadTarget, moduleId: WorkModuleId | null) => void;
   clearProjectDraftThreadId: (projectRef: ScopedProjectRef) => void;
   clearProjectDraftThreadById: (
     projectRef: ScopedProjectRef,
@@ -1532,6 +1536,9 @@ function createDraftThreadState(
     envMode:
       options?.envMode ?? (nextWorktreePath ? "worktree" : (existingThread?.envMode ?? "local")),
     startFromOrigin: nextStartFromOrigin,
+    ...(existingThread?.workModuleId !== undefined && !projectChanged
+      ? { workModuleId: existingThread.workModuleId }
+      : {}),
     promotedTo: null,
   };
 }
@@ -1725,6 +1732,10 @@ function normalizePersistedDraftThreads(
           : candidateDraftThread.loadBalancedEnvironmentId === null
             ? { loadBalancedEnvironmentId: null }
             : {}),
+        ...(typeof candidateDraftThread.workModuleId === "string" &&
+        candidateDraftThread.workModuleId.length > 0
+          ? { workModuleId: candidateDraftThread.workModuleId }
+          : {}),
         promotedTo,
       };
     }
@@ -2488,6 +2499,9 @@ function toHydratedDraftThreadState(
             persistedDraftThread.loadBalancedEnvironmentId as EnvironmentId | null,
         }
       : {}),
+    ...(persistedDraftThread.workModuleId
+      ? { workModuleId: WorkModuleId.make(persistedDraftThread.workModuleId) }
+      : {}),
     promotedTo: persistedDraftThread.promotedTo
       ? scopeThreadRef(
           persistedDraftThread.promotedTo.environmentId as EnvironmentId,
@@ -2770,6 +2784,9 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
               envMode:
                 options.envMode ?? (nextWorktreePath ? "worktree" : (existing.envMode ?? "local")),
               startFromOrigin: nextStartFromOrigin,
+              ...(existing.workModuleId !== undefined && !projectChanged
+                ? { workModuleId: existing.workModuleId }
+                : {}),
               promotedTo: existing.promotedTo ?? null,
             };
             const isUnchanged =
@@ -2793,6 +2810,21 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
               draftThreadsByThreadKey: {
                 ...state.draftThreadsByThreadKey,
                 [threadKey]: nextDraftThread,
+              },
+            };
+          });
+        },
+        setDraftWorkModule: (threadRef, moduleId) => {
+          const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
+          if (threadKey.length === 0) return;
+          set((state) => {
+            const existing = state.draftThreadsByThreadKey[threadKey];
+            if (existing === undefined) return state;
+            const { workModuleId: _previous, ...rest } = existing;
+            return {
+              draftThreadsByThreadKey: {
+                ...state.draftThreadsByThreadKey,
+                [threadKey]: moduleId === null ? rest : { ...rest, workModuleId: moduleId },
               },
             };
           });

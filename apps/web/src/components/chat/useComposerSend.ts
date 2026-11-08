@@ -91,6 +91,7 @@ import { environmentServerConfigsAtom } from "../../state/server";
 import { threadEnvironment } from "../../state/threads";
 import { claudeCloudEnvironment } from "../../state/claudeCloud";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { workModuleEnvironment } from "../../state/workModules";
 import { runMobileComposerTransition } from "./draftHeroTransition";
 import { useClientSettingsHydrated, useEnvironmentSettings } from "../../hooks/useSettings";
 import { environmentPresentations } from "../../state/presentation";
@@ -350,6 +351,9 @@ export function useComposerSend(input: ComposerSendInput) {
   });
   const startClaudeCloudSession = useAtomCommand(claudeCloudEnvironment.startSession, {
     reportFailure: false,
+  });
+  const linkWorkModule = useAtomCommand(workModuleEnvironment.linkThread, {
+    label: "work module link",
   });
   const uploadThreadFeedback = useOrchestrationCommand(threadEnvironment.uploadFeedback, {
     reportFailure: false,
@@ -1501,6 +1505,13 @@ export function useComposerSend(input: ComposerSendInput) {
           releaseDraftAttachments(composerAttachmentsSnapshot);
         }
         acknowledgeActiveThreadWoke();
+        // The thread exists now; a failed link leaves "Módulo: —" in the header to retry by hand.
+        if (sentDraftThreadRef && draftThread?.workModuleId !== undefined) {
+          void linkWorkModule({
+            environmentId,
+            input: { threadId: threadIdForSend, moduleId: draftThread.workModuleId },
+          });
+        }
         // A draft still on screen finalizes once its thread route takes over.
         if (sentDraftThreadRef) {
           if (backgroundDraftOpened || currentRouteThreadKeyRef.current !== routeThreadKey) {

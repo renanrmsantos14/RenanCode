@@ -65,6 +65,7 @@ import {
   FolderGit2Icon,
   FolderIcon,
   FolderPlusIcon,
+  ListTreeIcon,
   MessageSquareDashedIcon,
   LinkIcon,
   MessageSquareIcon,
@@ -1630,6 +1631,17 @@ function OpenCommandPaletteDialog(props: {
     shortcutCommand: "usage.open",
     run: async () => {
       await navigate({ to: "/usage" });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:work",
+    searchTerms: ["work", "trabalho", "board", "modules", "módulos", "plano", "kanban", "mês"],
+    title: "Abrir Trabalho",
+    icon: <ListTreeIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/work" });
     },
   });
 

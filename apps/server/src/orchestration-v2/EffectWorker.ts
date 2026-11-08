@@ -530,6 +530,17 @@ export const layerExecutor: Layer.Layer<
                   }),
               ),
             );
+          case "work-modules.cleanup":
+            return resourceCleanup.cleanupWorkModuleLinks(effect.threadId).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new OrchestrationEffectExecutionError({
+                    effectId: effect.id,
+                    effectType: effect.request.type,
+                    cause,
+                  }),
+              ),
+            );
           case "terminal.cleanup":
             return resourceCleanup.cleanupTerminals(effect.threadId).pipe(
               Effect.mapError(

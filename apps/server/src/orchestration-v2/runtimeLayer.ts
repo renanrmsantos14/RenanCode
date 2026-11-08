@@ -61,6 +61,7 @@ import * as ThreadLaunchService from "./ThreadLaunchService.ts";
 import * as ThreadForkService from "./ThreadForkService.ts";
 import * as TurnItemPositionStore from "./TurnItemPositionStore.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
+import * as WorkModuleService from "../workModules/WorkModuleService.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
 
 export const layerEventInfrastructure = Layer.mergeAll(
@@ -296,6 +297,9 @@ const layerScheduledTaskProvided = ScheduledTaskService.layer.pipe(
     ),
   ),
 );
+const layerWorkModuleProvided = WorkModuleService.layer.pipe(
+  Layer.provide(layerThreadManagementProvided),
+);
 const layerScratchThreadPromotionProvided = ScratchThreadPromotion.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
@@ -303,6 +307,7 @@ const layerScratchThreadPromotionProvided = ScratchThreadPromotion.layer.pipe(
       layerManagedProjectFoldersProvided,
       layerThreadManagementProvided,
       layerScheduledTaskProvided,
+      layerWorkModuleProvided,
     ),
   ),
 );
@@ -414,6 +419,7 @@ export const layerProduction = Layer.mergeAll(
   layerManagedProjectFoldersProvided,
   layerThreadLaunchProvided,
   layerScheduledTaskProvided,
+  layerWorkModuleProvided,
   layerScratchThreadPromotionProvided,
   layerCacheKeepWarmProvided,
   layerThreadHandoffProvided,
@@ -435,7 +441,11 @@ export const layerProduction = Layer.mergeAll(
   layerClaudeCloudSessionsProvided,
   EffectOutbox.layerPruneWorker.pipe(Layer.provide(EffectOutbox.layer)),
 ).pipe(
-  Layer.provide(ResourceCleanupService.layer.pipe(Layer.provide(layerScheduledTaskProvided))),
+  Layer.provide(
+    ResourceCleanupService.layer.pipe(
+      Layer.provide(Layer.merge(layerScheduledTaskProvided, layerWorkModuleProvided)),
+    ),
+  ),
   Layer.provide(Scheduler.layer),
   Layer.provideMerge(layerEventInfrastructure),
 );

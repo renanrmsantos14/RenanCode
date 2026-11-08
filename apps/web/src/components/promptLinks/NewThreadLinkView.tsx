@@ -15,7 +15,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
-import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import { type EnvironmentId, type ProjectId, WorkModuleId } from "@t3tools/contracts";
 import {
   type NewThreadLink,
   type PromptLinkRepository,
@@ -145,6 +145,11 @@ export function NewThreadLinkView({ link }: { readonly link: NewThreadLink }) {
       return;
     }
     setState({ status: "opened" });
+    if (link.kind === "new" && link.moduleId !== null) {
+      useComposerDraftStore
+        .getState()
+        .setDraftWorkModule(opened.draftId, WorkModuleId.make(link.moduleId));
+    }
     const notes: Array<string> = [];
     if (link.kind === "new" && link.provider !== null) {
       const providers =

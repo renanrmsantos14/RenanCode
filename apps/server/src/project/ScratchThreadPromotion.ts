@@ -15,6 +15,7 @@ import * as Schema from "effect/Schema";
 import { threadHasUnfinishedWork } from "../orchestration-v2/Orchestrator.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
+import * as WorkModuleService from "../workModules/WorkModuleService.ts";
 import * as ManagedProjectFolders from "./ManagedProjectFolders.ts";
 import * as ProjectService from "./ProjectService.ts";
 
@@ -48,6 +49,7 @@ const make = Effect.gen(function* () {
   const projects = yield* ProjectService.ProjectService;
   const threads = yield* ThreadManagementService.ThreadManagementService;
   const scheduledTasks = yield* ScheduledTaskService.ScheduledTaskService;
+  const workModules = yield* WorkModuleService.WorkModuleService;
   const random = yield* SecureRandom.SecureRandom;
   const path = yield* Path.Path;
 
@@ -112,6 +114,9 @@ const make = Effect.gen(function* () {
         yield* scheduledTasks
           .moveThreadTasks({ threadIds: [...moveSet.keys()], projectId })
           .pipe(Effect.mapError(fail("Could not move the thread's scheduled tasks.")));
+        yield* workModules
+          .unlinkThreads([...moveSet.keys()])
+          .pipe(Effect.mapError(fail("Could not clear the thread's work module links.")));
         for (const candidate of moveSet.values()) {
           const commandId = CommandId.make(`scratch-promotion:${yield* randomId}`);
           yield* threads
