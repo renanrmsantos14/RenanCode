@@ -2,11 +2,10 @@ import { WORK_MODULE_STATUSES, type WorkModuleStatus } from "@t3tools/contracts"
 import { useRef, useState } from "react";
 
 import { Badge } from "~/components/ui/badge";
-import { Input } from "~/components/ui/input";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "~/components/ui/menu";
-import { Popover, PopoverPopup } from "~/components/ui/popover";
 
 import { WORK_STATUS_BADGE, WORK_STATUS_LABEL } from "./workStatus";
+import { WorkWaitingReasonPrompt } from "./WorkWaitingReasonPrompt";
 
 export function WorkStatusMenu(props: {
   status: WorkModuleStatus;
@@ -17,7 +16,6 @@ export function WorkStatusMenu(props: {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [reasonRequested, setReasonRequested] = useState(false);
   const [askingReason, setAskingReason] = useState(false);
-  const [reason, setReason] = useState(props.waitingReason ?? "");
   const label = WORK_STATUS_LABEL[props.status];
   return (
     <>
@@ -54,27 +52,16 @@ export function WorkStatusMenu(props: {
           ))}
         </MenuPopup>
       </Menu>
-      <Popover open={askingReason} onOpenChange={setAskingReason}>
-        <PopoverPopup anchor={triggerRef} align="start" padding="compact" width="sm">
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              const trimmed = reason.trim();
-              if (trimmed === "") return;
-              setAskingReason(false);
-              props.onChange({ status: "waiting", waitingReason: trimmed });
-            }}
-          >
-            <Input
-              aria-label="Esperando o quê"
-              placeholder="Esperando o quê…"
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              autoFocus
-            />
-          </form>
-        </PopoverPopup>
-      </Popover>
+      <WorkWaitingReasonPrompt
+        open={askingReason}
+        initial={props.waitingReason ?? ""}
+        anchor={triggerRef}
+        onSubmit={(reason) => {
+          setAskingReason(false);
+          props.onChange({ status: "waiting", waitingReason: reason });
+        }}
+        onCancel={() => setAskingReason(false)}
+      />
     </>
   );
 }
