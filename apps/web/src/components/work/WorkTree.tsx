@@ -144,15 +144,15 @@ export function WorkTree(
               <span
                 className={cn(
                   "truncate font-medium",
-                  !project.connected && "text-muted-foreground",
+                  (!project.connected || project.unavailable) && "text-muted-foreground",
                 )}
               >
                 {project.project.title}
               </span>
               <ProgressBar done={done} total={total} />
-              {project.connected ? null : (
+              {project.connected && !project.unavailable ? null : (
                 <Badge variant="outline" size="sm">
-                  offline
+                  {project.unavailable ? "indisponível neste servidor" : "offline"}
                 </Badge>
               )}
             </div>
@@ -167,9 +167,9 @@ export function WorkTree(
           {withoutModules.map((project) => (
             <li key={projectKey(project)} className="flex items-center gap-2 py-1">
               <span className="truncate text-muted-foreground">{project.project.title}</span>
-              {project.connected ? null : (
+              {project.connected && !project.unavailable ? null : (
                 <Badge variant="outline" size="sm">
-                  offline
+                  {project.unavailable ? "indisponível neste servidor" : "offline"}
                 </Badge>
               )}
               {project.canWrite ? (

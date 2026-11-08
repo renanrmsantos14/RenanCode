@@ -39,7 +39,7 @@ export function WorkDueDatePicker(props: {
           {...(weekStartsOn === undefined ? {} : { weekStartsOn })}
           onSelect={(date: Date | undefined) => {
             setOpen(false);
-            props.onChange(date === undefined ? null : toIsoDate(date));
+            if (date !== undefined) props.onChange(toIsoDate(date));
           }}
         />
         {props.value === null ? null : (

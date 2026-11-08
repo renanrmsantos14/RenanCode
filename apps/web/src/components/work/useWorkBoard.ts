@@ -13,6 +13,8 @@ export interface WorkBoardProject {
   readonly project: EnvironmentProject;
   readonly nodes: WorkModuleNode[];
   readonly connected: boolean;
+  /** The environment is connected but its server has no work modules. */
+  readonly unavailable: boolean;
   readonly canWrite: boolean;
 }
 
@@ -65,7 +67,9 @@ export function useWorkBoard(): { projects: WorkBoardProject[]; loading: boolean
           project,
           nodes: forests.get(project.environmentId)?.get(project.id) ?? [],
           connected: index >= 0,
-          canWrite: index >= 0 && permissions[index] === true,
+          unavailable: index >= 0 && queries[index]!._tag === "Failure",
+          canWrite:
+            index >= 0 && queries[index]!._tag === "Success" && permissions[index] === true,
         };
       }),
   };

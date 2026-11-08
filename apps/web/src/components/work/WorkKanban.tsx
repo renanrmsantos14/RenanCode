@@ -13,6 +13,7 @@ import {
   filterWorkModuleForest,
   isOverdue,
   kanbanColumns,
+  workModuleMatchesFilters,
   type WorkModuleFilters,
   type WorkModuleNode,
 } from "@t3tools/client-runtime/workModuleTree";
@@ -66,6 +67,11 @@ export function WorkKanban(
     walk(nodes);
   }
   const columns = kanbanColumns(roots);
+  for (const status of WORK_MODULE_STATUSES) {
+    columns[status] = columns[status].filter((node) =>
+      workModuleMatchesFilters(node.module, props.filters),
+    );
+  }
 
   // Module ids are unique per environment, so resolve each column node back to its project.
   const projectOf = new Map<string, WorkBoardProject>();

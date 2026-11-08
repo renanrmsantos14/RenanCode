@@ -156,7 +156,9 @@ function MoveDialog(props: {
           </DialogPanel>
           <DialogFooter>
             <DialogClose render={<Button type="button" variant="outline" />}>Cancelar</DialogClose>
-            <Button type="submit">Mover</Button>
+            <Button type="submit" disabled={target === (props.node.module.parentId ?? ROOT)}>
+              Mover
+            </Button>
           </DialogFooter>
         </form>
       </DialogPopup>
