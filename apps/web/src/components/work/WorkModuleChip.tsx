@@ -53,7 +53,9 @@ export function WorkModuleChip(props: {
   const nodes = flatten(buildWorkModuleForest(snapshot).get(props.projectId) ?? []);
   const current = nodes.find((node) => node.module.id === currentId);
   const label =
-    current === undefined ? "Módulo: nenhum" : `Módulo: ${modulePath(current).slice(-2).join(" › ")}`;
+    current === undefined
+      ? "Módulo: nenhum"
+      : `Módulo: ${modulePath(current).slice(-2).join(" › ")}`;
   const trimmedQuery = query.trim();
   const matches = nodes.filter((node) =>
     modulePath(node).join(" › ").toLowerCase().includes(trimmedQuery.toLowerCase()),
