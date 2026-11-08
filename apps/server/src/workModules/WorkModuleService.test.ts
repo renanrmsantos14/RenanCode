@@ -195,6 +195,20 @@ it.effect("appends agent notes without rewriting the note", () =>
   ),
 );
 
+it.effect("refuses an agent note that would overflow the module note", () =>
+  withService((service) =>
+    Effect.gen(function* () {
+      const m = yield* service.upsert({ projectId: app, title: "A", note: "x".repeat(19_990) });
+      const error = yield* service
+        .appendAgentNote({ moduleId: m.id, text: "this line is too long" })
+        .pipe(Effect.flip);
+      assert.strictEqual(error.message, "The module note is full; ask the user to trim it.");
+      const after = yield* service.upsert({ id: m.id, projectId: app });
+      assert.strictEqual(after.note, m.note);
+    }),
+  ),
+);
+
 it.effect("unlinks deleted threads and reports the module of a thread", () =>
   withService((service) =>
     Effect.gen(function* () {

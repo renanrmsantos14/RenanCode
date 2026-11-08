@@ -349,6 +349,11 @@ export const layer = Layer.effect(
       const now = yield* DateTime.now;
       const line = `${iso(now).slice(0, 10)} · agent: ${input.text.trim()}`;
       const note = module.note.length === 0 ? line : `${module.note}\n${line}`;
+      if (note.length > 20_000) {
+        return yield* fail("The module note is full; ask the user to trim it.", {
+          moduleId: input.moduleId,
+        });
+      }
       yield* sql`
         UPDATE work_modules SET note = ${note}, updated_at = ${iso(now)} WHERE module_id = ${input.moduleId}
       `.pipe(Effect.mapError(storage));
