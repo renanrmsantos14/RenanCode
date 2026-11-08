@@ -128,6 +128,7 @@ import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts"
 import * as DocumentText from "./provider/DocumentText.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
+import * as WorkModules from "./workModules/WorkModuleService.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
 import * as GuestShareService from "./guest/GuestShareService.ts";
 import {
@@ -1451,6 +1452,7 @@ export const layerWsRpc = (
       const commandOutputHub = yield* CommandOutputHub.CommandOutputHub;
       const providerSessionManager = yield* ProviderSessionManager.ProviderSessionManagerV2;
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
+      const workModules = yield* WorkModules.WorkModuleService;
       const secretRequests = yield* SecretRequests.SecretRequests;
       const guestShares = yield* GuestShareService.GuestShareService;
       const pullRequests = yield* PullRequestService.PullRequestService;
@@ -2375,6 +2377,17 @@ export const layerWsRpc = (
           Effect.annotateCurrentSpan({ "scheduled_task.id": input.id }).pipe(
             Effect.andThen(scheduledTasks.getWebhookDelivery(input)),
           ),
+        [WS_METHODS.workModulesSubscribe]: (_input) => workModules.subscribe(),
+        [WS_METHODS.workModulesUpsert]: (input) => workModules.upsert(input),
+        [WS_METHODS.workModulesMove]: (input) => workModules.move(input),
+        [WS_METHODS.workModulesDelete]: (input) =>
+          workModules.delete(input.id).pipe(Effect.map((deletedIds) => ({ deletedIds }))),
+        [WS_METHODS.workModulesLinkThread]: (input) =>
+          workModules.linkThread({ ...input, suggested: false }),
+        [WS_METHODS.workModulesUnlinkThread]: (input) =>
+          workModules.unlinkThreads([input.threadId]),
+        [WS_METHODS.workModulesConfirmSuggestion]: (input) =>
+          workModules.confirmSuggestion(input.threadId),
         [WS_METHODS.serverProbe]: (_input) => Effect.succeed({}),
         [WS_METHODS.serverGetConfig]: (_input) =>
           loadServerConfig({

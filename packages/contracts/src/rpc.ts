@@ -395,6 +395,19 @@ import {
   ScheduledTaskUpsertInput,
   ScheduledTaskMutationResult,
 } from "./scheduledTask.ts";
+import {
+  WorkModule,
+  WorkModuleDeleteInput,
+  WorkModuleDeleteResult,
+  WorkModuleError,
+  WorkModuleLinkThreadInput,
+  WorkModuleMoveInput,
+  WorkModuleSnapshot,
+  WorkModuleSubscribeInput,
+  WorkModuleThreadInput,
+  WorkModuleThreadLink,
+  WorkModuleUpsertInput,
+} from "./workModule.ts";
 import { SecretRequestAnswerInput, SecretRequestError } from "./secretRequest.ts";
 import {
   ProjectCloneActionInput,
@@ -573,6 +586,14 @@ export const WS_METHODS = {
   guestShareCreate: "guestShare.create",
   scheduledTasksListWebhookDeliveries: "scheduledTasks.listWebhookDeliveries",
   scheduledTasksGetWebhookDelivery: "scheduledTasks.getWebhookDelivery",
+
+  workModulesSubscribe: "workModules.subscribe",
+  workModulesUpsert: "workModules.upsert",
+  workModulesMove: "workModules.move",
+  workModulesDelete: "workModules.delete",
+  workModulesLinkThread: "workModules.linkThread",
+  workModulesUnlinkThread: "workModules.unlinkThread",
+  workModulesConfirmSuggestion: "workModules.confirmSuggestion",
 
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
   cloudInstallRelayClient: "cloud.installRelayClient",
@@ -2040,6 +2061,50 @@ const WsScheduledTasksGetWebhookDeliveryRpc = Rpc.make(
   },
 );
 
+const WorkModuleRpcError = Schema.Union([WorkModuleError, EnvironmentAuthorizationError]);
+
+const WsWorkModulesSubscribeRpc = Rpc.make(WS_METHODS.workModulesSubscribe, {
+  payload: WorkModuleSubscribeInput,
+  success: WorkModuleSnapshot,
+  error: WorkModuleRpcError,
+  stream: true,
+});
+
+const WsWorkModulesUpsertRpc = Rpc.make(WS_METHODS.workModulesUpsert, {
+  payload: WorkModuleUpsertInput,
+  success: WorkModule,
+  error: WorkModuleRpcError,
+});
+
+const WsWorkModulesMoveRpc = Rpc.make(WS_METHODS.workModulesMove, {
+  payload: WorkModuleMoveInput,
+  success: WorkModule,
+  error: WorkModuleRpcError,
+});
+
+const WsWorkModulesDeleteRpc = Rpc.make(WS_METHODS.workModulesDelete, {
+  payload: WorkModuleDeleteInput,
+  success: WorkModuleDeleteResult,
+  error: WorkModuleRpcError,
+});
+
+const WsWorkModulesLinkThreadRpc = Rpc.make(WS_METHODS.workModulesLinkThread, {
+  payload: WorkModuleLinkThreadInput,
+  success: WorkModuleThreadLink,
+  error: WorkModuleRpcError,
+});
+
+const WsWorkModulesUnlinkThreadRpc = Rpc.make(WS_METHODS.workModulesUnlinkThread, {
+  payload: WorkModuleThreadInput,
+  error: WorkModuleRpcError,
+});
+
+const WsWorkModulesConfirmSuggestionRpc = Rpc.make(WS_METHODS.workModulesConfirmSuggestion, {
+  payload: WorkModuleThreadInput,
+  success: WorkModuleThreadLink,
+  error: WorkModuleRpcError,
+});
+
 const WsSubscribeAuthAccessRpc = Rpc.make(WS_METHODS.subscribeAuthAccess, {
   payload: Schema.Struct({}),
   success: AuthAccessStreamEvent,
@@ -2125,6 +2190,13 @@ export const WsRpcGroup = RpcGroup.make(
   WsSecretsAnswerRequestRpc,
   WsScheduledTasksListWebhookDeliveriesRpc,
   WsScheduledTasksGetWebhookDeliveryRpc,
+  WsWorkModulesSubscribeRpc,
+  WsWorkModulesUpsertRpc,
+  WsWorkModulesMoveRpc,
+  WsWorkModulesDeleteRpc,
+  WsWorkModulesLinkThreadRpc,
+  WsWorkModulesUnlinkThreadRpc,
+  WsWorkModulesConfirmSuggestionRpc,
   WsServerReportClientActivityRpc,
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,
