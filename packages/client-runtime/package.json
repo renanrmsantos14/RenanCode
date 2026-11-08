@@ -247,6 +247,10 @@
       "types": "./src/workModuleTree.ts",
       "default": "./src/workModuleTree.ts"
     },
+    "./state/workModules": {
+      "types": "./src/state/workModules.ts",
+      "default": "./src/state/workModules.ts"
+    },
     "./state/peerLinks": {
       "types": "./src/state/peerLinks.ts",
       "default": "./src/state/peerLinks.ts"
