@@ -1,10 +1,10 @@
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
-import type { EnvironmentProject } from "@t3tools/client-runtime/state/models";
 import type { WorkModuleNode } from "@t3tools/client-runtime/workModuleTree";
 import type { WorkModuleId, WorkModuleUpsertInput } from "@t3tools/contracts";
 import { PlusIcon } from "lucide-react";
 import { useState } from "react";
 
+import { useComposerDraftStore } from "~/composerDraftStore";
 import { Button } from "~/components/ui/button";
 import {
   Select,
@@ -40,6 +40,11 @@ const readView = (): View => {
 };
 
 const ALL_PROJECTS = "all";
+
+export const moduleThreadPrompt = (path: string[], note: string) =>
+  [`Módulo: ${path.join(" › ")}`, note.trim() === "" ? null : `Nota: ${note.trim()}`]
+    .filter((line) => line !== null)
+    .join("\n") + "\n\n";
 
 const boardProjectKey = (project: WorkBoardProject) =>
   `${project.project.environmentId}:${project.project.id}`;
@@ -98,7 +103,7 @@ export function WorkPage() {
   const upsert = useAtomCommand(workModuleEnvironment.upsert, { label: "work module save" });
   const move = useAtomCommand(workModuleEnvironment.move, { label: "work module move" });
   const remove = useAtomCommand(workModuleEnvironment.remove, { label: "work module delete" });
-  const newThread = useNewThreadHandler();
+  const handleNewThread = useNewThreadHandler();
   // Local calendar day of the minute tick, so "today" rolls over at local midnight.
   const today = new Date(`${nowMinute}Z`).toLocaleDateString("sv-SE");
   const filters = { dueThisMonth, hideDone, today };
@@ -107,6 +112,12 @@ export function WorkPage() {
     (project) => boardProjectKey(project) === projectFilter,
   );
   const shownProjects = filteredProject === undefined ? board.projects : [filteredProject];
+  const openProject =
+    open === null
+      ? undefined
+      : (board.projects.find(
+          (project) => boardProjectKey(project) === boardProjectKey(open.project),
+        ) ?? open.project);
 
   const changeView = (next: View) => {
     setView(next);
@@ -121,8 +132,20 @@ export function WorkPage() {
     });
   const create = (project: WorkBoardProject, parentId: WorkModuleId | null, title: string) =>
     update(project, { parentId, title });
-  const startThreadInModule = (project: EnvironmentProject, _node: WorkModuleNode) =>
-    void newThread(scopeProjectRef(project.environmentId, project.id));
+  const startThreadInModule = async (project: WorkBoardProject, node: WorkModuleNode) => {
+    const opened = await handleNewThread(
+      scopeProjectRef(project.project.environmentId, project.project.id),
+      {
+        prompt: moduleThreadPrompt(
+          [project.project.title, ...node.ancestorTitles, node.module.title],
+          node.module.note,
+        ),
+      },
+    );
+    if (opened !== null) {
+      useComposerDraftStore.getState().setDraftWorkModule(opened.draftId, node.module.id);
+    }
+  };
   const handlers: WorkBoardHandlers = {
     onUpdate: update,
     onCreate: create,
@@ -133,7 +156,7 @@ export function WorkPage() {
     onDelete: (project, node) =>
       void remove({ environmentId: project.project.environmentId, input: { id: node.module.id } }),
     onOpen: (project, node) => setOpen({ project, moduleId: node.module.id }),
-    onNewThread: (project, node) => startThreadInModule(project.project, node),
+    onNewThread: (project, node) => void startThreadInModule(project, node),
   };
 
   return (
@@ -205,12 +228,14 @@ export function WorkPage() {
           <WorkKanban projects={shownProjects} filters={filters} {...handlers} />
         )}
       </div>
-      {open === null ? null : (
+      {open === null || openProject === undefined ? null : (
         <WorkModulePanel
-          project={open.project}
+          project={openProject}
           moduleId={open.moduleId}
+          today={today}
           onClose={() => setOpen(null)}
           onUpdate={update}
+          onNewThread={handlers.onNewThread}
         />
       )}
       {creating ? (

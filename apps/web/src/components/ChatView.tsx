@@ -292,6 +292,7 @@ import { ProviderSubagentBar } from "./chat/ProviderSubagentBar";
 import { getTriggerDisplayModelName } from "./chat/providerIconUtils";
 import { resolveScrollToEndClearance } from "./composerFooterLayout";
 import { ChatHeader } from "./chat/ChatHeader";
+import { WorkModuleChip } from "./work/WorkModuleChip";
 import { useSideChat } from "./chat/useSideChat";
 import { useRemoteOpenState } from "~/remoteOpen";
 import { shouldShowOpenInPicker } from "./chat/OpenInPicker.logic";
@@ -3442,6 +3443,17 @@ export default function ChatView(props: ChatViewProps) {
                 ? { onOpenProjectSettings: handleOpenDraftProjectSettingsStable }
                 : {})}
               {...(threadFindEnabled ? { onFindInThread: openThreadFindStable } : {})}
+              workModuleChip={
+                activeProject && activeProject.isScratch !== true ? (
+                  <WorkModuleChip
+                    environmentId={activeThread.environmentId}
+                    threadId={activeThread.id}
+                    projectId={activeProject.id}
+                    draftModuleId={draftThread?.workModuleId}
+                    isServerThread={isServerThread}
+                  />
+                ) : undefined
+              }
             />
           </header>
         )}
