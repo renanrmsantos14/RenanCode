@@ -190,6 +190,11 @@ import {
   ClaudeCloudStartSessionResult,
 } from "./claudeCloud.ts";
 import {
+  ThreadContinuationError,
+  ThreadContinuationInput,
+  ThreadContinuationResult,
+} from "./threadContinuation.ts";
+import {
   PullRequestActionInput,
   PullRequestActivity,
   PullRequestChangeBreakdown,
@@ -450,6 +455,7 @@ export const WS_METHODS = {
   projectsCreateFromThread: "projects.createFromThread",
   threadsCacheKeepWarm: "threads.cacheKeepWarm",
   threadsHandoff: "threads.handoff",
+  threadsContinue: "threads.continue",
   claudeCloudStartSession: "claudeCloud.startSession",
   claudeCloudSuggestPlacement: "claudeCloud.suggestPlacement",
 
@@ -1417,6 +1423,12 @@ const WsThreadsHandoffRpc = Rpc.make(WS_METHODS.threadsHandoff, {
   error: Schema.Union([ThreadHandoffError, EnvironmentAuthorizationError]),
 });
 
+const WsThreadsContinueRpc = Rpc.make(WS_METHODS.threadsContinue, {
+  payload: ThreadContinuationInput,
+  success: ThreadContinuationResult,
+  error: Schema.Union([ThreadContinuationError, EnvironmentAuthorizationError]),
+});
+
 const WsClaudeCloudStartSessionRpc = Rpc.make(WS_METHODS.claudeCloudStartSession, {
   payload: ClaudeCloudStartSessionInput,
   success: ClaudeCloudStartSessionResult,
@@ -2257,6 +2269,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsCreateFromThreadRpc,
   WsThreadsCacheKeepWarmRpc,
   WsThreadsHandoffRpc,
+  WsThreadsContinueRpc,
   WsClaudeCloudStartSessionRpc,
   WsClaudeCloudSuggestPlacementRpc,
   WsServerEstimateInputCostRpc,

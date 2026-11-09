@@ -43,6 +43,7 @@ import * as ThreadTitleRegenerationService from "./ThreadTitleRegenerationServic
 import * as NextActionSuggestionService from "./NextActionSuggestionService.ts";
 import * as CacheKeepWarmService from "./CacheKeepWarmService.ts";
 import * as ThreadHandoffService from "./ThreadHandoffService.ts";
+import * as ThreadContinuationService from "./ThreadContinuationService.ts";
 import * as ProviderEventIngestor from "./ProviderEventIngestor.ts";
 import * as ThreadCommandExecutor from "./ThreadCommandExecutor.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
@@ -344,6 +345,9 @@ const layerThreadHandoffProvided = ThreadHandoffService.layer.pipe(
     Layer.mergeAll(layerOrchestratorProvided, ProjectionStore.layer, layerThreadLaunchProvided),
   ),
 );
+const layerThreadContinuationProvided = ThreadContinuationService.layer.pipe(
+  Layer.provide(Layer.mergeAll(layerOrchestratorProvided, layerEventSink, layerProjectService)),
+);
 // Provided into `layer` for the effect executor and merged below; one memoized build, one sync loop.
 const layerClaudeCloudSessionsProvided = ClaudeCloudSessions.layer.pipe(
   Layer.provide(
@@ -423,6 +427,7 @@ export const layerProduction = Layer.mergeAll(
   layerScratchThreadPromotionProvided,
   layerCacheKeepWarmProvided,
   layerThreadHandoffProvided,
+  layerThreadContinuationProvided,
   layerSecretRequestsProvided,
   GuestShareService.layer.pipe(
     Layer.provide(Layer.merge(layerOrchestratorProvided, layerCommandOutputHubProvided)),

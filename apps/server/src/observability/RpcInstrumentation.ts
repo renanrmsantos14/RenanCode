@@ -125,6 +125,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.pullRequestsGenerateReviewGuide]: "pull-requests",
   [WS_METHODS.threadsCacheKeepWarm]: "orchestration",
   [WS_METHODS.threadsHandoff]: "orchestration",
+  [WS_METHODS.threadsContinue]: "orchestration",
   [WS_METHODS.claudeCloudStartSession]: "orchestration",
   [WS_METHODS.claudeCloudSuggestPlacement]: "orchestration",
   [WS_METHODS.pullRequestsThreadComments]: "pull-requests",

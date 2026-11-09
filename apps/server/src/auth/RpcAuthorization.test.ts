@@ -66,6 +66,7 @@ describe("RPC authorization scopes", () => {
       WS_METHODS.serverPrepareTriage,
       WS_METHODS.threadsCacheKeepWarm,
       WS_METHODS.threadsHandoff,
+      WS_METHODS.threadsContinue,
     ]) {
       expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationOperateScope);
     }
