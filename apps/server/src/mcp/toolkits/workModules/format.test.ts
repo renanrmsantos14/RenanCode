@@ -49,7 +49,7 @@ describe("work module text", () => {
       [
         "Board › Web tab [waiting: review, due 2026-11-20, 1 thread] (id m:web)",
         "Note: Ship it",
-        "Status is changed by the user only.",
+        "Change status only after the user approves it.",
       ].join("\n"),
     );
   });
