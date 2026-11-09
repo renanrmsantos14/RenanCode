@@ -3,6 +3,8 @@ import { assert, it } from "@effect/vitest";
 import { type OrchestrationV2ThreadShell, ProjectId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as SqlClient from "effect/sql/SqlClient";
+import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
@@ -36,7 +38,9 @@ const layer = WorkModuleService.layer.pipe(
 );
 
 const withService = <A, E>(
-  body: (service: WorkModuleService.WorkModuleService["Service"]) => Effect.Effect<A, E>,
+  body: (
+    service: WorkModuleService.WorkModuleService["Service"],
+  ) => Effect.Effect<A, E, SqlClient.SqlClient>,
 ) =>
   Effect.gen(function* () {
     return yield* body(yield* WorkModuleService.WorkModuleService);
@@ -190,6 +194,52 @@ it.effect("lets a suggestion replace a suggestion but never a confirmed link", (
         "The user already linked this thread; a suggestion cannot replace it.",
       );
     }),
+  ),
+);
+
+it.effect("names archived threads and drops their pending suggestions", () =>
+  withService((service) =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const m = yield* service.upsert({ projectId: app, title: "A" });
+      const archivedSuggestion = ThreadId.make("thread:archived-suggestion");
+      shells[archivedSuggestion] = shell(app);
+      yield* service.linkThread({ threadId: threadInApp, moduleId: m.id, suggested: false });
+      yield* service.linkThread({ threadId: archivedSuggestion, moduleId: m.id, suggested: true });
+      for (const [threadId, title] of [
+        [threadInApp, "Recibo"],
+        [archivedSuggestion, "Antiga"],
+      ]) {
+        yield* sql`
+          INSERT INTO orchestration_v2_projection_threads (thread_id, project_id, title,
+            default_provider, runtime_mode, interaction_mode, created_at, updated_at, archived_at,
+            payload_json)
+          VALUES (${threadId}, ${app}, ${title}, 'codex', 'full-access', 'default',
+            '1970-01-01T00:00:00.000Z', '1970-01-01T00:00:00.000Z', '1970-01-01T00:00:00.000Z', '{}')
+        `;
+      }
+      const { links } = yield* service.snapshot();
+      assert.deepStrictEqual(
+        links.map((l) => [l.threadId, l.threadTitle, l.threadArchived]),
+        [[threadInApp, "Recibo", true]],
+      );
+    }),
+  ),
+);
+
+it.effect("re-publishes the snapshot when a linked thread changes", () =>
+  withService((service) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const m = yield* service.upsert({ projectId: app, title: "A" });
+        yield* service.linkThread({ threadId: threadInApp, moduleId: m.id, suggested: false });
+        const pull = yield* Stream.toPull(service.subscribe());
+        yield* pull;
+        yield* service.threadChanged(threadInApp);
+        const next = yield* pull;
+        assert.lengthOf(next.at(-1)!.links, 1);
+      }),
+    ),
   ),
 );
 

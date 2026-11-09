@@ -41,6 +41,10 @@ export const WorkModuleThreadLink = Schema.Struct({
   moduleId: WorkModuleId,
   suggested: Schema.Boolean,
   linkedAt: IsoDateTime,
+  /** Snapshot only: the thread's title, which shells may omit for archived or older threads. */
+  threadTitle: Schema.optionalKey(Schema.String),
+  /** Snapshot only. */
+  threadArchived: Schema.optionalKey(Schema.Boolean),
 });
 export type WorkModuleThreadLink = typeof WorkModuleThreadLink.Type;
 

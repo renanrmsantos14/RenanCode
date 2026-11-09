@@ -11,7 +11,9 @@ import {
   buildWorkModuleForest,
   filterWorkModuleForest,
   isOverdue,
+  joinAgentNote,
   kanbanColumns,
+  splitAgentNote,
   workModuleMatchesFilters,
 } from "./workModuleTree.ts";
 
@@ -70,7 +72,7 @@ describe("work module tree", () => {
     expect([board!.leafDone, board!.leafTotal]).toEqual([1, 3]);
     const web = board!.children[0]!;
     expect(web.ancestorTitles).toEqual(["board"]);
-    expect(web.threadIds).toEqual([ThreadId.make("t:1"), ThreadId.make("t:2")]);
+    expect(web.linkedThreadIds).toEqual([ThreadId.make("t:1")]);
     expect(web.pendingSuggestions).toBe(1);
   });
 
@@ -121,5 +123,16 @@ describe("work module tree", () => {
       isOverdue(mod("a", null, 0, { dueDate: "2026-11-06", status: "done" }), "2026-11-08"),
     ).toBe(false);
     expect(isOverdue(mod("a", null, 0, { dueDate: "2026-11-08" }), "2026-11-08")).toBe(false);
+  });
+
+  it("keeps agent lines out of the editable note and back in on save", () => {
+    const note = "Mine\n\n2026-11-08 · agent: PR opened\n2026-11-09 · agent: CI green";
+    const { text, agentLines } = splitAgentNote(note);
+    expect(text).toBe("Mine");
+    expect(agentLines).toEqual(["2026-11-08 · agent: PR opened", "2026-11-09 · agent: CI green"]);
+    expect(joinAgentNote("Mine edited ", agentLines)).toBe(
+      "Mine edited\n2026-11-08 · agent: PR opened\n2026-11-09 · agent: CI green",
+    );
+    expect(joinAgentNote("", agentLines)).toBe(agentLines.join("\n"));
   });
 });

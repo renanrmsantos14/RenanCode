@@ -11,7 +11,8 @@ export interface WorkModuleNode {
   readonly module: WorkModule;
   readonly children: WorkModuleNode[];
   readonly ancestorTitles: string[];
-  readonly threadIds: ThreadId[];
+  /** Confirmed links only; suggestions are counted in `pendingSuggestions`. */
+  readonly linkedThreadIds: ThreadId[];
   readonly pendingSuggestions: number;
   readonly leafTotal: number;
   readonly leafDone: number;
@@ -57,7 +58,7 @@ export function buildWorkModuleForest(
             module,
             children,
             ancestorTitles,
-            threadIds: links.map((link) => link.threadId),
+            linkedThreadIds: links.filter((l) => !l.suggested).map((l) => l.threadId),
             pendingSuggestions: links.filter((link) => link.suggested).length,
             leafTotal: isLeaf ? 1 : children.reduce((sum, c) => sum + c.leafTotal, 0),
             leafDone: isLeaf
@@ -117,6 +118,28 @@ export function kanbanColumns(nodes: WorkModuleNode[]): Record<WorkModuleStatus,
     });
   }
   return columns;
+}
+
+const AGENT_NOTE_LINE = /^\d{4}-\d{2}-\d{2} · agent: /;
+
+/** Splits a module note into the user's text and the lines agents appended to it. */
+export function splitAgentNote(note: string): {
+  readonly text: string;
+  readonly agentLines: string[];
+} {
+  const lines = note.split("\n");
+  return {
+    text: lines
+      .filter((line) => !AGENT_NOTE_LINE.test(line))
+      .join("\n")
+      .trimEnd(),
+    agentLines: lines.filter((line) => AGENT_NOTE_LINE.test(line)),
+  };
+}
+
+export function joinAgentNote(text: string, agentLines: ReadonlyArray<string>): string {
+  const trimmed = text.trimEnd();
+  return [...(trimmed === "" ? [] : [trimmed]), ...agentLines].join("\n");
 }
 
 export function isOverdue(module: WorkModule, today: string): boolean {

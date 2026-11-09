@@ -206,6 +206,8 @@ import * as ThreadSearch from "./orchestration-v2/ThreadSearch.ts";
 import * as ThreadSettlementService from "./orchestration-v2/ThreadSettlementService.ts";
 import * as IdleCompactionService from "./orchestration-v2/IdleCompactionService.ts";
 import * as ThreadPullRequestService from "./orchestration-v2/ThreadPullRequestService.ts";
+import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
+import * as WorkModuleService from "./workModules/WorkModuleService.ts";
 import * as RunFinalizationService from "./orchestration-v2/RunFinalizationService.ts";
 import * as ProjectionMaintenance from "./orchestration-v2/ProjectionMaintenance.ts";
 import * as ProjectionStoreV2 from "./orchestration-v2/ProjectionStore.ts";
@@ -597,6 +599,22 @@ const layerThreadPullRequestWorker = Layer.effectDiscard(
   ThreadPullRequestService.make.pipe(Effect.flatMap((service) => service.start())),
 ).pipe(Layer.provide(layerPullRequestService));
 
+const layerWorkModuleThreadWatcher = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const workModules = yield* WorkModuleService.WorkModuleService;
+    yield* ServerActivation.forkParked(
+      Stream.runForEach(orchestrator.streamDomainEvents, (event) =>
+        event.type === "thread.archived" ||
+        event.type === "thread.unarchived" ||
+        event.type === "thread.metadata-updated"
+          ? workModules.threadChanged(event.threadId).pipe(Effect.ignoreCause({ log: true }))
+          : Effect.void,
+      ),
+    );
+  }),
+);
+
 const layerProviderInstallationRefresh = Layer.effectDiscard(
   Effect.gen(function* () {
     const antigravity = yield* AntigravityInstallation.AntigravityInstallation;
@@ -654,6 +672,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
     Layer.provide(layerServerRestart),
   ),
   layerThreadPullRequestWorker,
+  layerWorkModuleThreadWatcher,
   DelegatedTaskAnalytics.layer,
   Layer.effectDiscard(
     Effect.gen(function* () {
