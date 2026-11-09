@@ -5,13 +5,14 @@ import { describe, expect, it } from "vite-plus/test";
 import { WorkModulesToolkit } from "./tools.ts";
 
 describe("t3_work_module_suggest parameters", () => {
-  it("accepts create, link, note and status", () => {
+  it("accepts create, link, confirm, note and status", () => {
     const decode = Schema.decodeUnknownExit(
       WorkModulesToolkit.tools.t3_work_module_suggest.parametersSchema,
     );
     expect(Exit.isSuccess(decode({ action: "note", moduleId: "m:1", text: "PR opened" }))).toBe(
       true,
     );
+    expect(Exit.isSuccess(decode({ action: "confirm", threadId: "t:1" }))).toBe(true);
     expect(Exit.isSuccess(decode({ action: "status", moduleId: "m:1", status: "done" }))).toBe(
       true,
     );

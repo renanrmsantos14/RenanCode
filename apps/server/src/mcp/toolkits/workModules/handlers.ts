@@ -91,7 +91,23 @@ const handlers = {
             yield* service
               .linkThread({ threadId: thread.id, moduleId: input.moduleId, suggested: true })
               .pipe(Effect.mapError(domain));
-            return { text: "Suggested. The user confirms or discards it on the board." };
+            return {
+              text: "Suggested. The user confirms it on the board, or you confirm it once they approve.",
+            };
+          }
+          case "confirm": {
+            const {
+              projection: { thread },
+            } = yield* readThread(input.threadId);
+            // A later suggestion can replace the one the user approved.
+            if (input.moduleId !== undefined) {
+              const found = yield* service.moduleForThread(thread.id).pipe(Effect.mapError(domain));
+              if (found !== null && found.link.moduleId !== input.moduleId) {
+                return yield* invalid(`The suggestion now points to ${found.module.title}.`);
+              }
+            }
+            yield* service.confirmSuggestion(thread.id).pipe(Effect.mapError(domain));
+            return { text: "Link confirmed." };
           }
           case "note": {
             if (
