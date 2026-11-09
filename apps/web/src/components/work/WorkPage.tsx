@@ -40,6 +40,14 @@ const readView = (): View => {
 };
 
 const ALL_PROJECTS = "all";
+const LAST_PROJECT_KEY = "t3.work.lastProject";
+const readLastProject = () => {
+  try {
+    return localStorage.getItem(LAST_PROJECT_KEY);
+  } catch {
+    return null;
+  }
+};
 
 const moduleThreadPrompt = (path: string[], note: string) =>
   [`Módulo: ${path.join(" › ")}`, note.trim() === "" ? null : `Nota: ${note.trim()}`]
@@ -51,12 +59,19 @@ const boardProjectKey = (project: WorkBoardProject) =>
 
 function CreateModuleDialog(props: {
   projects: WorkBoardProject[];
+  /** The filtered project, else the last one used, else the first that already has modules. */
+  preferredKey: string | null;
   onCreate: (project: WorkBoardProject, title: string) => void;
   onClose: () => void;
 }) {
-  const [selectedKey, setSelectedKey] = useState(() =>
-    props.projects[0] === undefined ? "" : boardProjectKey(props.projects[0]),
-  );
+  const [selectedKey, setSelectedKey] = useState(() => {
+    const keys = props.projects.map(boardProjectKey);
+    const preferred = [props.preferredKey, readLastProject()].find(
+      (key) => key !== null && keys.includes(key),
+    );
+    const withModules = props.projects.find((project) => project.nodes.length > 0);
+    return preferred ?? (withModules === undefined ? keys[0] : boardProjectKey(withModules)) ?? "";
+  });
   const selected = props.projects.find((project) => boardProjectKey(project) === selectedKey);
   return (
     <WorkTitleDialog
@@ -132,6 +147,16 @@ export function WorkPage() {
     });
   const create = (project: WorkBoardProject, parentId: WorkModuleId | null, title: string) =>
     update(project, { parentId, title });
+  const createAndOpen = async (project: WorkBoardProject, title: string) => {
+    try {
+      localStorage.setItem(LAST_PROJECT_KEY, boardProjectKey(project));
+    } catch {}
+    const result = await upsert({
+      environmentId: project.project.environmentId,
+      input: { projectId: project.project.id, parentId: null, title },
+    });
+    if (result._tag === "Success") setOpen({ project, moduleId: result.value.id });
+  };
   const startThreadInModule = async (project: WorkBoardProject, node: WorkModuleNode) => {
     const opened = await handleNewThread(
       scopeProjectRef(project.project.environmentId, project.project.id),
@@ -243,7 +268,8 @@ export function WorkPage() {
       {creating ? (
         <CreateModuleDialog
           projects={writableProjects}
-          onCreate={(project, title) => create(project, null, title)}
+          preferredKey={filteredProject === undefined ? null : projectFilter}
+          onCreate={(project, title) => void createAndOpen(project, title)}
           onClose={() => setCreating(false)}
         />
       ) : null}

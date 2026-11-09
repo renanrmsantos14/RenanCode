@@ -11,7 +11,7 @@ const fromIsoDate = (value: string) => {
   const [y, m, d] = value.split("-").map(Number);
   return new Date(y!, m! - 1, d!);
 };
-const shortLabel = (value: string) =>
+export const formatShortDate = (value: string) =>
   fromIsoDate(value).toLocaleDateString("pt-BR", { day: "numeric", month: "short" });
 
 export function WorkDueDatePicker(props: {
@@ -29,7 +29,7 @@ export function WorkDueDatePicker(props: {
         render={<Button variant="ghost" size="sm" aria-label="Prazo" />}
       >
         <span className={props.overdue ? "text-destructive" : "text-muted-foreground"}>
-          {props.value === null ? "Sem prazo" : shortLabel(props.value)}
+          {props.value === null ? "Sem prazo" : formatShortDate(props.value)}
         </span>
       </PopoverTrigger>
       <PopoverPopup align="start" aria-label="Escolher prazo">

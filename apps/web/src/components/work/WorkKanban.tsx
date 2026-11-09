@@ -25,6 +25,7 @@ import { Badge } from "~/components/ui/badge";
 import { cn } from "~/lib/utils";
 
 import type { WorkBoardHandlers, WorkBoardProject } from "./useWorkBoard";
+import { formatShortDate } from "./WorkDueDatePicker";
 import { WORK_STATUS_BADGE, WORK_STATUS_LABEL } from "./workStatus";
 import { WorkWaitingReasonPrompt } from "./WorkWaitingReasonPrompt";
 
@@ -55,9 +56,14 @@ export function WorkKanban(
 
   const entries = new Map<string, KanbanEntry>();
   const roots: WorkModuleNode[] = [];
+  // A root module named after its project stands for the project itself; it stays in the tree only.
+  const projectModules = new Set<string>();
   for (const project of props.projects) {
     const nodes = filterWorkModuleForest(project.nodes, props.filters);
     roots.push(...nodes);
+    for (const node of nodes) {
+      if (node.module.title === project.project.title) projectModules.add(node.module.id);
+    }
     const walk = (list: WorkModuleNode[]) => {
       for (const node of list) {
         entries.set(cardKey(project, node), { project, node });
@@ -68,8 +74,9 @@ export function WorkKanban(
   }
   const columns = kanbanColumns(roots);
   for (const status of WORK_MODULE_STATUSES) {
-    columns[status] = columns[status].filter((node) =>
-      workModuleMatchesFilters(node.module, props.filters),
+    columns[status] = columns[status].filter(
+      (node) =>
+        !projectModules.has(node.module.id) && workModuleMatchesFilters(node.module, props.filters),
     );
   }
 
@@ -210,7 +217,7 @@ function KanbanCard(props: {
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         {workModule.dueDate === null ? null : (
           <span className={cn(isOverdue(workModule, props.today) && "text-destructive-foreground")}>
-            {workModule.dueDate}
+            {formatShortDate(workModule.dueDate)}
           </span>
         )}
         <span className="ms-auto flex items-center gap-2 tabular-nums">

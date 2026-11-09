@@ -40,7 +40,8 @@ import { buildThreadRouteParams } from "~/threadRoutes";
 import { resolveSidebarThreadStatus, type SidebarThreadStatus } from "../Sidebar.logic";
 import type { WorkBoardHandlers, WorkBoardProject } from "./useWorkBoard";
 import { WorkDueDatePicker } from "./WorkDueDatePicker";
-import { WorkStatusMenu } from "./WorkStatusMenu";
+import { formatShortDate } from "./WorkDueDatePicker";
+import { WorkStatusPicker } from "./WorkStatusMenu";
 
 const THREAD_STATUS_LABEL: Record<SidebarThreadStatus, string> = {
   approval: "Aprovação",
@@ -155,6 +156,7 @@ function RowAction(props: {
 }
 
 function LinkThreadDialog(props: {
+  projectTitle: string;
   threads: EnvironmentThreadShell[];
   onLink: (threadId: ThreadId) => void;
   onClose: () => void;
@@ -182,7 +184,7 @@ function LinkThreadDialog(props: {
           >
             <ComboboxInput aria-label="Thread" placeholder="Buscar thread…" autoFocus />
             <ComboboxPopup>
-              <ComboboxEmpty>Nenhuma thread encontrada.</ComboboxEmpty>
+              <ComboboxEmpty>Nenhuma thread livre em {props.projectTitle}.</ComboboxEmpty>
               <ComboboxList>
                 {(thread: EnvironmentThreadShell) => (
                   <ComboboxItem key={thread.id} value={thread}>
@@ -268,11 +270,11 @@ export function WorkModulePanel(props: {
         <SheetHeader>
           <SheetTitle className="sr-only">{workModule.title}</SheetTitle>
           <div className="flex min-w-0 flex-col gap-1 pe-8">
-            {node.ancestorTitles.length === 0 ? null : (
-              <p className="truncate text-xs text-muted-foreground">
-                {node.ancestorTitles.join(" › ")}
-              </p>
-            )}
+            <p className="truncate text-xs text-muted-foreground">
+              {[project.project.title, ...node.ancestorTitles]
+                .filter((title, index, all) => index === 0 || title !== all[index - 1])
+                .join(" › ")}
+            </p>
             <textarea
               key={workModule.title}
               aria-label="Título"
@@ -317,16 +319,17 @@ export function WorkModulePanel(props: {
               if (next !== workModule.note) update({ note: next });
             }}
           />
+          {/* Full width: the four statuses side by side do not fit the label column grid. */}
+          <div className="flex flex-col items-start gap-2">
+            <span className="text-sm text-muted-foreground">Status</span>
+            <WorkStatusPicker
+              status={workModule.status}
+              waitingReason={workModule.waitingReason}
+              disabled={!canWrite}
+              onChange={(next) => update(next)}
+            />
+          </div>
           <dl className="grid grid-cols-[5.5rem_1fr] items-center gap-x-3 gap-y-1 text-sm">
-            <dt className="text-muted-foreground">Status</dt>
-            <dd className="flex h-8 items-center">
-              <WorkStatusMenu
-                status={workModule.status}
-                waitingReason={workModule.waitingReason}
-                disabled={!canWrite}
-                onChange={(next) => update(next)}
-              />
-            </dd>
             {workModule.waitingReason === null ? null : (
               <>
                 <dt className="text-muted-foreground">Motivo</dt>
@@ -437,8 +440,11 @@ export function WorkModulePanel(props: {
                   return (
                     // oxlint-disable-next-line react/no-array-index-key -- agent lines can repeat verbatim
                     <li key={index} className="flex gap-3">
-                      <time className="shrink-0 text-xs leading-5 tabular-nums text-muted-foreground">
-                        {date}
+                      <time
+                        dateTime={date}
+                        className="shrink-0 text-xs leading-5 tabular-nums text-muted-foreground"
+                      >
+                        {formatShortDate(date)}
                       </time>
                       <span className="text-foreground/90">{rest.join(" · agent: ")}</span>
                     </li>
@@ -451,6 +457,7 @@ export function WorkModulePanel(props: {
         {/* Inside the popup so the sheet treats the dialog as nested and stays open. */}
         {linking ? (
           <LinkThreadDialog
+            projectTitle={project.project.title}
             threads={linkCandidates}
             onLink={(threadId) =>
               void linkThread({ environmentId, input: { threadId, moduleId: workModule.id } })
