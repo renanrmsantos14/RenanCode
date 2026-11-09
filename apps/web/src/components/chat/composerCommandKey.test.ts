@@ -8,8 +8,8 @@ type HandlerInput = Parameters<typeof composerCommandKeyHandler>[0];
 function setup(input: { readonly prompt: string; readonly suggestion: string | null }) {
   const promptRef = { current: input.prompt };
   const setComposerDraftPrompt = vi.fn<HandlerInput["setComposerDraftPrompt"]>();
-  const dismissNextActionSuggestion = vi.fn();
-  const applyPromptReplacement = vi.fn<HandlerInput["applyPromptReplacement"]>(() => false);
+  const dismissPromptSuggestion = vi.fn();
+  const applyPromptReplacement = vi.fn<HandlerInput["applyPromptReplacement"]>(() => true);
   const handler = composerCommandKeyHandler({
     keybindings: [],
     sendShortcut: "enter",
@@ -18,7 +18,6 @@ function setup(input: { readonly prompt: string; readonly suggestion: string | n
     isCompacting: false,
     followUpBehavior: "queue",
     isSoftwareKeyboardOpen: false,
-    planModeUiEnabled: false,
     isLiteralPendingAnswer: false,
     pendingUserInputs: [],
     promptHistoryEntries: [],
@@ -43,18 +42,17 @@ function setup(input: { readonly prompt: string; readonly suggestion: string | n
     setComposerTrigger: vi.fn(),
     setComposerHighlightedItemId: vi.fn(),
     dismissComposerTrigger: vi.fn(),
-    toggleInteractionMode: vi.fn(),
     nudgeComposerMenuHighlight: vi.fn(),
     onSelectComposerItem: vi.fn(),
     resolveActiveComposerTrigger: () => ({ trigger: null }),
     readComposerSnapshot: () => ({ value: promptRef.current }),
     applyPromptReplacement,
     submitComposer: vi.fn(),
-    nextActionSuggestion: input.suggestion,
-    dismissNextActionSuggestion,
+    promptSuggestion: input.suggestion,
+    dismissPromptSuggestion,
     steerQueuedMessage: () => false,
   });
-  return { handler, promptRef, setComposerDraftPrompt, dismissNextActionSuggestion };
+  return { handler, promptRef, applyPromptReplacement, dismissPromptSuggestion };
 }
 
 const key = (name: string, init: KeyboardEventInit = {}) =>
@@ -67,22 +65,17 @@ const key = (name: string, init: KeyboardEventInit = {}) =>
     ...init,
   }) as KeyboardEvent;
 
-describe("composerCommandKeyHandler next action suggestion", () => {
+describe("composerCommandKeyHandler prompt suggestion", () => {
   it("accepts the suggestion on Tab without sending", () => {
     const harness = setup({ prompt: "", suggestion: "Run the tests" });
     expect(harness.handler("Tab", key("Tab"))).toBe(true);
-    expect(harness.promptRef.current).toBe("Run the tests");
-    expect(harness.setComposerDraftPrompt).toHaveBeenCalledWith(
-      DraftId.make("draft"),
-      "Run the tests",
-    );
-    expect(harness.dismissNextActionSuggestion).toHaveBeenCalledOnce();
+    expect(harness.applyPromptReplacement).toHaveBeenCalledWith(0, 0, "Run the tests");
   });
 
   it("dismisses the suggestion on Escape", () => {
     const harness = setup({ prompt: "", suggestion: "Run the tests" });
     expect(harness.handler("Escape", key("Escape"))).toBe(true);
-    expect(harness.dismissNextActionSuggestion).toHaveBeenCalledOnce();
+    expect(harness.dismissPromptSuggestion).toHaveBeenCalledOnce();
     expect(harness.promptRef.current).toBe("");
   });
 
@@ -93,6 +86,6 @@ describe("composerCommandKeyHandler next action suggestion", () => {
     const harness = setup({ prompt, suggestion });
     expect(harness.handler("Tab", key("Tab"))).toBe(false);
     expect(harness.promptRef.current).toBe(prompt);
-    expect(harness.dismissNextActionSuggestion).not.toHaveBeenCalled();
+    expect(harness.dismissPromptSuggestion).not.toHaveBeenCalled();
   });
 });
