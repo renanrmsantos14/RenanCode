@@ -2,6 +2,7 @@ import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { requestCustomSnooze } from "../components/CustomSnoozeDialog";
 import { openGuestShareDialog } from "../components/chat/guestShareDialogState";
 import { openContinueThreadDialog } from "../components/chat/continueThreadDialogState";
+import { openComponentToolsDialog } from "../components/chat/ComponentToolsDialog";
 import {
   type AtomCommandResult,
   isAtomCommandInterrupted,
@@ -285,6 +286,15 @@ export function useThreadActionMenu(input: {
           return;
         case "continue-elsewhere":
           openContinueThreadDialog(threadRef);
+          return;
+        case "components:find":
+          openComponentToolsDialog(threadRef, "find");
+          return;
+        case "components:replace":
+          openComponentToolsDialog(threadRef, "replace");
+          return;
+        case "components:web":
+          openComponentToolsDialog(threadRef, "web");
           return;
         case "turn-into-project": {
           const result = await turnThreadIntoProject(threadRef);
