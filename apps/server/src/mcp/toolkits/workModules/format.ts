@@ -34,6 +34,6 @@ export function formatWorkModule(
 ): string {
   const lines = [[...ancestorTitles, detail(module, links)].join(" › ")];
   if (module.note.length > 0) lines.push(`Note: ${module.note}`);
-  lines.push("Change status only after the user approves it.");
+  lines.push("Change status or confirm links only after the user approves it.");
   return lines.join("\n");
 }

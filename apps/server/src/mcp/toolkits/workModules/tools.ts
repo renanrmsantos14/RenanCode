@@ -42,10 +42,10 @@ const WorkModuleReadTool = Tool.make("t3_work_module_read", {
 const WorkModuleSuggestTool = Tool.make("t3_work_module_suggest", {
   ...shared,
   description:
-    "Suggest on the user's work board. create: new module (status idea). link: propose a thread (default this one; elsewhere pass `threadId`) for a module; the user confirms. note: append a dated line to a module's note. status: set `status` (`waitingReason` for waiting), only after the user approved that exact change; when one makes sense, propose it and ask. Due date, title, moves and deletes are the user's.",
+    "Suggest on the user's work board. create: new module (status idea). link: propose a thread (default this one; elsewhere pass `threadId`) for a module. confirm: turn a thread's suggested link into a confirmed one. note: append a dated line to a module's note. status: set `status` (`waitingReason` for waiting). Use confirm and status only after the user approved that change; when one makes sense, propose it and ask. Due date, title, moves and deletes are the user's.",
   parameters: Schema.Struct({
     environmentId: OrchestratorMcpEnvironmentTarget,
-    action: Schema.Literals(["create", "link", "note", "status"]),
+    action: Schema.Literals(["create", "link", "confirm", "note", "status"]),
     projectId: Schema.optional(ProjectId),
     parentModuleId: Schema.optional(WorkModuleId),
     moduleId: Schema.optional(WorkModuleId),

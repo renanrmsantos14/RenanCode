@@ -1,6 +1,6 @@
 ---
 name: verificar-quadro-trabalho
-description: "Verifica as ferramentas MCP do quadro de Trabalho (t3_work_module_read e t3_work_module_suggest): criar módulo, sugerir vínculo, nota, mudar status só com aprovação do usuário e acesso a ambientes vinculados por environmentId. Use após mudar apps/server/src/mcp/toolkits/workModules/**, apps/server/src/workModules/**, packages/contracts/src/workModule.ts ou evals/mcp-tool-use/cases/work-modules.ndjson."
+description: "Verifica as ferramentas MCP do quadro de Trabalho (t3_work_module_read e t3_work_module_suggest): criar módulo, sugerir e confirmar vínculo, nota, mudar status só com aprovação do usuário e acesso a ambientes vinculados por environmentId. Use após mudar apps/server/src/mcp/toolkits/workModules/**, apps/server/src/workModules/**, packages/contracts/src/workModule.ts ou evals/mcp-tool-use/cases/work-modules.ndjson."
 ---
 
 # Verificar quadro de Trabalho (MCP)
@@ -17,8 +17,8 @@ description: "Verifica as ferramentas MCP do quadro de Trabalho (t3_work_module_
 
 ## Evals (pagos, precisam de `ANTHROPIC_API_KEY` no `.env` da raiz)
 
-- Em `evals/`: `pnpm mcp-tool-use --out runs/<nome> --case work-module-status-asks-first,work-module-status-on-approval,work-module-read-for-context,work-module-linked-environment`.
-- Esperado: 100% nos 4 casos. `status-asks-first` garante que o agente não muda status sozinho; `status-on-approval` que ele muda quando o usuário pede; `linked-environment` que ele passa `environmentId`.
+- Em `evals/`: `pnpm mcp-tool-use --out runs/<nome> --case work-module-confirm-asks-first,work-module-confirm-on-approval,work-module-status-asks-first,work-module-status-on-approval,work-module-read-for-context,work-module-linked-environment`.
+- Esperado: 100% nos 6 casos. `confirm-*` cobrem confirmar vínculo só com aprovação. `status-asks-first` garante que o agente não muda status sozinho; `status-on-approval` que ele muda quando o usuário pede; `linked-environment` que ele passa `environmentId`.
 - Custo estimado: menos de US$ 1 por rodada (Sonnet, 2 amostras por caso).
 
 ## Roteiro manual (thread real, opcional)
@@ -26,7 +26,8 @@ description: "Verifica as ferramentas MCP do quadro de Trabalho (t3_work_module_
 1. Numa thread, pedir para ler o quadro do projeto (`t3_work_module_read` com `projectId`). Esperado: árvore com status e a linha "Change status only after the user approves it." na leitura de um módulo.
 2. Dizer que o trabalho de um módulo terminou, sem pedir mudança. Esperado: o agente propõe o status e pergunta; o quadro não muda.
 3. Aprovar. Esperado: chamada `action: "status"` e o card muda de coluna no quadro. `waiting` exige `waitingReason`.
-4. Com um ambiente vinculado (`t3_environment_links`), ler o quadro dele com `environmentId` e `projectId`. Sem `projectId`/`moduleId`, a leitura remota falha porque não há thread chamadora lá.
+4. Com aprovação, confirmar um vínculo sugerido (`action: "confirm"`, `threadId`). Esperado: o selo de sugestão some no painel do módulo; sem sugestão, erro "There is no suggestion for this thread.".
+5. Com um ambiente vinculado (`t3_environment_links`), ler o quadro dele com `environmentId` e `projectId`. Sem `projectId`/`moduleId`, a leitura remota falha porque não há thread chamadora lá.
 
 ## Casos de borda
 
