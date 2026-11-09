@@ -24,10 +24,6 @@ export type ThreadActionMenuId =
   | "mark-unread"
   | "share-guest"
   | "continue-elsewhere"
-  | "components"
-  | "components:find"
-  | "components:replace"
-  | "components:web"
   | "copy"
   | "copy-path"
   | "copy-branch"
@@ -206,16 +202,6 @@ export function buildThreadActionMenuItems(
           },
         ]
       : []),
-    {
-      id: "components",
-      label: "Components",
-      icon: "puzzle",
-      children: [
-        { id: "components:find", label: "Find in app", icon: "text-search" },
-        { id: "components:replace", label: "Replace everywhere", icon: "refresh-cw" },
-        { id: "components:web", label: "Find ready-made on the web", icon: "globe" },
-      ],
-    },
     ...(state.projectFilter
       ? [
           {
