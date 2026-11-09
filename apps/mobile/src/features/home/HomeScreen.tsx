@@ -444,7 +444,7 @@ export function HomeScreen(props: HomeScreenProps) {
     snoozedShelfExpanded,
     workingShelfEnabled,
     workingShelfExpanded,
-    collapsedSubsessions,
+    expandedSubsessions,
     toggleSubsessions,
     toggleSettledShelf,
     toggleSnoozedShelf,
@@ -491,7 +491,7 @@ export function HomeScreen(props: HomeScreenProps) {
     workingShelfExpanded,
     snoozedShelfExpanded,
     settledShelfExpanded,
-    collapsedSubsessions,
+    expandedSubsessions,
     selectedThreadKey,
   });
   // Called as `props.onSelectThread(...)`, the compiler would cache this handler on the whole

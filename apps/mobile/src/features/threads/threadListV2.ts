@@ -690,11 +690,11 @@ interface SubsessionEntry {
   readonly subsessions: ThreadListV2Subsessions | null;
 }
 
-/** The thread followed by its subsessions in tree order; a folded thread lists none. */
+/** The thread followed by its subsessions in tree order; threads start folded and list none. */
 export function listThreadWithSubsessions(
   thread: EnvironmentThreadShell,
   nesting: ThreadListSubsessions<EnvironmentThreadShell>,
-  collapsedKeys: ReadonlySet<string>,
+  expandedKeys: ReadonlySet<string>,
 ): SubsessionEntry[] {
   const visit = (
     current: EnvironmentThreadShell,
@@ -706,7 +706,7 @@ export function listThreadWithSubsessions(
     const all = childThreads.flatMap((child, index) => [child, ...children[index]!.all]);
     const depth = Math.min(level, THREAD_LIST_SUBSESSION_MAX_INDENT);
     if (all.length === 0) return { shown: [{ thread: current, depth, subsessions: null }], all };
-    const collapsed = collapsedKeys.has(key);
+    const collapsed = !expandedKeys.has(key);
     const statuses = collapsed ? all.map(resolveThreadListV2Status) : [];
     const self: SubsessionEntry = {
       thread: current,
@@ -745,7 +745,7 @@ export function buildThreadListV2Items(input: {
   readonly selectedThreadKey?: string | null;
   readonly queuedThreadKeys?: ReadonlySet<string>;
   /** Parent thread keys whose subsessions are folded. */
-  readonly collapsedSubsessionKeys?: ReadonlySet<string>;
+  readonly expandedSubsessionKeys?: ReadonlySet<string>;
   /** Whether the shelf may list a settled row yet; older settled rows load in pages. */
   readonly isListedSettled?: (thread: EnvironmentThreadShell) => boolean;
   /** Settled threads in scope that are not local (older settled threads not loaded). */
@@ -780,7 +780,7 @@ export function buildThreadListV2Items(input: {
   // A search lists matches flat; otherwise subsessions render under their parent.
   const nesting = nestThreadListSubsessions(input.threads);
   const flatSearch = query.length > 0;
-  const collapsedKeys = input.collapsedSubsessionKeys ?? EMPTY_KEYS;
+  const expandedKeys = input.expandedSubsessionKeys ?? EMPTY_KEYS;
   const listedThreads = input.threads.filter(
     (thread) =>
       thread.archivedAt === null &&
@@ -933,7 +933,7 @@ export function buildThreadListV2Items(input: {
     thread: EnvironmentThreadShell,
     shelf: { variant: "card" | "slim"; snoozed: boolean; pinned: boolean },
   ) => {
-    for (const entry of listThreadWithSubsessions(thread, nesting, collapsedKeys)) {
+    for (const entry of listThreadWithSubsessions(thread, nesting, expandedKeys)) {
       const root = entry.depth === 0;
       items.push({
         thread: entry.thread,

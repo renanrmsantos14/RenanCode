@@ -4,7 +4,7 @@ import { AsyncResult } from "effect/reactivity";
 
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
 
-const EMPTY_COLLAPSED_SUBSESSIONS: ReadonlySet<string> = new Set();
+const EMPTY_EXPANDED_SUBSESSIONS: ReadonlySet<string> = new Set();
 
 export function useThreadListV2ShelfPreferences() {
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
@@ -18,10 +18,10 @@ export function useThreadListV2ShelfPreferences() {
   const workingShelfExpanded =
     loaded && preferencesResult.value.threadListWorkingShelfExpanded === true;
 
-  const collapsedList = loaded ? preferencesResult.value.threadListCollapsedSubsessions : undefined;
-  const collapsedSubsessions = useMemo(
-    () => (collapsedList ? new Set(collapsedList) : EMPTY_COLLAPSED_SUBSESSIONS),
-    [collapsedList],
+  const expandedList = loaded ? preferencesResult.value.threadListExpandedSubsessions : undefined;
+  const expandedSubsessions = useMemo(
+    () => (expandedList ? new Set(expandedList) : EMPTY_EXPANDED_SUBSESSIONS),
+    [expandedList],
   );
 
   // Transforms read optimistic state so same-frame presses toggle twice.
@@ -56,9 +56,9 @@ export function useThreadListV2ShelfPreferences() {
       if (!loaded) return;
       savePreferences({
         transform: (current) => {
-          const collapsed = new Set(current.threadListCollapsedSubsessions);
-          if (!collapsed.delete(threadKey)) collapsed.add(threadKey);
-          return { threadListCollapsedSubsessions: [...collapsed] };
+          const expanded = new Set(current.threadListExpandedSubsessions);
+          if (!expanded.delete(threadKey)) expanded.add(threadKey);
+          return { threadListExpandedSubsessions: [...expanded] };
         },
       });
     },
@@ -67,7 +67,7 @@ export function useThreadListV2ShelfPreferences() {
 
   return {
     loaded,
-    collapsedSubsessions,
+    expandedSubsessions,
     toggleSubsessions,
     settledShelfExpanded,
     snoozedShelfExpanded,
