@@ -1,9 +1,11 @@
 import {
+  OrchestratorMcpEnvironmentTarget,
   OrchestratorMcpFailure,
   ProjectId,
   ThreadId,
   TrimmedNonEmptyString,
   WorkModuleId,
+  WorkModuleStatus,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { Tool, Toolkit } from "effect/ai";
@@ -26,8 +28,9 @@ const shared = {
 const WorkModuleReadTool = Tool.make("t3_work_module_read", {
   ...shared,
   description:
-    "Read the user's work board: modules nested under a project, with status, due date and threads. No args: this thread's module. `projectId`: the project's tree. `moduleId`: one module.",
+    "Read the user's work board: modules nested under a project, with status, due date and threads. No args: this thread's module (here only). `projectId`: the project's tree. `moduleId`: one module.",
   parameters: Schema.Struct({
+    environmentId: OrchestratorMcpEnvironmentTarget,
     projectId: Schema.optional(ProjectId),
     moduleId: Schema.optional(WorkModuleId),
   }),
@@ -39,18 +42,21 @@ const WorkModuleReadTool = Tool.make("t3_work_module_read", {
 const WorkModuleSuggestTool = Tool.make("t3_work_module_suggest", {
   ...shared,
   description:
-    "Suggest on the user's work board. create: new module (status idea). link: propose a thread (default this one) for a module; the user confirms. note: append a dated line to a module's note. Status, due date, title, moves and deletes are the user's.",
+    "Suggest on the user's work board. create: new module (status idea). link: propose a thread (default this one; elsewhere pass `threadId`) for a module; the user confirms. note: append a dated line to a module's note. status: set `status` (`waitingReason` for waiting), only after the user approved that exact change; when one makes sense, propose it and ask. Due date, title, moves and deletes are the user's.",
   parameters: Schema.Struct({
-    action: Schema.Literals(["create", "link", "note"]),
+    environmentId: OrchestratorMcpEnvironmentTarget,
+    action: Schema.Literals(["create", "link", "note", "status"]),
     projectId: Schema.optional(ProjectId),
     parentModuleId: Schema.optional(WorkModuleId),
     moduleId: Schema.optional(WorkModuleId),
     threadId: Schema.optional(ThreadId),
     title: Schema.optional(TrimmedNonEmptyString.check(Schema.isMaxLength(200))),
     text: Schema.optional(Schema.String.check(Schema.isMaxLength(2000))),
+    status: Schema.optional(WorkModuleStatus),
+    waitingReason: Schema.optional(TrimmedNonEmptyString.check(Schema.isMaxLength(200))),
   }),
 })
-  .annotate(Tool.Title, "Suggest on work board")
+  .annotate(Tool.Title, "Update work board")
   .annotate(Tool.Readonly, false)
   .annotate(Tool.Destructive, false)
   .annotate(Tool.Idempotent, false);

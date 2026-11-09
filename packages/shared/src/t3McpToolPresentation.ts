@@ -338,7 +338,7 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
   t3_worktree_list: tool(["List", "Listing", "Listed", "workspace branches"], "worktree-list"),
   t3_work_module_read: tool(["Read", "Reading", "Read", "work board"], "work-module-read"),
   t3_work_module_suggest: tool(
-    ["Suggest", "Suggesting", "Suggested", "work board change"],
+    ["Update", "Updating", "Updated", "the work board"],
     "work-module-suggest",
   ),
   t3_preview_list: tool(["List", "Listing", "Listed", "preview tabs"], "browser", "browser"),
