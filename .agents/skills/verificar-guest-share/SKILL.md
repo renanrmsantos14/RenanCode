@@ -23,8 +23,17 @@ description: "Verifica links de convidado (Share with guest): criar link com ou 
 4. Status acima do composer: "Guest link active · sends directly" (web e mobile). Com aprovação ligada, sem o sufixo.
 5. Com o link aberto num navegador sem sessão, enviar uma mensagem. Com aprovação: aparece pendente com Send/Dismiss. Sem aprovação: vira mensagem de usuário com o nome do convidado e o agente recebe "not reviewed by the owner".
 
+## Roteiro manual (mobile)
+
+Mesmo servidor do roteiro web, com Guest links ligado. A opção só aparece com a permissão `createGuestShare`, Guest links ligado e Connect liberado pela política (mesma regra do `canShareWithGuestAtom` da web). Não aparece em rascunho.
+
+1. Criar o link de dois jeitos: toque longo na thread da lista > **Share with guest**, ou thread aberta > menu do header (Android: overflow; iOS: botão na toolbar).
+2. Esperado: alerta "Share with guest" com **Cancel**, **Send directly** e **Require approval**.
+3. Escolher um modo. Esperado: abre o compartilhar do sistema com o link (iOS como `url`, Android como `message`), e o status acima do composer segue o passo 4 da web.
+
 ## Casos de borda
 
 - Provider desabilitado com auto-send: o envio falha, a mensagem fica pendente e o servidor registra "Guest message auto-send failed".
 - Link expirado: o mobile mostra "Guest link expired" sem o sufixo "sends directly".
+- iOS: fechar o compartilhar sem enviar abre o alerta "Guest link" com o link e **Copy** (o link só aparece uma vez). O Android não informa o cancelamento.
 - Não há como alternar o modo num link ativo: pare de compartilhar e crie outro.

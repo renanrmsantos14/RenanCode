@@ -959,6 +959,7 @@ function ThreadRouteContent(
                 inspectorMode={inspectorMode}
                 onOpenFilesInspector={handleOpenFilesInspector}
                 onReturnToThread={props.onReturnToThread}
+                threadRef={selectedThreadDetailRef}
               />
             )
           }
