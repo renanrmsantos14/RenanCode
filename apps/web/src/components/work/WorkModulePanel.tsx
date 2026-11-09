@@ -59,7 +59,7 @@ const findNode = (nodes: WorkModuleNode[], id: WorkModuleId): WorkModuleNode | n
 };
 
 const INLINE_FIELD_CLASS =
-  "-mx-2 w-[calc(100%+(--spacing(4)))] rounded-md bg-transparent px-2 py-1 outline-none transition-colors duration-150 placeholder:text-muted-foreground/70 enabled:hover:bg-accent/50 focus:bg-accent/50 focus:ring-1 focus:ring-ring disabled:cursor-default";
+  "-mx-2 w-[calc(100%+(--spacing(4)))] rounded-md bg-transparent px-2 py-1 outline-none transition-colors duration-150 placeholder:text-muted-foreground/70 enabled:hover:bg-accent/50 focus:bg-accent/50 focus:ring-1 focus:ring-inset focus:ring-ring disabled:cursor-default";
 
 const THREAD_STATUS_DOT: Record<SidebarThreadStatus, string> = {
   approval: "bg-warning",
@@ -83,7 +83,7 @@ function ThreadRow(props: {
     <li className="group/row flex items-center gap-1 rounded-md pe-1 transition-[background-color,opacity,translate] duration-200 ease-out-quint hover:bg-accent/50 starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none">
       <button
         type="button"
-        className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-start text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-start text-sm outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
         onClick={props.onOpen}
       >
         <span
