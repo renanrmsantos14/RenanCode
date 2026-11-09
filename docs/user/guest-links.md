@@ -13,7 +13,9 @@ While the setting is off, every guest link on that machine stops working; links 
 expired work again when you turn it back on.
 
 1. Right-click the thread in the sidebar and choose **Share with guest**. It is also in the thread
-   menu and the command palette.
+   menu and the command palette. In the mobile app, long-press the thread in the list or use the
+   thread's header, then choose whether the guest needs your approval; the link opens in the share
+   sheet.
 2. Copy the link and send it to one person. It works in one browser and expires after 24 hours.
    Opening it again in that browser takes them back to the thread. Turn off **Require my approval**
    before creating the link to let their messages go straight to the agent.

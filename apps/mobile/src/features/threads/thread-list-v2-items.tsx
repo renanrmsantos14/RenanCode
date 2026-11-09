@@ -10,6 +10,7 @@ import {
 } from "./thread-list-v2-row-appearance";
 import { RowPressable } from "../../components/ui/RowPressable";
 import { CustomSnoozeSheet } from "./CustomSnoozeSheet";
+import { useShareWithGuest } from "./ThreadGuestShareBar";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { threadArrangementOpenAtom } from "../../state/thread-order";
 import { startOpeningEnvironmentThread, threadEnvironment } from "../../state/threads";
@@ -1044,6 +1045,11 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     ],
   );
   const canTurnIntoProject = canTurnThreadIntoProject(thread);
+  const shareWithGuest = useShareWithGuest({
+    environmentId: thread.environmentId,
+    threadId: thread.id,
+  });
+  const canShareWithGuest = shareWithGuest !== null;
   const titleMenuItems = useMemo<MenuAction[]>(
     () => [
       { id: "rename", title: "Rename", image: "square.and.pencil" },
@@ -1078,6 +1084,9 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         : []),
       { id: "copy-thread", title: "Copy thread", image: "text.bubble" },
       { id: "copy-thread-id", title: "Copy thread ID", image: "doc.on.doc" },
+      ...(canShareWithGuest
+        ? [{ id: "share-guest", title: "Share with guest", image: "person.badge.plus" }]
+        : []),
     ];
     if (snoozedRow) {
       return layoutThreadListV2RowMenuActions({
@@ -1138,6 +1147,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     });
   }, [
     settlementMenuItems,
+    canShareWithGuest,
     canUnsettle,
     pinMenuItems,
     props.settlementSupported,
@@ -1179,6 +1189,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       if (nativeEvent.event === "copy-thread-id") {
         copyTextWithHaptic(thread.id, { target: "thread-id" });
       }
+      if (nativeEvent.event === "share-guest") shareWithGuest?.();
       if (nativeEvent.event === "delete") handleDelete();
       if (nativeEvent.event === "snooze:custom") {
         setCustomSnoozeOpen(true);
@@ -1217,6 +1228,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       handleUnsettle,
       handleUnsnooze,
       setCustomSnoozeOpen,
+      shareWithGuest,
       snoozePresets,
       props.snoozePresets,
     ],
