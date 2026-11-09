@@ -1061,8 +1061,8 @@ export function resolveWindowsServerAsarIgnoreGlobs(arch: typeof BuildArch.Type)
   ];
 }
 
-// Native Windows builds also ship server-compile-cache (11 files); cross builds from Linux skip it.
-export const WINDOWS_PACKAGED_PAYLOAD_FILE_LIMIT = 90;
+// Native Windows builds ship server-compile-cache (one file per server chunk); Linux cross builds skip it.
+export const WINDOWS_PACKAGED_PAYLOAD_FILE_LIMIT = 100;
 export const WINDOWS_SERVER_RESOURCE_SOURCE_DIR = "apps/desktop/prod-resources/windows-server";
 export const WINDOWS_SERVER_EXTRA_RESOURCES = [
   {
