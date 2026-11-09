@@ -5,7 +5,7 @@ import * as Schema from "effect/Schema";
 import { resolveBrowserDefaults } from "~/browser/browserDefaults";
 import { isWebUrl, resolveBrowserLinkTargetPreference } from "~/browser/browserLinkTarget";
 import type { OpenPreviewMutation } from "~/browser/openFileInPreview";
-import { isPreviewAvailableFor, previewRuntimeFor } from "~/browser/previewRuntime";
+import { isPreviewAvailableFor, previewRuntimeForUrl } from "~/browser/previewRuntime";
 import { recordVisitForThread } from "~/browserHistoryStore";
 import { applyPreviewServerSnapshot } from "~/previewStateStore";
 import { useRightPanelStore } from "~/rightPanelStore";
@@ -31,14 +31,12 @@ interface OpenTerminalLinkInPreviewInput<E> {
   readonly threadRef: ScopedThreadRef;
   readonly openPreview: OpenPreviewMutation<E>;
   readonly fallbackToBrowser: () => void;
-  readonly forceBrowser: boolean;
 }
 
 export async function openTerminalLinkInPreview<E>(
   input: OpenTerminalLinkInPreviewInput<E>,
 ): Promise<void> {
   const supportsPreview =
-    !input.forceBrowser &&
     isWebUrl(input.url) &&
     isPreviewAvailableFor(input.threadRef.environmentId) &&
     input.threadRef.threadId.length > 0 &&
@@ -56,7 +54,7 @@ export async function openTerminalLinkInPreview<E>(
   };
 
   const defaults = await resolveBrowserDefaults();
-  const runtime = previewRuntimeFor(input.threadRef.environmentId);
+  const runtime = previewRuntimeForUrl(input.threadRef.environmentId, input.url);
   const result = await input.openPreview({
     environmentId: input.threadRef.environmentId,
     input: {
