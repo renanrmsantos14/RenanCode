@@ -665,9 +665,8 @@ function TerminalSessionViewport({
       if (version > 0) synchronizedStatusRef.current = status;
     },
   );
-  const openLinkInPreview = useEffectEvent(
-    (url: string, fallbackToBrowser: () => void) =>
-      openTerminalLinkInPreview({ url, threadRef, openPreview, fallbackToBrowser }),
+  const openLinkInPreview = useEffectEvent((url: string, fallbackToBrowser: () => void) =>
+    openTerminalLinkInPreview({ url, threadRef, openPreview, fallbackToBrowser }),
   );
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- sets the terminal input's readOnly from the operate grant and consumes a pending focus request
@@ -1063,17 +1062,15 @@ function TerminalSessionViewport({
             fallbackToBrowser();
             return;
           }
-          void openLinkInPreview(text, fallbackToBrowser).catch(
-            (error: unknown) => {
-              toastManager.add(
-                stackedThreadToast({
-                  type: "error",
-                  title: "Unable to open link",
-                  description: error instanceof Error ? error.message : "An error occurred.",
-                }),
-              );
-            },
-          );
+          void openLinkInPreview(text, fallbackToBrowser).catch((error: unknown) => {
+            toastManager.add(
+              stackedThreadToast({
+                type: "error",
+                title: "Unable to open link",
+                description: error instanceof Error ? error.message : "An error occurred.",
+              }),
+            );
+          });
           return;
         }
         const target = resolvePathLinkTarget(text, cwd);
