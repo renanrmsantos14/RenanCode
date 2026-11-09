@@ -110,6 +110,7 @@ export function ThreadGuestShareBar(props: {
           : share.guestName === null
             ? "Guest link active"
             : `${share.guestName} is a guest`}
+        {share.autoSend && expiredAt !== share.expiresAt ? " · sends directly" : null}
       </Text>
       <Button label="Stop sharing" tone="text" disabled={disabled} onPress={stopSharing} />
     </View>
