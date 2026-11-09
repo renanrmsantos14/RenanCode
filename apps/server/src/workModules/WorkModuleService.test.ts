@@ -4,6 +4,7 @@ import { type OrchestrationV2ThreadShell, ProjectId, ThreadId } from "@t3tools/c
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/sql/SqlClient";
+import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
@@ -223,6 +224,22 @@ it.effect("names archived threads and drops their pending suggestions", () =>
         [[threadInApp, "Recibo", true]],
       );
     }),
+  ),
+);
+
+it.effect("re-publishes the snapshot when a linked thread changes", () =>
+  withService((service) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const m = yield* service.upsert({ projectId: app, title: "A" });
+        yield* service.linkThread({ threadId: threadInApp, moduleId: m.id, suggested: false });
+        const pull = yield* Stream.toPull(service.subscribe());
+        yield* pull;
+        yield* service.threadChanged(threadInApp);
+        const next = yield* pull;
+        assert.lengthOf(next.at(-1)!.links, 1);
+      }),
+    ),
   ),
 );
 

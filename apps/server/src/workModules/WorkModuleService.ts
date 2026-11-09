@@ -51,6 +51,8 @@ export class WorkModuleService extends Context.Service<
       { readonly module: WorkModule; readonly link: WorkModuleThreadLink } | null,
       WorkModuleError
     >;
+    /** Re-publishes the snapshot when a linked thread's title or archive state changed. */
+    readonly threadChanged: (threadId: ThreadId) => Effect.Effect<void, WorkModuleError>;
   }
 >()("t3/workModules/WorkModuleService") {}
 
@@ -404,6 +406,12 @@ export const layer = Layer.effect(
       return { module: yield* readModule(link.moduleId), link };
     });
 
+    const threadChanged = Effect.fn("WorkModuleService.threadChanged")(function* (
+      threadId: ThreadId,
+    ) {
+      if ((yield* readLink(threadId)) !== null) yield* notify;
+    });
+
     return WorkModuleService.of({
       snapshot,
       subscribe,
@@ -415,6 +423,7 @@ export const layer = Layer.effect(
       confirmSuggestion,
       appendAgentNote,
       moduleForThread,
+      threadChanged,
     });
   }),
 );
