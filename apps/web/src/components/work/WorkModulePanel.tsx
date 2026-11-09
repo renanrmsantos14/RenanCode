@@ -104,7 +104,9 @@ function ThreadRow(props: {
           </span>
         )}
       </button>
-      {props.children}
+      {props.children === null || props.children === undefined ? null : (
+        <div className="flex w-12 shrink-0 justify-end">{props.children}</div>
+      )}
     </li>
   );
 }
@@ -252,24 +254,30 @@ export function WorkModulePanel(props: {
       <SheetPopup side="right">
         <SheetHeader>
           <SheetTitle className="sr-only">{workModule.title}</SheetTitle>
-          <div className="flex min-w-0 flex-col gap-1 pe-6">
+          <div className="flex min-w-0 flex-col gap-1 pe-8">
             {node.ancestorTitles.length === 0 ? null : (
               <p className="truncate text-xs text-muted-foreground">
                 {node.ancestorTitles.join(" › ")}
               </p>
             )}
-            <input
+            <textarea
               key={workModule.title}
               aria-label="Título"
+              rows={1}
               defaultValue={workModule.title}
               maxLength={200}
               disabled={!canWrite}
-              className={cn(INLINE_FIELD_CLASS, "text-xl font-semibold leading-snug")}
+              className={cn(
+                INLINE_FIELD_CLASS,
+                "field-sizing-content resize-none text-xl font-semibold leading-snug",
+              )}
               onKeyDown={(event) => {
-                if (event.key === "Enter") event.currentTarget.blur();
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                event.currentTarget.blur();
               }}
               onBlur={(event) => {
-                const title = event.target.value.trim();
+                const title = event.target.value.replace(/\s+/g, " ").trim();
                 if (title === "" || title === workModule.title) {
                   event.target.value = workModule.title;
                   return;
