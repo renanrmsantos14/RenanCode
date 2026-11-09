@@ -43,6 +43,7 @@ import * as ServerConfig from "../config.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexAdapterV2.ts";
 import * as CommandOutputHub from "../orchestration-v2/CommandOutputHub.ts";
+import * as CommandReceiptStore from "../orchestration-v2/CommandReceiptStore.ts";
 import * as EffectOutbox from "../orchestration-v2/EffectOutbox.ts";
 import * as EffectWorker from "../orchestration-v2/EffectWorker.ts";
 import * as EventSink from "../orchestration-v2/EventSink.ts";
@@ -50,6 +51,7 @@ import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterRegistry.ts";
 import * as ResourceCleanupService from "../orchestration-v2/ResourceCleanupService.ts";
+import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as ProviderReplayHarness from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ServerSettings from "../serverSettings.ts";
@@ -137,6 +139,11 @@ const layerAnalytics = Layer.effectContext(
   }),
 );
 const layerTest = GuestShareService.layer.pipe(
+  Layer.provide(
+    ThreadManagementService.layer.pipe(
+      Layer.provide(CommandReceiptStore.layer.pipe(Layer.provide(layerDatabase))),
+    ),
+  ),
   Layer.provideMerge(
     CommandOutputHub.layer.pipe(
       Layer.provideMerge(layerOrchestration.pipe(Layer.provide(layerCleanup))),
@@ -153,7 +160,7 @@ const layerTest = GuestShareService.layer.pipe(
 
 const threadId = ThreadId.make("thread:guest-share-service");
 
-const shareThreadFor = Effect.fn(function* (threadId: ThreadId) {
+const shareThreadFor = Effect.fn(function* (threadId: ThreadId, autoSend?: boolean) {
   yield* Ref.set(hostname, "env.t3.test");
   const orchestrator = yield* Orchestrator.OrchestratorV2;
   yield* orchestrator.dispatch({
@@ -171,7 +178,7 @@ const shareThreadFor = Effect.fn(function* (threadId: ThreadId) {
     creationSource: "web",
   });
   const guestShares = yield* GuestShareService.GuestShareService;
-  const { url } = yield* guestShares.create({ threadId });
+  const { url } = yield* guestShares.create({ threadId, ...(autoSend ? { autoSend } : {}) });
   assert.isTrue(url.startsWith("https://env.t3.test/guest#"));
   const credential = url.slice(url.indexOf("#") + 1);
   return { orchestrator, guestShares, credential };
@@ -937,6 +944,31 @@ it.effect("sends a guest's files as the guest's message and keeps them the guest
     }
     assert.isFalse((yield* waitingMessages).some((next) => next.id === message!.id));
     assert.equal((yield* guestShares.attachment(session, copied.id)).attachment.id, copied.id);
+  }).pipe(Effect.scoped, Effect.provide(layerTest)),
+);
+
+it.effect("sends a guest's message without the owner when the link does not need approval", () =>
+  Effect.gen(function* () {
+    const { orchestrator, guestShares, credential } = yield* shareThreadFor(threadId, true);
+    const { token: session, shareId } = yield* guestShares.redeem({ credential, name: "Sam" });
+    yield* guestShares.submit(session, { shareId, text: "Run the tests" }, []);
+    const [message] = yield* waitingMessages;
+    assert.equal(message!.status, "sent");
+    const items = (yield* orchestrator.getThreadSnapshotWindow(threadId, {
+      rowLimit: 20,
+    })).projection.visibleTurnItems.map((entry) => entry.item);
+    const sent = items.find(
+      (item) => item.type === "user_message" && item.context?.guest?.guestMessageId === message!.id,
+    );
+    assert.deepInclude(sent?.type === "user_message" ? sent.context?.guest : undefined, {
+      name: "Sam",
+      text: "Run the tests",
+    });
+    const { messages } = yield* orchestrator.getThreadProjection(threadId);
+    assert.equal(
+      messages.find((entry) => entry.context?.guest?.guestMessageId === message!.id)?.text,
+      "Message from guest Sam, not reviewed by the owner:\n\nRun the tests",
+    );
   }).pipe(Effect.scoped, Effect.provide(layerTest)),
 );
 

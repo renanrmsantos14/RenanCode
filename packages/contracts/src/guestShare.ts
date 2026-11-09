@@ -49,13 +49,18 @@ export const ThreadGuestShare = Schema.Struct({
   /** Set once, when the guest redeems the link. */
   guestName: Schema.NullOr(TrimmedNonEmptyString),
   messages: Schema.Array(ThreadGuestMessage),
+  /** The guest's messages go to the agent without waiting for the owner. Absent on older shares. */
+  autoSend: Schema.optional(Schema.Boolean),
 });
 export type ThreadGuestShare = typeof ThreadGuestShare.Type;
 
 export const pendingGuestMessageCount = (share: ThreadGuestShare | null | undefined): number =>
   share?.messages.filter((message) => message.status === "pending").length ?? 0;
 
-export const GuestShareCreateInput = Schema.Struct({ threadId: ThreadId });
+export const GuestShareCreateInput = Schema.Struct({
+  threadId: ThreadId,
+  autoSend: Schema.optional(Schema.Boolean),
+});
 export type GuestShareCreateInput = typeof GuestShareCreateInput.Type;
 
 export const GuestShareCreateResult = Schema.Struct({

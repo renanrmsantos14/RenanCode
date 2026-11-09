@@ -391,7 +391,7 @@ function NameForm({
         Join
       </Button>
       <p className="text-xs text-muted-foreground">
-        The owner sees your name and approves each message before the agent gets it.
+        The owner sees your name and can require approval for each message before the agent gets it.
       </p>
     </form>
   );

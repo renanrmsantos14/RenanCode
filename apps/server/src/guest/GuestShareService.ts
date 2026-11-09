@@ -4,6 +4,7 @@ import {
   CommandId,
   GUEST_SHARE_TTL_MS,
   GuestMessageId,
+  MessageId,
   GuestShareCreateError,
   type GuestShareCreateInput,
   type GuestShareCreateResult,
@@ -48,6 +49,7 @@ import { CloudManagedEndpointRuntime } from "../cloud/ManagedEndpointRuntime.ts"
 import * as CommandOutputHub from "../orchestration-v2/CommandOutputHub.ts";
 import { GUEST_FAILURE } from "../orchestration-v2/GuestShareDecider.ts";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
+import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import { coalesceThreadLiveStream } from "../orchestration-v2/ThreadLiveEventCoalescer.ts";
 import { buildBoundedThreadStreamSnapshot } from "../orchestration-v2/ThreadStream.ts";
 import {
@@ -220,6 +222,7 @@ const threadOf = (event: OrchestrationV2DomainEvent): OrchestrationV2AppThread |
 
 const make = Effect.gen(function* () {
   const orchestrator = yield* Orchestrator.OrchestratorV2;
+  const threads = yield* ThreadManagementService.ThreadManagementService;
   const commandOutputs = yield* CommandOutputHub.CommandOutputHub;
   const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
@@ -355,6 +358,7 @@ const make = Effect.gen(function* () {
         shareId,
         host,
         expiresAt,
+        ...(input.autoSend ? { autoSend: true } : {}),
       })
       .pipe(Effect.mapError(() => new GuestShareCreateError({ reason: "thread_unavailable" })));
     const { thread } = yield* orchestrator
@@ -459,15 +463,38 @@ const make = Effect.gen(function* () {
       return yield* new GuestShareAccessError({ reason: "empty" });
     }
     const attachments = yield* storeUploads(thread.id, uploads);
+    const guestMessageId = GuestMessageId.make(yield* random.uuidV4());
     yield* dispatchGuestCommand({
       type: "thread.guest-message.submit",
       commandId: yield* commandId("submit"),
       threadId: thread.id,
       shareId: share.id,
-      guestMessageId: GuestMessageId.make(yield* random.uuidV4()),
+      guestMessageId,
       text: request.text,
       ...(attachments.length === 0 ? {} : { attachments }),
     }).pipe(Effect.onError(() => removeStored(attachments)));
+    if (share.autoSend) {
+      // Same send the owner's button makes. If it fails, the message stays waiting for the owner.
+      const sendId = yield* commandId("auto-send");
+      yield* threads
+        .dispatch({
+          type: "message.dispatch",
+          commandId: sendId,
+          threadId: thread.id,
+          messageId: MessageId.make(sendId),
+          guestMessageId,
+          text: "",
+          attachments,
+          dispatchMode: { type: "queue_after_active" },
+          createdBy: "user",
+          creationSource: "server",
+        })
+        .pipe(
+          Effect.catch((error) =>
+            Effect.logWarning("Guest message auto-send failed", { threadId: thread.id, error }),
+          ),
+        );
+    }
     yield* analytics.record("feature.used", {
       feature: "guest_message.submit",
       variant: attachments.length === 0 ? "text_only" : "with_files",
