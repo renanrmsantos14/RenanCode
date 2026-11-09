@@ -1,7 +1,7 @@
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import type { WorkModuleNode } from "@t3tools/client-runtime/workModuleTree";
 import type { WorkModuleId, WorkModuleUpsertInput } from "@t3tools/contracts";
-import { PlusIcon } from "lucide-react";
+import { CheckIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
 
 import { useComposerDraftStore } from "~/composerDraftStore";
@@ -210,9 +210,11 @@ export function WorkPage() {
           pressed={dueThisMonth}
           onPressedChange={setDueThisMonth}
         >
+          {dueThisMonth ? <CheckIcon /> : null}
           Vence este mês
         </Toggle>
         <Toggle variant="outline" size="sm" pressed={hideDone} onPressedChange={setHideDone}>
+          {hideDone ? <CheckIcon /> : null}
           Ocultar finalizados
         </Toggle>
       </div>

@@ -366,7 +366,9 @@ function SortableModule(props: { context: TreeContext; node: WorkModuleNode; dep
             onChange={(dueDate) => context.onUpdate(project, { id: workModule.id, dueDate })}
           />
         </div>
-        <span className="text-xs text-muted-foreground tabular-nums">{node.threadIds.length}</span>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {node.linkedThreadIds.length}
+        </span>
         <WorkModuleRowMenu
           node={node}
           projectNodes={project.nodes}

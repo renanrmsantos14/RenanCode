@@ -149,8 +149,24 @@ export const layer = Layer.effect(
       const modules = yield* sql<ModuleRow>`
         SELECT * FROM work_modules ORDER BY project_id, parent_module_id, position
       `;
-      const links = yield* sql<LinkRow>`SELECT * FROM work_module_threads`;
-      return { modules: modules.map(toModule), links: links.map(toLink) };
+      // Archived threads leave the client's shells, so the snapshot carries their titles and
+      // drops their pending suggestions, which nobody can act on.
+      const links = yield* sql<
+        LinkRow & { readonly title: string | null; readonly archived_at: string | null }
+      >`
+        SELECT l.*, t.title, t.archived_at
+        FROM work_module_threads l
+        LEFT JOIN orchestration_v2_projection_threads t ON t.thread_id = l.thread_id
+        WHERE l.suggested = 0 OR t.archived_at IS NULL
+      `;
+      return {
+        modules: modules.map(toModule),
+        links: links.map((row) => ({
+          ...toLink(row),
+          ...(row.title === null ? {} : { threadTitle: row.title }),
+          threadArchived: row.archived_at !== null,
+        })),
+      };
     }, Effect.mapError(storage));
 
     const subscribe = () =>

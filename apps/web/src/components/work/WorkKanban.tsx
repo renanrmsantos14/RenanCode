@@ -92,7 +92,7 @@ export function WorkKanban(
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-      <div className="grid min-w-[880px] grid-cols-4 gap-3 p-4">
+      <div className="grid min-w-[880px] grid-cols-4 items-start gap-3 p-4">
         {WORK_MODULE_STATUSES.map((status) => (
           <KanbanColumn key={status} status={status} count={columns[status].length}>
             {columns[status].map((node) => {
@@ -162,7 +162,13 @@ function KanbanCard(props: {
   const draggable = project.canWrite;
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, isDragging } =
     useDraggable({ id: cardKey(project, node), disabled: !draggable });
-  const path = [project.project.title, ...node.ancestorTitles].join(" › ");
+  // Root modules are often named after their project; don't print the same name twice.
+  const pathParts = [project.project.title, ...node.ancestorTitles].filter(
+    (title, index, all) => index === 0 || title !== all[index - 1],
+  );
+  const path =
+    pathParts.length === 1 && pathParts[0] === workModule.title ? null : pathParts.join(" › ");
+  const linked = node.linkedThreadIds.length;
   return (
     <article
       ref={setNodeRef}
@@ -174,7 +180,9 @@ function KanbanCard(props: {
     >
       <div className="flex items-start gap-1">
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate text-xs text-muted-foreground">{path}</span>
+          {path === null ? null : (
+            <span className="truncate text-xs text-muted-foreground">{path}</span>
+          )}
           <button
             type="button"
             className="min-w-0 text-left text-sm hover:underline"
@@ -205,8 +213,15 @@ function KanbanCard(props: {
             {workModule.dueDate}
           </span>
         )}
-        <span className="ms-auto tabular-nums">
-          {node.threadIds.length} {node.threadIds.length === 1 ? "thread" : "threads"}
+        <span className="ms-auto flex items-center gap-2 tabular-nums">
+          {node.pendingSuggestions === 0 ? null : (
+            <span className="text-info-foreground">
+              {node.pendingSuggestions} {node.pendingSuggestions === 1 ? "sugerida" : "sugeridas"}
+            </span>
+          )}
+          <span>
+            {linked} {linked === 1 ? "thread" : "threads"}
+          </span>
         </span>
       </div>
     </article>

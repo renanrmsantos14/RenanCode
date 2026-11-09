@@ -1,12 +1,17 @@
 import { useAtomValue } from "@effect/atom-react";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
-import { isOverdue, type WorkModuleNode } from "@t3tools/client-runtime/workModuleTree";
-import type { ThreadId, WorkModuleId } from "@t3tools/contracts";
+import {
+  isOverdue,
+  joinAgentNote,
+  splitAgentNote,
+  type WorkModuleNode,
+} from "@t3tools/client-runtime/workModuleTree";
+import type { ThreadId, WorkModuleId, WorkModuleThreadLink } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
 import { CheckIcon, LinkIcon, PlusIcon, SparklesIcon, UnlinkIcon, XIcon } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -75,10 +80,13 @@ const THREAD_STATUS_DOT: Record<SidebarThreadStatus, string> = {
 
 function ThreadRow(props: {
   thread: EnvironmentThreadShell | undefined;
+  link: WorkModuleThreadLink;
   onOpen: () => void;
   children?: ReactNode;
 }) {
   const status = props.thread === undefined ? null : resolveSidebarThreadStatus(props.thread);
+  // Shells drop archived and long-settled threads, so the snapshot's title stands in for them.
+  const title = props.thread?.title ?? props.link.threadTitle;
   return (
     <li className="group/row flex items-center gap-1 rounded-md pe-1 transition-[background-color,opacity,translate] duration-200 ease-out-quint hover:bg-accent/50 starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none">
       <button
@@ -93,16 +101,18 @@ function ThreadRow(props: {
             status === null ? "bg-muted-foreground/25" : THREAD_STATUS_DOT[status],
           )}
         />
-        {props.thread === undefined ? (
+        {title === undefined ? (
           <span className="truncate text-muted-foreground italic">Thread indisponível</span>
         ) : (
-          <span className="truncate">{props.thread.title}</span>
-        )}
-        {status === null ? null : (
-          <span className="ms-auto shrink-0 text-xs text-muted-foreground">
-            {THREAD_STATUS_LABEL[status]}
+          <span className={cn("truncate", status === null && "text-muted-foreground")}>
+            {title}
           </span>
         )}
+        {status !== null || props.link.threadArchived ? (
+          <span className="ms-auto shrink-0 text-xs text-muted-foreground">
+            {status === null ? "Arquivada" : THREAD_STATUS_LABEL[status]}
+          </span>
+        ) : null}
       </button>
       {props.children === null || props.children === undefined ? null : (
         <div className="flex w-12 shrink-0 justify-end">{props.children}</div>
@@ -217,6 +227,7 @@ export function WorkModulePanel(props: {
     label: "work module confirm",
   });
   const [linking, setLinking] = useState(false);
+  const popupRef = useRef<HTMLDivElement>(null);
 
   const node = findNode(project.nodes, props.moduleId);
   if (node === null) return null;
@@ -236,6 +247,7 @@ export function WorkModulePanel(props: {
     props.onUpdate(project, { ...input, id: workModule.id });
   const threadInput = (threadId: ThreadId) => ({ environmentId, input: { threadId } });
 
+  const note = splitAgentNote(workModule.note);
   const suggested = links.filter((link) => link.suggested);
   const confirmed = links.filter((link) => !link.suggested);
   const openThread = (threadId: ThreadId) =>
@@ -251,7 +263,8 @@ export function WorkModulePanel(props: {
         if (!open) props.onClose();
       }}
     >
-      <SheetPopup side="right">
+      {/* Focus the popup, not the title, so the title reads as text until clicked. */}
+      <SheetPopup ref={popupRef} initialFocus={popupRef} side="right">
         <SheetHeader>
           <SheetTitle className="sr-only">{workModule.title}</SheetTitle>
           <div className="flex min-w-0 flex-col gap-1 pe-8">
@@ -289,10 +302,10 @@ export function WorkModulePanel(props: {
         </SheetHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 pb-6">
           <textarea
-            key={workModule.note}
+            key={note.text}
             aria-label="Nota"
             placeholder={canWrite ? "Adicionar nota…" : "Sem nota"}
-            defaultValue={workModule.note}
+            defaultValue={note.text}
             maxLength={20_000}
             disabled={!canWrite}
             className={cn(
@@ -300,7 +313,8 @@ export function WorkModulePanel(props: {
               "field-sizing-content min-h-16 resize-none text-sm leading-relaxed text-foreground/90",
             )}
             onBlur={(event) => {
-              if (event.target.value !== workModule.note) update({ note: event.target.value });
+              const next = joinAgentNote(event.target.value, note.agentLines);
+              if (next !== workModule.note) update({ note: next });
             }}
           />
           <dl className="grid grid-cols-[5.5rem_1fr] items-center gap-x-3 gap-y-1 text-sm">
@@ -362,6 +376,7 @@ export function WorkModulePanel(props: {
                   <ThreadRow
                     key={link.threadId}
                     thread={shellById.get(link.threadId)}
+                    link={link}
                     onOpen={() => openThread(link.threadId)}
                   >
                     {canWrite ? (
@@ -388,6 +403,7 @@ export function WorkModulePanel(props: {
                     <ThreadRow
                       key={link.threadId}
                       thread={shellById.get(link.threadId)}
+                      link={link}
                       onOpen={() => openThread(link.threadId)}
                     >
                       {canWrite ? (
@@ -412,6 +428,25 @@ export function WorkModulePanel(props: {
               </div>
             )}
           </section>
+          {note.agentLines.length === 0 ? null : (
+            <section className="flex flex-col gap-2 border-t pt-5">
+              <h3 className="text-sm font-medium">Atividade</h3>
+              <ol className="flex flex-col gap-1.5 text-sm">
+                {note.agentLines.map((line, index) => {
+                  const [date = "", ...rest] = line.split(" · agent: ");
+                  return (
+                    // oxlint-disable-next-line react/no-array-index-key -- agent lines can repeat verbatim
+                    <li key={index} className="flex gap-3">
+                      <time className="shrink-0 text-xs leading-5 tabular-nums text-muted-foreground">
+                        {date}
+                      </time>
+                      <span className="text-foreground/90">{rest.join(" · agent: ")}</span>
+                    </li>
+                  );
+                })}
+              </ol>
+            </section>
+          )}
         </div>
         {/* Inside the popup so the sheet treats the dialog as nested and stays open. */}
         {linking ? (
