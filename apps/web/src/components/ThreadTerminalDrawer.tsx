@@ -726,7 +726,7 @@ function TerminalSessionViewport({
         onResize: (cols, rows) => void resizeTerminal(cols, rows),
         onSelectionChange: () => handleSelectionChange(),
         beforeKey: (event) => handleBeforeKey(event),
-        onLinkActivate: (text, event) => handleLinkActivate(text, event),
+        onLinkActivate: (text) => handleLinkActivate(text),
         canActivateLink: (text) => canActivateTerminalLink(text),
         validateLink: (text) => validateTerminalLink(text),
         onLinkHover: (text) => setLinkPath(text !== null && !isTerminalUrl(text) ? text : null),
@@ -1037,7 +1037,7 @@ function TerminalSessionViewport({
         return false;
       }
 
-      function handleLinkActivate(text: string, event: MouseEvent): void {
+      function handleLinkActivate(text: string): void {
         if (
           !isTerminalUrl(text) &&
           !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)
