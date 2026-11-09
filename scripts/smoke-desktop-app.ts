@@ -7,7 +7,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeTimersPromises from "node:timers/promises";
 import * as NodeUtil from "node:util";
-import { _electron, type ElectronApplication } from "playwright-core";
+import { _electron, type ElectronApplication, type Locator, type Page } from "playwright-core";
 
 // A snapshot from an older build on purpose: the packaged server must migrate it forward, as it
 // does for every upgrading user. It holds one project and two threads, nothing else.
@@ -31,15 +31,29 @@ if (!executable)
   );
 const artifactsDir = NodePath.resolve(values["artifacts-dir"] ?? "desktop-launch-check");
 
-// The startup splash is a data: URL window that closes once the main window opens.
-async function mainWindow(electronApp: ElectronApplication) {
-  const first = await electronApp.firstWindow({ timeout: STEP_TIMEOUT_MS });
-  await first.waitForLoadState("domcontentloaded", { timeout: STEP_TIMEOUT_MS }).catch(() => {});
-  if (!first.isClosed() && !first.url().startsWith("data:")) return first;
-  return (
-    electronApp.windows().find((window) => window !== first && !window.isClosed()) ??
-    (await electronApp.waitForEvent("window", { timeout: STEP_TIMEOUT_MS }))
+// Startup can open a splash window before the main one, and the splash closes once the main
+// window opens, so watch every window and take the first that shows the thread.
+async function findThreadInAnyWindow(electronApp: ElectronApplication) {
+  let watch: (page: Page) => void = () => {};
+  const found = new Promise<{ page: Page; thread: Locator }>((resolve) => {
+    watch = (page) => {
+      const thread = page.locator("li[data-thread-item]", { hasText: THREAD_TITLE });
+      thread.waitFor({ timeout: STEP_TIMEOUT_MS }).then(
+        () => resolve({ page, thread }),
+        () => {},
+      );
+    };
+  });
+  electronApp.windows().forEach(watch);
+  electronApp.on("window", watch);
+  const timedOut = NodeTimersPromises.setTimeout(STEP_TIMEOUT_MS, undefined, { ref: false }).then(
+    () => Promise.reject(new Error(`No window showed the thread within ${STEP_TIMEOUT_MS}ms`)),
   );
+  try {
+    return await Promise.race([found, timedOut]);
+  } finally {
+    electronApp.removeListener("window", watch);
+  }
 }
 
 const home = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-desktop-launch-"));
@@ -68,19 +82,21 @@ try {
   });
   // A backend that never starts leaves no window, or only the "could not start" window, so the
   // thread wait below fails either way and its screenshot shows the startup error.
-  step = "waiting for the main window";
-  const page = await mainWindow(app);
+  step = "waiting for the first window";
+  await app.firstWindow({ timeout: STEP_TIMEOUT_MS });
   try {
     step = `finding "${THREAD_TITLE}" in the sidebar`;
-    const thread = page.locator("li[data-thread-item]", { hasText: THREAD_TITLE });
-    await thread.waitFor({ timeout: STEP_TIMEOUT_MS });
+    const { page, thread } = await findThreadInAnyWindow(app);
     step = "opening the thread";
     await thread.click();
     await page.getByText(THREAD_MESSAGE).waitFor({ timeout: STEP_TIMEOUT_MS });
   } catch (error) {
     NodeFS.mkdirSync(artifactsDir, { recursive: true });
-    await page
-      .screenshot({ path: NodePath.join(artifactsDir, "window.png"), timeout: 10_000 })
+    const windows = app.windows();
+    console.error(`Open windows: ${windows.map((window) => window.url().slice(0, 80)).join(", ")}`);
+    await windows
+      .at(-1)
+      ?.screenshot({ path: NodePath.join(artifactsDir, "window.png"), timeout: 10_000 })
       .catch(() => {});
     throw error;
   }
