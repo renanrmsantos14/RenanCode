@@ -5,8 +5,8 @@ import { isOverdue, type WorkModuleNode } from "@t3tools/client-runtime/workModu
 import type { ThreadId, WorkModuleId } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
-import { PlusIcon } from "lucide-react";
-import { useState } from "react";
+import { CheckIcon, LinkIcon, PlusIcon, SparklesIcon, UnlinkIcon, XIcon } from "lucide-react";
+import { type ReactNode, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -24,10 +24,9 @@ import {
   DialogPopup,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { Sheet, SheetHeader, SheetPopup, SheetTitle } from "~/components/ui/sheet";
-import { Textarea } from "~/components/ui/textarea";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
+import { cn } from "~/lib/utils";
 import { useThreadShellsForProjectRefs } from "~/state/entities";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { workModuleEnvironment } from "~/state/workModules";
@@ -58,6 +57,92 @@ const findNode = (nodes: WorkModuleNode[], id: WorkModuleId): WorkModuleNode | n
   }
   return null;
 };
+
+const INLINE_FIELD_CLASS =
+  "-mx-2 w-[calc(100%+(--spacing(4)))] rounded-md bg-transparent px-2 py-1 outline-none transition-colors duration-150 placeholder:text-muted-foreground/70 enabled:hover:bg-accent/50 focus:bg-accent/50 focus:ring-1 focus:ring-inset focus:ring-ring disabled:cursor-default";
+
+const THREAD_STATUS_DOT: Record<SidebarThreadStatus, string> = {
+  approval: "bg-warning",
+  input: "bg-yellow-500",
+  request: "bg-guest",
+  preparing: "bg-info",
+  working: "bg-info",
+  waiting: "bg-muted-foreground/40",
+  failed: "bg-destructive",
+  limited: "bg-warning",
+  ready: "bg-success",
+};
+
+function ThreadRow(props: {
+  thread: EnvironmentThreadShell | undefined;
+  onOpen: () => void;
+  children?: ReactNode;
+}) {
+  const status = props.thread === undefined ? null : resolveSidebarThreadStatus(props.thread);
+  return (
+    <li className="group/row flex items-center gap-1 rounded-md pe-1 transition-[background-color,opacity,translate] duration-200 ease-out-quint hover:bg-accent/50 starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none">
+      <button
+        type="button"
+        className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-start text-sm outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+        onClick={props.onOpen}
+      >
+        <span
+          aria-hidden
+          className={cn(
+            "size-1.5 shrink-0 rounded-full",
+            status === null ? "bg-muted-foreground/25" : THREAD_STATUS_DOT[status],
+          )}
+        />
+        {props.thread === undefined ? (
+          <span className="truncate text-muted-foreground italic">Thread indisponível</span>
+        ) : (
+          <span className="truncate">{props.thread.title}</span>
+        )}
+        {status === null ? null : (
+          <span className="ms-auto shrink-0 text-xs text-muted-foreground">
+            {THREAD_STATUS_LABEL[status]}
+          </span>
+        )}
+      </button>
+      {props.children === null || props.children === undefined ? null : (
+        <div className="flex w-12 shrink-0 justify-end">{props.children}</div>
+      )}
+    </li>
+  );
+}
+
+function RowAction(props: {
+  label: string;
+  reveal?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <span
+      className={
+        props.reveal
+          ? "flex opacity-0 transition-opacity duration-150 group-hover/row:opacity-100 has-focus-visible:opacity-100 pointer-coarse:opacity-100"
+          : "flex"
+      }
+    >
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              aria-label={props.label}
+              onClick={props.onClick}
+            />
+          }
+        >
+          {props.children}
+        </TooltipTrigger>
+        <TooltipPopup>{props.label}</TooltipPopup>
+      </Tooltip>
+    </span>
+  );
+}
 
 function LinkThreadDialog(props: {
   threads: EnvironmentThreadShell[];
@@ -151,6 +236,14 @@ export function WorkModulePanel(props: {
     props.onUpdate(project, { ...input, id: workModule.id });
   const threadInput = (threadId: ThreadId) => ({ environmentId, input: { threadId } });
 
+  const suggested = links.filter((link) => link.suggested);
+  const confirmed = links.filter((link) => !link.suggested);
+  const openThread = (threadId: ThreadId) =>
+    void navigate({
+      to: "/$environmentId/$threadId",
+      params: buildThreadRouteParams(scopeThreadRef(environmentId, threadId)),
+    });
+
   return (
     <Sheet
       open
@@ -160,19 +253,31 @@ export function WorkModulePanel(props: {
     >
       <SheetPopup side="right">
         <SheetHeader>
-          <SheetTitle>{[...node.ancestorTitles, workModule.title].join(" › ")}</SheetTitle>
-        </SheetHeader>
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 pb-6">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="work-module-title">Título</Label>
-            <Input
+          <SheetTitle className="sr-only">{workModule.title}</SheetTitle>
+          <div className="flex min-w-0 flex-col gap-1 pe-8">
+            {node.ancestorTitles.length === 0 ? null : (
+              <p className="truncate text-xs text-muted-foreground">
+                {node.ancestorTitles.join(" › ")}
+              </p>
+            )}
+            <textarea
               key={workModule.title}
-              id="work-module-title"
+              aria-label="Título"
+              rows={1}
               defaultValue={workModule.title}
               maxLength={200}
               disabled={!canWrite}
+              className={cn(
+                INLINE_FIELD_CLASS,
+                "field-sizing-content resize-none text-xl font-semibold leading-snug",
+              )}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                event.currentTarget.blur();
+              }}
               onBlur={(event) => {
-                const title = event.target.value.trim();
+                const title = event.target.value.replace(/\s+/g, " ").trim();
                 if (title === "" || title === workModule.title) {
                   event.target.value = workModule.title;
                   return;
@@ -181,113 +286,132 @@ export function WorkModulePanel(props: {
               }}
             />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="work-module-note">Nota</Label>
-            <Textarea
-              key={workModule.note}
-              id="work-module-note"
-              defaultValue={workModule.note}
-              maxLength={20_000}
-              disabled={!canWrite}
-              onBlur={(event) => {
-                if (event.target.value !== workModule.note) update({ note: event.target.value });
-              }}
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <WorkStatusMenu
-              status={workModule.status}
-              waitingReason={workModule.waitingReason}
-              disabled={!canWrite}
-              onChange={(next) => update(next)}
-            />
-            <WorkDueDatePicker
-              value={workModule.dueDate}
-              overdue={isOverdue(workModule, props.today)}
-              disabled={!canWrite}
-              onChange={(dueDate) => update({ dueDate })}
-            />
-          </div>
-          {workModule.waitingReason === null ? null : (
-            <p className="text-sm text-muted-foreground">Motivo: {workModule.waitingReason}</p>
-          )}
-          <div className="flex flex-col gap-2">
-            <h3 className="text-sm font-medium">Threads</h3>
-            {links.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhuma thread ligada.</p>
+        </SheetHeader>
+        <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 pb-6">
+          <textarea
+            key={workModule.note}
+            aria-label="Nota"
+            placeholder={canWrite ? "Adicionar nota…" : "Sem nota"}
+            defaultValue={workModule.note}
+            maxLength={20_000}
+            disabled={!canWrite}
+            className={cn(
+              INLINE_FIELD_CLASS,
+              "field-sizing-content min-h-16 resize-none text-sm leading-relaxed text-foreground/90",
+            )}
+            onBlur={(event) => {
+              if (event.target.value !== workModule.note) update({ note: event.target.value });
+            }}
+          />
+          <dl className="grid grid-cols-[5.5rem_1fr] items-center gap-x-3 gap-y-1 text-sm">
+            <dt className="text-muted-foreground">Status</dt>
+            <dd className="flex h-8 items-center">
+              <WorkStatusMenu
+                status={workModule.status}
+                waitingReason={workModule.waitingReason}
+                disabled={!canWrite}
+                onChange={(next) => update(next)}
+              />
+            </dd>
+            {workModule.waitingReason === null ? null : (
+              <>
+                <dt className="text-muted-foreground">Motivo</dt>
+                <dd className="py-1.5">{workModule.waitingReason}</dd>
+              </>
+            )}
+            <dt className="text-muted-foreground">Prazo</dt>
+            <dd className="-ms-2.5 flex h-8 items-center">
+              <WorkDueDatePicker
+                value={workModule.dueDate}
+                overdue={isOverdue(workModule, props.today)}
+                disabled={!canWrite}
+                onChange={(dueDate) => update({ dueDate })}
+              />
+            </dd>
+          </dl>
+          <section className="flex flex-col gap-2 border-t pt-5">
+            <header className="flex items-center gap-2">
+              <h3 className="text-sm font-medium">Threads</h3>
+              {confirmed.length === 0 ? null : (
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {confirmed.length}
+                </span>
+              )}
+              {canWrite ? (
+                <div className="ms-auto flex items-center gap-1">
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    onClick={() => props.onNewThread(project, node)}
+                  >
+                    <PlusIcon />
+                    Nova
+                  </Button>
+                  <Button size="xs" variant="ghost" onClick={() => setLinking(true)}>
+                    <LinkIcon />
+                    Ligar
+                  </Button>
+                </div>
+              ) : null}
+            </header>
+            {confirmed.length === 0 ? (
+              <p className="py-2 text-sm text-muted-foreground">Nenhuma thread ligada.</p>
             ) : (
-              <ul className="flex flex-col gap-1">
-                {links.map((link) => {
-                  const thread = shellById.get(link.threadId);
-                  return (
-                    <li key={link.threadId} className="flex items-center gap-2">
-                      <Button
-                        variant="link"
-                        size="sm"
-                        className="min-w-0 flex-1 justify-start"
-                        onClick={() =>
-                          void navigate({
-                            to: "/$environmentId/$threadId",
-                            params: buildThreadRouteParams(
-                              scopeThreadRef(environmentId, link.threadId),
-                            ),
-                          })
-                        }
+              <ul className="-mx-2 flex flex-col">
+                {confirmed.map((link) => (
+                  <ThreadRow
+                    key={link.threadId}
+                    thread={shellById.get(link.threadId)}
+                    onOpen={() => openThread(link.threadId)}
+                  >
+                    {canWrite ? (
+                      <RowAction
+                        label="Desvincular"
+                        reveal
+                        onClick={() => void unlinkThread(threadInput(link.threadId))}
                       >
-                        <span className="truncate">{thread?.title ?? "Thread não carregada"}</span>
-                      </Button>
-                      {thread === undefined ? null : (
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          {THREAD_STATUS_LABEL[resolveSidebarThreadStatus(thread)]}
-                        </span>
-                      )}
-                      {!canWrite ? null : link.suggested ? (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="xs"
-                            onClick={() => void confirmSuggestion(threadInput(link.threadId))}
-                          >
-                            Confirmar
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="xs"
-                            onClick={() => void unlinkThread(threadInput(link.threadId))}
-                          >
-                            Descartar
-                          </Button>
-                        </>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          onClick={() => void unlinkThread(threadInput(link.threadId))}
-                        >
-                          Desvincular
-                        </Button>
-                      )}
-                    </li>
-                  );
-                })}
+                        <UnlinkIcon />
+                      </RowAction>
+                    ) : null}
+                  </ThreadRow>
+                ))}
               </ul>
             )}
-            {canWrite ? (
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  size="xs"
-                  variant="outline"
-                  onClick={() => props.onNewThread(project, node)}
-                >
-                  <PlusIcon />
-                  Nova thread
-                </Button>
-                <Button size="xs" variant="outline" onClick={() => setLinking(true)}>
-                  Ligar thread existente…
-                </Button>
+            {suggested.length === 0 ? null : (
+              <div className="mt-2 flex flex-col gap-1">
+                <h4 className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <SparklesIcon className="size-3.5" />
+                  Sugeridas
+                </h4>
+                <ul className="-mx-2 flex flex-col">
+                  {suggested.map((link) => (
+                    <ThreadRow
+                      key={link.threadId}
+                      thread={shellById.get(link.threadId)}
+                      onOpen={() => openThread(link.threadId)}
+                    >
+                      {canWrite ? (
+                        <>
+                          <RowAction
+                            label="Confirmar"
+                            onClick={() => void confirmSuggestion(threadInput(link.threadId))}
+                          >
+                            <CheckIcon />
+                          </RowAction>
+                          <RowAction
+                            label="Descartar"
+                            onClick={() => void unlinkThread(threadInput(link.threadId))}
+                          >
+                            <XIcon />
+                          </RowAction>
+                        </>
+                      ) : null}
+                    </ThreadRow>
+                  ))}
+                </ul>
               </div>
-            ) : null}
-          </div>
+            )}
+          </section>
         </div>
         {/* Inside the popup so the sheet treats the dialog as nested and stays open. */}
         {linking ? (

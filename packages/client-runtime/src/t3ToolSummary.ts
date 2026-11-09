@@ -331,7 +331,7 @@ export function summarizeT3ToolCalls(
       label = phrase("Read", "read", `the work board ${times}`);
       break;
     case "work-module-suggest":
-      label = phrase("Suggested", "suggest", `work board changes ${times}`);
+      label = phrase("Updated", "update", `the work board ${times}`);
       break;
     case "project-list":
       label = phrase("Listed", "list", `projects ${times}`);

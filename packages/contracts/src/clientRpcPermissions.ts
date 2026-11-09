@@ -45,6 +45,7 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   // Keep-warm pings and handoff summaries are real billed turns on this environment's providers.
   [WS_METHODS.threadsCacheKeepWarm]: AuthOrchestrationOperateScope,
   [WS_METHODS.threadsHandoff]: AuthOrchestrationOperateScope,
+  [WS_METHODS.threadsContinue]: AuthOrchestrationOperateScope,
   // Starts a billed Claude Code cloud session with this environment's Claude login.
   [WS_METHODS.claudeCloudStartSession]: AuthOrchestrationOperateScope,
   // Runs a billed classification turn on the text generation model.

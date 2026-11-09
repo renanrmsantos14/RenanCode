@@ -64,49 +64,70 @@ const handlers = {
       };
     }),
   ),
-  t3_work_module_suggest: McpToolAccess.writes((input) =>
-    Effect.gen(function* () {
-      const service = yield* WorkModuleService.WorkModuleService;
-      switch (input.action) {
-        case "create": {
-          if (input.projectId === undefined || input.title === undefined) {
-            return yield* invalid("create needs projectId and title.");
+  t3_work_module_suggest: McpToolAccess.writes(
+    (input) =>
+      Effect.gen(function* () {
+        const service = yield* WorkModuleService.WorkModuleService;
+        switch (input.action) {
+          case "create": {
+            if (input.projectId === undefined || input.title === undefined) {
+              return yield* invalid("create needs projectId and title.");
+            }
+            const module = yield* service
+              .upsert({
+                projectId: input.projectId,
+                parentId: input.parentModuleId ?? null,
+                title: input.title,
+                ...(input.text === undefined ? {} : { note: input.text }),
+              })
+              .pipe(Effect.mapError(domain));
+            return { text: `Created ${module.title} as an idea (id ${module.id}).` };
           }
-          const module = yield* service
-            .upsert({
-              projectId: input.projectId,
-              parentId: input.parentModuleId ?? null,
-              title: input.title,
-              ...(input.text === undefined ? {} : { note: input.text }),
-            })
-            .pipe(Effect.mapError(domain));
-          return { text: `Created ${module.title} as an idea (id ${module.id}).` };
-        }
-        case "link": {
-          if (input.moduleId === undefined) return yield* invalid("link needs moduleId.");
-          const {
-            projection: { thread },
-          } = yield* readThread(input.threadId);
-          yield* service
-            .linkThread({ threadId: thread.id, moduleId: input.moduleId, suggested: true })
-            .pipe(Effect.mapError(domain));
-          return { text: "Suggested. The user confirms or discards it on the board." };
-        }
-        case "note": {
-          if (
-            input.moduleId === undefined ||
-            input.text === undefined ||
-            input.text.trim() === ""
-          ) {
-            return yield* invalid("note needs moduleId and text.");
+          case "link": {
+            if (input.moduleId === undefined) return yield* invalid("link needs moduleId.");
+            const {
+              projection: { thread },
+            } = yield* readThread(input.threadId);
+            yield* service
+              .linkThread({ threadId: thread.id, moduleId: input.moduleId, suggested: true })
+              .pipe(Effect.mapError(domain));
+            return { text: "Suggested. The user confirms or discards it on the board." };
           }
-          yield* service
-            .appendAgentNote({ moduleId: input.moduleId, text: input.text })
-            .pipe(Effect.mapError(domain));
-          return { text: "Note appended." };
+          case "note": {
+            if (
+              input.moduleId === undefined ||
+              input.text === undefined ||
+              input.text.trim() === ""
+            ) {
+              return yield* invalid("note needs moduleId and text.");
+            }
+            yield* service
+              .appendAgentNote({ moduleId: input.moduleId, text: input.text })
+              .pipe(Effect.mapError(domain));
+            return { text: "Note appended." };
+          }
+          case "status": {
+            if (input.moduleId === undefined || input.status === undefined) {
+              return yield* invalid("status needs moduleId and status.");
+            }
+            const { modules } = yield* service.snapshot().pipe(Effect.mapError(domain));
+            const existing = modules.find((m) => m.id === input.moduleId);
+            if (existing === undefined) return yield* invalid("The module was not found.");
+            const module = yield* service
+              .upsert({
+                id: existing.id,
+                projectId: existing.projectId,
+                status: input.status,
+                ...(input.waitingReason === undefined
+                  ? {}
+                  : { waitingReason: input.waitingReason }),
+              })
+              .pipe(Effect.mapError(domain));
+            return { text: `${module.title} is now ${module.status}.` };
+          }
         }
-      }
-    }),
+      }),
+    { linkedCallers: "allowed" },
   ),
 } satisfies McpToolAccess.Handlers<typeof WorkModulesToolkit.tools>;
 

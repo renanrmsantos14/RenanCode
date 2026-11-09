@@ -1680,6 +1680,9 @@ export function threadShellFromProjection(
     ...(projection.thread.launchedFrom === undefined
       ? {}
       : { launchedFrom: projection.thread.launchedFrom }),
+    ...(projection.thread.continuedFrom === undefined
+      ? {}
+      : { continuedFrom: projection.thread.continuedFrom }),
     latestRunId: latestRun?.id ?? null,
     latestRunRequestedAt: latestRun?.requestedAt ?? null,
     latestRunStartedAt: latestRun?.startedAt ?? null,
@@ -1965,6 +1968,9 @@ function shellFromState(input: {
     ...(input.state.thread.launchedFrom === undefined
       ? {}
       : { launchedFrom: input.state.thread.launchedFrom }),
+    ...(input.state.thread.continuedFrom === undefined
+      ? {}
+      : { continuedFrom: input.state.thread.continuedFrom }),
     latestRunId: input.state.latestRunId,
     latestRunRequestedAt: input.state.latestRunRequestedAt,
     latestRunStartedAt: input.state.latestRunStartedAt,

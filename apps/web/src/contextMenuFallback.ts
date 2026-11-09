@@ -128,6 +128,12 @@ const ICON_PATHS: Record<string, ReadonlyArray<{ tag: string; attrs: Record<stri
     },
     { tag: "circle", attrs: { cx: "12", cy: "12", r: "3" } },
   ],
+  "arrow-right-left": [
+    { tag: "path", attrs: { d: "m16 3 4 4-4 4" } },
+    { tag: "path", attrs: { d: "M20 7H4" } },
+    { tag: "path", attrs: { d: "m8 21-4-4 4-4" } },
+    { tag: "path", attrs: { d: "M4 17h16" } },
+  ],
   "user-plus": [
     { tag: "path", attrs: { d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" } },
     { tag: "circle", attrs: { cx: "9", cy: "7", r: "4" } },
@@ -159,6 +165,19 @@ const ICON_PATHS: Record<string, ReadonlyArray<{ tag: string; attrs: Record<stri
     },
     { tag: "path", attrs: { d: "M3 5a2 2 0 0 0 2 2h3" } },
     { tag: "path", attrs: { d: "M3 3v13a2 2 0 0 0 2 2h3" } },
+  ],
+  globe: [
+    { tag: "circle", attrs: { cx: "12", cy: "12", r: "10" } },
+    { tag: "path", attrs: { d: "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" } },
+    { tag: "path", attrs: { d: "M2 12h20" } },
+  ],
+  puzzle: [
+    {
+      tag: "path",
+      attrs: {
+        d: "M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0z",
+      },
+    },
   ],
   "text-search": [
     { tag: "path", attrs: { d: "M21 5H3" } },

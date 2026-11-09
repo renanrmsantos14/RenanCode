@@ -167,6 +167,15 @@ on that machine. Existing threads stay where they started. If resource checks ar
 unavailable or all eligible machines are full, choose a machine manually to continue.
 Mobile keeps its manual environment selection.
 
+If a thread's machine goes offline, open its menu (or the command palette, or the
+offline banner in the thread) and choose **Continue on another machine**. T3 Code starts
+a new thread on a connected machine that has the same project, using the copy of the
+conversation saved on this device (the most recent messages, up to a size limit). Code
+that was not pushed stayed on the original machine, and if the branch does not exist on
+the new machine the thread starts in the project folder. The original thread stays as it
+is; archive it from the "Continued on" notice when you no longer need it. If a thread
+already has a continuation, the same action opens it instead of starting another.
+
 ### Tailscale HTTPS
 
 Join both devices to the same tailnet. In the desktop app, enable **Tailscale

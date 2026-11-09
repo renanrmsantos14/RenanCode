@@ -151,6 +151,13 @@ export const OrchestrationV2DelegatedFrom = Schema.Struct({
 });
 export type OrchestrationV2DelegatedFrom = typeof OrchestrationV2DelegatedFrom.Type;
 
+/** The thread, on another environment, whose history this one was started from. */
+export const OrchestrationV2ContinuedFrom = Schema.Struct({
+  environmentId: EnvironmentId,
+  threadId: ThreadId,
+});
+export type OrchestrationV2ContinuedFrom = typeof OrchestrationV2ContinuedFrom.Type;
+
 export const OrchestrationV2NativeRefStrength = Schema.Literals(["strong", "weak", "none"]);
 export type OrchestrationV2NativeRefStrength = typeof OrchestrationV2NativeRefStrength.Type;
 
@@ -475,6 +482,8 @@ export const OrchestrationV2AppThread = Schema.Struct({
   delegatedFrom: Schema.optional(OrchestrationV2DelegatedFrom),
   /** Thread whose agent opened this one through MCP; only the server sets it. */
   launchedFrom: Schema.optional(ThreadId),
+  /** Set when a client moved an offline machine's thread here; the original is not updated. */
+  continuedFrom: Schema.optional(OrchestrationV2ContinuedFrom),
   lineage: OrchestrationV2AppThreadLineage,
   forkedFrom: Schema.NullOr(
     Schema.Union([
@@ -2202,6 +2211,7 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   delegatedFrom: Schema.optional(OrchestrationV2DelegatedFrom),
   /** Thread whose agent opened this one through MCP; only the server sets it. */
   launchedFrom: Schema.optional(ThreadId),
+  continuedFrom: Schema.optional(OrchestrationV2ContinuedFrom),
   latestRunId: Schema.NullOr(RunId),
   latestRunRequestedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   latestRunStartedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),

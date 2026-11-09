@@ -289,6 +289,7 @@ import { ProviderSubagentBar } from "./chat/ProviderSubagentBar";
 import { getTriggerDisplayModelName } from "./chat/providerIconUtils";
 import { resolveScrollToEndClearance } from "./composerFooterLayout";
 import { ChatHeader } from "./chat/ChatHeader";
+import { continuationKey, continuationOfAtom } from "./chat/continuationLinks";
 import { WorkModuleChip } from "./work/WorkModuleChip";
 import { useSideChat } from "./chat/useSideChat";
 import { useRemoteOpenState } from "~/remoteOpen";
@@ -888,6 +889,55 @@ export default function ChatView(props: ChatViewProps) {
       : scopeThreadRef(delegatedFrom.environmentId, delegatedFrom.threadId);
   // The title it had at delegation, until this client sees the parent itself.
   const delegatedFromThread = useQuietThreadShell(delegatedFromRef);
+  // A client moved this thread here from a machine that was offline.
+  const continuedFrom = activeThread?.continuedFrom ?? null;
+  const continuedFromEnvironment = useEnvironment(continuedFrom?.environmentId ?? null);
+  const continuedFromRef =
+    continuedFrom === null
+      ? null
+      : scopeThreadRef(continuedFrom.environmentId, continuedFrom.threadId);
+  const continuedFromThread = useQuietThreadShell(continuedFromRef);
+  const continuation = useAtomValue(
+    continuationOfAtom(
+      activeThread === undefined || activeThread === null || !isServerThread
+        ? ""
+        : continuationKey(scopeThreadRef(activeThread.environmentId, activeThread.id)),
+    ),
+  );
+  const continuationEnvironment = useEnvironment(continuation?.environmentId ?? null);
+  const archiveOriginal = useOrchestrationCommand(threadEnvironment.archive);
+  const continuedOnLink =
+    continuation === null
+      ? null
+      : {
+          title: continuation.title,
+          environmentLabel: continuationEnvironment?.label ?? continuation.environmentId,
+          ...(activeThread === undefined ||
+          activeThread === null ||
+          !isServerThread ||
+          activeThread.archivedAt != null
+            ? {}
+            : {
+                archive: (): void => {
+                  void archiveOriginal({
+                    environmentId: activeThread.environmentId,
+                    input: { threadId: activeThread.id },
+                  });
+                },
+              }),
+          ...(continuationEnvironment === null
+            ? {}
+            : {
+                open: (): void => {
+                  void navigate({
+                    to: "/$environmentId/$threadId",
+                    params: buildThreadRouteParams(
+                      scopeThreadRef(continuation.environmentId, continuation.id),
+                    ),
+                  });
+                },
+              }),
+        };
   const sideChatParentRef =
     activeThread?.lineage.sideChat === true && activeThread.lineage.parentThreadId !== null
       ? scopeThreadRef(activeThread.environmentId, activeThread.lineage.parentThreadId)
@@ -918,6 +968,26 @@ export default function ChatView(props: ChatViewProps) {
             params: buildThreadRouteParams(parentSubagentThreadRef),
           });
         },
+      };
+    }
+    if (continuedFromRef !== null) {
+      return {
+        title: continuedFromThread?.title ?? activeThread?.title ?? "Thread",
+        environmentLabel: continuedFromEnvironment?.label ?? continuedFromRef.environmentId,
+        relation: {
+          label: "Continued from",
+          actionLabel: "Open original thread",
+        },
+        ...(continuedFromEnvironment === null
+          ? {}
+          : {
+              open: (): void => {
+                void navigate({
+                  to: "/$environmentId/$threadId",
+                  params: buildThreadRouteParams(continuedFromRef),
+                });
+              },
+            }),
       };
     }
     if (delegatedFrom === null || delegatedFromRef === null) return null;
@@ -1316,6 +1386,7 @@ export default function ChatView(props: ChatViewProps) {
     activeEnvironmentUnavailable,
     activeEnvironmentUnavailableState,
     activeThreadEnvironmentId: activeThread?.environmentId ?? null,
+    activeThreadId: activeThread?.id ?? null,
     serverConfig,
     hasMultipleRegisteredEnvironments: environments.length > 1,
     automaticEnvironment,
@@ -3522,6 +3593,7 @@ export default function ChatView(props: ChatViewProps) {
                     : { onOpenTurnDiff: onOpenTurnDiffStable, onForkFromRun: onForkFromRunStable })}
                   onOpenThread={onOpenRelatedThreadStable}
                   parentThreadLink={parentThreadLink}
+                  continuedOnLink={continuedOnLink}
                   workflowOpening={workflowOpening}
                   supportsConversationRollback={supportsConversationRollback}
                   threadStartCheckpointReady={threadStartCheckpointReady}

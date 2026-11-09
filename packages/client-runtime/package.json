@@ -159,6 +159,10 @@
       "types": "./src/relay/index.ts",
       "default": "./src/relay/index.ts"
     },
+    "./state/threadContinuation": {
+      "types": "./src/state/threadContinuation.ts",
+      "default": "./src/state/threadContinuation.ts"
+    },
     "./state/claudeCloud": {
       "types": "./src/state/claudeCloud.ts",
       "default": "./src/state/claudeCloud.ts"

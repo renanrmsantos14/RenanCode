@@ -1,6 +1,8 @@
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { requestCustomSnooze } from "../components/CustomSnoozeDialog";
 import { openGuestShareDialog } from "../components/chat/guestShareDialogState";
+import { openContinueThreadDialog } from "../components/chat/continueThreadDialogState";
+import { openComponentToolsDialog } from "../components/chat/componentToolsDialogState";
 import {
   type AtomCommandResult,
   isAtomCommandInterrupted,
@@ -64,8 +66,18 @@ export function useThreadActionMenu(input: {
   readonly onStartRename: () => void;
   readonly onFind?: ((threadRef: ScopedThreadRef) => void) | undefined;
   readonly canShareWithGuest: boolean;
+  readonly canContinueElsewhere?: boolean;
+  readonly hasContinuation?: boolean;
 }) {
-  const { threadRef, projectCwd, onStartRename, onFind, canShareWithGuest } = input;
+  const {
+    threadRef,
+    projectCwd,
+    onStartRename,
+    onFind,
+    canShareWithGuest,
+    canContinueElsewhere = false,
+    hasContinuation = false,
+  } = input;
   const router = useRouter();
   const projects = useProjects();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
@@ -150,6 +162,8 @@ export function useThreadActionMenu(input: {
         supports,
         snoozePresets,
         canShareWithGuest,
+        canContinueElsewhere,
+        hasContinuation,
         canTurnIntoProject: canTurnThreadIntoProject(threadRef),
       });
       const clicked = await settlePromise(() => api.contextMenu.show(items, position));
@@ -269,6 +283,18 @@ export function useThreadActionMenu(input: {
           return;
         case "share-guest":
           openGuestShareDialog(threadRef);
+          return;
+        case "continue-elsewhere":
+          openContinueThreadDialog(threadRef);
+          return;
+        case "components:find":
+          openComponentToolsDialog(threadRef, "find");
+          return;
+        case "components:replace":
+          openComponentToolsDialog(threadRef, "replace");
+          return;
+        case "components:web":
+          openComponentToolsDialog(threadRef, "web");
           return;
         case "turn-into-project": {
           const result = await turnThreadIntoProject(threadRef);

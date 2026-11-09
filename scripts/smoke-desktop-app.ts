@@ -31,6 +31,17 @@ if (!executable)
   );
 const artifactsDir = NodePath.resolve(values["artifacts-dir"] ?? "desktop-launch-check");
 
+// The startup splash is a data: URL window that closes once the main window opens.
+async function mainWindow(electronApp: ElectronApplication) {
+  const first = await electronApp.firstWindow({ timeout: STEP_TIMEOUT_MS });
+  await first.waitForLoadState("domcontentloaded", { timeout: STEP_TIMEOUT_MS }).catch(() => {});
+  if (!first.isClosed() && !first.url().startsWith("data:")) return first;
+  return (
+    electronApp.windows().find((window) => window !== first && !window.isClosed()) ??
+    (await electronApp.waitForEvent("window", { timeout: STEP_TIMEOUT_MS }))
+  );
+}
+
 const home = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-desktop-launch-"));
 const t3Home = NodePath.join(home, "t3");
 NodeFS.mkdirSync(NodePath.join(t3Home, "userdata"), { recursive: true });
@@ -57,8 +68,8 @@ try {
   });
   // A backend that never starts leaves no window, or only the "could not start" window, so the
   // thread wait below fails either way and its screenshot shows the startup error.
-  step = "waiting for the first window";
-  const page = await app.firstWindow({ timeout: STEP_TIMEOUT_MS });
+  step = "waiting for the main window";
+  const page = await mainWindow(app);
   try {
     step = `finding "${THREAD_TITLE}" in the sidebar`;
     const thread = page.locator("li[data-thread-item]", { hasText: THREAD_TITLE });

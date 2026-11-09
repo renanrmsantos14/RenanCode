@@ -154,6 +154,8 @@ export interface EnvironmentThreadShell {
   readonly delegatedFrom: OrchestrationV2ThreadShell["delegatedFrom"] | null;
   /** The thread whose agent opened this one through MCP, if one did (same environment). */
   readonly launchedFrom: OrchestrationV2ThreadShell["launchedFrom"] | null;
+  /** The thread on another machine this one continues, if a client moved it here. */
+  readonly continuedFrom: NonNullable<OrchestrationV2ThreadShell["continuedFrom"]> | null;
   readonly creationSource: OrchestrationV2ThreadShell["creationSource"];
   readonly activeProviderThreadId: OrchestrationV2ThreadShell["activeProviderThreadId"];
   readonly latestRun: ThreadRunSummary | null;
@@ -306,6 +308,7 @@ export function presentThreadShell(
     linkOrigin: thread.linkOrigin ?? null,
     delegatedFrom: thread.delegatedFrom ?? null,
     launchedFrom: thread.launchedFrom ?? null,
+    continuedFrom: thread.continuedFrom ?? null,
     creationSource: thread.creationSource,
     activeProviderThreadId: thread.activeProviderThreadId,
     latestRun,

@@ -227,6 +227,7 @@ import * as ScratchThreadPromotion from "./project/ScratchThreadPromotion.ts";
 import * as CacheKeepWarmService from "./orchestration-v2/CacheKeepWarmService.ts";
 import { KEEP_WARM_DEFAULT_HOURS } from "@t3tools/shared/promptCache";
 import * as ThreadHandoffService from "./orchestration-v2/ThreadHandoffService.ts";
+import * as ThreadContinuationService from "./orchestration-v2/ThreadContinuationService.ts";
 import * as ClaudeCloudSessions from "./claudeCloud/ClaudeCloudSessions.ts";
 import { mutateProjectWithClone } from "./project/ProjectMutation.ts";
 import * as ProjectCloneTracker from "./project/ProjectCloneTracker.ts";
@@ -1429,6 +1430,7 @@ export const layerWsRpc = (
       const scratchThreadPromotion = yield* ScratchThreadPromotion.ScratchThreadPromotion;
       const cacheKeepWarm = yield* CacheKeepWarmService.CacheKeepWarmService;
       const threadHandoff = yield* ThreadHandoffService.ThreadHandoffService;
+      const threadContinuation = yield* ThreadContinuationService.ThreadContinuationService;
       // Optional so test servers need not build the Claude cloud client.
       const claudeCloudSessions = yield* Effect.serviceOption(
         ClaudeCloudSessions.ClaudeCloudSessions,
@@ -2974,6 +2976,7 @@ export const layerWsRpc = (
               ? cacheKeepWarm.stop(input.threadId)
               : cacheKeepWarm.status(input.threadId),
         [WS_METHODS.threadsHandoff]: (input) => threadHandoff.handoff(input),
+        [WS_METHODS.threadsContinue]: (input) => threadContinuation.importContinuation(input),
         [WS_METHODS.claudeCloudStartSession]: (input) =>
           Option.isSome(claudeCloudSessions)
             ? claudeCloudSessions.value.start(input)

@@ -1,6 +1,7 @@
 import { Mascot } from "../mascot/Mascot";
 import { useStableCallback } from "../../hooks/useStableCallback";
-import { type EnvironmentId } from "@t3tools/contracts";
+import { type EnvironmentId, type ThreadId } from "@t3tools/contracts";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { type EnvironmentConnectionPresentation } from "@t3tools/client-runtime/connection";
 import { useAtomValue } from "@effect/atom-react";
 import { useState } from "react";
@@ -24,6 +25,8 @@ import type { ComposerBannerStackItem } from "./ComposerBannerStack";
 import { ENVIRONMENT_RECONNECT_WARNING_GRACE_MS } from "../ChatView.logic";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
+import { continuationKey, continuationOfAtom } from "./continuationLinks";
+import { openContinueThreadDialog } from "./continueThreadDialogState";
 import { ServerUpdateAction, serverUpdateStageLabel } from "../ServerUpdateAction";
 import { useAutoBalanceUpdateBanner } from "./useAutoBalanceUpdateBanner";
 import { ComposerServerUpdateIcon } from "./ComposerServerUpdateStatus";
@@ -46,6 +49,7 @@ interface SystemComposerBannersInput {
   readonly activeEnvironmentUnavailable: boolean;
   readonly activeEnvironmentUnavailableState: EnvironmentUnavailableState | null;
   readonly activeThreadEnvironmentId: EnvironmentId | null;
+  readonly activeThreadId: ThreadId | null;
   readonly serverConfig: EnvironmentPresentation["serverConfig"] | null;
   readonly hasMultipleRegisteredEnvironments: boolean;
   readonly automaticEnvironment: boolean;
@@ -62,12 +66,21 @@ export function useSystemComposerBanners(input: SystemComposerBannersInput) {
     activeEnvironmentUnavailable,
     activeEnvironmentUnavailableState,
     activeThreadEnvironmentId,
+    activeThreadId,
     serverConfig,
     hasMultipleRegisteredEnvironments,
     automaticEnvironment,
     autoUpdateEnvironments,
   } = input;
   const navigate = useNavigate();
+  const hasContinuation =
+    useAtomValue(
+      continuationOfAtom(
+        activeThreadEnvironmentId !== null && activeThreadId !== null
+          ? continuationKey(scopeThreadRef(activeThreadEnvironmentId, activeThreadId))
+          : "",
+      ),
+    ) !== null;
   const retryEnvironment = useAtomCommand(environmentCatalog.retryNow, { reportFailure: false });
   const setEnvironmentEnabled = useAtomCommand(environmentCatalog.setEnabled, {
     reportFailure: false,
@@ -185,6 +198,7 @@ export function useSystemComposerBanners(input: SystemComposerBannersInput) {
       unavailableConnection !== null &&
       !suppressUnavailableBanner;
     if (showUnavailableBanner) {
+      const activeEnvironmentUnavailableId = activeEnvironmentUnavailableState.environmentId;
       items.push({
         id: `environment-unavailable:${activeEnvironmentUnavailableState.environmentId}`,
         variant: unavailableConnection.phase === "error" ? "error" : "warning",
@@ -213,6 +227,19 @@ export function useSystemComposerBanners(input: SystemComposerBannersInput) {
                 }
               >
                 Reconnect
+              </Button>
+            ) : null}
+            {activeThreadId !== null ? (
+              <Button
+                size="xs"
+                variant="ghost"
+                onClick={() =>
+                  openContinueThreadDialog(
+                    scopeThreadRef(activeEnvironmentUnavailableId, activeThreadId),
+                  )
+                }
+              >
+                {hasContinuation ? "Open continued thread" : "Continue on another machine"}
               </Button>
             ) : null}
             {disconnectAction}

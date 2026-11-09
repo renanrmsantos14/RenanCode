@@ -164,6 +164,10 @@ import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { readEnvironmentScope, useEnvironmentScope } from "../state/session";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
+import { continuationKey, continuationOfAtom } from "./chat/continuationLinks";
+import { canContinueElsewhereAtom } from "./chat/continueThreadAvailability";
+import { openContinueThreadDialog } from "./chat/continueThreadDialogState";
+import { openComponentToolsDialog } from "./chat/componentToolsDialogState";
 import { openGuestShareDialog } from "./chat/guestShareDialogState";
 import {
   buildThreadRouteParams,
@@ -2771,6 +2775,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               canShareWithGuest: appAtomRegistry.get(
                 canShareWithGuestAtom(threadRef.environmentId),
               ),
+              canContinueElsewhere: appAtomRegistry.get(
+                canContinueElsewhereAtom(threadRef.environmentId),
+              ),
+              hasContinuation:
+                appAtomRegistry.get(continuationOfAtom(continuationKey(threadRef))) !== null,
               canTurnIntoProject: canTurnThreadIntoProject(threadRef),
               supports: {
                 settlement: configLoaded,
@@ -2910,6 +2919,18 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             return;
           case "share-guest":
             openGuestShareDialog(threadRef);
+            return;
+          case "continue-elsewhere":
+            openContinueThreadDialog(threadRef);
+            return;
+          case "components:find":
+            openComponentToolsDialog(threadRef, "find");
+            return;
+          case "components:replace":
+            openComponentToolsDialog(threadRef, "replace");
+            return;
+          case "components:web":
+            openComponentToolsDialog(threadRef, "web");
             return;
           case "regenerate-title": {
             if (isRegeneratingTitle) return;
