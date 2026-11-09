@@ -410,6 +410,10 @@ export function createThreadEnvironmentAtoms<R, E, StateError>(
       label: "environment-data:commands:thread:handoff",
       tag: WS_METHODS.threadsHandoff,
     }),
+    continueFromOfflineCopy: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:commands:thread:continue-from-offline-copy",
+      tag: WS_METHODS.threadsContinue,
+    }),
     estimateInputCost: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:commands:thread:estimate-input-cost",
       tag: WS_METHODS.serverEstimateInputCost,

@@ -68,6 +68,18 @@ describe("buildThreadActionMenuItems", () => {
     },
   );
 
+  it("offers continuing elsewhere only when the machine is offline, even for read-only clients", () => {
+    const ids = (state: ThreadActionMenuState) =>
+      buildThreadActionMenuItems(state).filter((item) => item.id === "continue-elsewhere");
+    expect(ids(baseState)).toEqual([]);
+    const [item] = ids({ ...baseState, canOperate: false, canContinueElsewhere: true });
+    expect(item?.disabled).toBeUndefined();
+    expect(item?.label).toBe("Continue on another machine");
+    expect(ids({ ...baseState, canContinueElsewhere: true, hasContinuation: true })[0]?.label).toBe(
+      "Open continued thread",
+    );
+  });
+
   it("disables archive and turning into a project while the thread is running", () => {
     const items = buildThreadActionMenuItems({
       ...baseState,

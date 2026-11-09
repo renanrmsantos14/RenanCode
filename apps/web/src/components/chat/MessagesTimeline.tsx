@@ -52,6 +52,7 @@ import {
   type LegendListRef,
   type MaintainScrollAtEndOptions,
 } from "@legendapp/list/react";
+import { Button } from "../ui/button";
 import { type PendingApproval, type TimelineEntry } from "../../session-logic";
 import type { CodexArtifactTemplate } from "@t3tools/shared/codexArtifactTemplates";
 import { type ChatFileAttachment, type TurnDiffSummary } from "../../types";
@@ -275,7 +276,17 @@ interface MessagesTimelineProps {
     readonly sideChat?: boolean;
     /** Where it runs, when that is another environment. */
     readonly environmentLabel?: string;
+    /** Replaces the subagent and side chat wording, e.g. for a continued thread. */
+    readonly relation?: { readonly label: string; readonly actionLabel: string };
     readonly open?: () => void;
+  } | null;
+  /** The thread that continues this one on another machine, shown under the header. */
+  continuedOnLink?: {
+    readonly title: string;
+    readonly environmentLabel: string;
+    readonly open?: () => void;
+    /** Present while the original is not archived. */
+    readonly archive?: () => void;
   } | null;
   workflowOpening?: WorkflowOpening | null;
   onForkFromRun?: (input: {
@@ -382,6 +393,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   renderHtmlVariant,
   turnItemSource,
   parentThreadLink = null,
+  continuedOnLink = null,
   workflowOpening = null,
   onForkFromRun,
   supportsConversationRollback,
@@ -730,6 +742,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
     unmatchedPendingApprovals.length === 0 &&
     !isWorking &&
     parentThreadLink === null &&
+    continuedOnLink === null &&
     historyControls === undefined &&
     footer === null;
   const [listOpening, setListOpening] = useState<TimelineListOpening>(() =>
@@ -1122,23 +1135,58 @@ const ConversationTimeline = memo(function ConversationTimeline({
       <div className="messages-timeline-row-frame">
         <div className="chat-content-lane pt-1 sm:pt-2">
           <TimelineSystemDivider
-            label={parentThreadLink.sideChat ? "Context from" : "Subagent of"}
+            label={
+              parentThreadLink.relation?.label ??
+              (parentThreadLink.sideChat ? "Context from" : "Subagent of")
+            }
             detail={
               parentThreadLink.environmentLabel === undefined
                 ? parentThreadLink.title
                 : `${parentThreadLink.title} on ${parentThreadLink.environmentLabel}`
             }
-            icon={parentThreadLink.sideChat ? MessagesSquareIcon : BotIcon}
+            icon={
+              parentThreadLink.relation
+                ? ArrowRightIcon
+                : parentThreadLink.sideChat
+                  ? MessagesSquareIcon
+                  : BotIcon
+            }
             {...(parentThreadLink.open === undefined
               ? {}
-              : { actionLabel: "Open parent thread", onAction: parentThreadLink.open })}
+              : {
+                  actionLabel: parentThreadLink.relation?.actionLabel ?? "Open parent thread",
+                  onAction: parentThreadLink.open,
+                })}
           />
+        </div>
+      </div>
+    );
+  const continuedOnDivider =
+    continuedOnLink === null ? null : (
+      <div className="messages-timeline-row-frame">
+        <div className="chat-content-lane flex items-center gap-2 pt-1 sm:pt-2">
+          <div className="min-w-0 flex-1">
+            <TimelineSystemDivider
+              label="Continued on"
+              detail={`${continuedOnLink.title} on ${continuedOnLink.environmentLabel}`}
+              icon={ArrowRightIcon}
+              {...(continuedOnLink.open === undefined
+                ? {}
+                : { actionLabel: "Open continued thread", onAction: continuedOnLink.open })}
+            />
+          </div>
+          {continuedOnLink.archive === undefined ? null : (
+            <Button size="xs" variant="ghost" onClick={continuedOnLink.archive}>
+              Archive
+            </Button>
+          )}
         </div>
       </div>
     );
   const listHeader = (
     <>
       {parentThreadLink === null ? listHeaderLeadingContent : null}
+      {continuedOnDivider}
       {historyControls ? <TimelineHistoryControl {...historyControls} /> : null}
       {parentThreadLink !== null ? listHeaderLeadingContent : null}
     </>

@@ -1,3 +1,4 @@
+import { createCachedThreadReader } from "@t3tools/client-runtime/state/threadContinuation";
 import { createChildThreadApprovalsAtom } from "@t3tools/client-runtime/state/thread-requests";
 import { useAtomValue } from "@effect/atom-react";
 import { enabledEnvironmentIds } from "@t3tools/client-runtime/state/connections";
@@ -186,3 +187,5 @@ export const runningThreadKeepAliveAtom = createRunningThreadKeepAliveAtom({
   threadsAtom: environmentThreadShells.environmentThreadsAtom,
   stateAtom: environmentThreads.stateAtom,
 });
+
+export const cachedThreadReader = createCachedThreadReader(connectionAtomRuntime);

@@ -56,6 +56,7 @@ import {
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
+  ArrowRightLeftIcon,
   BugIcon,
   ChartNoAxesColumnIcon,
   CheckIcon,
@@ -248,6 +249,9 @@ import { Checkbox } from "./ui/checkbox";
 import { ProjectFilePicker } from "./files/ProjectFilePicker";
 import { openLinkPullRequestDialog } from "./pullRequest/LinkPullRequestDialog";
 import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
+import { continuationKey, continuationOfAtom } from "./chat/continuationLinks";
+import { canContinueElsewhereAtom } from "./chat/continueThreadAvailability";
+import { openContinueThreadDialog } from "./chat/continueThreadDialogState";
 import { openGuestShareDialog } from "./chat/guestShareDialogState";
 import { ProjectContentSearchDialog } from "./search/ProjectContentSearchDialog";
 import { settingsForThisPlatform, SETTINGS_SECTION_LABELS } from "./settings/settingsSearch";
@@ -486,6 +490,17 @@ function OpenCommandPaletteDialog(props: {
   const canShareActiveThreadWithGuest = useAtomValue(
     canShareWithGuestAtom(activeThread?.environmentId ?? ("" as EnvironmentId)),
   );
+  const canContinueActiveThreadElsewhere = useAtomValue(
+    canContinueElsewhereAtom(activeThread?.environmentId ?? ("" as EnvironmentId)),
+  );
+  const activeThreadHasContinuation =
+    useAtomValue(
+      continuationOfAtom(
+        activeThread === null
+          ? ""
+          : continuationKey(scopeThreadRef(activeThread.environmentId, activeThread.id)),
+      ),
+    ) !== null;
   const activeThreadReferenceCopyTarget =
     referenceThreadRef === null || (pathname === "/pull-requests" && !openPanelPullRequestUrl)
       ? null
@@ -1437,6 +1452,20 @@ function OpenCommandPaletteDialog(props: {
       icon: <UserPlusIcon className={ITEM_ICON_CLASS} />,
       run: async () => {
         openGuestShareDialog(threadRef);
+      },
+    });
+  }
+
+  if (activeThread !== null && canContinueActiveThreadElsewhere) {
+    const threadRef = scopeThreadRef(activeThread.environmentId, activeThread.id);
+    actionItems.push({
+      kind: "action",
+      value: "action:continue-thread-elsewhere",
+      searchTerms: ["continue", "another", "machine", "offline", "move", "device"],
+      title: activeThreadHasContinuation ? "Open continued thread" : "Continue on another machine",
+      icon: <ArrowRightLeftIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        openContinueThreadDialog(threadRef);
       },
     });
   }

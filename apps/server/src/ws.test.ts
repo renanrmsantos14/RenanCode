@@ -67,6 +67,7 @@ import * as ManagedProjectFolders from "./project/ManagedProjectFolders.ts";
 import * as ScratchThreadPromotion from "./project/ScratchThreadPromotion.ts";
 import * as CacheKeepWarmService from "./orchestration-v2/CacheKeepWarmService.ts";
 import * as ThreadHandoffService from "./orchestration-v2/ThreadHandoffService.ts";
+import * as ThreadContinuationService from "./orchestration-v2/ThreadContinuationService.ts";
 import * as McpAppRequests from "./mcpApps/McpAppRequests.ts";
 import * as ModelManifest from "./provider/ModelManifest.ts";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
@@ -946,6 +947,7 @@ it.effect.each([
         Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
         Layer.mock(CacheKeepWarmService.CacheKeepWarmService)({}),
         Layer.mock(ThreadHandoffService.ThreadHandoffService)({}),
+        Layer.mock(ThreadContinuationService.ThreadContinuationService)({}),
         Layer.mock(ServerEnvironment.ServerEnvironment)({
           getDescriptor: Effect.succeed({
             environmentId: EnvironmentId.make("config-test"),
@@ -1200,6 +1202,7 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
       Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
       Layer.mock(CacheKeepWarmService.CacheKeepWarmService)({}),
       Layer.mock(ThreadHandoffService.ThreadHandoffService)({}),
+      Layer.mock(ThreadContinuationService.ThreadContinuationService)({}),
       Layer.mock(ServerEnvironment.ServerEnvironment)({
         getDescriptor: Effect.succeed({
           environmentId: EnvironmentId.make("config-test"),
@@ -1389,6 +1392,7 @@ it.effect("a publish whose push fails still refreshes the new remote", () =>
       Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
       Layer.mock(CacheKeepWarmService.CacheKeepWarmService)({}),
       Layer.mock(ThreadHandoffService.ThreadHandoffService)({}),
+      Layer.mock(ThreadContinuationService.ThreadContinuationService)({}),
       Layer.mock(ServerEnvironment.ServerEnvironment)({}),
       Layer.mock(EnvironmentAuth.EnvironmentAuth)({}),
     );
