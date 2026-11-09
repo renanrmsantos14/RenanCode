@@ -1812,14 +1812,20 @@ describe("buildThreadListV2Items subsessions", () => {
     buildThreadListV2Items({ threads, environmentId: null, searchQuery: "", now: NOW, ...extra });
   const rows = (layout: ReturnType<typeof build>) =>
     layout.items.map((item) => `${item.depth}:${item.thread.id}`);
+  const expanded = (...ids: ThreadId[]) => ({
+    expandedSubsessionKeys: new Set(ids.map((id) => `${environmentId}:${id}`)),
+  });
 
-  it("lists a child under its listed parent, oldest first, and not at top level", () => {
-    const layout = build([
-      launched(grandchildId, childId, "2026-06-01T03:00:00.000Z"),
-      launched(ThreadId.make("older"), parentId, "2026-06-01T01:00:00.000Z"),
-      launched(childId, parentId, "2026-06-01T02:00:00.000Z"),
-      parent,
-    ]);
+  it("lists a child under its expanded parent, oldest first, and not at top level", () => {
+    const layout = build(
+      [
+        launched(grandchildId, childId, "2026-06-01T03:00:00.000Z"),
+        launched(ThreadId.make("older"), parentId, "2026-06-01T01:00:00.000Z"),
+        launched(childId, parentId, "2026-06-01T02:00:00.000Z"),
+        parent,
+      ],
+      expanded(parentId, childId),
+    );
     expect(rows(layout)).toEqual(["0:parent", "1:older", "1:child", "2:grandchild"]);
     expect(layout.items[0]?.subsessions).toMatchObject({ count: 3, collapsed: false });
   });
@@ -1841,7 +1847,7 @@ describe("buildThreadListV2Items subsessions", () => {
         relationshipToParent: "subagent",
       },
     });
-    expect(rows(build([parent, delegated]))).toEqual(["0:parent", "1:child"]);
+    expect(rows(build([parent, delegated], expanded(parentId)))).toEqual(["0:parent", "1:child"]);
     expect(rows(build([delegated]))).toEqual([]);
   });
 
@@ -1856,10 +1862,10 @@ describe("buildThreadListV2Items subsessions", () => {
         relationshipToParent: "subagent",
       },
     });
-    expect(rows(build([parent, native]))).toEqual(["0:parent"]);
+    expect(rows(build([parent, native], expanded(parentId)))).toEqual(["0:parent"]);
   });
 
-  it("hides children of a collapsed parent and surfaces their urgent status", () => {
+  it("hides children by default and surfaces their urgent status", () => {
     const working = makeThread({
       id: childId,
       title: "Working",
@@ -1867,9 +1873,7 @@ describe("buildThreadListV2Items subsessions", () => {
       creationSource: "mcp",
       runtime: { status: "running" } as EnvironmentThreadShell["runtime"],
     });
-    const layout = build([parent, working], {
-      collapsedSubsessionKeys: new Set([`${environmentId}:${parentId}`]),
-    });
+    const layout = build([parent, working]);
     expect(rows(layout)).toEqual(["0:parent"]);
     expect(layout.items[0]?.subsessions).toEqual({
       count: 1,

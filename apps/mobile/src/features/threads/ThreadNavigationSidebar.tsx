@@ -240,7 +240,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
     snoozedShelfExpanded,
     workingShelfEnabled,
     workingShelfExpanded,
-    collapsedSubsessions,
+    expandedSubsessions,
     toggleSubsessions,
     toggleSettledShelf,
     toggleSnoozedShelf,
@@ -287,7 +287,7 @@ function ThreadNavigationSidebarPane(props: ThreadNavigationSidebarProps) {
     workingShelfExpanded,
     snoozedShelfExpanded,
     settledShelfExpanded,
-    collapsedSubsessions,
+    expandedSubsessions,
     selectedThreadKey: props.selectedThreadKey ?? null,
   });
   const listItems: readonly SidebarListItem[] =

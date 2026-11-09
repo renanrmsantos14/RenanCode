@@ -64,7 +64,7 @@ export function useThreadListV2(input: {
   readonly workingShelfExpanded: boolean;
   readonly snoozedShelfExpanded: boolean;
   readonly settledShelfExpanded: boolean;
-  readonly collapsedSubsessions: ReadonlySet<string>;
+  readonly expandedSubsessions: ReadonlySet<string>;
   readonly selectedThreadKey: string | null;
 }) {
   const { threads, workingShelfEnabled } = input;
@@ -152,7 +152,7 @@ export function useThreadListV2(input: {
         isWorking: inbox.isWorking,
         snoozedShelfExpanded: input.snoozedShelfExpanded,
         settledShelfExpanded: input.settledShelfExpanded,
-        collapsedSubsessionKeys: input.collapsedSubsessions,
+        expandedSubsessionKeys: input.expandedSubsessions,
         selectedThreadKey: input.selectedThreadKey,
         isListedSettled: isListed,
         unloadedSettledCount: unloadedCount(
@@ -185,7 +185,7 @@ export function useThreadListV2(input: {
       inbox.isWorking,
       input.snoozedShelfExpanded,
       input.settledShelfExpanded,
-      input.collapsedSubsessions,
+      input.expandedSubsessions,
       input.selectedThreadKey,
       isListed,
       unloadedCount,
