@@ -3,6 +3,8 @@ import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
+import type { OpenPreviewMutation } from "~/browser/openFileInPreview";
+
 import { openTerminalLinkInPreview } from "./openTerminalLinkInPreview";
 
 vi.mock("~/previewStateStore", () => ({
@@ -82,7 +84,9 @@ describe("openTerminalLinkInPreview", () => {
     ["http://127.0.0.1:36472/", "server"],
   ])("opens %s with runtime %s on a server-browser environment", async (url, runtime) => {
     entityMocks.serverBrowser.mockReturnValue(true);
-    const openPreview = vi.fn(async () => AsyncResult.failure(Cause.interrupt()));
+    const openPreview = vi.fn<OpenPreviewMutation<never>>(async () =>
+      AsyncResult.failure(Cause.interrupt()),
+    );
 
     await openTerminalLinkInPreview({ url, threadRef, openPreview, fallbackToBrowser: vi.fn() });
 
