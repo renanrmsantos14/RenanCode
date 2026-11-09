@@ -2,7 +2,7 @@ import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { requestCustomSnooze } from "../components/CustomSnoozeDialog";
 import { openGuestShareDialog } from "../components/chat/guestShareDialogState";
 import { openContinueThreadDialog } from "../components/chat/continueThreadDialogState";
-import { openComponentToolsDialog } from "../components/chat/ComponentToolsDialog";
+import { openComponentToolsDialog } from "../components/chat/componentToolsDialogState";
 import {
   type AtomCommandResult,
   isAtomCommandInterrupted,

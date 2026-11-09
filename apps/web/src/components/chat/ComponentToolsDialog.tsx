@@ -1,8 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
-import type { ScopedThreadRef } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import { Atom } from "effect/reactivity";
 import { useId, useState } from "react";
 
 import { useComposerDraftStore } from "~/composerDraftStore";
@@ -22,23 +20,11 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
-
-type ComponentToolMode = "find" | "replace" | "web";
-
-interface ComponentToolRequest {
-  readonly threadRef: ScopedThreadRef;
-  readonly mode: ComponentToolMode;
-}
-
-/** The thread menus close as their command runs, so one host in the root renders the dialog. */
-const componentToolsDialogAtom = Atom.make<ComponentToolRequest | null>(null).pipe(
-  Atom.keepAlive,
-  Atom.withLabel("component-tools:dialog"),
-);
-
-export function openComponentToolsDialog(threadRef: ScopedThreadRef, mode: ComponentToolMode) {
-  appAtomRegistry.set(componentToolsDialogAtom, { threadRef, mode });
-}
+import {
+  type ComponentToolMode,
+  type ComponentToolRequest,
+  componentToolsDialogAtom,
+} from "./componentToolsDialogState";
 
 interface ComponentToolFields {
   readonly name: string;

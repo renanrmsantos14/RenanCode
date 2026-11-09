@@ -167,7 +167,7 @@ import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
 import { continuationKey, continuationOfAtom } from "./chat/continuationLinks";
 import { canContinueElsewhereAtom } from "./chat/continueThreadAvailability";
 import { openContinueThreadDialog } from "./chat/continueThreadDialogState";
-import { openComponentToolsDialog } from "./chat/ComponentToolsDialog";
+import { openComponentToolsDialog } from "./chat/componentToolsDialogState";
 import { openGuestShareDialog } from "./chat/guestShareDialogState";
 import {
   buildThreadRouteParams,
