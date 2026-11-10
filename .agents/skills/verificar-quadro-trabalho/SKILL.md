@@ -17,9 +17,9 @@ description: "Verifica as ferramentas MCP do quadro de Trabalho (t3_work_module_
 
 ## Evals (pagos, precisam de `ANTHROPIC_API_KEY` no `.env` da raiz)
 
-- Em `evals/`: `pnpm mcp-tool-use --out runs/<nome> --case work-module-confirm-asks-first,work-module-confirm-on-approval,work-module-status-asks-first,work-module-status-on-approval,work-module-read-for-context,work-module-linked-environment`.
+- Em `evals/`: `pnpm mcp-tool-use --model claude-haiku-5-5 --out runs/<nome> --case work-module-confirm-asks-first,work-module-confirm-on-approval,work-module-status-asks-first,work-module-status-on-approval,work-module-read-for-context,work-module-linked-environment`. Use Haiku (cerca de US$ 0,04 a rodada; precisa Node 26.12.1). Linha de base em 09/11/2026: 13/14, com `work-module-status-asks-first` em 67%.
 - Esperado: 100% nos 6 casos. `confirm-*` cobrem confirmar vínculo só com aprovação. `status-asks-first` garante que o agente não muda status sozinho; `status-on-approval` que ele muda quando o usuário pede; `linked-environment` que ele passa `environmentId`.
-- Custo estimado: menos de US$ 1 por rodada (Sonnet, 2 amostras por caso).
+- Custo estimado: cerca de US$ 0,04 por rodada com Haiku; menos de US$ 1 com Sonnet (2 amostras por caso).
 
 ## Roteiro manual (thread real, opcional)
 

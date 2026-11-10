@@ -12,6 +12,7 @@ import {
   resolveFilePreviewPath,
   shouldShowFileExplorer,
   workspaceAssetResource,
+  worktreeFallbackPaths,
 } from "./filePreviewMode";
 
 const decodeReadError = Schema.decodeSync(ProjectReadFileError);
@@ -24,6 +25,43 @@ describe("file preview read errors", () => {
       message: "Legacy file read failure.",
     });
     expect(filePreviewReadErrorMessage(error)).toBe("Legacy file read failure.");
+  });
+
+  it("looks for a missing relative file in the repository's other worktrees", () => {
+    const missing = decodeReadError({
+      _tag: "ProjectReadFileError",
+      failure: "operation_failed",
+      operation: "realpath-target",
+      message: "missing",
+    });
+    const refs = [
+      { worktreePath: "/repo" },
+      { worktreePath: null },
+      { worktreePath: "/repo/.claude/worktrees/agent-1" },
+      { worktreePath: "/repo/.claude/worktrees/agent-1" },
+    ];
+    expect(worktreeFallbackPaths("docs/setup.md", "/repo", missing, refs)).toEqual([
+      "/repo/.claude/worktrees/agent-1/docs/setup.md",
+    ]);
+    expect(worktreeFallbackPaths("docs/setup.md", "/repo/apps/web", missing, refs)).toEqual([
+      "/repo/.claude/worktrees/agent-1/apps/web/docs/setup.md",
+    ]);
+    expect(worktreeFallbackPaths("/repo/docs/setup.md", "/repo", missing, refs)).toEqual([]);
+    for (const operation of ["realpath-workspace-root", "read"] as const) {
+      expect(
+        worktreeFallbackPaths(
+          "docs/setup.md",
+          "/repo",
+          decodeReadError({
+            _tag: "ProjectReadFileError",
+            failure: "operation_failed",
+            operation,
+            message: "missing",
+          }),
+          refs,
+        ),
+      ).toEqual([]);
+    }
   });
 });
 

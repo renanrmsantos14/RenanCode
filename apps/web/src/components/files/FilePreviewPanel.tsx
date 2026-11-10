@@ -39,7 +39,9 @@ import {
 import type { WorkerPoolManager } from "@pierre/diffs/worker";
 import { EditProvider, File, Virtualizer, useWorkerPool } from "@pierre/diffs/react";
 import { DiffWorkerPoolProvider } from "../DiffWorkerPoolProvider";
-import { useFilesystemReadAccess } from "~/state/filesystem";
+import { filesystemEnvironment, useFilesystemReadAccess } from "~/state/filesystem";
+import { useEnvironmentQuery } from "~/state/query";
+import { vcsEnvironment } from "~/state/vcs";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -48,7 +50,7 @@ import { mediaFileReference } from "@t3tools/client-runtime/media-reference";
 import { FolderTree, Globe2, WrapTextIcon } from "lucide-react";
 import { Code2, Eye, Table2 } from "lucide";
 import * as Schema from "effect/Schema";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { isBrowserPreviewFile, openFileInPreview } from "~/browser/openFileInPreview";
 import { useAssetUrlRefresh, useAssetUrlState } from "~/assets/assetUrls";
@@ -116,7 +118,9 @@ import {
   isMarkdownPreviewFile,
   resolveFilePreviewPath,
   shouldShowFileExplorer,
+  isMissingRelativeFile,
   workspaceAssetResource,
+  worktreeFallbackPaths,
 } from "./filePreviewMode";
 import { setMarkdownTaskChecked } from "@t3tools/shared/markdownTaskList";
 import { changeFileSaveSession, useFileSaveSession } from "./fileSaveSessions";
@@ -1059,6 +1063,40 @@ export default function FilePreviewPanel({
     relativePath,
     attachment === undefined && relativePath !== null,
   );
+  const getFilesystemMetadata = useAtomQueryRunner(filesystemEnvironment.getMetadata, {
+    reportFailure: false,
+    refresh: true,
+  });
+  const missingRelativeFile =
+    relativePath !== null && isMissingRelativeFile(relativePath, file.readError);
+  const worktreeRefs = useEnvironmentQuery(
+    canReadFiles && missingRelativeFile
+      ? vcsEnvironment.listRefs({ environmentId, input: { cwd, refKind: "local", limit: 200 } })
+      : null,
+  );
+  const worktreeCandidatesKey = missingRelativeFile
+    ? worktreeFallbackPaths(relativePath, cwd, file.readError, worktreeRefs.data?.refs ?? []).join(
+        "\n",
+      )
+    : "";
+  const openFromOtherWorktree = useEffectEvent(
+    async (paths: ReadonlyArray<string>, isActive: () => boolean) => {
+      const metadata = await getFilesystemMetadata({ environmentId, input: { paths } });
+      if (!isActive() || metadata._tag !== "Success") return;
+      const found = paths.find((_, index) => metadata.value.entries[index]?.kind === "file");
+      // Replace the missing tab in place rather than leaving it open beside the found file.
+      if (found) onNavigateFolder(found, found, false);
+    },
+  );
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a relative link missing here may name a file in another worktree of the repository (a subagent's), checked over RPC
+  useEffect(() => {
+    if (worktreeCandidatesKey === "") return;
+    let active = true;
+    void openFromOtherWorktree(worktreeCandidatesKey.split("\n"), () => active);
+    return () => {
+      active = false;
+    };
+  }, [worktreeCandidatesKey]);
   const [fileRefreshRevision, setFileRefreshRevision] = useState(0);
   const attemptedPath = file.readError?.resolvedPath ?? file.readError?.operationPath;
   // Folder links fail file reads; retain mutation refresh to detect conversion to files. Host folders own
