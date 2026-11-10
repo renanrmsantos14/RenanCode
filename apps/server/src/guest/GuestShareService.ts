@@ -9,6 +9,7 @@ import {
   type GuestShareCreateInput,
   type GuestShareCreateResult,
   GuestShareId,
+  type GuestAnswerRequest,
   type GuestRedeemRequest,
   type GuestStreamEvent,
   type GuestSubmitRequest,
@@ -92,6 +93,8 @@ const GUEST_ACCESS_MESSAGES = {
   too_large: "Attached files can total up to 10 MB per message.",
   unsupported_file: "This file cannot be attached. Images must be PNG, JPEG, GIF, or WebP.",
   files_busy: GUEST_FAILURE.filesBusy,
+  needs_owner: "The owner answers the agent's questions on this link.",
+  answered: "This question was already answered.",
 } as const;
 
 /** What a guest is told. The message comes from `reason`, never from a cause. */
@@ -111,6 +114,8 @@ export class GuestShareAccessError extends Schema.TaggedError<GuestShareAccessEr
       "too_large",
       "unsupported_file",
       "files_busy",
+      "needs_owner",
+      "answered",
     ]),
   },
 ) {
@@ -160,6 +165,11 @@ export class GuestShareService extends Context.Service<
       session: string,
       request: GuestSubmitRequest,
       uploads: ReadonlyArray<GuestUpload>,
+    ) => Effect.Effect<void, GuestShareAccessError>;
+    /** Answers a pending question of the agent, on a link whose messages skip the owner. */
+    readonly answer: (
+      session: string,
+      request: GuestAnswerRequest,
     ) => Effect.Effect<void, GuestShareAccessError>;
     readonly stream: (
       session: string,
@@ -501,6 +511,39 @@ const make = Effect.gen(function* () {
     });
   });
 
+  const answer = Effect.fn("GuestShareService.answer")(function* (
+    session: string,
+    request: GuestAnswerRequest,
+  ) {
+    const { thread, share } = yield* authorize(session, "session");
+    if (request.shareId !== share.id) {
+      return yield* new GuestShareAccessError({ reason: "stale_page" });
+    }
+    // Answering steers the agent like a message does, so it needs the same trust.
+    if (!share.autoSend) return yield* new GuestShareAccessError({ reason: "needs_owner" });
+    const { runtimeRequests } = yield* orchestrator
+      .getThreadRecords(thread.id, ["runtimeRequests"])
+      .pipe(Effect.mapError(() => inactive));
+    // Only questions: an approval decides what the agent may run on the owner's machine.
+    const pending = runtimeRequests.some(
+      (candidate) =>
+        candidate.id === request.requestId &&
+        candidate.kind === "user_input" &&
+        candidate.status === "pending",
+    );
+    if (!pending) return yield* new GuestShareAccessError({ reason: "answered" });
+    yield* threads
+      .dispatch({
+        type: "runtime-request.respond",
+        commandId: yield* commandId("answer"),
+        threadId: thread.id,
+        requestId: request.requestId,
+        answers: request.answers,
+      })
+      .pipe(Effect.mapError(() => new GuestShareAccessError({ reason: "rejected" })));
+    yield* analytics.record("feature.used", { feature: "guest_question.answer" });
+  });
+
   /** Completes once the session no longer opens its share, so open reads end with it. */
   const untilRevoked = (session: string) =>
     authorize(session, "session").pipe(
@@ -795,6 +838,7 @@ const make = Effect.gen(function* () {
     redeem,
     check,
     submit,
+    answer,
     stream,
     render,
     item,

@@ -14,6 +14,7 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   RunId,
+  RuntimeRequestId,
   ThreadId,
   TurnItemId,
 } from "@t3tools/contracts";
@@ -969,6 +970,118 @@ it.effect("sends a guest's message without the owner when the link does not need
       messages.find((entry) => entry.context?.guest?.guestMessageId === message!.id)?.text,
       "Message from guest Sam, not reviewed by the owner:\n\nRun the tests",
     );
+  }).pipe(Effect.scoped, Effect.provide(layerTest)),
+);
+
+it.effect("lets a guest answer the agent's questions only on a link without approval", () =>
+  Effect.gen(function* () {
+    const askingThread = ThreadId.make("thread:guest-answers");
+    const approvedLink = yield* shareThreadFor(threadId);
+    const approved = yield* approvedLink.guestShares.redeem({
+      credential: approvedLink.credential,
+      name: "Eve",
+    });
+    const { orchestrator, guestShares, credential } = yield* shareThreadFor(askingThread, true);
+    const { token: session, shareId } = yield* guestShares.redeem({ credential, name: "Sam" });
+    yield* orchestrator.dispatch({
+      type: "message.dispatch",
+      commandId: CommandId.make("ask-guest-answers"),
+      threadId: askingThread,
+      messageId: MessageId.make("message:ask-guest-answers"),
+      text: "Ask me something",
+      attachments: [],
+      dispatchMode: { type: "start_immediately" },
+      createdBy: "user",
+      creationSource: "web",
+    });
+    const run = (yield* orchestrator.getThreadRecords(askingThread, ["runs"])).runs[0]!;
+    const now = yield* DateTime.now;
+    const request = (id: string, kind: "user_input" | "command") =>
+      ({
+        id: EventId.make(`event:${id}`),
+        type: "runtime-request.updated",
+        threadId: askingThread,
+        runId: run.id,
+        occurredAt: now,
+        payload: {
+          id: RuntimeRequestId.make(id),
+          nodeId: run.rootNodeId!,
+          providerTurnId: null,
+          nativeRequestRef: null,
+          kind,
+          status: "pending",
+          responseCapability: { type: "message" },
+          createdAt: now,
+          resolvedAt: null,
+        },
+      }) as const;
+    yield* (yield* EventSink.EventSinkV2).write({
+      events: [
+        request("request:question", "user_input"),
+        request("request:approval", "command"),
+        {
+          id: EventId.make("event:question-item"),
+          type: "turn-item.updated",
+          threadId: askingThread,
+          runId: run.id,
+          occurredAt: now,
+          payload: {
+            id: TurnItemId.make("item:question"),
+            threadId: askingThread,
+            runId: run.id,
+            nodeId: run.rootNodeId!,
+            providerThreadId: null,
+            providerTurnId: null,
+            nativeItemRef: null,
+            parentItemId: null,
+            ordinal: 1,
+            status: "waiting",
+            title: null,
+            startedAt: now,
+            completedAt: null,
+            updatedAt: now,
+            type: "user_input_request",
+            requestId: RuntimeRequestId.make("request:question"),
+            questions: [
+              {
+                id: "scope",
+                header: "Scope",
+                question: "How much should I change?",
+                options: [{ label: "All of it", description: "Everything" }],
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const answerWith = (token: string, share: GuestShareId, requestId: string) =>
+      Effect.flip(
+        guestShares.answer(token, {
+          shareId: share,
+          requestId: RuntimeRequestId.make(requestId),
+          answers: { scope: "All of it" },
+        }),
+      ).pipe(Effect.map((error) => error.reason));
+
+    assert.equal(
+      yield* answerWith(approved.token, approved.shareId, "request:question"),
+      "needs_owner",
+    );
+    // An approval decides what runs on the owner's machine, so a guest never answers one.
+    assert.equal(yield* answerWith(session, shareId, "request:approval"), "answered");
+    yield* guestShares.answer(session, {
+      shareId,
+      requestId: RuntimeRequestId.make("request:question"),
+      answers: { scope: "All of it" },
+    });
+    const { runtimeRequests } = yield* orchestrator.getThreadRecords(askingThread, [
+      "runtimeRequests",
+    ]);
+    assert.notEqual(
+      runtimeRequests.find((entry) => entry.id === "request:question")?.status,
+      "pending",
+    );
+    assert.equal(yield* answerWith(session, shareId, "request:question"), "answered");
   }).pipe(Effect.scoped, Effect.provide(layerTest)),
 );
 

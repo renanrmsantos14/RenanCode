@@ -5,6 +5,7 @@ import {
   GUEST_NAME_MAX_LENGTH,
   GUEST_ROUTE_PREFIX,
   GUEST_SHARE_PARAM,
+  type GuestAnswerRequest,
   GuestMessageId,
   type GuestRedeemRequest,
   type GuestShareView,
@@ -23,7 +24,18 @@ import {
   deriveThreadActivityRun,
   deriveThreadStructureRuntime,
 } from "@t3tools/client-runtime/state/thread-execution";
-import { createQuestionHistoryProjector } from "@t3tools/client-runtime/state/thread-requests";
+import {
+  createQuestionHistoryProjector,
+  derivePendingThreadRequests,
+  seedUserInputDraftAnswers,
+} from "@t3tools/client-runtime/state/thread-requests";
+import {
+  buildPendingUserInputAnswers,
+  derivePendingUserInputProgress,
+  setPendingUserInputCustomAnswer,
+  togglePendingUserInputOptionSelection,
+  type PendingUserInputDraftAnswer,
+} from "@t3tools/client-runtime/state/pending-user-input";
 import { ArrowUpIcon, PaperclipIcon, XIcon } from "lucide-react";
 import {
   useEffect,
@@ -40,8 +52,15 @@ import { useNowMinute } from "~/hooks/useNowMinute";
 import { useStableCallback } from "~/hooks/useStableCallback";
 import { useTheme } from "~/hooks/useTheme";
 import { cn } from "~/lib/utils";
-import { deriveActiveWorkStartedAt, derivePhase } from "~/session-logic";
+import {
+  deriveActiveWorkStartedAt,
+  derivePendingUserInputs,
+  derivePhase,
+  type PendingUserInput,
+} from "~/session-logic";
+import { ComposerBanner } from "../chat/ComposerBanner";
 import { ComposerControl, ComposerControlIcon } from "../chat/ComposerControl";
+import { ComposerPendingUserInputPanel } from "../chat/ComposerPendingUserInputPanel";
 import type { ExpandedImagePreview } from "../chat/ExpandedImagePreview";
 import { GuestMessageAttachments } from "../chat/GuestMessageAttachments";
 import { HostImageUrlContext } from "../chat/hostImageUrl";
@@ -161,8 +180,8 @@ async function fetchGuestHistoryPage(
 
 /** Resolves to null on success, or to a message the guest can read. */
 async function postGuest(
-  path: "redeem" | `messages?${string}`,
-  body: typeof GuestRedeemRequest.Encoded | FormData,
+  path: "redeem" | `messages?${string}` | `answer?${string}`,
+  body: typeof GuestRedeemRequest.Encoded | typeof GuestAnswerRequest.Encoded | FormData,
 ): Promise<string | null> {
   try {
     const response = await fetch(
@@ -409,7 +428,7 @@ const ignore = () => {};
  * revert, diffs, files, other threads, shell) is left out, so its control does not render.
  */
 function GuestThread({
-  view: { shareId, title, expiresAt, messages, model },
+  view: { shareId, title, expiresAt, messages, model, canAnswer },
   projection,
   awaitingRowIds,
   historyControls,
@@ -482,6 +501,7 @@ function GuestThread({
     ),
   );
   const unplaced = unplacedGuestMessages(messages, items, awaitingRowIds);
+  const question = useGuestQuestion(shareId, canAnswer ? projection : null);
   return (
     <>
       <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2.5">
@@ -547,10 +567,146 @@ function GuestThread({
         ) : null}
       </div>
       <div className={cn(LANE, "shrink-0 pb-4")}>
-        <GuestComposer shareId={shareId} model={model} onSent={() => follow.scrollToEnd(true)} />
+        {question.pending === null ? null : (
+          <div className="mb-2">
+            <ComposerBanner.Root variant="info" detached>
+              <ComposerPendingUserInputPanel
+                pendingUserInputs={[question.pending]}
+                cwd={undefined}
+                threadRef={undefined}
+                respondingRequestIds={question.responding ? [question.pending.requestId] : []}
+                answers={question.answers}
+                questionIndex={question.index}
+                onToggleOption={question.toggleOption}
+                onAdvance={() => question.advance()}
+                onDismiss={ignore}
+              />
+            </ComposerBanner.Root>
+            {question.error === null ? null : (
+              <p role="alert" className="mt-1 px-4 text-xs text-destructive">
+                {question.error}
+              </p>
+            )}
+          </div>
+        )}
+        <GuestComposer
+          shareId={shareId}
+          model={model}
+          canAnswer={canAnswer}
+          answering={question.pending !== null}
+          onAnswer={question.answerWithText}
+          onSent={() => follow.scrollToEnd(true)}
+        />
       </div>
     </>
   );
+}
+
+const NO_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
+
+/**
+ * The agent's oldest open question, answered from the guest page the way the owner's composer
+ * panel answers it. Null projection: this link cannot answer.
+ */
+function useGuestQuestion(
+  shareId: GuestShareView["shareId"],
+  projection: OrchestrationV2ThreadProjection | null,
+) {
+  const userInputs = projection === null ? [] : derivePendingThreadRequests(projection).userInputs;
+  const oldest = derivePendingUserInputs(userInputs)[0];
+  // Only the owner can dismiss a question without answering it.
+  const pending: PendingUserInput | null =
+    oldest === undefined ? null : { ...oldest, dismissible: false };
+  const [draft, setDraft] = useState<{
+    readonly requestId: string;
+    readonly answers: Record<string, PendingUserInputDraftAnswer>;
+    readonly index: number;
+  } | null>(null);
+  // Set until the question leaves the projection, so it cannot be answered twice.
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const current = pending !== null && draft?.requestId === pending.requestId ? draft : null;
+  const answers =
+    pending === null
+      ? NO_ANSWERS
+      : seedUserInputDraftAnswers(pending.questions, current?.answers ?? NO_ANSWERS);
+  const index = current?.index ?? 0;
+  const responding = pending !== null && respondingId === pending.requestId;
+
+  const submit = async (
+    request: PendingUserInput,
+    next: Record<string, PendingUserInputDraftAnswer>,
+  ) => {
+    const resolved = buildPendingUserInputAnswers(request.questions, next);
+    if (resolved === null) return;
+    setRespondingId(request.requestId);
+    setError(null);
+    const failure = await postGuest(`answer?${GUEST_SHARE_PARAM}=${encodeURIComponent(shareId)}`, {
+      shareId,
+      requestId: request.requestId,
+      answers: resolved,
+    });
+    if (failure !== null) {
+      setRespondingId(null);
+      setError(failure);
+    }
+  };
+
+  const advance = (next: Record<string, PendingUserInputDraftAnswer> = answers) => {
+    if (pending === null || responding || pending.responseCapability === "not_resumable") return;
+    const progress = derivePendingUserInputProgress(pending.questions, next, index);
+    if (progress.isLastQuestion) {
+      void submit(pending, next);
+      return;
+    }
+    if (!progress.canAdvance) return;
+    setDraft({ requestId: pending.requestId, answers: next, index: progress.questionIndex + 1 });
+  };
+
+  const toggleOption = (questionId: string, optionValue: string) => {
+    if (pending === null) return;
+    const question = pending.questions.find((entry) => entry.id === questionId);
+    if (question === undefined) return;
+    setDraft({
+      requestId: pending.requestId,
+      answers: {
+        ...answers,
+        [questionId]: togglePendingUserInputOptionSelection(
+          question,
+          answers[questionId],
+          optionValue,
+        ),
+      },
+      index,
+    });
+  };
+
+  /**
+   * Send answers the open question: typed text is the answer, and no text submits the chosen
+   * options. False when there is no question or it cannot take text.
+   */
+  const answerWithText = (text: string): boolean => {
+    if (pending === null || responding) return false;
+    if (text === "") {
+      advance();
+      return true;
+    }
+    const question = derivePendingUserInputProgress(
+      pending.questions,
+      answers,
+      index,
+    ).activeQuestion;
+    if (question === null || question.allowCustomAnswer === false) return false;
+    const next = {
+      ...answers,
+      [question.id]: setPendingUserInputCustomAnswer(question, answers[question.id], text),
+    };
+    setDraft({ requestId: pending.requestId, answers: next, index });
+    advance(next);
+    return true;
+  };
+
+  return { pending, answers, index, responding, error, toggleOption, advance, answerWithText };
 }
 
 function ExpiryLabel({ expiresAt }: { readonly expiresAt: string }) {
@@ -655,10 +811,18 @@ function StagedImage({ file }: { readonly file: File }) {
 function GuestComposer({
   shareId,
   model,
+  canAnswer,
+  answering,
+  onAnswer,
   onSent,
 }: {
   readonly shareId: GuestShareView["shareId"];
   readonly model: GuestThreadModel;
+  readonly canAnswer: boolean;
+  /** The agent's question is open, so Send answers it. */
+  readonly answering: boolean;
+  /** Takes the text as the answer to an open question; false sends it as a message. */
+  readonly onAnswer: (text: string) => boolean;
   /** The guest's own message comes into view even if they had scrolled up, as the owner's does. */
   readonly onSent: () => void;
 }) {
@@ -681,7 +845,12 @@ function GuestComposer({
   };
   const send = async () => {
     const trimmed = text.trim();
-    if ((trimmed === "" && files.length === 0) || sending) return;
+    if (sending) return;
+    if (files.length === 0 && onAnswer(trimmed)) {
+      setText("");
+      return;
+    }
+    if (trimmed === "" && files.length === 0) return;
     setSending(true);
     const sentFiles = files;
     const form = new FormData();
@@ -803,13 +972,13 @@ function GuestComposer({
           </p>
         ) : (
           <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-            The owner approves each message
+            {canAnswer ? "Messages go straight to the agent" : "The owner approves each message"}
           </p>
         )}
         <button
           type="submit"
           aria-label="Send"
-          disabled={sending || (text.trim() === "" && files.length === 0)}
+          disabled={sending || (!answering && text.trim() === "" && files.length === 0)}
           className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-message-action text-message-action-foreground shadow-xs hover:bg-message-action-hover focus-visible:outline-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-64"
         >
           <ArrowUpIcon aria-hidden className="size-4" />

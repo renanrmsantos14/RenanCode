@@ -1,7 +1,12 @@
 import * as Schema from "effect/Schema";
 
-import { GuestShareId, IsoDateTime, TrimmedNonEmptyString } from "./baseSchemas.ts";
-import { ThreadGuestMessage } from "./guestShare.ts";
+import {
+  GuestShareId,
+  IsoDateTime,
+  RuntimeRequestId,
+  TrimmedNonEmptyString,
+} from "./baseSchemas.ts";
+import { GUEST_ROUTE_PREFIX, ThreadGuestMessage } from "./guestShare.ts";
 import { OrchestrationV2ThreadStreamItem } from "./orchestrationV2.ts";
 import { ProviderDriverKind } from "./providerInstance.ts";
 
@@ -26,6 +31,8 @@ export const GuestShareView = Schema.Struct({
   expiresAt: IsoDateTime,
   messages: Schema.Array(ThreadGuestMessage),
   model: GuestThreadModel,
+  /** The guest answers the agent's questions: only on a link whose messages skip the owner. */
+  canAnswer: Schema.Boolean,
 });
 export type GuestShareView = typeof GuestShareView.Type;
 
@@ -40,3 +47,14 @@ export const GuestStreamEvent = Schema.Union([
   Schema.Struct({ type: Schema.Literal("ended") }),
 ]);
 export type GuestStreamEvent = typeof GuestStreamEvent.Type;
+
+/** Answers one of the agent's pending questions: `?share=<share id>`. */
+export const GUEST_ANSWER_ROUTE = `${GUEST_ROUTE_PREFIX}/answer`;
+
+export const GuestAnswerRequest = Schema.Struct({
+  shareId: GuestShareId,
+  requestId: RuntimeRequestId,
+  /** Question id to the chosen option values or the typed answer. */
+  answers: Schema.Record(Schema.String, Schema.Union([Schema.String, Schema.Array(Schema.String)])),
+});
+export type GuestAnswerRequest = typeof GuestAnswerRequest.Type;

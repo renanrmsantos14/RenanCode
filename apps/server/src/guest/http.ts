@@ -1,4 +1,5 @@
 import {
+  GUEST_ANSWER_ROUTE,
   GUEST_ATTACHMENT_ROUTE,
   GUEST_COMMAND_OUTPUT_ROUTE,
   GUEST_HISTORY_ROUTE,
@@ -10,6 +11,7 @@ import {
   GUEST_MESSAGE_MAX_ATTACHMENT_BYTES,
   GUEST_MESSAGE_MAX_ATTACHMENTS,
   GUEST_SHARE_TTL_MS,
+  GuestAnswerRequest,
   GuestRedeemRequest,
   GuestStreamEvent,
   GuestSubmitRequest,
@@ -46,6 +48,7 @@ const FILE_HEADERS = {
 
 const decodeRedeem = Schema.decodeUnknownEffect(GuestRedeemRequest);
 const decodeSubmit = Schema.decodeUnknownEffect(GuestSubmitRequest);
+const decodeAnswer = Schema.decodeUnknownEffect(GuestAnswerRequest);
 // The owner's thread types hold DateTime values; the JSON codec writes them as strings.
 const encodeStreamEvent = Schema.encodeEffect(
   Schema.fromJsonString(Schema.toCodecJson(GuestStreamEvent)),
@@ -68,7 +71,9 @@ const errorResponse = (error: GuestShareAccessError) =>
               error.reason === "too_large" ||
               error.reason === "unsupported_file"
             ? 400
-            : 409,
+            : error.reason === "needs_owner"
+              ? 403
+              : 409,
       headers: NO_STORE,
     },
   );
@@ -236,6 +241,23 @@ const submitRoute = HttpRouter.add(
   ),
 );
 
+const answerRoute = HttpRouter.add(
+  "POST",
+  GUEST_ANSWER_ROUTE,
+  Effect.gen(function* () {
+    const shareId = yield* queryParam(GUEST_SHARE_PARAM);
+    const body = yield* readJson.pipe(Effect.flatMap(decodeAnswer), Effect.option);
+    if (body._tag === "None" || body.value.shareId !== shareId) return yield* badRequest;
+    const guestShares = yield* GuestShareService;
+    return yield* guestShares
+      .answer(yield* sessionToken, body.value)
+      .pipe(
+        Effect.as(HttpServerResponse.empty({ status: 204, headers: NO_STORE })),
+        Effect.catchTags({ GuestShareAccessError: errorResponse }),
+      );
+  }),
+);
+
 const streamRoute = HttpRouter.add(
   "GET",
   `${GUEST_ROUTE_PREFIX}/stream`,
@@ -394,6 +416,7 @@ export const layer = Layer.mergeAll(
   redeemRoute,
   sessionRoute,
   submitRoute,
+  answerRoute,
   streamRoute,
   renderRoute,
   itemRoute,
