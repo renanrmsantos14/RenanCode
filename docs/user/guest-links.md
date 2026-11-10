@@ -32,7 +32,11 @@ The guest sees the thread's recent history and everything after, in the same tim
 it streams: messages and their files, the agent's replies with the images they show from your
 machine, its reasoning, plans, questions, and its work, with command output when they expand a
 command. Their composer shows the thread's model, but they cannot change it. They do not see diffs, and they cannot act on the thread: no forking,
-reverting, opening files on your machine, or answering the agent for you.
+reverting, opening files on your machine, or approving the agent's commands.
+
+On a link without **Require my approval**, the guest can also answer the agent's questions: they
+pick an option or type an answer, and it goes straight to the agent, as their messages do. With
+approval on, you answer the questions.
 
 Anything the agent read or printed can show, such as a value from a file. Share only threads you
 are comfortable showing.

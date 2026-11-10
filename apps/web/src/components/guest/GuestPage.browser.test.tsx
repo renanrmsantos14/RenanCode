@@ -6,11 +6,14 @@ import {
   GuestShareId,
   GuestStreamEvent,
   MessageId,
+  NodeId,
   ProviderDriverKind,
   RunId,
+  RuntimeRequestId,
   TurnItemId,
   type GuestShareView,
   type OrchestrationV2Run,
+  type OrchestrationV2ThreadProjection,
   type OrchestrationV2TurnItem,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
@@ -113,14 +116,19 @@ const view: GuestShareView = {
   expiresAt: "2026-10-24T10:00:00.000Z",
   messages: [],
   model: { driver: ProviderDriverKind.make("codex"), name: "GPT-5.4", shortName: "5.4" },
+  canAnswer: false,
 };
 
 /** The stream's opening, as the server sends it: the share, then the owner's snapshot. */
 const opening = (
   runs: ReadonlyArray<OrchestrationV2Run>,
   turnItems: ReadonlyArray<OrchestrationV2TurnItem>,
+  options: {
+    readonly view?: GuestShareView;
+    readonly runtimeRequests?: OrchestrationV2ThreadProjection["runtimeRequests"];
+  } = {},
 ): ReadonlyArray<GuestStreamEvent> => [
-  { type: "view", view },
+  { type: "view", view: options.view ?? view },
   {
     type: "thread",
     item: {
@@ -130,6 +138,7 @@ const opening = (
         ...fixture,
         runs,
         turnItems,
+        runtimeRequests: options.runtimeRequests ?? [],
         visibleTurnItems: turnItems.map((item, position) => ({
           position,
           visibility: "local",
@@ -247,6 +256,71 @@ describe("GuestPage", () => {
     expect(socket).not.toHaveBeenCalled();
     // The composer names the thread's model, as the owner's does, with nothing to pick.
     await expect.element(screen.getByLabelText("Model: GPT-5.4")).toBeVisible();
+  });
+
+  it("lets the guest answer the agent's question on a link without approval", async () => {
+    using _page = visit(`/guest?share=${SHARE_ID}`);
+    using fetchSpy = vi
+      .spyOn(window, "fetch")
+      .mockImplementation(async () => new Response(null, { status: 204 }));
+    const requestId = RuntimeRequestId.make("request-1");
+    const question: OrchestrationV2TurnItem = {
+      ...itemBase("question", 3),
+      status: "waiting",
+      completedAt: null,
+      type: "user_input_request",
+      requestId,
+      questions: [
+        {
+          id: "scope",
+          header: "Scope",
+          question: "How much should I change?",
+          options: [
+            { label: "Only login", description: "Leave the rest" },
+            { label: "Everything", description: "Login and logout" },
+          ],
+        },
+      ],
+    };
+    using _stream = vi.spyOn(window, "EventSource").mockImplementation(
+      fakeEventSource(
+        opening([run("run-1", 1, "running")], [...items, question], {
+          view: { ...view, canAnswer: true },
+          runtimeRequests: [
+            {
+              id: requestId,
+              nodeId: NodeId.make("node-question"),
+              providerTurnId: null,
+              nativeRequestRef: null,
+              kind: "user_input",
+              status: "pending",
+              responseCapability: { type: "message" },
+              createdAt: started,
+              resolvedAt: null,
+            },
+          ],
+        }),
+      ) as never,
+    );
+    await using screen = await render(<GuestPage />);
+
+    await expect.element(screen.getByText("How much should I change?")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: /Everything/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    await vi.waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        `/api/guest/answer?share=${SHARE_ID}`,
+        expect.objectContaining({ method: "POST" }),
+      ),
+    );
+    const body = fetchSpy.mock.calls.find(
+      ([url]) => url === `/api/guest/answer?share=${SHARE_ID}`,
+    )?.[1]?.body;
+    expect(JSON.parse(String(body))).toEqual({
+      shareId: SHARE_ID,
+      requestId,
+      answers: { scope: "Everything" },
+    });
   });
 
   it("sends attached files with the message, as form data", async () => {

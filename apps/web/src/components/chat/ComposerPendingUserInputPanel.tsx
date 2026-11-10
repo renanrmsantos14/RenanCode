@@ -19,7 +19,8 @@ import ChatMarkdown from "../ChatMarkdown";
 interface PendingUserInputPanelProps {
   pendingUserInputs: PendingUserInput[];
   cwd: string | undefined;
-  threadRef: ScopedThreadRef;
+  /** Undefined on the guest page, which has no thread behind it. */
+  threadRef: ScopedThreadRef | undefined;
   disabled?: boolean;
   respondingRequestIds: RuntimeRequestId[];
   answers: Record<string, PendingUserInputDraftAnswer>;
@@ -76,7 +77,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
 }: {
   prompt: PendingUserInput;
   cwd: string | undefined;
-  threadRef: ScopedThreadRef;
+  threadRef: ScopedThreadRef | undefined;
   disabled: boolean;
   isResponding: boolean;
   answers: Record<string, PendingUserInputDraftAnswer>;
