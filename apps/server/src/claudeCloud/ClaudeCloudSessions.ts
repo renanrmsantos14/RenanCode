@@ -178,8 +178,6 @@ function isCloudSessionArchived(session: CloudSession): boolean {
   return session.status === "archived";
 }
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 function cloudSessionIdOf(threadId: string): string | null {
   return isClaudeCloudThreadId(threadId)
     ? threadId.slice(CLAUDE_CLOUD_THREAD_ID_PREFIX.length)
@@ -877,17 +875,8 @@ const make = Effect.gen(function* () {
       {
         title,
         environment_id: environment.environment_id,
-        events: [
-          {
-            payload: {
-              ...(UUID_PATTERN.test(input.messageId) ? { uuid: input.messageId } : {}),
-              session_id: "",
-              type: "user",
-              parent_tool_use_id: null,
-              message: { role: "user", content: input.text },
-            },
-          },
-        ],
+        // The first prompt goes through message.dispatch below, so it gets a run like any reply.
+        events: [],
         config: {
           sources: [
             { type: "git_repository", url: `https://github.com/${repo}`, revision: branch },
@@ -926,8 +915,22 @@ const make = Effect.gen(function* () {
       },
       project.id,
     ).pipe(Effect.mapError((cause) => startError("unavailable", cause.message)));
+    const threadId = cloudThreadId(sessionId);
+    yield* orchestrator
+      .dispatch({
+        type: "message.dispatch",
+        commandId: CommandId.make(`server:claude-cloud-start:${input.messageId}`),
+        threadId,
+        messageId: input.messageId,
+        text: input.text,
+        attachments: [],
+        dispatchMode: { type: "start_immediately" },
+        createdBy: "user",
+        creationSource: "server",
+      })
+      .pipe(Effect.mapError((cause) => startError("unavailable", cause.message)));
     yield* Queue.offer(wakeups, undefined);
-    return { threadId: cloudThreadId(sessionId) };
+    return { threadId };
   });
 
   return { archive, start, suggestPlacement };
