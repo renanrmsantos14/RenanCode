@@ -499,7 +499,7 @@ describe("DesktopWindow", () => {
     const snappedBounds = { x: 1921, y: 30, width: 1280, height: 945 };
 
     assert.strictEqual(
-      DesktopWindow.resolveInitialMainWindowBounds(snappedBounds, displays),
+      DesktopWindow.resolveInitialMainWindowBounds(snappedBounds, displays, displays[0]!),
       snappedBounds,
     );
     for (const bounds of [
@@ -509,7 +509,7 @@ describe("DesktopWindow", () => {
       { x: 1920, y: 976, width: 1280, height: 946 },
     ]) {
       assert.deepEqual(
-        DesktopWindow.resolveInitialMainWindowBounds(bounds, displays),
+        DesktopWindow.resolveInitialMainWindowBounds(bounds, displays, displays[0]!),
         DesktopAppSettings.DEFAULT_MAIN_WINDOW_SIZE,
       );
     }

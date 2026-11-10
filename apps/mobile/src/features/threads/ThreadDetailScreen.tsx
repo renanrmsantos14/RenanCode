@@ -329,8 +329,6 @@ function ColumnWidth(props: { readonly width: number | null; readonly children: 
     </WorkspaceSettledContentWidthContext>
   );
 }
-const USAGE_LIMITS_PANEL_GAP = 12;
-const USAGE_LIMITS_PANEL_MIN_HEIGHT = 44;
 
 const USER_INPUT_TOGGLE_TIMING = {
   duration: USER_INPUT_TOGGLE_DURATION_MS,

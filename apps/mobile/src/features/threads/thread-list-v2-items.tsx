@@ -40,7 +40,14 @@ import {
   type ComponentProps,
   type ReactNode,
 } from "react";
-import { Platform, Pressable, StyleSheet, Text as RNText, useWindowDimensions, View } from "react-native";
+import {
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text as RNText,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 
 import type { ThreadListProvider } from "../../state/thread-list-environments";
