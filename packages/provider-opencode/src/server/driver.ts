@@ -160,12 +160,12 @@ function selectOpenCodeRuntimeTextGeneration(
         v2: v2.generateReviewGuide(input),
       }),
     generateNextAction: (input) =>
-      byOpenCodeRuntime(probe.get, {
+      byOpenCodeRuntime(resolve, {
         v1: v1.generateNextAction(input),
         v2: v2.generateNextAction(input),
       }),
     generateTaskPlacement: (input) =>
-      byOpenCodeRuntime(probe.get, {
+      byOpenCodeRuntime(resolve, {
         v1: v1.generateTaskPlacement(input),
         v2: v2.generateTaskPlacement(input),
       }),
