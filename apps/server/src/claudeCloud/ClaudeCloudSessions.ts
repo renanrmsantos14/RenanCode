@@ -30,7 +30,6 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
-import * as Queue from "effect/Queue";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as HttpClientError from "effect/http/HttpClientError";
@@ -698,17 +697,9 @@ const make = Effect.gen(function* () {
     ),
   );
 
-  const wakeups = yield* Queue.sliding<void>(1);
   yield* forkParked(
     tick.pipe(
-      Effect.flatMap((busy) =>
-        Queue.take(wakeups).pipe(
-          Effect.timeoutOrElse({
-            duration: busy ? BUSY_INTERVAL : IDLE_INTERVAL,
-            orElse: () => Effect.void,
-          }),
-        ),
-      ),
+      Effect.flatMap((busy) => Effect.sleep(busy ? BUSY_INTERVAL : IDLE_INTERVAL)),
       Effect.forever,
     ),
   );
@@ -928,8 +919,19 @@ const make = Effect.gen(function* () {
         createdBy: "user",
         creationSource: "server",
       })
-      .pipe(Effect.mapError((cause) => startError("unavailable", cause.message)));
-    yield* Queue.offer(wakeups, undefined);
+      .pipe(
+        // The client reports a failed start (or runs locally); do not leave an empty cloud thread behind.
+        Effect.tapError(() =>
+          orchestrator
+            .dispatch({
+              type: "thread.archive",
+              commandId: CommandId.make(`server:claude-cloud-start-failed:${input.messageId}`),
+              threadId,
+            })
+            .pipe(Effect.ignore),
+        ),
+        Effect.mapError((cause) => startError("unavailable", cause.message)),
+      );
     return { threadId };
   });
 
