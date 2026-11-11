@@ -2,9 +2,7 @@ import {
   AuthProvidersManageScope,
   type EnvironmentId,
   type ProviderConsumeResetCreditOutcome,
-  ProviderConsumeResetCreditInput,
   ServerProvider,
-  ServerProviderResetCredits,
   ServerProviderUsageWindow,
   UsageProviderKind,
 } from "@t3tools/contracts";
@@ -17,7 +15,6 @@ import {
   paceRemainingPercent,
   remainingPercent,
   type ResetCreditChoice,
-  resetCreditChoices,
 } from "@t3tools/shared/usageLimits";
 import { GaugeIcon, TrendingDownIcon, TrendingUpIcon } from "lucide-react";
 import { Fragment, useLayoutEffect, useState } from "react";
@@ -248,12 +245,12 @@ export function useResetCredit(environmentId: EnvironmentId) {
   const [status, setStatus] = useState<string | null>(null);
 
   /** Resolves to the outcome text, also kept in `status`. */
-  const redeem = async (): Promise<string | null> => {
+  const redeem = async (picked: ResetCreditChoice | null = choice): Promise<string | null> => {
     setConfirming(false);
-    if (!choice || !readEnvironmentScope(environmentId, AuthProvidersManageScope)) return null;
+    if (!picked || !readEnvironmentScope(environmentId, AuthProvidersManageScope)) return null;
     setBusy(true);
     setStatus(null);
-    const result = await consume({ environmentId, input: choice.input });
+    const result = await consume({ environmentId, input: picked.input });
     setBusy(false);
     const text =
       result._tag === "Success"
@@ -304,49 +301,6 @@ export function ResetCreditDialog({
         </AlertDialogFooter>
       </AlertDialogPopup>
     </AlertDialog>
-  );
-}
-
-export function ResetCredits({
-  environmentId,
-  input,
-  credits,
-  now,
-}: {
-  readonly environmentId: EnvironmentId;
-  readonly input: ProviderConsumeResetCreditInput;
-  readonly credits: ServerProviderResetCredits;
-  readonly now: number;
-}) {
-  const { canManageProviders, choice, confirming, setConfirming, confirm, busy, status, redeem } =
-    useResetCredit(environmentId);
-  if (credits.availableCount === 0 && status === null) return null;
-  return (
-    <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-      {resetCreditChoices(credits, input, now).map((choice) => (
-        <div key={choice.key} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="tabular-nums">{choice.summary}</span>
-          {choice.availableCount > 0 ? (
-            <Button
-              size="xs"
-              variant="outline"
-              disabled={busy || !canManageProviders}
-              onClick={() => confirm(choice)}
-            >
-              {busy ? "Using…" : choice.actionLabel}
-            </Button>
-          ) : null}
-        </div>
-      ))}
-      {status ? <span className="text-foreground">{status}</span> : null}
-      <ResetCreditDialog
-        open={confirming}
-        onOpenChange={setConfirming}
-        choice={choice}
-        onConfirm={() => void redeem()}
-        disabled={!canManageProviders}
-      />
-    </div>
   );
 }
 

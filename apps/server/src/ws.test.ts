@@ -1492,6 +1492,9 @@ it.effect("a missing thread worktree gets its project's skills in the cwd snapsh
         namedProjectsRoot: process.cwd(),
       }),
       Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
+      Layer.mock(CacheKeepWarmService.CacheKeepWarmService)({}),
+      Layer.mock(ThreadHandoffService.ThreadHandoffService)({}),
+      Layer.mock(ThreadContinuationService.ThreadContinuationService)({}),
       Layer.mock(ServerEnvironment.ServerEnvironment)({}),
       Layer.mock(EnvironmentAuth.EnvironmentAuth)({}),
     );
@@ -1968,6 +1971,9 @@ it.effect("ACP session RPCs list a thread missing its history and repair it on i
       Layer.mock(DirectEndpoints.DirectEndpoints)({}),
       Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({ namedProjectsRoot: "/unused" }),
       Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
+      Layer.mock(CacheKeepWarmService.CacheKeepWarmService)({}),
+      Layer.mock(ThreadHandoffService.ThreadHandoffService)({}),
+      Layer.mock(ThreadContinuationService.ThreadContinuationService)({}),
       Layer.mock(ServerEnvironment.ServerEnvironment)({}),
       Layer.mock(EnvironmentAuth.EnvironmentAuth)({}),
       Layer.mock(ProjectService.ProjectService)({

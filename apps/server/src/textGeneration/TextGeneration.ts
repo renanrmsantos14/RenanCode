@@ -194,13 +194,16 @@ export const make = Effect.gen(function* () {
       );
     }),
     generateNextAction: Effect.fn("TextGeneration.generateNextAction")(function (input) {
-      return generate("generateNextAction", input.modelSelection, (service, modelSelection) =>
+      return generate("generateNextAction", input.modelSelection, null, (service, modelSelection) =>
         service.generateNextAction({ ...input, modelSelection }),
       );
     }),
     generateTaskPlacement: Effect.fn("TextGeneration.generateTaskPlacement")(function (input) {
-      return generate("generateTaskPlacement", input.modelSelection, (service, modelSelection) =>
-        service.generateTaskPlacement({ ...input, modelSelection }),
+      return generate(
+        "generateTaskPlacement",
+        input.modelSelection,
+        null,
+        (service, modelSelection) => service.generateTaskPlacement({ ...input, modelSelection }),
       );
     }),
     generateTranscriptionPostProcessing: Effect.fn(

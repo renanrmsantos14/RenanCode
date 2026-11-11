@@ -51,7 +51,7 @@ function ResetCreditHost({
   readonly target: ResetCreditTarget;
   readonly onDone: () => void;
 }) {
-  const redeem = useResetCredit(target.environmentId, target.input);
+  const redeem = useResetCredit(target.environmentId);
   const [asking, setAsking] = useState(true);
   return (
     <ResetCreditDialog
@@ -61,9 +61,10 @@ function ResetCreditHost({
         setAsking(false);
         onDone();
       }}
+      choice={target.choice}
       onConfirm={async () => {
         setAsking(false);
-        const text = await redeem.redeem();
+        const text = await redeem.redeem(target.choice);
         if (text) toastManager.add({ type: "info", title: text });
         onDone();
       }}
@@ -160,7 +161,7 @@ export function ClaudeUsageIndicator({
       </Popover>
       {redeemTarget ? (
         <ResetCreditHost
-          key={JSON.stringify(redeemTarget.input)}
+          key={JSON.stringify(redeemTarget.choice.input)}
           target={redeemTarget}
           onDone={() => setRedeemTarget(null)}
         />

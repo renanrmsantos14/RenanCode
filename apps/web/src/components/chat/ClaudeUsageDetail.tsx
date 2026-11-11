@@ -24,6 +24,8 @@ import {
   limitsNotice,
   exhaustionForecast,
   USAGE_GOAL_TIME_ZONE,
+  type ResetCreditChoice,
+  resetCreditChoices,
 } from "@t3tools/shared/usageLimits";
 import type { ReactNode } from "react";
 
@@ -36,12 +38,12 @@ import { formatUpcomingTimestamp } from "../../timestampFormat";
 import { providerClients } from "../settings/providerDriverMeta";
 import { RedactedSensitiveText } from "../settings/RedactedSensitiveText";
 import { Button } from "../ui/button";
-import { LimitWindows, resetCreditsSummary } from "../usage/UsageLimits";
+import { LimitWindows } from "../usage/UsageLimits";
 import { PROVIDER_PRESENTATION } from "../usage/usageProviders";
 
 export interface ResetCreditTarget {
   readonly environmentId: EnvironmentId;
-  readonly input: ProviderConsumeResetCreditInput;
+  readonly choice: ResetCreditChoice;
 }
 
 function AccountName({ label }: { readonly label: string }) {
@@ -98,23 +100,34 @@ function UsageBar({
 
 function CreditsRow({
   credits,
+  input,
   now,
   canManage,
   onUse,
 }: {
   readonly credits: ServerProviderResetCredits;
+  readonly input: ProviderConsumeResetCreditInput;
   readonly now: number;
   readonly canManage: boolean;
-  readonly onUse: () => void;
+  readonly onUse: (choice: ResetCreditChoice) => void;
 }) {
   if (credits.availableCount === 0) return null;
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-      <span className="tabular-nums">{resetCreditsSummary(credits, now)}</span>
-      <Button size="xs" variant="outline" disabled={!canManage} onClick={onUse}>
-        Use reset
-      </Button>
-    </div>
+    <>
+      {resetCreditChoices(credits, input, now, true).map((choice) => (
+        <div
+          key={choice.key}
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"
+        >
+          <span className="tabular-nums">{choice.summary}</span>
+          {choice.availableCount > 0 ? (
+            <Button size="xs" variant="outline" disabled={!canManage} onClick={() => onUse(choice)}>
+              {choice.actionLabel}
+            </Button>
+          ) : null}
+        </div>
+      ))}
+    </>
   );
 }
 
@@ -127,7 +140,7 @@ function ClaudeAccountBlock({
   readonly account: ClaudeAccountUsage;
   readonly now: number;
   readonly canManage: boolean;
-  readonly onRedeem: (target: ResetCreditTarget["input"]) => void;
+  readonly onRedeem: (choice: ResetCreditChoice) => void;
 }) {
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const color =
@@ -202,9 +215,10 @@ function ClaudeAccountBlock({
       {account.limits.resetCredits ? (
         <CreditsRow
           credits={account.limits.resetCredits}
+          input={account.resetCreditInput}
           now={now}
           canManage={canManage}
-          onUse={() => onRedeem(account.resetCreditInput)}
+          onUse={onRedeem}
         />
       ) : null}
     </section>
@@ -261,9 +275,10 @@ function OtherAccountBlock({
       {redeem && account.limits.resetCredits ? (
         <CreditsRow
           credits={account.limits.resetCredits}
+          input={redeem.input}
           now={now}
           canManage={canManage}
-          onUse={() => onRedeem(redeem)}
+          onUse={(choice) => onRedeem({ environmentId: redeem.environmentId, choice })}
         />
       ) : null}
     </section>
@@ -297,7 +312,7 @@ export function ClaudeUsageDetail({
         account={account}
         now={now}
         canManage={canManage}
-        onRedeem={(input) => onRedeem({ environmentId, input })}
+        onRedeem={(choice) => onRedeem({ environmentId, choice })}
       />,
     );
   }
