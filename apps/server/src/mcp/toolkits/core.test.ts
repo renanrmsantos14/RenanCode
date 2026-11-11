@@ -37,6 +37,7 @@ import {
   OrchestratorCommandRejectedError,
   OrchestratorDispatchError,
   OrchestratorProjectionError,
+  OrchestratorProviderSelectionBusyError,
 } from "../../orchestration-v2/Orchestrator.ts";
 
 import * as Upload from "../../assets/AttachmentUpload.ts";
@@ -230,6 +231,11 @@ it("bounds public command rejections and redacts internal dispatch causes", () =
       new OrchestratorCommandRejectedError({ ...command, cause: "Run is not queued." }),
     ).message,
   ).toBe("Run is not queued.");
+  const busy = new OrchestratorProviderSelectionBusyError({
+    commandId: command.commandId,
+    threadId,
+  });
+  expect(dispatchFailure(busy)).toMatchObject({ code: "invalid_request", message: busy.message });
   for (const cause of [
     undefined,
     "",

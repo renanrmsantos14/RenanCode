@@ -396,7 +396,7 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
                 </SettingsSection>
                 <SettingsSection title="After a turn">
                   <SettingsSwitchRow
-                    icon="sparkles"
+                    icon={{ ios: "text.bubble", android: "chat" }}
                     label="Suggest next message"
                     subtitle={managedSubtitle(
                       "nextActionSuggestionsEnabled",

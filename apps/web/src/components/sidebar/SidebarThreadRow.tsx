@@ -1,5 +1,6 @@
 import { useAtomMount } from "@effect/atom-react";
 import { SubsessionToggle, type SubsessionDot } from "./SubsessionToggle";
+import { asLaunchingThread } from "@t3tools/client-runtime/state/thread-inbox";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { ThreadTerminalStatusButton } from "../ThreadStatusIndicators";
 import { discardComposerDraft } from "../../lib/discardComposerDraft";
@@ -496,7 +497,9 @@ export function SortableThreadRow(
       ? rowProps.thread
       : isProviderNativeSubagentThread(liveThread)
         ? { ...liveThread, runtime: rowProps.thread.runtime }
-        : liveThread;
+        : rowProps.thread.runtime !== null
+          ? asLaunchingThread(liveThread)
+          : liveThread;
   // Keyed by variant so a card/slim switch remounts the row.
   return <SidebarThreadRow key={rowProps.variant} {...rowProps} thread={thread} sortable={bag} />;
 }
