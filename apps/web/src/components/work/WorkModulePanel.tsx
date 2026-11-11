@@ -10,7 +10,7 @@ import {
 import type { ThreadId, WorkModuleId, WorkModuleThreadLink } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
-import { CheckIcon, LinkIcon, PlusIcon, SparklesIcon, UnlinkIcon, XIcon } from "lucide-react";
+import { CheckIcon, LinkIcon, PlusIcon, LightbulbIcon, UnlinkIcon, XIcon } from "lucide-react";
 import { type ReactNode, useRef, useState } from "react";
 
 import { Button } from "~/components/ui/button";
@@ -398,7 +398,7 @@ export function WorkModulePanel(props: {
             {suggested.length === 0 ? null : (
               <div className="mt-2 flex flex-col gap-1">
                 <h4 className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <SparklesIcon className="size-3.5" />
+                  <LightbulbIcon className="size-3.5" />
                   Sugeridas
                 </h4>
                 <ul className="-mx-2 flex flex-col">

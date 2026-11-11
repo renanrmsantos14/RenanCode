@@ -259,7 +259,18 @@ effectIt.layer(NodeServices.layer)("Claude usage poller", (it) => {
           HttpClient.make(() => Effect.die("the probe must reuse the shared read")),
         ),
       );
-      expect(credits).toEqual({ availableCount: 2, nextCreditId: "grant_1" });
+      expect(credits).toEqual({
+        availableCount: 2,
+        nextCreditId: "grant_1",
+        options: [
+          {
+            availableCount: 2,
+            creditId: "grant_1",
+            description: "Refills your 5-hour and weekly limits.",
+            label: "Full reset",
+          },
+        ],
+      });
       expect(yield* Ref.get(requests)).toBe(1);
       expect((yield* Ref.get(urls))[0]).toBe("cedar_ember=1");
       expect(yield* Ref.get(recorded)).toEqual([
@@ -292,11 +303,33 @@ effectIt.layer(NodeServices.layer)("Claude usage poller", (it) => {
       yield* run;
       yield* TestClock.adjust(MINUTE);
       yield* run;
-      expect(yield* probe).toEqual({ availableCount: 1, nextCreditId: "grant_1" });
+      expect(yield* probe).toEqual({
+        availableCount: 1,
+        nextCreditId: "grant_1",
+        options: [
+          {
+            availableCount: 1,
+            creditId: "grant_1",
+            description: "Refills your 5-hour and weekly limits.",
+            label: "Full reset",
+          },
+        ],
+      });
 
       yield* expireSharedClaudeUsage(configDir);
       yield* TestClock.adjust(MINUTE);
-      expect(yield* probe).toEqual({ availableCount: 1, nextCreditId: "grant_1" });
+      expect(yield* probe).toEqual({
+        availableCount: 1,
+        nextCreditId: "grant_1",
+        options: [
+          {
+            availableCount: 1,
+            creditId: "grant_1",
+            description: "Refills your 5-hour and weekly limits.",
+            label: "Full reset",
+          },
+        ],
+      });
       yield* TestClock.adjust(MINUTE);
       yield* run;
       expect(yield* Ref.get(requests)).toBe(3);
