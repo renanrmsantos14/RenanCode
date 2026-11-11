@@ -26,12 +26,18 @@ vi.mock("react-native-reanimated", () => {
   return {
     default: { View: ({ children }: Children) => <div>{children}</div> },
     Easing: { out: () => () => 0, cubic: () => 0 },
+    FadeIn: animation,
     FadeInUp: animation,
     FadeOutDown: animation,
     useAnimatedStyle: () => ({}),
     useSharedValue: (value: number) => ({ value, set: () => {} }),
   };
 });
+vi.mock("expo-haptics", () => ({
+  selectionAsync: () => Promise.resolve(),
+  notificationAsync: () => Promise.resolve(),
+  NotificationFeedbackType: { Success: "success" },
+}));
 vi.mock("../../components/ui/AppSymbol", () => ({ SymbolView: () => null }));
 vi.mock("../../components/ui/AppText", () => ({
   AppText: ({ children }: Children) => <span>{children}</span>,
