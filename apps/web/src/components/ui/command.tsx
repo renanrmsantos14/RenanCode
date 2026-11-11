@@ -32,6 +32,7 @@ function CommandDialogBackdrop({ className, ...props }: CommandDialogPrimitive.B
       className={cn(
         DIALOG_BACKDROP_CLASS,
         "transition-none! data-ending-style:opacity-100! data-starting-style:opacity-100!",
+        "data-ending-style:pointer-events-none",
         className,
       )}
       data-slot="command-dialog-backdrop"
@@ -79,7 +80,7 @@ function CommandDialogPopup({
           className={cn(
             DIALOG_POPUP_CLASS,
             /* Opened by shortcut dozens of times a day: no enter/exit motion. */
-            "pointer-events-auto max-h-105 max-w-xl text-foreground transition-none! will-change-auto! data-ending-style:scale-100! data-starting-style:scale-100! data-ending-style:opacity-100! data-starting-style:opacity-100!",
+            "pointer-events-auto max-h-105 max-w-xl text-foreground transition-none! will-change-auto! data-ending-style:scale-100! data-starting-style:scale-100! data-ending-style:opacity-100! data-starting-style:opacity-100! data-ending-style:pointer-events-none",
             className,
           )}
           data-slot="command-dialog-popup"
