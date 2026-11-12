@@ -2568,6 +2568,7 @@ function toHydratedDraftThreadState(
       : {}),
     ...(persistedDraftThread.workModuleId
       ? { workModuleId: WorkModuleId.make(persistedDraftThread.workModuleId) }
+      : {}),
     ...(persistedDraftThread.checkoutPullRequest
       ? { checkoutPullRequest: persistedDraftThread.checkoutPullRequest }
       : {}),
