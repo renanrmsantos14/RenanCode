@@ -17,6 +17,7 @@ import type { EnvironmentThreadState } from "./threadState.ts";
 import * as DateTime from "effect/DateTime";
 
 import {
+  type AtomCommand,
   createAtomCommandScheduler,
   createEnvironmentCommand,
   createEnvironmentRpcCommand,
@@ -130,7 +131,22 @@ export function createThreadEnvironmentAtoms<R, E, StateError>(
     );
   });
 
-  const commands = {
+  // Counts the commands that move or remove a thread's row. A list that holds its rows while
+  // environments synchronize (`stepSteadyShells`) shows the user's own change at once.
+  const rowActionsAtom = Atom.family((_environmentId: EnvironmentId) =>
+    Atom.make(0).pipe(Atom.keepAlive),
+  );
+  const rowAction = <W extends { readonly environmentId: EnvironmentId }, A, E>(
+    command: AtomCommand<W, A, E>,
+  ): AtomCommand<W, A, E> => ({
+    label: command.label,
+    run: (registry, target) => {
+      registry.update(rowActionsAtom(target.environmentId), (count) => count + 1);
+      return command.run(registry, target);
+    },
+  });
+
+  const sent = {
     create: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:create",
       execute: createThread,
@@ -427,10 +443,23 @@ export function createThreadEnvironmentAtoms<R, E, StateError>(
       tag: WS_METHODS.serverEstimateInputCost,
     }),
   };
+  const commands = {
+    ...sent,
+    delete: rowAction(sent.delete),
+    archive: rowAction(sent.archive),
+    unarchive: rowAction(sent.unarchive),
+    settle: rowAction(sent.settle),
+    unsettle: rowAction(sent.unsettle),
+    snooze: rowAction(sent.snooze),
+    unsnooze: rowAction(sent.unsnooze),
+    pin: rowAction(sent.pin),
+    unpin: rowAction(sent.unpin),
+  };
   const optimistic = createOptimisticThreadLifecycle(snapshotAtom);
   const responses = createOptimisticRuntimeResponses(threadStateAtom);
   return {
     ...commands,
+    rowActionsAtom,
     snapshotAtom: optimistic.snapshotAtom,
     threadStateAtom: responses.stateAtom,
     respondToApproval: responses.wrap(commands.respondToApproval, (input) => ({
