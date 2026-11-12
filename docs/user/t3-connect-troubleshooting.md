@@ -114,8 +114,9 @@ an active link between your account and the host.
 - **This device's sign-in expired, or the host no longer accepts this
   device.** Sign out of T3 Connect and sign in again.
 - **This device is still loading its T3 Connect sign-in.** Wait a moment;
-  T3 Code retries on its own. If it keeps waiting, reload or restart T3 Code on
-  this device.
+  T3 Code retries on its own. If the desktop app cannot load your saved sign-in,
+  it reloads, and if that fails too it signs you out so you can sign in again.
+  If it keeps waiting, restart T3 Code on this device.
 - **Your account reached its tunnel limit.** Remove an environment you do not
   use from your T3 account's T3 Connect page, or
   [link a paid T3 Chat account](./remote-access.md#more-machines-with-t3-chat)
