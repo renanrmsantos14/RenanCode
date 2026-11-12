@@ -218,7 +218,7 @@ const make = Effect.gen(function* () {
         ),
       );
     return runtimeRows.flatMap((runtime) => {
-      const payload = decodeImportedTranscriptPayload(runtime.runtimePayload);
+      const payload = AgentSessionScanner.decodeImportedTranscriptPayload(runtime.runtimePayload);
       if (
         Option.isNone(payload) ||
         payload.value.cwd === undefined ||

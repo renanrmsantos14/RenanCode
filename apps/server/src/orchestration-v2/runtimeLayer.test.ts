@@ -60,6 +60,7 @@ import * as ProjectService from "../project/ProjectService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as McpSessionRegistryTestkit from "../mcp/McpSessionRegistry.testkit.ts";
 import * as ProviderInstanceRegistry from "../provider/ProviderInstanceRegistry.ts";
+import * as ProviderInstallationGate from "../provider/ProviderInstallationGate.ts";
 import type { ProviderInstance } from "@t3tools/provider-core/server/driver";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
@@ -420,10 +421,12 @@ const bootedSimulatorHost = DeviceHost.DeviceHost.of({
 const layerResourceCleanupTest = ResourceCleanupService.layer.pipe(
   Layer.provideMerge(layerScheduledTasksTest),
   Layer.provideMerge(
-    Layer.mock(WorkModuleService.WorkModuleService)({ unlinkThreads: () => Effect.void }),
-    Layer.effect(
-      DeviceService.DeviceService,
-      DeviceService.makeWithHosts(new Map([[bootedSimulatorHost.id, bootedSimulatorHost]])),
+    Layer.mergeAll(
+      Layer.mock(WorkModuleService.WorkModuleService)({ unlinkThreads: () => Effect.void }),
+      Layer.effect(
+        DeviceService.DeviceService,
+        DeviceService.makeWithHosts(new Map([[bootedSimulatorHost.id, bootedSimulatorHost]])),
+      ),
     ),
   ),
   Layer.provide(
@@ -471,6 +474,7 @@ const layerProjectDeletionTest = Layer.mergeAll(
   Layer.provide(ServerSettings.layerTest()),
   Layer.provide(layerTestProviderInstanceRegistry),
   Layer.provide(layerGitWorkflowTest),
+  Layer.provide(ProviderInstallationGate.layer),
   Layer.provide(layerPlatformTest),
 );
 
@@ -1014,6 +1018,7 @@ const layerSharedApplicationDataPlaneTest = Layer.mergeAll(
   Layer.provide(ServerSettings.layerTest()),
   Layer.provide(layerTestProviderInstanceRegistry),
   Layer.provide(layerGitWorkflowTest),
+  Layer.provide(ProviderInstallationGate.layer),
   Layer.provide(layerPlatformTest),
 );
 
