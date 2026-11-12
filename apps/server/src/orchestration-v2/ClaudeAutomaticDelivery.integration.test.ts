@@ -169,10 +169,10 @@ it.effect.each(deliveries)(
                   }),
                 setModel: () => Effect.void,
                 applyFlagSettings: () => Effect.void,
+                toggleMcpServer: () => Effect.void,
                 setPermissionMode: () => Effect.void,
                 backgroundTasks: () => Effect.succeed(false),
                 mcpServerStatus: Effect.succeed([]),
-                toggleMcpServer: () => Effect.void,
                 readMcpResource: () => Effect.die("unexpected MCP resource read"),
                 callMcpTool: () => Effect.die("unexpected MCP tool call"),
                 listPermissionRules: Effect.die("unexpected permission rules read"),
@@ -182,6 +182,7 @@ it.effect.each(deliveries)(
               }),
             forkSession: () => Effect.die("unused"),
             subagentLaunchToolUseId: () => Effect.succeed(null),
+            subagentModel: () => Effect.succeed(null),
             assertComplete: Effect.void,
           },
         });
@@ -524,6 +525,7 @@ it.effect("applies an effort change to the running Claude query without waiting 
                 Effect.sync(() => {
                   flagSettings.push(flags);
                 }),
+              toggleMcpServer: () => Effect.void,
               setPermissionMode: () => Effect.void,
               backgroundTasks: () => Effect.succeed(false),
               mcpServerStatus: Effect.succeed([]),
@@ -536,6 +538,7 @@ it.effect("applies an effort change to the running Claude query without waiting 
             }),
           forkSession: () => Effect.die("unused"),
           subagentLaunchToolUseId: () => Effect.succeed(null),
+          subagentModel: () => Effect.succeed(null),
           assertComplete: Effect.void,
         },
       });
@@ -721,6 +724,7 @@ it.effect("offers a continuation for a later wake after a queued continuation is
                   offer: () => Effect.void,
                   setModel: () => Effect.void,
                   applyFlagSettings: () => Effect.void,
+                  toggleMcpServer: () => Effect.void,
                   setPermissionMode: () => Effect.void,
                   backgroundTasks: () => Effect.succeed(false),
                   mcpServerStatus: Effect.succeed([]),
@@ -733,6 +737,7 @@ it.effect("offers a continuation for a later wake after a queued continuation is
                 }),
               forkSession: () => Effect.die("unused"),
               subagentLaunchToolUseId: () => Effect.succeed(null),
+              subagentModel: () => Effect.succeed(null),
               assertComplete: Effect.void,
             },
           }).pipe(Effect.provideContext(services));
