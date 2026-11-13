@@ -420,10 +420,12 @@ const bootedSimulatorHost = DeviceHost.DeviceHost.of({
 const layerResourceCleanupTest = ResourceCleanupService.layer.pipe(
   Layer.provideMerge(layerScheduledTasksTest),
   Layer.provideMerge(
-    Layer.mock(WorkModuleService.WorkModuleService)({ unlinkThreads: () => Effect.void }),
-    Layer.effect(
-      DeviceService.DeviceService,
-      DeviceService.makeWithHosts(new Map([[bootedSimulatorHost.id, bootedSimulatorHost]])),
+    Layer.mergeAll(
+      Layer.mock(WorkModuleService.WorkModuleService)({ unlinkThreads: () => Effect.void }),
+      Layer.effect(
+        DeviceService.DeviceService,
+        DeviceService.makeWithHosts(new Map([[bootedSimulatorHost.id, bootedSimulatorHost]])),
+      ),
     ),
   ),
   Layer.provide(

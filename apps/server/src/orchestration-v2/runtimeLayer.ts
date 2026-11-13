@@ -369,7 +369,7 @@ const layerClaudeCloudSessionsProvided = ClaudeCloudSessions.layer.pipe(
       layerOrchestratorProvided,
       layerEventSink,
       FetchHttpClient.layer,
-      TextGeneration.layer,
+      TextGeneration.layer.pipe(Layer.provide(ProviderInstallationGate.layer)),
     ),
   ),
 );
