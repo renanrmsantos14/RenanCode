@@ -1907,6 +1907,7 @@ export default function ChatView(props: ChatViewProps) {
   const {
     needsLoadBalancing,
     loadBalancing,
+    refreshBeforeSend,
     onAutoEnvironmentStable,
     autoEnvironmentLabel,
     onClaudeCloudStable,
@@ -3088,6 +3089,7 @@ export default function ChatView(props: ChatViewProps) {
     openUsageLimits,
     needsLoadBalancing,
     loadBalancing,
+    refreshBeforeSend,
     readPendingEnvironmentChange,
     classifyTaskPlacement,
     pendingApprovals,
