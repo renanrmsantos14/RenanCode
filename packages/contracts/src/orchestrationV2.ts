@@ -481,8 +481,6 @@ export const OrchestrationV2AppThread = Schema.Struct({
   historyOrigin: Schema.optional(OrchestrationV2ThreadHistoryOrigin),
   linkOrigin: Schema.optional(OrchestrationV2LinkOrigin),
   delegatedFrom: Schema.optional(OrchestrationV2DelegatedFrom),
-  /** Thread whose agent opened this one through MCP; only the server sets it. */
-  launchedFrom: Schema.optional(ThreadId),
   /** Set when a client moved an offline machine's thread here; the original is not updated. */
   continuedFrom: Schema.optional(OrchestrationV2ContinuedFrom),
   lineage: OrchestrationV2AppThreadLineage,
@@ -2216,8 +2214,6 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   historyOrigin: Schema.optional(OrchestrationV2ThreadHistoryOrigin),
   linkOrigin: Schema.optional(OrchestrationV2LinkOrigin),
   delegatedFrom: Schema.optional(OrchestrationV2DelegatedFrom),
-  /** Thread whose agent opened this one through MCP; only the server sets it. */
-  launchedFrom: Schema.optional(ThreadId),
   continuedFrom: Schema.optional(OrchestrationV2ContinuedFrom),
   latestRunId: Schema.NullOr(RunId),
   latestRunRequestedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
@@ -3074,8 +3070,6 @@ export const OrchestrationV2Command = Schema.Union([
     linkOrigin: Schema.optional(OrchestrationV2LinkOrigin),
     /** Only the server sets this, with `linkOrigin`, for a linked environment's delegated task. */
     delegatedFrom: Schema.optional(OrchestrationV2DelegatedFrom),
-    /** Thread whose agent opened this one through MCP; only the server sets it. */
-    launchedFrom: Schema.optional(ThreadId),
     importedNativeThread: Schema.optional(
       Schema.Struct({
         ref: Schema.Struct({

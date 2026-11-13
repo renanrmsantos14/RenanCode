@@ -145,20 +145,12 @@ const assertShellIndexCoversShells = Effect.fnUntraced(function* () {
   const trimmed = (
     row: Pick<
       ProjectionStore.ActiveShellIndexEntry,
-      | "id"
-      | "projectId"
-      | "lineage"
-      | "launchedFrom"
-      | "settledOverride"
-      | "settledAt"
-      | "pinnedAt"
-      | "snoozedUntil"
+      "id" | "projectId" | "lineage" | "settledOverride" | "settledAt" | "pinnedAt" | "snoozedUntil"
     >,
   ) => ({
     id: row.id,
     projectId: row.projectId,
     lineage: row.lineage,
-    launchedFrom: row.launchedFrom ?? null,
     settledOverride: row.settledOverride,
     settledAt: iso(row.settledAt),
     pinnedAt: iso(row.pinnedAt),

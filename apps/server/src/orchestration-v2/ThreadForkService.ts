@@ -103,7 +103,6 @@ export const layer: Layer.Layer<ThreadForkServiceV2> = Layer.succeed(
       // source continues the offline original.
       const {
         delegatedFrom: _delegatedFrom,
-        launchedFrom: _launchedFrom,
         continuedFrom: _continuedFrom,
         ...inherited
       } = input.sourceProjection.thread;

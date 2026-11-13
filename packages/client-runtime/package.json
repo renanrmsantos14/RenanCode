@@ -363,17 +363,9 @@
       "types": "./src/state/subagentDisplay.ts",
       "default": "./src/state/subagentDisplay.ts"
     },
-    "./state/nativeSubagents": {
-      "types": "./src/state/nativeSubagents.ts",
-      "default": "./src/state/nativeSubagents.ts"
-    },
     "./state/subagentRuntime": {
       "types": "./src/state/subagentRuntime.ts",
       "default": "./src/state/subagentRuntime.ts"
-    },
-    "./state/subsessions": {
-      "types": "./src/state/subsessions.ts",
-      "default": "./src/state/subsessions.ts"
     },
     "./state/thread-sort": {
       "types": "./src/state/threadSort.ts",
