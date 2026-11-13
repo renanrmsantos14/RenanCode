@@ -15,7 +15,7 @@ function setup(input: { readonly prompt: string; readonly suggestion: string | n
     sendShortcut: "enter",
     routeKind: "server",
     phase: "ready",
-    isCompacting: false,
+    canSteer: false,
     followUpBehavior: "queue",
     isSoftwareKeyboardOpen: false,
     isLiteralPendingAnswer: false,
