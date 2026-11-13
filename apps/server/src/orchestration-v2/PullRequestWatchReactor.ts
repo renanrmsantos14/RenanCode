@@ -501,11 +501,14 @@ export const make = Effect.gen(function* () {
       { concurrency: 2 },
     );
     // Activity failures must not cancel or hide a permanent detail failure.
+    // Activity is irrelevant once the pull request is closed or merged, so it cannot block ending.
     const read = Exit.isFailure(detailRead)
       ? Exit.failCause(detailRead.cause)
-      : Exit.isFailure(activityRead)
-        ? Exit.failCause(activityRead.cause)
-        : Exit.succeed([detailRead.value, activityRead.value] as const);
+      : detailRead.value.state !== "open"
+        ? Exit.succeed([detailRead.value, Option.none<PullRequestActivity>()] as const)
+        : Exit.isFailure(activityRead)
+          ? Exit.failCause(activityRead.cause)
+          : Exit.succeed([detailRead.value, activityRead.value] as const);
     if (Exit.isFailure(read)) {
       if (Cause.hasInterruptsOnly(read.cause)) return yield* Effect.failCause(read.cause);
       lastReads.delete(group.key);
