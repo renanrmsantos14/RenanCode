@@ -31,21 +31,8 @@ import type { SnoozePresetSetting } from "@t3tools/contracts/settings";
 import { canSnooze } from "@t3tools/client-runtime/state/thread-settled";
 import { threadChipCopyTarget } from "@t3tools/client-runtime/thread-reference";
 import type { MenuAction } from "@react-native-menu/menu";
-import {
-  memo,
-  useCallback,
-  useMemo,
-  useRef,
-  useState,
-  type ComponentProps,
-} from "react";
-import {
-  Platform,
-  Pressable,
-  Text as RNText,
-  useWindowDimensions,
-  View,
-} from "react-native";
+import { memo, useCallback, useMemo, useRef, useState, type ComponentProps } from "react";
+import { Platform, Pressable, Text as RNText, useWindowDimensions, View } from "react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 
 import type { ThreadListProvider } from "../../state/thread-list-environments";
