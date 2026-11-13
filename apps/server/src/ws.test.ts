@@ -1584,6 +1584,9 @@ it.effect("a git action that fails partway still refreshes the repository status
       Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({ namedProjectsRoot: "/unused" }),
       Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
       Layer.mock(ServerEnvironment.ServerEnvironment)({}),
+      Layer.mock(CacheKeepWarmService.CacheKeepWarmService)({}),
+      Layer.mock(ThreadHandoffService.ThreadHandoffService)({}),
+      Layer.mock(ThreadContinuationService.ThreadContinuationService)({}),
       Layer.mock(EnvironmentAuth.EnvironmentAuth)({}),
     );
     const server = yield* RpcServer.makeNoSerialization(WsRpcGroup, {
