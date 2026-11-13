@@ -339,6 +339,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
               threadId={props.threadId}
               workspaceRoot={props.workspaceRoot}
               setDirection={setDirection}
+              preserveSoftBreaks
             />
             {activeQuestion.multiSelect ? (
               <Text className="font-sans text-xs text-foreground-muted">Select all that apply</Text>
