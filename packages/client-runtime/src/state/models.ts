@@ -91,6 +91,12 @@ export interface ThreadRunSummary {
    */
   readonly turnEnded?: boolean;
   readonly nextActionSuggestion?: OrchestrationV2RunNextActionSuggestion;
+  /**
+   * Set while the run is open but its provider has not started a turn, so the
+   * provider is still launching and nothing is generating. Clients show it
+   * instead of "Thinking".
+   */
+  readonly providerStartingLabel?: string;
   readonly sourcePlanRef?: {
     readonly threadId: ThreadId;
     readonly planId: PlanId;

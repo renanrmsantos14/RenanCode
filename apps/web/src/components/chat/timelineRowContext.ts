@@ -123,6 +123,7 @@ export interface TimelineRowActivityState {
   awaitingUser: boolean;
   mascotState: MascotState;
   isPreparingWorktree: boolean;
+  providerStartingLabel: string | null;
   latestRunId: RunId | null;
   backgroundWorktreeSetup: WorktreeSetupSnapshot | null;
   liveAnswerPreview: string | null;
