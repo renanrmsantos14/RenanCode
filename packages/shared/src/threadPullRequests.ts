@@ -76,7 +76,7 @@ export function threadPullRequestDelivery(
   return urgent;
 }
 
-function latestUpdatedAt(link: ThreadPullRequestLink): number {
+export function threadPullRequestUpdatedAtMs(link: ThreadPullRequestLink): number {
   const value = link.snapshot?.updatedAt ?? link.linkedAt;
   const ms = Date.parse(value);
   return Number.isNaN(ms) ? 0 : ms;
@@ -110,7 +110,7 @@ export function threadSearchPullRequests(thread: {
     // Every pull request matches by number and link, but only the newest few
     // by title: a triage thread linked to dozens would match almost any word.
     const newestFirst = [...visibleThreadPullRequests(thread.pullRequests)].sort(
-      (left, right) => latestUpdatedAt(right) - latestUpdatedAt(left),
+      (left, right) => threadPullRequestUpdatedAtMs(right) - threadPullRequestUpdatedAtMs(left),
     );
     return branch.concat(
       newestFirst.map((link, index) =>

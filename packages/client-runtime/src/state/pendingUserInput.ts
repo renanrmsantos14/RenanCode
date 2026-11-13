@@ -177,9 +177,9 @@ export function buildPendingUserInputAnswers(
   return Object.fromEntries(entries);
 }
 
-export interface PendingUserInputProgress {
+export interface PendingUserInputProgress<Q extends UserInputQuestion = UserInputQuestion> {
   questionIndex: number;
-  activeQuestion: UserInputQuestion | null;
+  activeQuestion: Q | null;
   activeDraft: PendingUserInputDraftAnswer | undefined;
   selectedOptionValues: ReadonlyArray<string>;
   customAnswer: string;
@@ -202,11 +202,11 @@ function countAnsweredPendingUserInputQuestions(
   }, 0);
 }
 
-export function derivePendingUserInputProgress(
-  questions: ReadonlyArray<UserInputQuestion>,
+export function derivePendingUserInputProgress<Q extends UserInputQuestion>(
+  questions: ReadonlyArray<Q>,
   draftAnswers: Record<string, PendingUserInputDraftAnswer>,
   questionIndex: number,
-): PendingUserInputProgress {
+): PendingUserInputProgress<Q> {
   const normalizedQuestionIndex =
     questions.length === 0 ? 0 : Math.max(0, Math.min(questionIndex, questions.length - 1));
   const activeQuestion = questions[normalizedQuestionIndex] ?? null;
