@@ -1205,6 +1205,9 @@ it.effect("access changes made while the snapshot loads reach the client after i
                 namedProjectsRoot: "/unused",
               }),
               Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
+              Layer.mock(CacheKeepWarmService.CacheKeepWarmService)({}),
+              Layer.mock(ThreadHandoffService.ThreadHandoffService)({}),
+              Layer.mock(ThreadContinuationService.ThreadContinuationService)({}),
               Layer.mock(ServerEnvironment.ServerEnvironment)({}),
               Layer.mock(EnvironmentAuth.EnvironmentAuth)({
                 listPairingLinks: () => Effect.succeed([]),
