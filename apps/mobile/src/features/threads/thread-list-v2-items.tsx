@@ -38,12 +38,10 @@ import {
   useRef,
   useState,
   type ComponentProps,
-  type ReactNode,
 } from "react";
 import {
   Platform,
   Pressable,
-  StyleSheet,
   Text as RNText,
   useWindowDimensions,
   View,
@@ -95,7 +93,6 @@ import {
   resolveThreadListV2SwipeActions,
   layoutThreadListV2RowMenuActions,
   type ThreadListV2Status,
-  type ThreadListV2Subsessions,
 } from "./threadListV2";
 import { QueuedMessageIcon } from "./queued-message-icon";
 import { shouldRecedeThreadRow } from "./thread-row-emphasis";
@@ -700,86 +697,6 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
 
 const PREFETCH_PRESS_DELAY_MS = 100;
 
-const SUBSESSION_INDENT = 14;
-
-/** Indents a subsession row under its parent with a guide line per level, and folds a parent's subsessions. */
-function ThreadListV2SubsessionFrame(props: {
-  readonly depth: number;
-  readonly subsessions: ThreadListV2Subsessions | null;
-  readonly threadKey: string;
-  readonly sidebarPane: boolean;
-  readonly onToggle: ((threadKey: string) => void) | undefined;
-  readonly children: ReactNode;
-}) {
-  const { depth, subsessions, sidebarPane } = props;
-  if (depth === 0 && subsessions === null) return props.children;
-  const hiddenStatus =
-    subsessions?.collapsed === true && subsessions.hiddenStatus !== null
-      ? STATUS_LABEL_BY_STATUS[subsessions.hiddenStatus]
-      : undefined;
-  const mutedClassName = sidebarPane ? "text-drawer-foreground-muted" : "text-foreground-muted";
-  return (
-    <View style={{ paddingLeft: depth * SUBSESSION_INDENT }}>
-      {Array.from({ length: depth }, (_, level) => (
-        <View
-          key={level}
-          pointerEvents="none"
-          className={sidebarPane ? "bg-drawer-border" : "bg-border"}
-          style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            left: level * SUBSESSION_INDENT + 12,
-            width: StyleSheet.hairlineWidth,
-          }}
-        />
-      ))}
-      {props.children}
-      {subsessions ? (
-        <Pressable
-          accessibilityLabel={subsessions.collapsed ? "Expand subsessions" : "Collapse subsessions"}
-          accessibilityRole="button"
-          accessibilityState={{ expanded: !subsessions.collapsed }}
-          className={cn(
-            "min-h-8 flex-row items-center gap-1.5",
-            sidebarPane ? "px-3" : "bg-screen px-5",
-          )}
-          hitSlop={6}
-          onPress={() => props.onToggle?.(props.threadKey)}
-          style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-        >
-          <SymbolView
-            name="chevron.down"
-            size={10}
-            tintColorClassName={
-              sidebarPane ? "accent-drawer-foreground-muted" : "accent-foreground-muted"
-            }
-            type="monochrome"
-            style={{ transform: [{ rotate: subsessions.collapsed ? "-90deg" : "0deg" }] }}
-          />
-          <Text className={cn("text-xs", mutedClassName)}>
-            {subsessions.count} {subsessions.count === 1 ? "subsession" : "subsessions"}
-          </Text>
-          {hiddenStatus ? (
-            <>
-              <SymbolView
-                name={hiddenStatus.icon}
-                size={12}
-                tintColorClassName={hiddenStatus.iconTintClassName}
-                type="monochrome"
-                weight="semibold"
-              />
-              <Text className={cn("text-xs font-t3-bold", hiddenStatus.className)}>
-                {hiddenStatus.label}
-              </Text>
-            </>
-          ) : null}
-        </Pressable>
-      ) : null}
-    </View>
-  );
-}
-
 export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly thread: EnvironmentThreadShell;
   readonly variant: "card" | "slim";
@@ -797,9 +714,6 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly environmentMachine?: EnvironmentMachineKind;
   readonly pane?: "screen" | "sidebar";
   readonly showTrailingDivider?: boolean;
-  readonly depth?: number;
-  readonly subsessions?: ThreadListV2Subsessions | null;
-  readonly onToggleSubsessions?: (threadKey: string) => void;
   readonly selected?: boolean;
   readonly fullSwipeWidth?: number;
   readonly onSelectThread: (thread: EnvironmentThreadShell) => void;
@@ -1738,9 +1652,10 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       </RowPressable>
     );
 
-  const body = !canOperateThread ? (
-    <View style={rowAppearance.swipeContainerStyle}>{rowContent(() => {})}</View>
-  ) : (
+  if (!canOperateThread)
+    return <View style={rowAppearance.swipeContainerStyle}>{rowContent(() => {})}</View>;
+
+  return (
     <View collapsable={false}>
       {customSnoozeOpen && (
         <CustomSnoozeSheet onClose={() => setCustomSnoozeOpen(false)} onSnooze={handleSnooze} />
@@ -1770,17 +1685,5 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         )}
       </ThreadSwipeable>
     </View>
-  );
-
-  return (
-    <ThreadListV2SubsessionFrame
-      depth={props.depth ?? 0}
-      subsessions={props.subsessions ?? null}
-      threadKey={`${thread.environmentId}:${thread.id}`}
-      sidebarPane={sidebarPane}
-      onToggle={props.onToggleSubsessions}
-    >
-      {body}
-    </ThreadListV2SubsessionFrame>
   );
 });

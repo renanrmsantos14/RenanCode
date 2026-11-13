@@ -149,7 +149,6 @@ it.effect("resets a fork's pin, snooze, settle and delegation state but keeps it
         threadId: ThreadId.make("linked-parent"),
         title: "Linked parent",
       },
-      launchedFrom: ThreadId.make("launcher"),
       historyOrigin: "v1_import",
       linkOrigin,
       tags: ["private"],
@@ -168,7 +167,6 @@ it.effect("resets a fork's pin, snooze, settle and delegation state but keeps it
     assert.isNull(result.targetThread.activeOrderKey);
     assert.isNull(result.targetThread.autoSettleDisabledAt);
     assert.isUndefined(result.targetThread.delegatedFrom);
-    assert.isUndefined(result.targetThread.launchedFrom);
     assert.equal(result.targetThread.historyOrigin, "v1_import");
     assert.deepEqual(result.targetThread.linkOrigin, linkOrigin);
     assert.deepEqual(result.targetThread.tags, ["private"]);

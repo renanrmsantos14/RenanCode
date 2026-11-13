@@ -55,13 +55,11 @@ import {
 } from "@t3tools/client-runtime/environment";
 import {
   AuthOrchestrationOperateScope,
-  isProviderNativeSubagentThread,
   ProjectId,
   type ScopedThreadRef,
   type ThreadId,
 } from "@t3tools/contracts";
 import type { OlderSettledScope } from "@t3tools/client-runtime/state/threads";
-import type { RemoteTaskRow } from "@t3tools/client-runtime/state/nativeSubagents";
 
 import {
   CheckIcon,
@@ -72,7 +70,6 @@ import {
   SettingsIcon,
 } from "lucide-react";
 import {
-  Fragment,
   useEffect,
   useLayoutEffect,
   useReducer,
@@ -214,12 +211,7 @@ import {
   type SidebarListItem,
   type SidebarSection,
   resolveSidebarRowThreadId,
-  listSubsessionDescendants,
   dedupeClaudeCloudThreads,
-  nestSidebarSubsessions,
-  resolveSubsessionDot,
-  subsessionsExpansionKey,
-  resolveSubsessionsOpen,
 } from "./Sidebar.logic";
 import {
   createSidebarCollisionDetection,
@@ -275,9 +267,6 @@ import {
   type SidebarSweepAction,
 } from "./sidebar/SidebarThreadRow";
 import { SidebarDraftBlock } from "./sidebar/SidebarDraftBlock";
-import { useSidebarNativeSubagents } from "./sidebar/useSidebarNativeSubagents";
-import { SubsessionBranch } from "./sidebar/SubsessionBranch";
-import { SidebarRemoteTaskRow } from "./sidebar/SidebarRemoteTaskRow";
 import {
   SidebarProjectFolderHeader,
   sidebarFolderRowId,
@@ -365,7 +354,6 @@ interface SidebarThreadPartitionInput {
   readonly scopedProjectKeys: ReadonlySet<string> | null;
   /** Tasks linked environments run for a listed thread; they show under it. */
   readonly delegatedUnderParent: ReadonlySet<string>;
-  readonly nativeParentKeyByChild: ReadonlyMap<string, string>;
   readonly serverConfigs: ReadonlyMap<EnvironmentId, EnvironmentServerConfig>;
   readonly connectedEnvironmentIds: readonly EnvironmentId[];
   readonly optimisticDrop: SidebarOptimisticDrop | null;
@@ -386,8 +374,6 @@ function threadShellKey(thread: Pick<SidebarThreadSummary, "environmentId" | "id
   return scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
 }
 
-const NO_SUBSESSIONS: readonly EnvironmentThreadShell[] = [];
-const NO_REMOTE_TASKS: readonly RemoteTaskRow[] = [];
 const NO_DRAGGED_ORDER: readonly string[] = [];
 const NO_DRAGGED_ORDERS: {
   readonly settledOrder: readonly string[];
@@ -438,7 +424,6 @@ function useSidebarThreads(input: {
   readonly optimisticDrop: SidebarOptimisticDrop | null;
   readonly threads: readonly EnvironmentThreadShell[];
   readonly delegatedUnderParent: ReadonlySet<string>;
-  readonly nativeParentKeyByChild: ReadonlyMap<string, string>;
   readonly routeRowThreadKey: string | null;
   // Set in boring mode: the project groups to fold active threads into, in order.
   readonly folderGroups: readonly SidebarProjectSnapshot[] | null;
@@ -453,7 +438,6 @@ function useSidebarThreads(input: {
     optimisticDrop,
     threads,
     delegatedUnderParent,
-    nativeParentKeyByChild,
     routeRowThreadKey,
     folderGroups,
     keepEmptyFolders: keepEmpty,
@@ -505,7 +489,6 @@ function useSidebarThreads(input: {
     threads,
     scopedProjectKeys,
     delegatedUnderParent,
-    nativeParentKeyByChild,
     serverConfigs,
     connectedEnvironmentIds,
     optimisticDrop,
@@ -577,29 +560,7 @@ function useSidebarThreads(input: {
               : EMPTY_THREADS,
           };
         });
-  const { subsessionsByParent } = partition;
-  const isSubsessionsOpen = (key: string) =>
-    resolveSubsessionsOpen(
-      projectExpandedById[subsessionsExpansionKey(key)],
-      subsessionsByParent.get(key) ?? EMPTY_THREADS,
-    );
-  // Stable, so memoized rows keep their props while the fold state changes.
-  const toggleSubsessions = useStableCallback((threadKey: string) =>
-    setProjectExpanded(subsessionsExpansionKey(threadKey), !isSubsessionsOpen(threadKey)),
-  );
-  // Open subsessions follow their parent, so jump hints, range selection and row actions reach them.
-  const withOpenSubsessions = (list: readonly EnvironmentThreadShell[]) =>
-    subsessionsByParent.size === 0
-      ? list
-      : list.flatMap((thread) => [
-          thread,
-          ...listSubsessionDescendants(
-            subsessionsByParent,
-            threadShellKey(thread),
-            isSubsessionsOpen,
-          ),
-        ]);
-  const orderedThreads = withOpenSubsessions([
+  const orderedThreads = [
     ...pinnedThreads,
     ...(projectFolders === null
       ? activeThreads
@@ -608,7 +569,7 @@ function useSidebarThreads(input: {
     ...visibleWorkingThreads,
     ...visibleSnoozedThreads,
     ...renderedSettledThreads,
-  ]);
+  ];
   const sectionByThreadKey = new Map<string, SidebarSection>();
   for (const [list, section] of [
     [pinnedThreads, "pinned"],
@@ -631,9 +592,7 @@ function useSidebarThreads(input: {
       ...workingThreads,
       ...snoozedThreads,
       ...settledThreads,
-      ...[...subsessionsByParent.values()].flat(),
     ],
-    subsessionsByParent,
     settledVisibleCount,
     settledCount,
     olderSettledShelf,
@@ -652,8 +611,6 @@ function useSidebarThreads(input: {
     workingShelfExpanded,
     toggleWorkingShelf: () => setWorkingShelfExpanded((value) => !value),
     projectFolders,
-    isSubsessionsOpen,
-    toggleSubsessions,
     toggleProjectFolder: (group: SidebarProjectSnapshot) => {
       const keys = sidebarFolderExpansionKeys(group);
       setProjectExpanded(keys, !resolveProjectExpanded(projectExpandedById, keys));
@@ -683,26 +640,13 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
     threads,
     scopedProjectKeys,
     delegatedUnderParent,
-    nativeParentKeyByChild,
     serverConfigs,
     optimisticDrop,
     workingShelfEnabled,
     sortActiveBySend,
   } = input;
   const preciseNow = new Date().toISOString();
-  const visibleThreads = filterSidebarV2VisibleThreads(
-    threads,
-    scopedProjectKeys,
-    delegatedUnderParent,
-  );
-  const { subsessionsByParent, parentKeyByChild } = nestSidebarSubsessions(
-    threads,
-    visibleThreads,
-    delegatedUnderParent,
-    nativeParentKeyByChild,
-  );
-  // Subsessions list under their parent, so only the other threads take part in sections.
-  const visible = visibleThreads.filter((thread) => !parentKeyByChild.has(threadShellKey(thread)));
+  const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys, delegatedUnderParent);
   const inboxObservation = inboxReturns.observe(workingShelfEnabled ? threads : null);
   const pinned: EnvironmentThreadShell[] = [];
   const active: EnvironmentThreadShell[] = [];
@@ -797,8 +741,7 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
         firstValidTimestampMs(right.snoozedUntil ?? null),
     ),
     settledThreads: sortSettledThreads(settled),
-    visibleThreads,
-    subsessionsByParent,
+    visibleThreads: visible,
     snoozeNow: preciseNow,
   };
 }
@@ -1192,10 +1135,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             ),
           ),
         );
-  const { threads, nativeParentKeyByChild, remoteTasksByParent } = useSidebarNativeSubagents(
-    routeThreadRef,
-    dedupeClaudeCloudThreads(useQuietThreadShells(), primaryEnvironmentId),
-  );
+  const threads = dedupeClaudeCloudThreads(useQuietThreadShells(), primaryEnvironmentId);
   const promotingDraftThreadKeys = usePromotingDraftThreadKeys();
   const listedThreads =
     promotingDraftThreadKeys.length === 0
@@ -1205,22 +1145,19 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             ? asLaunchingThread(thread)
             : thread,
         );
-  // A listed native subagent is its own row; other hidden threads show as their parent's.
   const routeRowThreadKey =
     routeThreadRef === null
       ? null
-      : routeThreadKey !== null && nativeParentKeyByChild.has(routeThreadKey)
-        ? routeThreadKey
-        : scopedThreadKey(
-            scopeThreadRef(
+      : scopedThreadKey(
+          scopeThreadRef(
+            routeThreadRef.environmentId,
+            resolveSidebarRowThreadId(
+              routeThreadRef.threadId,
               routeThreadRef.environmentId,
-              resolveSidebarRowThreadId(
-                routeThreadRef.threadId,
-                routeThreadRef.environmentId,
-                threads,
-              ),
+              threads,
             ),
-          );
+          ),
+        );
   const isSearchingThreads = threadSearchQuery.trim().length > 0;
 
   // History, the palette and links can open a thread the scope hides or the list
@@ -1409,9 +1346,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     settledThreads,
     snoozeNow,
     searchableThreads,
-    subsessionsByParent,
-    isSubsessionsOpen,
-    toggleSubsessions,
     settledVisibleCount,
     settledCount,
     olderSettledShelf,
@@ -1448,7 +1382,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     optimisticDrop,
     threads: listedThreads,
     delegatedUnderParent,
-    nativeParentKeyByChild,
     routeRowThreadKey,
     folderGroups: boringSidebarEnabled
       ? scopedProjectGroups.length === 0
@@ -3471,41 +3404,15 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                         section: SidebarSection,
                         // The tree row of the project folder this row sits in.
                         folderRow?: string,
-                        // The thread key of the parent whose subsession this row is.
-                        parentKey?: string,
-                        depth = 0,
-                      ): ReactNode => {
+                      ) => {
                         const threadKey = scopedThreadKey(
                           scopeThreadRef(thread.environmentId, thread.id),
                         );
-                        const subsessions = subsessionsByParent.get(threadKey) ?? NO_SUBSESSIONS;
-                        const remoteTasks = remoteTasksByParent.get(threadKey) ?? NO_REMOTE_TASKS;
-                        const childCount = subsessions.length + remoteTasks.length;
-                        // A native subagent is read-only: nothing to settle, snooze or pin.
-                        const threadActionsSupported =
-                          serverConfigs.has(thread.environmentId) &&
-                          !isProviderNativeSubagentThread(thread);
-                        const subsessionsOpen = isSubsessionsOpen(threadKey);
-                        // A subsession sits in the section its own state puts it in, as a slim row.
-                        const rowSection: SidebarSection =
-                          parentKey === undefined
-                            ? section
-                            : resolveSidebarThreadSection({
-                                snoozed:
-                                  serverConfigs.has(thread.environmentId) &&
-                                  effectiveSnoozed(thread, { now: snoozeNow }),
-                                settled:
-                                  serverConfigs.has(thread.environmentId) &&
-                                  thread.settledOverride === "settled",
-                                testing: false,
-                                pinned: false,
-                              });
                         const isCard =
-                          parentKey === undefined &&
-                          (section === "active" ||
-                            section === "pinned" ||
-                            section === "testing" ||
-                            section === "working");
+                          section === "active" ||
+                          section === "pinned" ||
+                          section === "testing" ||
+                          section === "working";
                         const rowVariant = folderRow
                           ? folderRowsMultiline
                             ? "folder-multiline"
@@ -3513,7 +3420,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           : isCard
                             ? "card"
                             : "slim";
-                        const row = (
+                        return (
                           <SortableThreadRow
                             key={threadKey}
                             sortableId={threadKey}
@@ -3526,7 +3433,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             thread={thread}
                             variant={rowVariant}
                             navigationParent={
-                              parentKey ??
                               folderRow ??
                               (section === "testing" ||
                               section === "working" ||
@@ -3536,15 +3442,15 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                 : undefined)
                             }
                             variantAction={
-                              rowSection === "snoozed"
+                              section === "snoozed"
                                 ? "unsnooze"
-                                : rowSection === "settled"
+                                : section === "settled"
                                   ? "unsettle"
                                   : "settle"
                             }
-                            settlementSupported={threadActionsSupported}
-                            snoozeSupported={threadActionsSupported}
-                            pinningSupported={threadActionsSupported}
+                            settlementSupported={serverConfigs.has(thread.environmentId)}
+                            snoozeSupported={serverConfigs.has(thread.environmentId)}
+                            pinningSupported={serverConfigs.has(thread.environmentId)}
                             isPinned={thread.pinnedAt != null}
                             dropVerb={
                               dragState?.activeKey === threadKey
@@ -3558,7 +3464,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               actionSweep?.keys.has(threadKey) ? actionSweep.action : null
                             }
                             snoozeWakeLabelText={
-                              rowSection === "snoozed" && thread.snoozedUntil != null
+                              section === "snoozed" && thread.snoozedUntil != null
                                 ? snoozeWakeLabel(thread.snoozedUntil, {
                                     now: new Date().toISOString(),
                                   })
@@ -3614,59 +3520,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             onUnpin={attemptUnpin}
                             onAcknowledgeWoke={acknowledgeWoke}
                             onFileDropThreads={handleThreadFileDrop}
-                            // Rows without subsessions get constants so their memo holds.
-                            subsessionCount={childCount}
-                            subsessionsCollapsed={!subsessionsOpen}
-                            subsessionDot={
-                              childCount > 0 && !subsessionsOpen
-                                ? resolveSubsessionDot(subsessionsByParent, threadKey)
-                                : null
-                            }
-                            onToggleSubsessions={toggleSubsessions}
                           />
-                        );
-                        return (
-                          <Fragment key={threadKey}>
-                            {row}
-                            {subsessionsOpen && childCount > 0 ? (
-                              <li className="list-none">
-                                <ul className="flex flex-col gap-px">
-                                  {subsessions.map((child, index) => (
-                                    <SubsessionBranch
-                                      key={scopedThreadKey(
-                                        scopeThreadRef(child.environmentId, child.id),
-                                      )}
-                                      last={index === childCount - 1}
-                                      folder={folderRow !== undefined}
-                                      // Past three levels the rows stop stepping in.
-                                      indent={depth < 3}
-                                    >
-                                      {renderThreadRow(
-                                        child,
-                                        section,
-                                        folderRow,
-                                        threadKey,
-                                        depth + 1,
-                                      )}
-                                    </SubsessionBranch>
-                                  ))}
-                                  {remoteTasks.map((task, index) => (
-                                    <SubsessionBranch
-                                      key={task.id}
-                                      last={subsessions.length + index === childCount - 1}
-                                      folder={folderRow !== undefined}
-                                      indent={depth < 3}
-                                    >
-                                      <SidebarRemoteTaskRow
-                                        task={task}
-                                        folder={folderRow !== undefined}
-                                      />
-                                    </SubsessionBranch>
-                                  ))}
-                                </ul>
-                              </li>
-                            ) : null}
-                          </Fragment>
                         );
                       };
                       const from = isContextDrag ? null : (dragState?.activeSection ?? null);

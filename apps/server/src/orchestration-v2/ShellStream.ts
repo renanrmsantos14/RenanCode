@@ -138,27 +138,6 @@ function hiddenChildAncestorIds(
   return ancestorIds;
 }
 
-/**
- * Kept rows plus the threads that launched them, up the chain, so a launched subsession still
- * finds its parent after the parent falls below the older-settled cut.
- */
-function withLaunchParents<T extends Pick<OrchestrationV2ThreadShell, "id" | "launchedFrom">>(
-  rows: ReadonlyArray<T>,
-  isKept: (row: T) => boolean,
-): ReadonlyArray<T> {
-  const byId = new Map(rows.map((row) => [row.id, row]));
-  const keptIds = new Set<string>();
-  const pending = rows.filter(isKept);
-  while (pending.length > 0) {
-    const row = pending.pop()!;
-    if (keptIds.has(row.id)) continue;
-    keptIds.add(row.id);
-    const parent = row.launchedFrom === undefined ? undefined : byId.get(row.launchedFrom);
-    if (parent !== undefined) pending.push(parent);
-  }
-  return rows.filter((row) => keptIds.has(row.id));
-}
-
 function omitIdleSubagentShellsWith(
   threads: ReadonlyArray<OrchestrationV2ThreadShell>,
   facts: Pick<ShellTrimFacts, "subagentParentIds">,
@@ -185,8 +164,7 @@ function omitOlderSettledShellsWith(
   const nowMs = DateTime.toEpochMillis(input.now);
   const beforeMs = facts.olderSettledBeforeMs ?? nowMs;
   const ancestorIds = hiddenChildAncestorIds(input.threads);
-  const threads = withLaunchParents(
-    input.threads,
+  const threads = input.threads.filter(
     (thread) =>
       !isOlderSettledThreadShell(thread, beforeMs) ||
       thread.pinnedAt != null ||
@@ -236,8 +214,8 @@ export function activeShellRowsForSubscriber(
 /**
  * Opted-in snapshots keep the 25 newest settled top-level threads (and ties) and count the rest per
  * project in `olderSettled`; clients page them with `getOlderSettledThreads`. Older rows stay while
- * pinned, snoozed, live, or above a kept subagent, side chat, or launched thread, so walks over
- * shell rows still find them.
+ * pinned, snoozed, live, or above a kept subagent or side chat, so walks over shell rows still find
+ * them.
  */
 export function omitOlderSettledShells(input: {
   readonly threads: ReadonlyArray<OrchestrationV2ThreadShell>;
@@ -291,17 +269,21 @@ function shellSubscriberThreadIds(
   ]);
   const keptSubagentIds = new Set(subagents.map((entry) => entry.id));
   const beforeMs = facts.olderSettledBeforeMs;
-  return withLaunchParents(index, (entry) =>
+  return index.flatMap((entry) =>
     entry.lineage.relationshipToParent === "subagent"
       ? keptSubagentIds.has(entry.id)
+        ? [entry.id]
+        : []
       : !options.omitOlderSettled ||
-        beforeMs === undefined ||
-        !isOlderSettledThreadShell(entry, beforeMs) ||
-        entry.pinnedAt != null ||
-        entry.snoozedUntil != null ||
-        entry.mayBeLive ||
-        ancestorIds.has(entry.id),
-  ).map((entry) => entry.id);
+          beforeMs === undefined ||
+          !isOlderSettledThreadShell(entry, beforeMs) ||
+          entry.pinnedAt != null ||
+          entry.snoozedUntil != null ||
+          entry.mayBeLive ||
+          ancestorIds.has(entry.id)
+        ? [entry.id]
+        : [],
+  );
 }
 
 /**

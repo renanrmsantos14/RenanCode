@@ -71,7 +71,6 @@ export function makeSubagentChildThread(input: {
     linkedPullRequest: null,
     pullRequests: [],
     historyOrigin: undefined,
-    launchedFrom: undefined,
     providerInstanceId: input.providerInstanceId,
     modelSelection: input.modelSelection,
     activeProviderThreadId: input.activeProviderThreadId,
