@@ -525,6 +525,7 @@ it.effect("applies an effort change to the running Claude query without waiting 
               setPermissionMode: () => Effect.void,
               backgroundTasks: () => Effect.succeed(false),
               mcpServerStatus: Effect.succeed([]),
+              toggleMcpServer: () => Effect.void,
               readMcpResource: () => Effect.die("unexpected MCP resource read"),
               callMcpTool: () => Effect.die("unexpected MCP tool call"),
               listPermissionRules: Effect.die("unexpected permission rules read"),
