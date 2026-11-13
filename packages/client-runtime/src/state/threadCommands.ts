@@ -1,8 +1,8 @@
-import type { ModelSelection, ThreadId } from "@t3tools/contracts";
+import { CommandId, type ModelSelection, type ThreadId } from "@t3tools/contracts";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import { type AsyncResult, Atom } from "effect/reactivity";
+import { AsyncResult, Atom, type AtomRegistry } from "effect/reactivity";
 import {
   WS_METHODS,
   type EnvironmentId,
@@ -21,7 +21,10 @@ import {
   createAtomCommandScheduler,
   createEnvironmentCommand,
   createEnvironmentRpcCommand,
+  environmentConnectionAtom,
+  mapAtomCommandResult,
 } from "./runtime.ts";
+import { waitForTitleRegenerationOutcome } from "./threadTitleRegeneration.ts";
 import {
   type InterruptThreadTurnInput,
   type UpdateThreadMetadataInput,
@@ -67,6 +70,7 @@ import {
   visitThread,
   watchThreadPullRequest,
 } from "../operations/commands.ts";
+import { connectionProjectionPhase } from "../connection/model.ts";
 import type { EnvironmentRegistry } from "../connection/registry.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import * as ThreadHistoryController from "./threadHistoryController.ts";
@@ -131,6 +135,19 @@ export function createThreadEnvironmentAtoms<R, E, StateError>(
     );
   });
 
+  const armTitleRegeneration = Effect.fn("ThreadCommands.armTitleRegeneration")(function* (input: {
+    readonly threadId: ThreadId;
+  }) {
+    const random = yield* SecureRandom.SecureRandom;
+    const requestId = CommandId.make(yield* random.uuidV4());
+    const result = yield* updateThreadMetadata({
+      threadId: input.threadId,
+      regenerateTitle: true,
+      commandId: requestId,
+    });
+    return { requestId, sequence: result.sequence };
+  });
+
   // Counts the commands that move or remove a thread's row. A list that holds its rows while
   // environments synchronize (`stepSteadyShells`) shows the user's own change at once.
   const rowActionsAtom = Atom.family((_environmentId: EnvironmentId) =>
@@ -147,6 +164,13 @@ export function createThreadEnvironmentAtoms<R, E, StateError>(
   });
 
   const sent = {
+    armTitleRegeneration: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:regenerate-title",
+      execute: armTitleRegeneration,
+      scheduler,
+      concurrency,
+    }),
+
     create: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:create",
       execute: createThread,
@@ -457,8 +481,39 @@ export function createThreadEnvironmentAtoms<R, E, StateError>(
   };
   const optimistic = createOptimisticThreadLifecycle(snapshotAtom);
   const responses = createOptimisticRuntimeResponses(threadStateAtom);
+  const disconnectedAtom = Atom.family((environmentId: EnvironmentId) =>
+    Atom.make((get) => {
+      const connection = AsyncResult.getOrElse(
+        get(environmentConnectionAtom(runtime, environmentId)),
+        () => null,
+      );
+      return connection !== null && connectionProjectionPhase(connection[0]) === "disconnected";
+    }),
+  );
+  const regenerateTitle = {
+    label: commands.armTitleRegeneration.label,
+    run: async (
+      registry: AtomRegistry.AtomRegistry,
+      target: { readonly environmentId: EnvironmentId; readonly input: { threadId: ThreadId } },
+    ) => {
+      const armed = await commands.armTitleRegeneration.run(registry, target);
+      const outcome =
+        armed._tag === "Success"
+          ? await waitForTitleRegenerationOutcome(
+              registry,
+              {
+                snapshot: snapshotAtom(target.environmentId),
+                disconnected: disconnectedAtom(target.environmentId),
+              },
+              { threadId: target.input.threadId, ...armed.value },
+            )
+          : null;
+      return mapAtomCommandResult(armed, () => outcome);
+    },
+  };
   return {
     ...commands,
+    regenerateTitle,
     rowActionsAtom,
     snapshotAtom: optimistic.snapshotAtom,
     threadStateAtom: responses.stateAtom,
