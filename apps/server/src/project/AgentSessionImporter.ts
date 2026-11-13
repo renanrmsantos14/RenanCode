@@ -7,6 +7,7 @@ import {
   AgentSessionImportProjectChangedError,
   AgentSessionImportProjectNotFoundError,
   AgentSessionScanError,
+  AgentSessionImportSource,
   AgentSessionSource,
   EventId,
   MessageId,

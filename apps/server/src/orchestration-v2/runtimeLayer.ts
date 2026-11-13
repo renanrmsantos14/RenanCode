@@ -344,7 +344,7 @@ const layerNextActionSuggestionProvided = NextActionSuggestionService.layer.pipe
     Layer.mergeAll(
       layerThreadManagementProvided,
       ProjectStore.layer,
-      TextGeneration.layer,
+      TextGeneration.layer.pipe(Layer.provide(ProviderInstallationGate.layer)),
       layerEventSink,
       IdAllocator.layer,
     ),
