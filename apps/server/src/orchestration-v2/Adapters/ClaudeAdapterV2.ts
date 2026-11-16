@@ -3952,12 +3952,18 @@ function claudeHandbackReportText(report: unknown): string | undefined {
   return warning === undefined ? reportText : `${warning}\n\n${reportText}`;
 }
 
-// Claude Code opens a subagent's result with the tools it used, for the model only.
-const CLAUDE_TOOLS_USED_PREAMBLE =
+// Claude Code wraps a foreground Agent result in notes for the parent model, not the report: the
+// tools it used, a hand-back frame that indents each report line by two spaces, and a trailer.
+const CLAUDE_TOOLS_USED_NOTE =
   /^\s*<((?:unreadable-)?tools-used-before-summary)\b[^>]*>[\s\S]*?<\/\1>\s*/u;
+const CLAUDE_HAND_BACK_FRAME =
+  /^\[Subagent hand-back\] The text below is the final report of a subagent [^\n]* The report follows:\n/;
+const CLAUDE_USAGE_TRAILER = /(?:^|\n)<usage>[^<]*<\/usage>\s*$/;
+const CLAUDE_AGENT_ID_TRAILER =
+  /(?:^|\n)agentId: ([\w-]+) \(use SendMessage with to: '\1'[^\n]*\)\s*$/;
 
 function withoutClaudeToolsUsedPreamble(result: string): string {
-  return result.replace(CLAUDE_TOOLS_USED_PREAMBLE, "");
+  return result.replace(CLAUDE_TOOLS_USED_NOTE, "");
 }
 
 function claudeTaskNotificationResult(message: { readonly summary: string }): string {
@@ -3973,6 +3979,14 @@ function claudeSubagentResultText(output: ClaudeNativeToolOutput): string {
       ? claudeHandbackReportText(field(output.value, "handbackReport"))
       : undefined;
   if (handbackReport !== undefined) return handbackReport;
+  const unwrapped = withoutClaudeToolsUsedPreamble(claudeSubagentRawResultText(output))
+    .replace(CLAUDE_USAGE_TRAILER, "")
+    .replace(CLAUDE_AGENT_ID_TRAILER, "");
+  const report = unwrapped.replace(CLAUDE_HAND_BACK_FRAME, "");
+  return report === unwrapped ? report : report.replace(/^ {2}/gm, "");
+}
+
+function claudeSubagentRawResultText(output: ClaudeNativeToolOutput): string {
   const value = claudeNativeToolOutputValue(output);
   const content = Array.isArray(value)
     ? value
@@ -3993,10 +4007,10 @@ function claudeSubagentResultText(output: ClaudeNativeToolOutput): string {
       )
       .join("\n");
     if (text.length > 0) {
-      return withoutClaudeToolsUsedPreamble(text);
+      return text;
     }
   }
-  return withoutClaudeToolsUsedPreamble(claudeNativeToolOutputText(output));
+  return claudeNativeToolOutputText(output);
 }
 
 function isClaudeSubagentAsyncLaunchAck(output: ClaudeNativeToolOutput): boolean {
@@ -4009,7 +4023,10 @@ function isClaudeSubagentAsyncLaunchAck(output: ClaudeNativeToolOutput): boolean
       return true;
     }
   }
-  return claudeSubagentResultText(output).startsWith("Async agent launched successfully.");
+  // A framed foreground report may itself start with this text; only the bare ACK counts.
+  return claudeSubagentRawResultText(output)
+    .replace(CLAUDE_TOOLS_USED_NOTE, "")
+    .startsWith("Async agent launched successfully.");
 }
 
 // Background Agent launches ACK immediately and workflow launches return run handles; only task_notification settles those.

@@ -177,6 +177,7 @@ interface ComposerSendInput {
   readonly activeThreadKey: string | null;
   readonly activeThreadBranch: string | null;
   readonly activeProject: EnvironmentProject | null;
+  readonly activeProjectIsScratch: boolean;
   readonly activeProjectDefaultModelSelection: ModelSelection | null;
   readonly activeMessageCount: number;
   readonly isServerThread: boolean;
@@ -278,6 +279,7 @@ export function useComposerSend(input: ComposerSendInput) {
     activeThreadKey,
     activeThreadBranch,
     activeProject,
+    activeProjectIsScratch,
     activeProjectDefaultModelSelection,
     activeMessageCount,
     isServerThread,
@@ -743,6 +745,7 @@ export function useComposerSend(input: ComposerSendInput) {
           replyTo,
         },
         setThreadError,
+        { dispatchMode, submissionIntent },
       );
       return;
     }
@@ -899,6 +902,7 @@ export function useComposerSend(input: ComposerSendInput) {
       sendEnvMode,
       worktreePath: activeThread.worktreePath,
       activeThreadBranch,
+      isScratchProject: activeProjectIsScratch,
       resumeCompactionTokens,
       keepFullHistory,
       compactChoice,
