@@ -37,6 +37,7 @@ import { draftWorktreeBaseBranch, isAutoRoutedDraft } from "./taskRouting";
 import { useTaskCloudPlacement } from "./useTaskCloudPlacement";
 import { loadBalancingSendWarning } from "./composerSend.logic";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
+import { seedDraftModelSelection } from "../../lib/seedDraftModelSelection";
 import { draftFanoutSelectionsAtom } from "./chatViewSend";
 
 interface DraftEnvironmentRoutingInput {
@@ -352,6 +353,7 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
           loadBalancedEnvironmentId: null,
         });
       }
+      seedDraftModelSelection(draftId, projectRef);
     };
     const finish = () => {
       if (environmentChangeRef.current === request) environmentChangeRef.current = null;
