@@ -558,6 +558,7 @@ export function layerWithRegistry<Error>(
         layerNextActionSuggestionTest,
         layerServerSettings,
         layerThreadManagementProvided,
+        layerStores,
       ),
     ),
   );
