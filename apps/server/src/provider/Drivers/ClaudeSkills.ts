@@ -108,19 +108,27 @@ function parseSkillFrontmatter(contents: string): SkillFrontmatter {
   };
 }
 
-function claudeManagedSettingsPath(
+// A caller-supplied environment is a plain object, without Windows' case-insensitive keys.
+function windowsEnvironmentValue(environment: NodeJS.ProcessEnv, name: string) {
+  const key = name.toLowerCase();
+  return Object.entries(environment)
+    .find(([candidate]) => candidate.toLowerCase() === key)?.[1]
+    ?.trim();
+}
+
+function claudeManagedDirectory(
   path: Path.Path,
   platform: NodeJS.Platform,
   environment: NodeJS.ProcessEnv,
 ): string | undefined {
   if (platform === "darwin") {
-    return "/Library/Application Support/ClaudeCode/managed-settings.json";
+    return "/Library/Application Support/ClaudeCode";
   }
   if (platform === "win32") {
-    const programData = environment.PROGRAMDATA?.trim();
-    return programData ? path.join(programData, "ClaudeCode", "managed-settings.json") : undefined;
+    const programFiles = windowsEnvironmentValue(environment, "ProgramFiles");
+    return programFiles ? path.join(programFiles, "ClaudeCode") : undefined;
   }
-  return "/etc/claude-code/managed-settings.json";
+  return "/etc/claude-code";
 }
 
 /** Claude Code settings files, lowest precedence first. */
@@ -132,7 +140,9 @@ function claudeSettingsPaths(
   environment: NodeJS.ProcessEnv,
   repositoryRoot?: string,
 ): ReadonlyArray<string> {
-  const managedPath = claudeManagedSettingsPath(path, platform, environment);
+  const managedDirectory = claudeManagedDirectory(path, platform, environment);
+  const programData =
+    platform === "win32" ? windowsEnvironmentValue(environment, "ProgramData") : undefined;
   const root = repositoryRoot !== undefined && repositoryRoot !== cwd ? repositoryRoot : undefined;
   return [
     path.join(configDirPath, "settings.json"),
@@ -143,7 +153,8 @@ function claudeSettingsPaths(
         ]
       : []),
     ...(root ? [path.join(root, ".claude", "settings.local.json")] : []),
-    ...(managedPath ? [managedPath] : []),
+    ...(programData ? [path.join(programData, "ClaudeCode", "managed-settings.json")] : []),
+    ...(managedDirectory ? [path.join(managedDirectory, "managed-settings.json")] : []),
   ];
 }
 
@@ -629,7 +640,7 @@ export function claudeLaunchArgDirectories(launchArgs?: string): ReadonlyArray<s
   return directories;
 }
 
-/** First name wins, matching Claude Code's precedence of user skills over project skills. */
+/** First name wins, managed skills, then user skills, then project skills. */
 const scanClaudeSkills = Effect.fn("scanClaudeSkills")(function* (
   config: Pick<ClaudeSettings, "homePath">,
   configDirPath: string,
@@ -645,6 +656,7 @@ const scanClaudeSkills = Effect.fn("scanClaudeSkills")(function* (
     cwd,
     env,
   );
+  const managedDirectory = claudeManagedDirectory(path, yield* HostProcess.Platform, env);
   // Most installs have no synced folder; skip reading `.claude.json` for them.
   const hasSyncedPlugins =
     !syncedPluginsHidden &&
@@ -656,6 +668,9 @@ const scanClaudeSkills = Effect.fn("scanClaudeSkills")(function* (
     : undefined;
 
   const roots: ReadonlyArray<ClaudeSkillRoot> = [
+    ...(managedDirectory
+      ? [{ directory: path.join(managedDirectory, ".claude", "skills"), scope: "user" as const }]
+      : []),
     { directory: path.join(configDirPath, "skills"), scope: "user" },
     ...(cwd ? [{ directory: path.join(cwd, ".claude", "skills"), scope: "project" as const }] : []),
     ...additionalDirectories
@@ -819,11 +834,17 @@ export const discoverClaudeSkills = Effect.fn("discoverClaudeSkills")(function* 
   const resolvedEnvironment = environment ?? process.env;
   const configDirPath = yield* resolveClaudeConfigDirPath(config, resolvedEnvironment, cwd);
   const additionalDirectories = claudeLaunchArgDirectories(config.launchArgs);
+  const managedDirectory = claudeManagedDirectory(
+    yield* Path.Path,
+    yield* HostProcess.Platform,
+    resolvedEnvironment,
+  );
   const key = [
     configDirPath,
     cwd ?? "",
     additionalDirectories.join("\u0001"),
     resolvedEnvironment.CLAUDE_CODE_PLUGIN_CACHE_DIR ?? "",
+    managedDirectory ?? "",
   ].join("\u0000");
   const lock = yield* skillCacheLock(key);
 
