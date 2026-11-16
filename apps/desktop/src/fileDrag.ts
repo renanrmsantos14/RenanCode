@@ -73,8 +73,8 @@ export function installFileDrag(iconPath: string | undefined): void {
     return { token };
   });
 
-  Electron.ipcMain.removeAllListeners(IpcChannels.START_FILE_DRAG_CHANNEL);
-  Electron.ipcMain.on(IpcChannels.START_FILE_DRAG_CHANNEL, (event, token: unknown) => {
+  Electron.ipcMain.removeAllListeners(IpcChannels.START_STAGED_FILE_DRAG_CHANNEL);
+  Electron.ipcMain.on(IpcChannels.START_STAGED_FILE_DRAG_CHANNEL, (event, token: unknown) => {
     if (typeof token !== "string" || !isTrustedSender(event.sender)) return;
     const entry = entries.get(token);
     if (!entry) return;
