@@ -4,7 +4,6 @@ import { AsyncResult } from "effect/reactivity";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { OpenPreviewMutation } from "~/browser/openFileInPreview";
-
 import { openTerminalLinkInPreview } from "./openTerminalLinkInPreview";
 
 vi.mock("~/previewStateStore", () => ({
@@ -45,6 +44,8 @@ vi.mock("~/state/entities", () => ({
 const hydratedDefaults = {
   viewport: { _tag: "fixed", width: 1280, height: 720 } as const,
   profileId: "work",
+  zoomFactor: 0.8,
+  appearance: "dark",
 };
 
 const threadRef = {
@@ -91,7 +92,9 @@ describe("openTerminalLinkInPreview", () => {
     await openTerminalLinkInPreview({ url, threadRef, openPreview, fallbackToBrowser: vi.fn() });
 
     expect(openPreview).toHaveBeenCalledWith(
-      expect.objectContaining({ input: expect.objectContaining({ runtime }) }),
+      expect.objectContaining({
+        input: expect.objectContaining({ runtime, zoomFactor: 0.8, colorScheme: "dark" }),
+      }),
     );
   });
 });
