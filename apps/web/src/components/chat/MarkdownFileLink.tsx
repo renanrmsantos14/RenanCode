@@ -5,14 +5,19 @@ import {
   squashAtomCommandFailure,
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
-import type { AssetResource, EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
+import type {
+  AssetResource,
+  ContextMenuSource,
+  EnvironmentId,
+  ScopedThreadRef,
+} from "@t3tools/contracts";
 import { DownloadIcon } from "lucide-react";
 import { memo, useState, type MouseEvent as ReactMouseEvent } from "react";
 
 import { useAssetUrlRefresh } from "../../assets/assetUrls";
 import { saveAssetFile } from "../../assets/saveAssetFile";
 import { useFileDrag } from "../../assets/useFileDrag";
-
+import { contextMenuSourceOf } from "../../contextMenuSource";
 import { readLocalApi } from "../../localApi";
 import { cn } from "../../lib/utils";
 import { shouldOpenMarkdownFileLinkInEditor } from "../../markdown-links";
@@ -262,7 +267,10 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
     });
   };
 
-  const showFileContextMenu = async (position: { x: number; y: number }) => {
+  const showFileContextMenu = async (
+    position: { x: number; y: number },
+    source: ContextMenuSource,
+  ) => {
     const api = readLocalApi();
     if (!api) return;
 
@@ -283,6 +291,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
             : []),
         ] as const,
         position,
+        source,
       );
 
       if (clicked === "preview-media") {
@@ -336,7 +345,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
             return { x: bounds.left, y: bounds.bottom };
           })()
         : { x: event.clientX, y: event.clientY };
-    void showFileContextMenu(position);
+    void showFileContextMenu(position, contextMenuSourceOf(event));
   };
 
   const canOpenInEditor = onOpen !== undefined;
