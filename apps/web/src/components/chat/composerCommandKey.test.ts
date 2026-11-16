@@ -12,6 +12,14 @@ function setup(input: { readonly prompt: string; readonly suggestion: string | n
   const applyPromptReplacement = vi.fn<HandlerInput["applyPromptReplacement"]>(() => true);
   const handler = composerCommandKeyHandler({
     keybindings: [],
+    getShortcutContext: () => ({
+      terminalFocus: false,
+      terminalOpen: false,
+      previewFocus: false,
+      previewOpen: false,
+      isWeb: true,
+      isDesktop: false,
+    }),
     sendShortcut: "enter",
     routeKind: "server",
     phase: "ready",
@@ -38,6 +46,8 @@ function setup(input: { readonly prompt: string; readonly suggestion: string | n
     composerMenuItemsRef: { current: [] },
     activeComposerMenuItemRef: { current: null },
     setComposerDraftPrompt,
+    setComposerDraftThreadContexts: vi.fn(),
+    setComposerDraftEnvironmentContexts: vi.fn(),
     setComposerCursor: vi.fn(),
     setComposerTrigger: vi.fn(),
     setComposerHighlightedItemId: vi.fn(),

@@ -389,6 +389,7 @@ const layerEffectExecutorProvided = EffectWorker.layerExecutor.pipe(
       layerThreadTitleRegenerationProvided,
       layerNextActionSuggestionProvided,
       layerThreadManagementProvided,
+      ProjectionStore.layer,
     ),
   ),
 );

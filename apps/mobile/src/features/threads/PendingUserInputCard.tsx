@@ -229,6 +229,16 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
   }));
   const overlayHeightStyle = useAnimatedStyle(() => ({ height: maxHeight.value }));
 
+  const stopButton = props.onStopThread ? (
+    <ControlPill
+      accessibilityLabel="Stop"
+      icon="stop.fill"
+      variant="danger"
+      className="h-9 w-9"
+      disabled={!props.canOperateThread}
+      onPress={props.onStopThread}
+    />
+  ) : null;
   const bar = (
     <View
       onLayout={handleBarLayout}
@@ -264,16 +274,7 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
           type="monochrome"
         />
       </Pressable>
-      {props.onStopThread ? (
-        <ControlPill
-          accessibilityLabel="Stop"
-          icon="stop.fill"
-          variant="danger"
-          className="h-9 w-9"
-          disabled={!props.canOperateThread}
-          onPress={props.onStopThread}
-        />
-      ) : null}
+      {stopButton}
     </View>
   );
   const card = (
@@ -285,33 +286,36 @@ export function PendingUserInputCard(props: PendingUserInputCardProps) {
       className="overflow-hidden gap-2.5 rounded-[20px] border border-border bg-card-alt p-4"
       style={cardAnimatedStyle}
     >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Collapse question"
-        onPress={props.onToggleCollapsed}
-        className="flex-row items-center gap-2"
-      >
-        <View className="min-w-0 flex-1 justify-center self-stretch">
-          <Text
-            numberOfLines={1}
-            className="font-t3-bold text-2xs uppercase tracking-[1.1px] text-foreground-secondary"
-            style={proseDirectionStyle(activeQuestion?.header ?? "", setDirection)}
-          >
-            {activeQuestion?.header ?? "Question"}
-          </Text>
-        </View>
-        {counter ? (
-          <Text className="self-center font-sans text-xs text-foreground-muted">{counter}</Text>
-        ) : null}
-        <View className="h-8 w-8 items-center justify-center rounded-full bg-subtle-strong">
-          <SymbolView
-            name="chevron.down"
-            size={13}
-            tintColorClassName={"accent-icon-subtle"}
-            type="monochrome"
-          />
-        </View>
-      </Pressable>
+      <View className="flex-row items-center gap-2">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Collapse question"
+          onPress={props.onToggleCollapsed}
+          className="min-w-0 flex-1 flex-row items-center gap-2"
+        >
+          <View className="min-w-0 flex-1 justify-center self-stretch">
+            <Text
+              numberOfLines={1}
+              className="font-t3-bold text-2xs uppercase tracking-[1.1px] text-foreground-secondary"
+              style={proseDirectionStyle(activeQuestion?.header ?? "", setDirection)}
+            >
+              {activeQuestion?.header ?? "Question"}
+            </Text>
+          </View>
+          {counter ? (
+            <Text className="self-center font-sans text-xs text-foreground-muted">{counter}</Text>
+          ) : null}
+          <View className="h-8 w-8 items-center justify-center rounded-full bg-subtle-strong">
+            <SymbolView
+              name="chevron.down"
+              size={13}
+              tintColorClassName={"accent-icon-subtle"}
+              type="monochrome"
+            />
+          </View>
+        </Pressable>
+        {stopButton}
+      </View>
       <ScrollView
         bounces={false}
         className="min-h-0"

@@ -20,6 +20,7 @@ import { Badge } from "../ui/badge";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { cn } from "~/lib/utils";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { ModelPickerContent, resolveModelPickerSelectedModel } from "./ModelPickerContent";
 import { ModelPickerStrips } from "./ModelPickerStrips";
 import { retainedModelWhileProviderLocked } from "./ProviderModelPicker.logic";
@@ -153,6 +154,8 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement | null>(null);
+  // Touch opens on the popup itself so the on-screen keyboard stays down until the search is tapped.
+  const isCoarsePointer = useMediaQuery({ pointer: "coarse" });
   const size = props.size ?? "sm";
   const docked = props.effortColumn !== undefined;
   const [searching, setSearching] = useState(false);
@@ -464,7 +467,9 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
                 popupRef.current?.querySelector<HTMLElement>(
                   '[role="radio"][aria-checked="true"]',
                 ) ?? true
-            : searchInputRef
+            : isCoarsePointer
+              ? popupRef
+              : searchInputRef
         }
         align={props.popupAlign ?? "start"}
         // Docked, the popup opens above the composer and slides over it when that space is short,

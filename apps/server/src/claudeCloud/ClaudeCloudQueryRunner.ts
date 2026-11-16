@@ -233,6 +233,7 @@ export const makeClaudeCloudQueryRunner = Effect.fn("makeClaudeCloudQueryRunner"
         setModel: () => Effect.void,
         applyFlagSettings: () => Effect.void,
         setPermissionMode: () => Effect.void,
+        renameSession: () => Effect.void,
         mcpServerStatus: Effect.succeed([]),
         toggleMcpServer: () => notSupported("toggleMcpServer"),
         stopTask: () => notSupported("stopTask"),

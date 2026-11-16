@@ -5,14 +5,19 @@ import {
   squashAtomCommandFailure,
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
-import type { AssetResource, EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
-import { DownloadIcon } from "lucide-react";
+import type {
+  AssetResource,
+  ContextMenuSource,
+  EnvironmentId,
+  ScopedThreadRef,
+} from "@t3tools/contracts";
+import { DownloadIcon, FolderIcon } from "lucide-react";
 import { memo, useState, type MouseEvent as ReactMouseEvent } from "react";
 
 import { useAssetUrlRefresh } from "../../assets/assetUrls";
 import { saveAssetFile } from "../../assets/saveAssetFile";
 import { useFileDrag } from "../../assets/useFileDrag";
-
+import { contextMenuSourceOf } from "../../contextMenuSource";
 import { readLocalApi } from "../../localApi";
 import { cn } from "../../lib/utils";
 import { shouldOpenMarkdownFileLinkInEditor } from "../../markdown-links";
@@ -29,7 +34,7 @@ import {
   shouldUseMarkdownFileBrowserPrimaryAction,
 } from "./MarkdownFileLink.logic";
 import { reportMarkdownActionFailure } from "./markdownActionFailure";
-import { WorkspaceEntryIcon, WorkspaceEntryTooltip } from "./WorkspaceEntryIcon";
+import { WorkspaceEntryTooltip } from "./WorkspaceEntryIcon";
 
 interface MarkdownFileLinkProps {
   environmentId: EnvironmentId | null;
@@ -247,31 +252,25 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
             }),
           ])
         : value.then((text) => navigator.clipboard.writeText(text));
-    void Promise.all([write, value]).then(
-      ([, text]) => {
-        toastManager.add({
-          type: "success",
-          title: `${title} copied`,
-          description: title === "File contents" ? `${text.length} characters` : text,
-        });
-      },
-      (error) => {
-        reportMarkdownActionFailure(
-          { operation: "copy-file-path", target: targetPath, copyTarget: title },
-          error,
-        );
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: `Failed to copy ${title.toLowerCase()}`,
-            description: error instanceof Error ? error.message : "An error occurred.",
-          }),
-        );
-      },
-    );
+    void Promise.all([write, value]).catch((error) => {
+      reportMarkdownActionFailure(
+        { operation: "copy-file-path", target: targetPath, copyTarget: title },
+        error,
+      );
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: `Failed to copy ${title.toLowerCase()}`,
+          description: error instanceof Error ? error.message : "An error occurred.",
+        }),
+      );
+    });
   };
 
-  const showFileContextMenu = async (position: { x: number; y: number }) => {
+  const showFileContextMenu = async (
+    position: { x: number; y: number },
+    source: ContextMenuSource,
+  ) => {
     const api = readLocalApi();
     if (!api) return;
 
@@ -292,6 +291,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
             : []),
         ] as const,
         position,
+        source,
       );
 
       if (clicked === "preview-media") {
@@ -345,7 +345,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
             return { x: bounds.left, y: bounds.bottom };
           })()
         : { x: event.clientX, y: event.clientY };
-    void showFileContextMenu(position);
+    void showFileContextMenu(position, contextMenuSourceOf(event));
   };
 
   const canOpenInEditor = onOpen !== undefined;
@@ -358,7 +358,6 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
     canOpenMedia: onOpenMedia !== undefined,
   });
   const useBrowserPrimaryAction = shouldUseMarkdownFileBrowserPrimaryAction({
-    iconPath,
     canOpenInEditor,
     canOpenInBrowser,
     canOpenInPanel,
@@ -395,7 +394,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
               <FileTagChipContent
                 icon={
                   isAppBundle ? (
-                    <AppBundleIcon environmentId={environmentId} path={iconPath} theme={theme} />
+                    <AppBundleIcon environmentId={environmentId} path={iconPath} />
                   ) : undefined
                 }
                 path={iconPath}
@@ -420,7 +419,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
               <FileTagChipContent
                 icon={
                   isAppBundle ? (
-                    <AppBundleIcon environmentId={environmentId} path={iconPath} theme={theme} />
+                    <AppBundleIcon environmentId={environmentId} path={iconPath} />
                   ) : undefined
                 }
                 path={iconPath}
@@ -502,25 +501,31 @@ async function downloadCitedFile(prepare: () => Promise<string | null>, name: st
   }
 }
 
-function AppBundleIcon(props: {
-  environmentId: EnvironmentId | null;
-  path: string;
-  theme: "light" | "dark";
-}) {
+function AppBundleIcon(props: { environmentId: EnvironmentId | null; path: string }) {
   const asset = useAssetUrlState(props.environmentId, {
     _tag: "native-app-icon",
     app: { _tag: "app-path", path: props.path },
   });
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
-  if (asset._tag !== "Success" || asset.url === failedUrl) {
-    return <WorkspaceEntryIcon {...props} />;
-  }
+  const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
+  const url = asset._tag === "Success" && asset.url !== failedUrl ? asset.url : null;
+  const loaded = url !== null && loadedUrl === url;
   return (
-    <img
-      src={asset.url}
-      alt=""
-      className="size-4 shrink-0 object-contain"
-      onError={() => setFailedUrl(asset.url)}
-    />
+    <span
+      data-app-bundle-icon=""
+      aria-hidden="true"
+      className="relative me-[0.2em] inline-block size-[1em] align-[calc((1cap-1em)/2)]"
+    >
+      <FolderIcon className={cn("size-full text-icon-muted", loaded && "invisible")} />
+      {url !== null && (
+        <img
+          src={url}
+          alt=""
+          className={cn("absolute inset-0 size-full object-contain", !loaded && "invisible")}
+          onLoad={() => setLoadedUrl(url)}
+          onError={() => setFailedUrl(url)}
+        />
+      )}
+    </span>
   );
 }
