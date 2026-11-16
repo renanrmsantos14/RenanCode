@@ -14,7 +14,7 @@ import {
   HTML_VARIANTS_TOOL_NAME,
 } from "@t3tools/shared/htmlRender";
 import * as Schema from "effect/Schema";
-import { Tool, Toolkit } from "effect/ai";
+import { McpSchema, Tool, Toolkit } from "effect/ai";
 
 import * as HtmlRender from "../../../htmlRender/HtmlRender.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
@@ -76,7 +76,8 @@ export const HtmlPreviewTool = Tool.make("html_preview", {
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false)
   .annotate(Tool.Idempotent, true)
-  .annotate(Tool.OpenWorld, true);
+  .annotate(Tool.OpenWorld, true)
+  .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
 
 // This affects only the caller's thread, not its workspace, so read-only sandboxes and plan mode may use it.
 const HtmlRenderTool = Tool.make(HTML_RENDER_TOOL_NAME, {
@@ -113,7 +114,8 @@ const HtmlRenderTool = Tool.make(HTML_RENDER_TOOL_NAME, {
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false)
   .annotate(Tool.Idempotent, false)
-  .annotate(Tool.OpenWorld, true);
+  .annotate(Tool.OpenWorld, true)
+  .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
 
 const HtmlVariantsTool = Tool.make(HTML_VARIANTS_TOOL_NAME, {
   description: `Show ${HTML_VARIANTS_MIN} to ${HTML_VARIANTS_MAX} alternative versions of one page side by side, when the user asks for options, alternatives, or variations of a visual. One page uses html_render. Check each page with html_preview first. Each label names what differs, without a letter prefix (A, B, C are added). ${PAGE_RULES} Theme and layout rules are in html_render.`,
@@ -159,7 +161,8 @@ const HtmlVariantsTool = Tool.make(HTML_VARIANTS_TOOL_NAME, {
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false)
   .annotate(Tool.Idempotent, false)
-  .annotate(Tool.OpenWorld, true);
+  .annotate(Tool.OpenWorld, true)
+  .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
 
 export const HtmlPreviewToolkit = Toolkit.make(HtmlPreviewTool);
 
