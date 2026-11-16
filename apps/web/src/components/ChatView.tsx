@@ -3064,6 +3064,7 @@ export default function ChatView(props: ChatViewProps) {
     scrollToEnd,
     setThreadError,
   });
+  const onComposerCompactContextStable = useStableCallback(onCompactContext);
   const coldCache = useColdCache({
     environmentId,
     threadId: isServerThread ? threadId : null,
@@ -3073,7 +3074,7 @@ export default function ChatView(props: ChatViewProps) {
     nowMinute,
     isWorking,
     canCompact: !compactDisabled && !hasHeldQueuedRuns && multipleModelSelections === null,
-    onCompact: onCompactContext,
+    onCompact: onComposerCompactContextStable,
   });
   // The cold-cache dialog already offers compaction; keep the inline offer out of its way.
   const inlineCompactionTokens = coldCache.warning === null ? resumeCompactionTokens : null;
@@ -3173,7 +3174,6 @@ export default function ChatView(props: ChatViewProps) {
   };
   const sendPreviewAnnotationStable = useStableCallback(sendPreviewAnnotation);
   const onComposerResumeStable = useStableCallback(onResume);
-  const onComposerCompactContextStable = useStableCallback(onCompactContext);
   // Read from the projection the footer renders, so the scroll below sees the new message.
   const pendingGuestMessageIds =
     serverProjection?.thread.guestShare?.messages.flatMap((message) =>
