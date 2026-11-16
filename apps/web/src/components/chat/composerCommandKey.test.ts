@@ -38,6 +38,8 @@ function setup(input: { readonly prompt: string; readonly suggestion: string | n
     composerMenuItemsRef: { current: [] },
     activeComposerMenuItemRef: { current: null },
     setComposerDraftPrompt,
+    setComposerDraftThreadContexts: vi.fn(),
+    setComposerDraftEnvironmentContexts: vi.fn(),
     setComposerCursor: vi.fn(),
     setComposerTrigger: vi.fn(),
     setComposerHighlightedItemId: vi.fn(),
