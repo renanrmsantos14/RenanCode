@@ -97,6 +97,7 @@ export interface ProviderChangeRequest {
   readonly state: PullRequestState;
   readonly isDraft: boolean;
   readonly mergeability: PullRequestMergeability;
+  readonly rebaseRequired?: boolean | undefined;
   readonly additions: number;
   readonly deletions: number;
   readonly createdAt: string;
@@ -129,6 +130,7 @@ export interface ProviderChangeRequestSummary {
   /** Checks on the merge commit in the base branch; absent where the host is not read for them. */
   readonly mergeCommitChecksState?: PullRequestChecksState | null | undefined;
   readonly mergeability?: PullRequestMergeability | undefined;
+  readonly rebaseRequired?: boolean | undefined;
   /** Null means no stack; absent means not requested. */
   readonly stack?: PullRequestStackMembership | null | undefined;
   readonly headSha?: string | undefined;

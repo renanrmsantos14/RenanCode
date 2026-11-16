@@ -41,6 +41,7 @@ import * as ServerConfig from "../config.ts";
 import * as McpAppModelContext from "../mcpApps/McpAppModelContext.ts";
 import * as PreviewAgentActivity from "../preview/PreviewAgentActivity.ts";
 import * as CheckpointService from "./CheckpointService.ts";
+import * as NextActionSuggestionService from "./NextActionSuggestionService.ts";
 import * as ProviderEventIngestor from "./ProviderEventIngestor.ts";
 import {
   withCheckpointRestoreReservation,
@@ -1370,6 +1371,7 @@ function layerStartEffectWorker(
         Layer.mock(CheckpointRollbackService.CheckpointRollbackServiceV2)({}),
         Layer.mock(RuntimeRequestService.RuntimeRequestServiceV2)({}),
         Layer.mock(ThreadTitleRegenerationService.ThreadTitleRegenerationService)({}),
+        Layer.mock(NextActionSuggestionService.NextActionSuggestionService)({}),
         Layer.mock(ThreadManagementService.ThreadManagementService)({}),
         Layer.mock(ProjectionStore.ProjectionStoreV2)({}),
         ServerSettings.layerTest(),

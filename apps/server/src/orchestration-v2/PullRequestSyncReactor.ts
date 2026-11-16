@@ -248,6 +248,7 @@ function snapshotFieldsOf(summary: PullRequestSummary): SnapshotFields {
       ? {}
       : { mergeCommitChecksState: summary.mergeCommitChecksState }),
     ...(summary.mergeability === undefined ? {} : { mergeability: summary.mergeability }),
+    ...(summary.rebaseRequired === undefined ? {} : { rebaseRequired: summary.rebaseRequired }),
   };
 }
 
@@ -297,7 +298,8 @@ function snapshotFieldsEqual(left: SnapshotFields, right: SnapshotFields): boole
     (left.reviewDecision ?? null) === (right.reviewDecision ?? null) &&
     (left.checksState ?? null) === (right.checksState ?? null) &&
     (left.mergeCommitChecksState ?? null) === (right.mergeCommitChecksState ?? null) &&
-    left.mergeability === right.mergeability
+    left.mergeability === right.mergeability &&
+    left.rebaseRequired === right.rebaseRequired
   );
 }
 
