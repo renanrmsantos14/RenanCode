@@ -36,7 +36,7 @@ import {
   togglePendingUserInputOptionSelection,
   type PendingUserInputDraftAnswer,
 } from "@t3tools/client-runtime/state/pending-user-input";
-import { ArrowUpIcon, PaperclipIcon, XIcon } from "lucide-react";
+import { ArrowUpIcon, BellIcon, PaperclipIcon, XIcon } from "lucide-react";
 import {
   useEffect,
   useReducer,
@@ -51,6 +51,7 @@ import { useIncrementalTimelineEntries } from "~/hooks/useIncrementalTimelineEnt
 import { useNowMinute } from "~/hooks/useNowMinute";
 import { useStableCallback } from "~/hooks/useStableCallback";
 import { useTheme } from "~/hooks/useTheme";
+import { playNotificationSound, unlockNotificationAudio } from "~/threadNotifications";
 import { cn } from "~/lib/utils";
 import {
   deriveActiveWorkStartedAt,
@@ -313,11 +314,6 @@ function GuestSession({ shareId }: { readonly shareId: string }) {
           onLoadEarlier: () => void loadEarlier(),
         };
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- sets document.title to the shared thread's title
-  useEffect(() => {
-    if (stream.view) document.title = stream.view.title;
-  }, [stream.view]);
-
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- opens the guest EventSource stream and closes it on cleanup
   useEffect(() => {
     const source = new EventSource(
@@ -502,10 +498,12 @@ function GuestThread({
   );
   const unplaced = unplacedGuestMessages(messages, items, awaitingRowIds);
   const question = useGuestQuestion(shareId, canAnswer ? projection : null);
+  useGuestQuestionAlert(title, question.pending?.requestId ?? null);
   return (
     <>
       <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2.5">
         <h1 className="min-w-0 flex-1 truncate text-sm font-medium">{title}</h1>
+        {canAnswer ? <GuestNotificationsButton /> : null}
         <ExpiryLabel expiresAt={expiresAt} />
       </header>
       <div className="relative min-h-0 flex-1">
@@ -707,6 +705,63 @@ function useGuestQuestion(
   };
 
   return { pending, answers, index, responding, error, toggleOption, advance, answerWithText };
+}
+
+const guestFocused = () => document.visibilityState === "visible" && document.hasFocus();
+
+/**
+ * Tells a guest who looked away that the agent asked a new question: a desktop notification
+ * when allowed, the input sound, and a marked tab title while the question stays open.
+ */
+function useGuestQuestionAlert(title: string, requestId: string | null) {
+  // A question already open on load is on screen; only later ones alert.
+  const alertedRef = useRef(requestId);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- sets document.title and raises the browser notification for a new question
+  useEffect(() => {
+    document.title = requestId === null ? title : `(?) ${title}`;
+    if (requestId === null || alertedRef.current === requestId) return;
+    alertedRef.current = requestId;
+    if (guestFocused()) return;
+    void playNotificationSound("input", () => !guestFocused());
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    try {
+      const notification = new Notification("New question", {
+        body: title,
+        tag: `guest-question:${requestId}`,
+        silent: true,
+      });
+      notification.addEventListener("click", () => {
+        notification.close();
+        window.focus();
+      });
+    } catch {
+      // Some browsers expose Notification but reject desktop presentation.
+    }
+  }, [requestId, title]);
+}
+
+/** Asks for notification permission from a click, which browsers require, and unlocks sound. */
+function GuestNotificationsButton() {
+  const [asked, setAsked] = useState(
+    () => typeof Notification !== "undefined" && Notification.permission === "granted",
+  );
+  if (asked) return null;
+  return (
+    <Button
+      size="xs"
+      variant="outline"
+      onClick={() => {
+        unlockNotificationAudio();
+        setAsked(true);
+        // Without permission or a secure context the guest still gets the sound and tab title.
+        if (typeof Notification === "undefined" || !window.isSecureContext) return;
+        void Notification.requestPermission().catch(() => undefined);
+      }}
+    >
+      <BellIcon />
+      Notify me
+    </Button>
+  );
 }
 
 function ExpiryLabel({ expiresAt }: { readonly expiresAt: string }) {
