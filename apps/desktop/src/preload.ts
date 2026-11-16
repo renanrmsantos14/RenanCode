@@ -116,7 +116,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
   prepareFileDrag: (input) => ipcRenderer.invoke(IpcChannels.PREPARE_FILE_DRAG_CHANNEL, input),
   // Fire-and-forget: startDrag must run synchronously inside the renderer's dragstart.
-  startFileDrag: (token) => ipcRenderer.send(IpcChannels.START_FILE_DRAG_CHANNEL, token),
+  startStagedFileDrag: (token) =>
+    ipcRenderer.send(IpcChannels.START_STAGED_FILE_DRAG_CHANNEL, token),
   getClientPlatform: () => clientPlatform,
   restartAudioService: () => ipcRenderer.invoke(IpcChannels.RESTART_AUDIO_SERVICE_CHANNEL),
   setNotificationBadge: (badge) =>
@@ -258,6 +259,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.invoke(IpcChannels.RECEIVE_PROVIDER_AUTH_CALLBACK_CHANNEL, url),
   cancelProviderAuthCallback: (url: string) =>
     ipcRenderer.invoke(IpcChannels.CANCEL_PROVIDER_AUTH_CALLBACK_CHANNEL, url),
+  startFileDrag: (input) => ipcRenderer.invoke(IpcChannels.START_FILE_DRAG_CHANNEL, input),
   openExternal: (url: string) => ipcRenderer.invoke(IpcChannels.OPEN_EXTERNAL_CHANNEL, url),
   readMedia: (url: string) => ipcRenderer.invoke(IpcChannels.READ_MEDIA_CHANNEL, url),
   checkSystemPermission: (pane: string) =>

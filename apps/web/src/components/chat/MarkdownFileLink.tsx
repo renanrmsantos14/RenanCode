@@ -1,3 +1,4 @@
+import { useNativeFileDrag } from "../../useNativeFileDrag";
 import { useAssetUrlState } from "../../assets/assetUrls";
 import { formatFilePathForClipboard } from "@t3tools/client-runtime/media-actions";
 import {
@@ -51,6 +52,7 @@ interface MarkdownFileLinkProps {
   threadRef?: ScopedThreadRef | undefined;
   onOpen?: (() => Promise<AtomCommandResult<unknown, unknown>>) | undefined;
   onOpenInPanel: (panelPath: string, line: number | undefined) => void;
+  resolveDragPath: () => Promise<string>;
   resolveCopyPaths: () => Promise<ReturnType<typeof markdownFileCopyPaths>>;
   readContents?: (() => Promise<string>) | undefined;
   openInEditorMenuLabel: string;
@@ -86,6 +88,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
   resolveCopyPaths,
   readContents,
   downloadPath,
+  resolveDragPath,
 }: MarkdownFileLinkProps) {
   const downloadResource: AssetResource | null =
     threadRef && downloadPath
@@ -101,7 +104,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
   const dragProps = useFileDrag(environmentId, downloadResource, downloadName);
   const canDownload = downloadResource !== null && environmentId !== null;
   const handleDownload = () => void downloadCitedFile(prepareDownload, downloadName);
-
+  const nativeDrag = useNativeFileDrag(environmentId, resolveDragPath);
   const handleOpenInEditor = () => {
     if (!onOpen) {
       return;
@@ -370,6 +373,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
         render={
           hasPrimaryAction ? (
             <ContextChip
+              {...nativeDrag}
               kind={chipKind}
               dir="ltr"
               render={<a href={href} />}
@@ -405,6 +409,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
             </ContextChip>
           ) : (
             <ContextChip
+              {...nativeDrag}
               kind={chipKind}
               dir="ltr"
               render={<button type="button" />}
@@ -483,6 +488,7 @@ function areMarkdownFileLinkPropsEqual(
     previous.onReveal === next.onReveal &&
     previous.resolveCopyPaths === next.resolveCopyPaths &&
     previous.readContents === next.readContents &&
+    previous.resolveDragPath === next.resolveDragPath &&
     previous.revealLabel === next.revealLabel
   );
 }
