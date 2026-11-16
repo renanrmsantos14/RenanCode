@@ -75,6 +75,8 @@ export class PullRequestProviderError extends Schema.TaggedError<PullRequestProv
 export interface ProviderChangeRequestWatchFingerprint {
   readonly status: string;
   readonly remarks: string;
+  /** True when `status` changes with every check and mergeability change, so pending work needs no detail read. */
+  readonly coversDetail?: boolean;
 }
 
 export interface PullRequestProviderFailure {
@@ -176,6 +178,16 @@ export interface ProviderListCursor {
    */
   readonly seenAt?: ReadonlyArray<number> | undefined;
   readonly resumeAfter?: string | undefined;
+}
+
+/** One search spans several repositories, so the rows seen at the boundary name theirs. */
+export interface ProviderAcrossListCursor extends Omit<ProviderListCursor, "seenAt"> {
+  readonly seenAt?: ReadonlyArray<ProviderRepositoryNumber> | undefined;
+}
+
+export interface ProviderRepositoryNumber {
+  readonly repository: string;
+  readonly number: number;
 }
 
 export interface ProviderBatchedChangeRequest extends ProviderChangeRequest {
@@ -360,7 +372,7 @@ export interface PullRequestProviderApi {
     readonly viewer: string;
     readonly limit: number;
     readonly query?: string | undefined;
-    readonly cursor?: ProviderListCursor | undefined;
+    readonly cursor?: ProviderAcrossListCursor | undefined;
     readonly filters?: PullRequestListFilters | undefined;
   }) => Effect.Effect<ProviderBatchedChangeRequestPage, PullRequestProviderError>;
 
