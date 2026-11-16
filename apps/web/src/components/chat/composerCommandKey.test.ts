@@ -12,6 +12,14 @@ function setup(input: { readonly prompt: string; readonly suggestion: string | n
   const applyPromptReplacement = vi.fn<HandlerInput["applyPromptReplacement"]>(() => true);
   const handler = composerCommandKeyHandler({
     keybindings: [],
+    getShortcutContext: () => ({
+      terminalFocus: false,
+      terminalOpen: false,
+      previewFocus: false,
+      previewOpen: false,
+      isWeb: true,
+      isDesktop: false,
+    }),
     sendShortcut: "enter",
     routeKind: "server",
     phase: "ready",
