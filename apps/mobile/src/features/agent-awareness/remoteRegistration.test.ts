@@ -737,7 +737,10 @@ describe("makeRelayDeviceRegistrationRequest", () => {
       }
       return Response.json({ ok: true });
     });
-    Constants.expoConfig!.extra = { relay: { url: "https://relay.example.test" } };
+    Constants.expoConfig!.extra = {
+      androidRemotePush: true,
+      relay: { url: "https://relay.example.test" },
+    };
     return registrations;
   };
 
