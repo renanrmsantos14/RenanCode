@@ -1062,6 +1062,7 @@ export interface DesktopBridge {
   prepareFileDrag: (input: { name: string; bytes: ArrayBuffer }) => Promise<{ token: string }>;
   startFileDrag: (token: string) => void;
   getClientPlatform: () => string;
+  restartAudioService?: () => Promise<boolean>;
   setNotificationBadge: (badge: { count: number; image: string | null }) => Promise<void>;
   onNotificationBadgeClear: (listener: () => void) => () => void;
   onTrackpadScrollBegin: (listener: () => void) => () => void;

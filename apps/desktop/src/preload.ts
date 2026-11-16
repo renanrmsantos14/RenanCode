@@ -118,6 +118,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   // Fire-and-forget: startDrag must run synchronously inside the renderer's dragstart.
   startFileDrag: (token) => ipcRenderer.send(IpcChannels.START_FILE_DRAG_CHANNEL, token),
   getClientPlatform: () => clientPlatform,
+  restartAudioService: () => ipcRenderer.invoke(IpcChannels.RESTART_AUDIO_SERVICE_CHANNEL),
   setNotificationBadge: (badge) =>
     ipcRenderer.invoke(IpcChannels.SET_NOTIFICATION_BADGE_CHANNEL, badge),
   onNotificationBadgeClear: (listener) => {
