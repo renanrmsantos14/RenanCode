@@ -188,7 +188,9 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
     // Read at click time so the brand does not re-render on every project or thread change.
     const [project] = sortScopedProjectsForSidebar(
-      readProjects().filter((candidate) => candidate.archivedAt == null && isHomeProject(candidate)),
+      readProjects().filter(
+        (candidate) => candidate.archivedAt == null && isHomeProject(candidate),
+      ),
       readThreadShells(),
       "updated_at",
     );
