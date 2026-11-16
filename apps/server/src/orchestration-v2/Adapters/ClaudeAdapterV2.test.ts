@@ -92,6 +92,7 @@ import { PreviewControlsToolkit } from "../../mcp/toolkits/previewControls/tools
 import { HtmlToolkit } from "../../mcp/toolkits/html/tools.ts";
 import { MessageToolkit } from "../../mcp/toolkits/message/tools.ts";
 import { EnvironmentToolkit } from "../../mcp/toolkits/environment/tools.ts";
+import { ThemeToolkit } from "../../mcp/toolkits/theme/tools.ts";
 import { ProjectToolkit } from "../../mcp/toolkits/project/tools.ts";
 import { WorkModulesToolkit } from "../../mcp/toolkits/workModules/tools.ts";
 import { WorktreeToolkit } from "../../mcp/toolkits/worktree/tools.ts";
@@ -664,6 +665,7 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
       ...Object.values(WorkModulesToolkit.tools),
       ...Object.values(ProjectToolkit.tools),
       ...Object.values(EnvironmentToolkit.tools),
+      ...Object.values(ThemeToolkit.tools),
       ...Object.values(PreviewControlsToolkit.tools),
       ...Object.values(HtmlToolkit.tools),
       ...Object.values(MessageToolkit.tools),
@@ -9220,6 +9222,18 @@ describe("ClaudeAdapterV2 background wake turns", () => {
       model: "claude-opus-5-5",
       environment: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: "300000" },
       threshold: 267_000,
+    },
+    {
+      autoCompactWindow: "",
+      model: "claude-opus-5-5",
+      userSettings: '{"autoCompactWindow":400000,"autoCompactEnabled":false}',
+      threshold: undefined,
+    },
+    {
+      autoCompactWindow: "400000",
+      model: "claude-opus-5-5",
+      environment: { DISABLE_AUTO_COMPACT: "1" },
+      threshold: undefined,
     },
   ])(
     "ignores stale snapshots after compaction and reports threshold $autoCompactWindow for $model",

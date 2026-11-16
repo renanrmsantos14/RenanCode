@@ -129,9 +129,10 @@ export const WorkGroupSection = memo(function WorkGroupSection({
 });
 
 function WorkingTimer({ createdAt }: { createdAt: string }) {
+  const { activeThreadEnvironmentId } = use(TimelineRowCtx);
   return (
     <span
-      ref={tickTextContent(() => formatWorkingTimerNow(createdAt), true)}
+      ref={tickTextContent(() => formatWorkingTimerNow(createdAt, activeThreadEnvironmentId), true)}
       className="tabular-nums"
     />
   );
@@ -448,7 +449,7 @@ export function ThinkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind:
     <div className="flex items-center gap-2">
       <Mascot state={rowMascotState(mascotState)} size={24} />
       <LiveActivityRow
-        label={providerStartingLabel ?? liveAnswerPreview ?? "Thinking"}
+        label={providerStartingLabel ?? row.label ?? liveAnswerPreview ?? "Thinking"}
         iconName="brain"
         active={live}
         shimmer={live}
