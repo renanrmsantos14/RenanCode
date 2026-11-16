@@ -453,7 +453,10 @@ describe("CLIProxyAPI built-in management API", () => {
       expect(result[0]?.usageLimits.unavailable).toBeUndefined();
       expect(
         result[0]?.usageLimits.windows.map((window) => [window.id, window.usedPercent]),
-      ).toEqual([["seven_day", 50]]);
+      ).toEqual([
+        ["five_hour", 0],
+        ["seven_day", 50],
+      ]);
     }),
   );
 

@@ -774,7 +774,7 @@ describe("pools", () => {
       limitAccountsBesideClaude(collectLimitAccounts(withOther(unreadable))).map(
         (account) => account.key,
       ),
-    ).toContain("hub:claude.json");
+    ).toContain("env-a:hub:claude.json");
   });
 
   it.each([
