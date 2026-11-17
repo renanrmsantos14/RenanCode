@@ -24,7 +24,7 @@ import {
   deriveThreadRuntime,
   threadRuntimeHasInterruptibleRun,
 } from "@t3tools/client-runtime/state/thread-execution";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   CommandId,
@@ -58,7 +58,11 @@ import {
 
 import type { DraftComposerImageAttachment } from "../lib/composerImages";
 import { scopedThreadKey } from "../lib/scopedEntities";
-import { buildThreadFeed, createThreadFeedCache } from "../lib/threadActivity";
+import {
+  buildThreadFeed,
+  createThreadFeedCache,
+  retainedThreadFeedCache,
+} from "../lib/threadActivity";
 import {
   acknowledgedThreadMessagesAtom,
   pruneCaughtUpAcknowledgedThreadMessages,
@@ -280,7 +284,13 @@ export function useThreadComposerState(input: {
   // detail is usually present but empty during a worktree checkout, so this
   // cannot be an either/or with the loaded messages.
   const pendingCreationMessage = selectedThreadCreation?.message ?? null;
-  const [feedCache] = useState(createThreadFeedCache);
+  const feedCache = useMemo(
+    () =>
+      selectedThreadKey === null
+        ? createThreadFeedCache()
+        : retainedThreadFeedCache(selectedThreadKey),
+    [selectedThreadKey],
+  );
   const selectedThreadFeed = (() => {
     const pendingCreation =
       pendingCreationMessage !== null &&

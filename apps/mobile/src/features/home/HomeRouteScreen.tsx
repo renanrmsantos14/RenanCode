@@ -21,11 +21,8 @@ import {
 import { AndroidHomeFabLayout } from "./AndroidHomeFab";
 import { HomeScreen } from "./HomeScreen";
 import { useHomeListOptions } from "./home-list-options";
-import {
-  runWhenHomeCovered,
-  useAtomValueWhileVisible,
-  useHomeRouteVisible,
-} from "./home-route-visibility";
+import { runWhenHomeCovered, useHomeRouteVisible } from "./home-route-visibility";
+import { useAtomValueWhileVisible } from "../../state/atom-value-while-visible";
 import {
   buildHomeProjectScopes,
   resolveHomeProjectFilterScope,

@@ -2,6 +2,8 @@ import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { useNavigation } from "@react-navigation/native";
 import { useAdaptiveWorkspaceLayout } from "../adaptive-workspace-context";
 import { startOpeningEnvironmentThread } from "../../../state/threads";
+import { scopedThreadKey } from "../../../lib/scopedEntities";
+import { traceThreadOpenStart } from "../../threads/threadOpenTrace";
 import {
   selectWorkspaceDetail,
   type WorkspaceDetail,
@@ -17,6 +19,9 @@ export function startOpeningDetail(detail: WorkspaceDetail) {
   const environmentId = first(detail.params?.environmentId);
   const threadId = first(detail.params?.threadId);
   if (environmentId && threadId) {
+    traceThreadOpenStart(
+      scopedThreadKey(EnvironmentId.make(environmentId), ThreadId.make(threadId)),
+    );
     startOpeningEnvironmentThread(EnvironmentId.make(environmentId), ThreadId.make(threadId));
   }
 }

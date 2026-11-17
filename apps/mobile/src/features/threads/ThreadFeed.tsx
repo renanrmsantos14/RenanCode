@@ -173,6 +173,7 @@ import Animated, { FadeIn, FadeInDown, type SharedValue } from "react-native-rea
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
 import { FONT_FAMILIES } from "../../lib/fontFamilies";
 import { scopedThreadKey } from "../../lib/scopedEntities";
+import { traceThreadOpenStage } from "./threadOpenTrace";
 import { copyTextWithHaptic } from "../../lib/copyTextWithHaptic";
 import { downloadAndShareAttachment } from "../../lib/attachmentDownload";
 import { splitMarkdownDetails } from "../../lib/markdownDetails";
@@ -224,7 +225,7 @@ import {
   resolveMarkdownLinkPresentation,
 } from "../../lib/markdownLinks";
 import {
-  createThreadFeedCache,
+  retainedThreadFeedCache,
   threadFeedCompactionLabels,
   failedFeedRunIds,
   deriveThreadFeedPresentation,
@@ -2851,7 +2852,8 @@ function useThreadFeedPresentation(
   expandedWorkGroups: Record<string, boolean>,
   revealedMessageId: MessageId | null,
 ) {
-  const [feedCache] = useState(createThreadFeedCache);
+  const feedThreadKey = scopedThreadKey(props.environmentId, props.threadId);
+  const feedCache = useMemo(() => retainedThreadFeedCache(feedThreadKey), [feedThreadKey]);
   return appendPendingThreadMessages(
     deriveThreadFeedPresentation(
       props.feed,
@@ -3613,6 +3615,14 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     onHeaderMaterialVisibilityChange?.(visible);
   };
   const feedThreadKey = scopedThreadKey(props.environmentId, props.threadId);
+  const feedHasRows = props.feed.length > 0;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- records when the opened thread's first rows commit, for the opt-in open trace
+  useLayoutEffect(() => {
+    traceThreadOpenStage(
+      feedHasRows ? "feed-rows-committed" : "feed-empty-committed",
+      feedThreadKey,
+    );
+  }, [feedHasRows, feedThreadKey]);
   const [loadedListKey, setLoadedListKey] = useState<string | null>(null);
   const [landedListKey, setLandedListKey] = useState<string | null>(null);
   // LegendList reports ready, and shows its rows, while rows measured during its initial scroll can
@@ -4177,6 +4187,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             alignItemsAtEnd
             initialScrollAtEnd
             onReady={() => {
+              traceThreadOpenStage("feed-ready", feedThreadKey);
               setLoadedListKey(feedThreadKey);
               reportMetrics(true);
               // Never leave the feed hidden if end following stalls short of the end.

@@ -7,6 +7,7 @@ import {
 } from "@t3tools/contracts";
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -217,6 +218,32 @@ it.effect("explains a CLI whose version probe failed instead of advising an inst
     ),
   ),
 );
+
+it.effect("shares a scan already running and starts a fresh one after it finished", () => {
+  const release = Deferred.makeUnsafe<void>();
+  let gitProbes = 0;
+  const runProcess: typeof run = (input) =>
+    input.command === "git"
+      ? Effect.suspend(() => {
+          gitProbes += 1;
+          return Deferred.await(release);
+        }).pipe(Effect.andThen(run(input)))
+      : run(input);
+  return Effect.gen(function* () {
+    const discovery = yield* SourceControlDiscovery.SourceControlDiscovery;
+    const [first, second] = yield* Effect.all(
+      [discovery.discover, discovery.discover, Deferred.succeed(release, undefined)],
+      { concurrency: "unbounded" },
+    );
+    assert.strictEqual(gitProbes, 1);
+    assert.strictEqual(second, first);
+
+    yield* discovery.discover;
+    assert.strictEqual(gitProbes, 2);
+  }).pipe(
+    Effect.provide(SourceControlDiscovery.layer.pipe(Layer.provide(layerDiscovery(runProcess)))),
+  );
+});
 
 it.effect.each(["darwin", "linux"] as const)(
   "names incompatible executables only on macOS (%s)",

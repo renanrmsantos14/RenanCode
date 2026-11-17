@@ -231,6 +231,8 @@ export interface ThreadDetailScreenProps {
   readonly worktreeSetup?: WorktreeSetupCardProps | null;
   readonly setupWorkingStartedAt?: string | null;
   readonly canOperateThread: boolean;
+  /** False while the screen opens; device and preview reads wait for it. Defaults to true. */
+  readonly secondaryReadsReady?: boolean;
   readonly selectedThread: EnvironmentThreadShell;
   /** Use this for detail reads; it stays null until queued creation reaches the server. */
   readonly selectedThreadDetailRef: ScopedThreadRef | null;
@@ -419,8 +421,11 @@ function ThreadDetailBody(
   const openInspector = useOpenThreadInspector();
   const { session: voiceInputSession } = useGlobalVoiceInput();
   const reportedModelSelection = useThreadReportedModelSelection(props.selectedThreadDetailRef);
+  const secondaryReadsReady = props.secondaryReadsReady ?? true;
   const deviceState = useEnvironmentQuery(
-    deviceEnvironment.state({ environmentId: props.environmentId, input: {} }),
+    secondaryReadsReady
+      ? deviceEnvironment.state({ environmentId: props.environmentId, input: {} })
+      : null,
   );
   const devicePreviews = threadDevicePreviews(deviceState.data, props.selectedThread.id);
   const openDevicePreview = () => {
@@ -441,7 +446,9 @@ function ThreadDetailBody(
     environmentId: props.environmentId,
     threadId: props.selectedThread.id,
     enabled:
-      !props.draftMode && props.serverConfig?.environment.capabilities.serverBrowser === true,
+      secondaryReadsReady &&
+      !props.draftMode &&
+      props.serverConfig?.environment.capabilities.serverBrowser === true,
   });
   const openBrowserPreview = (tabId?: string) => {
     Keyboard.dismiss();

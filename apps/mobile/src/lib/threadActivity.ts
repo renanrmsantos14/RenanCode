@@ -2342,7 +2342,7 @@ interface ThreadFeedBuild {
 }
 
 /**
- * Keep one cache per on-screen feed across renders to reuse unchanged prefixes during streaming.
+ * Keep one cache per thread across renders to reuse unchanged prefixes during streaming.
  * Sharing it between threads would make their results evict each other.
  */
 export interface ThreadFeedCache {
@@ -2352,6 +2352,20 @@ export interface ThreadFeedCache {
 
 export function createThreadFeedCache(): ThreadFeedCache {
   return { feedBuild: null, presentation: null };
+}
+
+const RETAINED_FEED_CACHE_LIMIT = 6;
+const retainedFeedCaches = new Map<string, ThreadFeedCache>();
+
+/** A thread's cache outlives its screen, so reopening it rebuilds only what changed meanwhile. */
+export function retainedThreadFeedCache(threadKey: string): ThreadFeedCache {
+  const cache = retainedFeedCaches.get(threadKey) ?? createThreadFeedCache();
+  retainedFeedCaches.delete(threadKey);
+  retainedFeedCaches.set(threadKey, cache);
+  if (retainedFeedCaches.size > RETAINED_FEED_CACHE_LIMIT) {
+    retainedFeedCaches.delete(retainedFeedCaches.keys().next().value!);
+  }
+  return cache;
 }
 
 function setsEqual<T>(left: ReadonlySet<T>, right: ReadonlySet<T>): boolean {

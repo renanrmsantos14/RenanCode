@@ -50,7 +50,7 @@ vi.mock("./use-selected-thread-worktree", () => ({
   }),
 }));
 vi.mock("./queries", () => ({
-  useBranches: () => ({ data: { refs: state.cachedRefs }, refresh: () => {} }),
+  refreshBranches: () => {},
 }));
 vi.mock("./use-atom-command", () => ({ useAtomCommand: (command: unknown) => command }));
 vi.mock("./atom-registry", () => ({ appAtomRegistry: {} }));
