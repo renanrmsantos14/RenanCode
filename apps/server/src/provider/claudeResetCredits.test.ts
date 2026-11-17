@@ -5,7 +5,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import { HttpClient, HttpClientResponse, UrlParams } from "effect/http";
+import { HttpClient, HttpClientResponse } from "effect/http";
 import { describe, expect, it } from "vite-plus/test";
 
 import * as ClaudeResetCredits from "./claudeResetCredits.ts";
@@ -62,7 +62,49 @@ describe("claudeResetCreditsToContract", () => {
       availableCount: 2,
       nextCreditId: "grant_a",
       nextExpiresAt: "2026-10-01T00:00:00.000Z",
+      options: [
+        expect.objectContaining({
+          creditId: "grant_a",
+          label: "Full reset",
+          availableCount: 2,
+          expiresAt: "2026-10-01T00:00:00.000Z",
+        }),
+      ],
     });
+  });
+
+  it("offers each kind of reset by its own grant", () => {
+    const credits = ClaudeResetCredits.claudeResetCreditsToContract(
+      {
+        eligible: true,
+        next_grant_id: "weekly_a",
+        grants: [
+          grant({ id: "weekly_a", clears: ["seven_day"], ends_at: "2026-12-10T22:00:00Z" }),
+          grant({
+            id: "fable_a",
+            clears: ["seven_day_overage_included"],
+            gives_back_weekly: true,
+            ends_at: "2027-03-09T07:59:00Z",
+          }),
+          grant({ id: "fable_b", gives_back_weekly: true, type: "weekly" }),
+          grant({ id: "session_a", type: "session" }),
+          grant({ id: "spent", clears: ["seven_day"], resets_left: 0 }),
+        ],
+      },
+      NOW,
+    );
+    expect(
+      credits?.options?.map(({ creditId, label, availableCount }) => [
+        creditId,
+        label,
+        availableCount,
+      ]),
+    ).toEqual([
+      ["session_a", "5-hour reset", 1],
+      ["weekly_a", "Weekly reset", 1],
+      ["fable_a", "Fable reset", 2],
+    ]);
+    expect(credits).toMatchObject({ availableCount: 4, nextCreditId: "weekly_a" });
   });
 
   it("offers nothing to redeem without a usable next grant or an eligible account", () => {
@@ -85,50 +127,6 @@ describe("claudeResetCreditsToContract", () => {
     ).toBeUndefined();
     expect(ClaudeResetCredits.claudeResetCreditsToContract(undefined, NOW)).toBeUndefined();
   });
-});
-
-effectIt.layer(NodeServices.layer)("readClaudeResetCredits", (it) => {
-  it.effect("reads the grants with the CLI's request", () =>
-    Effect.gen(function* () {
-      const { configDir } = yield* writeLogin;
-      const client = HttpClient.make((request) => {
-        expect(request.method).toBe("GET");
-        expect(request.url).toBe("https://api.anthropic.com/api/oauth/usage");
-        expect(UrlParams.toString(request.urlParams)).toBe("cedar_ember=1&skip_spend=1");
-        expect(request.headers.authorization).toBe("Bearer oauth-token");
-        expect(request.headers["anthropic-beta"]).toBe("oauth-2025-04-20");
-        expect(request.headers["user-agent"]).toBe("claude-cli/2.1.0 (external, cli)");
-        return Effect.succeed(
-          HttpClientResponse.fromWeb(
-            request,
-            Response.json({
-              cedar_ember: { eligible: true, next_grant_id: "grant_a", grants: [grant({})] },
-            }),
-          ),
-        );
-      });
-      const credits = yield* ClaudeResetCredits.readClaudeResetCredits(configDir, "2.1.0").pipe(
-        Effect.provideService(HostProcess.Platform, "linux"),
-        Effect.provideService(HttpClient.HttpClient, client),
-      );
-      expect(credits).toEqual({ availableCount: 1, nextCreditId: "grant_a" });
-    }),
-  );
-
-  it.effect("reads nothing from keychain logins or failed requests", () =>
-    Effect.gen(function* () {
-      const { configDir } = yield* writeLogin;
-      const darwin = yield* ClaudeResetCredits.readClaudeResetCredits(configDir, "2.1.0").pipe(
-        Effect.provideService(HostProcess.Platform, "darwin"),
-        Effect.provideService(HttpClient.HttpClient, refuseRequests),
-      );
-      const limited = yield* ClaudeResetCredits.readClaudeResetCredits(configDir, "2.1.0").pipe(
-        Effect.provideService(HostProcess.Platform, "linux"),
-        Effect.provideService(HttpClient.HttpClient, respond(429, {})),
-      );
-      expect([darwin, limited]).toEqual([undefined, undefined]);
-    }),
-  );
 });
 
 const ClaimBody = Schema.fromJsonString(

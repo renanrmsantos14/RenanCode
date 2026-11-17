@@ -11,12 +11,16 @@ import {
   isProviderAvailable,
   PROVIDER_DISPLAY_NAMES,
   type ServerProvider,
+  type ServerProviderResetCredits,
   type ServerProviderUsageLimits,
   type ServerProviderUsageWindow,
+  type UsageLimitSourceSnapshot,
   type UsageLimitSourceSnapshots,
 } from "@t3tools/contracts";
 
 import * as DateTime from "effect/DateTime";
+
+import { isLocalLoopbackHost, isWildcardHost } from "./hostClassification.ts";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -27,9 +31,14 @@ export function exhaustedUsageWindow(
   now: number,
   model?: string,
 ) {
-  const exhausted = (provider?.usageLimits?.windows ?? []).filter(
+  const windows = provider?.usageLimits?.windows ?? [];
+  const exhausted = windows.filter(
     (window) =>
       (window.usedPercent ?? 0) >= 100 &&
+      (model === undefined || window.modelIds === undefined || window.modelIds.includes(model)) &&
+      (model === undefined ||
+        window.providerIds === undefined ||
+        window.providerIds.includes(model.split("/")[0] ?? "")) &&
       (!window.resetsAt ||
         !Number.isFinite(Date.parse(window.resetsAt)) ||
         Date.parse(window.resetsAt) > now),
@@ -52,6 +61,13 @@ export function exhaustedUsageWindow(
           (pool === "3p" && (family === "claude" || family === "gpt"))
         );
       });
+    }
+    case "codex": {
+      // Seat-based plans spend credits only past their plan windows, so the credit cap blocks only plans without them.
+      const hasPlanWindows = windows.some(
+        (window) => window.id === "primary" || window.id === "secondary",
+      );
+      return exhausted.find((window) => window.id !== "individual" || !hasPlanWindows);
     }
     case "opencode":
       return exhausted.find(
@@ -118,22 +134,26 @@ export const CURSOR_USAGE_WINDOWS = [
   {
     id: "totalPercentUsed",
     label: "Overall",
-    description: "Combined usage across both allowances, not a third quota.",
+    description: "All usage on your plan this billing cycle.",
   },
   {
     id: "autoPercentUsed",
     label: "Cursor Models",
-    description: "Grok and Composer use this first. Auto can use either pool.",
+    description: "Grok, Composer, and Auto use this allowance.",
   },
   {
     id: "apiPercentUsed",
     label: "Other Models",
-    description: "Claude, GPT, and Gemini use this pool. Grok and Composer fall back here.",
+    description: "Usage allowance for third-party models such as Claude, GPT, and Gemini.",
   },
 ] as const;
 
-export function cursorUsageWindowDetails(id: string) {
-  return CURSOR_USAGE_WINDOWS.find((window) => window.id === id);
+export function cursorUsageWindowDetails(id: string, pool: LimitPool) {
+  const details = CURSOR_USAGE_WINDOWS.find((window) => window.id === id);
+  return details &&
+    ((pool.windows.length === 1 && id === "totalPercentUsed") || hasDuplicateCursorTotal(pool))
+    ? { ...details, label: null, description: undefined }
+    : details;
 }
 
 function cursorUsageWindowRank(id: string): number {
@@ -234,6 +254,20 @@ function accountKeyResolver(reports: Iterable<AccountReport>) {
 }
 
 const hubAccountName = (account: { readonly id: string }) => account.id.replace(/\.json$/i, "");
+
+// Source ids are environment-local, so only a remote endpoint names the same hub across environments.
+function hubIdentity(environmentId: EnvironmentId, source: UsageLimitSourceSnapshot): string {
+  // The server supplies canonical endpoints; native URL polyfills can misparse IPv6 hosts.
+  const endpoint = source.endpoint;
+  const host = endpoint?.match(/^https?:\/\/(\[[\da-f:.]+\]|[^:/?#@]+)(?::\d+)?(?:\/|$)/)?.[1];
+  const local =
+    !host ||
+    isLocalLoopbackHost(host) ||
+    isWildcardHost(host) ||
+    // Each machine resolves these to itself too; shared host classification leaves them out.
+    /\.localhost\.*$|^\[::ffff:(?:127\.|7f[\da-f]{2}:)/i.test(host);
+  return endpoint && !local ? endpoint : `${environmentId}:${source.id}`;
+}
 
 export interface LimitAccount {
   readonly key: string;
@@ -361,8 +395,11 @@ export function collectLimitAccounts(presentations: LimitPresentations): readonl
         : source.label;
       for (const account of source.accounts) {
         if (limitsNotice(account.usageLimits) !== null) continue;
-        const key = `${source.id}:${account.id}${account.workspaceId ? `:${account.workspaceId}` : ""}`;
-        merge(resolveKey(account) ?? key, {
+        const resolved = resolveKey(account);
+        // A resolved account already has an identity; its public key must stay distinct from others'.
+        const hub = resolved ? `${environmentId}:${source.id}` : hubIdentity(environmentId, source);
+        const key = `${hub}:${account.id}${account.workspaceId ? `:${account.workspaceId}` : ""}`;
+        merge(resolved ?? key, {
           key,
           driver: account.driver,
           displayName: account.email ? null : hubAccountName(account),
@@ -392,24 +429,24 @@ export function collectLimitAccounts(presentations: LimitPresentations): readonl
 export function collectLimitNotices(presentations: LimitPresentations): readonly string[] {
   const label = (environmentLabel: string, subject: string) =>
     presentations.size > 1 ? `${environmentLabel} · ${subject}` : subject;
-  const notices: string[] = [];
+  const notices = new Set<string>();
   for (const presentation of presentations.values()) {
     const environmentLabel = presentation.entry.target.label;
     for (const provider of providersWithLimits(presentation.serverConfig?.providers ?? [])) {
       if (provider.usageLimits?.unavailable?.reason === "unsupported") continue;
       const notice = provider.usageLimits ? limitsNotice(provider.usageLimits) : null;
       const name = provider.displayName?.trim() || String(provider.driver);
-      if (notice) notices.push(`${label(environmentLabel, name)}: ${notice}`);
+      if (notice) notices.add(`${label(environmentLabel, name)}: ${notice}`);
     }
     for (const source of presentation.serverConfig?.usageLimitSources ?? []) {
       if (source.error) {
-        notices.push(`${label(environmentLabel, source.label)}: ${source.error}`);
+        notices.add(`${label(environmentLabel, source.label)}: ${source.error}`);
       } else if (source.accounts.length === 0) {
-        notices.push(`${label(environmentLabel, source.label)}: No accounts reported.`);
+        notices.add(`${label(environmentLabel, source.label)}: No accounts reported.`);
       }
     }
   }
-  return notices;
+  return [...notices];
 }
 
 export interface LimitPoolMember {
@@ -442,6 +479,26 @@ export interface LimitPool {
   readonly windows: readonly LimitPoolWindow[];
 }
 
+function hasDuplicateCursorTotal(pool: LimitPool): boolean {
+  if (pool.windows.length !== 2) return false;
+  const total = pool.windows.find((window) => window.id === "totalPercentUsed");
+  const auto = pool.windows.find((window) => window.id === "autoPercentUsed");
+  return (
+    total !== undefined &&
+    auto !== undefined &&
+    total.members.length === auto.members.length &&
+    total.members.every(({ account, window }) =>
+      account.limits.windows.some(
+        (candidate) =>
+          candidate.id === auto.id &&
+          candidate.kind === auto.kind &&
+          candidate.usedPercent === window.usedPercent &&
+          candidate.resetsAt === window.resetsAt,
+      ),
+    )
+  );
+}
+
 export function displayLimitWindows(pool: LimitPool) {
   if (pool.driver === "antigravity") {
     return [...pool.windows].sort(
@@ -456,9 +513,9 @@ export function displayLimitWindows(pool: LimitPool) {
   if (pool.driver !== "cursor") return pool.windows;
   const hasAuto = pool.windows.some((window) => window.id === "autoPercentUsed");
   const hasApi = pool.windows.some((window) => window.id === "apiPercentUsed");
-  const hasBothPools = hasAuto && hasApi;
+  const hideTotal = (hasAuto && hasApi) || hasDuplicateCursorTotal(pool);
   return pool.windows
-    .filter((window) => !hasBothPools || window.id !== "totalPercentUsed")
+    .filter((window) => !hideTotal || window.id !== "totalPercentUsed")
     .sort((left, right) => cursorUsageWindowRank(left.id) - cursorUsageWindowRank(right.id));
 }
 
@@ -504,6 +561,25 @@ export function collectLimitPools(
 
 function accountSortName(account: LimitAccount): string {
   return (account.displayName ?? account.email ?? account.key).toLowerCase();
+}
+
+const CODEX_PLAN_CAPACITY: Record<string, number> = {
+  "ChatGPT Plus Subscription": 1,
+  "ChatGPT Pro 100 Subscription": 5,
+  "ChatGPT Pro 200 Subscription": 20,
+};
+// Claude's published plan multipliers describe the session allowance only.
+const CLAUDE_SESSION_CAPACITY: Record<string, number> = { Pro: 1, Max: 5, Ultra: 20 };
+
+function planCapacity(account: LimitAccount, kind: ServerProviderUsageWindow["kind"]) {
+  if (!account.plan) return undefined;
+  if (account.driver === "codex" && (kind === "session" || kind === "weekly")) {
+    return CODEX_PLAN_CAPACITY[account.plan];
+  }
+  if (account.driver === "claudeAgent" && kind === "session") {
+    return CLAUDE_SESSION_CAPACITY[account.plan];
+  }
+  return undefined;
 }
 
 // Codex ids name slots, so pool by kind; other drivers' ids identify distinct allowances.
@@ -574,15 +650,28 @@ function poolWindows(accounts: readonly LimitAccount[], now: number): readonly L
     const memberByAccount = new Map(members.map((member) => [member.account.key, member]));
     const first = members[0]!.window;
     const id = members[0]!.account.driver === "codex" ? key : first.id;
-    const usedPercent = members.reduce((sum, m) => sum + m.window.usedPercent, 0) / members.length;
+    // One unknown plan makes the pool incomparable by plan, so every member then counts once.
+    const capacities = members.map((m) => planCapacity(m.account, first.kind));
+    const weights = capacities.every((capacity) => capacity !== undefined)
+      ? capacities
+      : members.map(() => 1);
+    const weightOf = new Map(members.map((m, index) => [m, weights[index]!]));
+    const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+    const usedPercent =
+      members.reduce((sum, m) => sum + m.window.usedPercent * weightOf.get(m)!, 0) / totalWeight;
     // Judge pace only for windows with reset clocks; others add spend without elapsed time.
     const timed = members.flatMap((m) => {
       const share = elapsedShare(m.window, now);
-      return share === null ? [] : [{ used: m.window.usedPercent, elapsed: share }];
+      return share === null
+        ? []
+        : [{ used: m.window.usedPercent, elapsed: share, weight: weightOf.get(m)! }];
     });
-    const timedUsed = timed.reduce((sum, t) => sum + t.used, 0) / timed.length;
+    const timedWeight = timed.reduce((sum, t) => sum + t.weight, 0);
+    const timedUsed = timed.reduce((sum, t) => sum + t.used * t.weight, 0) / timedWeight;
     const meanElapsed =
-      timed.length > 0 ? timed.reduce((sum, t) => sum + t.elapsed, 0) / timed.length : null;
+      timed.length > 0
+        ? timed.reduce((sum, t) => sum + t.elapsed * t.weight, 0) / timedWeight
+        : null;
     const resets = members
       .flatMap((member) => {
         const at = resetMillis(member.window);
@@ -592,7 +681,9 @@ function poolWindows(accounts: readonly LimitAccount[], now: number): readonly L
               {
                 member,
                 at,
-                restoresPercent: Math.round(member.refillPercent / members.length),
+                restoresPercent: Math.round(
+                  (member.refillPercent * weightOf.get(member)!) / totalWeight,
+                ),
               },
             ];
       })
@@ -675,6 +766,56 @@ export function formatDuration(ms: number): string {
   return `${minutes}m`;
 }
 
+/** One redeemable reset as clients offer it; `input` already names the chosen credit. */
+export interface ResetCreditChoice {
+  readonly key: string;
+  readonly summary: string;
+  readonly actionLabel: string;
+  readonly confirmDescription: string;
+  readonly availableCount: number;
+  readonly input: ProviderConsumeResetCreditInput;
+}
+
+export function resetCreditChoices(
+  credits: ServerProviderResetCredits,
+  input: ProviderConsumeResetCreditInput,
+  now: number,
+  compact = false,
+): ReadonlyArray<ResetCreditChoice> {
+  const expiresIn = (at: string | undefined) => (at ? formatDuration(Date.parse(at) - now) : null);
+  if (credits.options && "instanceId" in input) {
+    return credits.options.map((option) => {
+      const expires = expiresIn(option.expiresAt);
+      return {
+        key: option.creditId,
+        summary: `${option.label} · ${option.availableCount} left${expires ? ` · expires in ${expires}` : ""}`,
+        actionLabel: "Use",
+        confirmDescription: `${option.label}: ${option.description} This cannot be undone.`,
+        availableCount: option.availableCount,
+        input: { ...input, creditId: option.creditId },
+      };
+    });
+  }
+  const count = credits.availableCount;
+  const expires = expiresIn(credits.nextExpiresAt);
+  return [
+    {
+      key: "next",
+      summary:
+        count === 0
+          ? "No reset credits banked"
+          : compact
+            ? `${count} banked${expires ? ` · expires in ${expires}` : ""}`
+            : `${count} ${count === 1 ? "reset credit" : "reset credits"} banked${expires ? ` · next expires in ${expires}` : ""}`,
+      actionLabel: "Use reset",
+      confirmDescription:
+        "This redeems one credit on your account and clears the current rate-limit windows. It cannot be undone.",
+      availableCount: count,
+      input,
+    },
+  ];
+}
+
 export function formatResetsIn(window: ServerProviderUsageWindow, now: number): string | null {
   const resetsAt = resetMillis(window);
   if (resetsAt === null) return null;
@@ -729,8 +870,15 @@ export function withUsageLimitsCommands(
   providers: readonly ServerProvider[],
   sources: UsageLimitSourceSnapshots,
 ): ServerProvider[] {
+  const supportedDrivers = new Set([
+    ...providersWithLimits(providers).map((provider) => provider.driver),
+    ...sources.flatMap((source) => source.accounts.map((account) => account.driver)),
+  ]);
+  const unreadableSource = sources.some(
+    (source) => source.error !== undefined && source.accounts.length === 0,
+  );
   return providers.map((provider) => {
-    if (!hasProviderUsageLimits(provider.driver, providers, sources)) return provider;
+    if (!unreadableSource && !supportedDrivers.has(provider.driver)) return provider;
     const commands = (items: readonly ServerProviderSlashCommand[]) => [
       ...items.filter((command) => command.name !== USAGE_LIMITS_COMMAND.name),
       USAGE_LIMITS_COMMAND,
@@ -876,4 +1024,359 @@ export function collectProviderUsageLimits(
     }
   }
   return { createdAt: DateTime.formatIso(DateTime.makeUnsafe(now)), accounts, notices };
+}
+
+export const USAGE_GOAL_TIME_ZONE = "America/Sao_Paulo";
+const USAGE_GOAL_PER_BUSINESS_DAY = 20;
+const WEEK = 7 * DAY;
+const STALE_AFTER = 3 * MINUTE;
+const MIN_PROJECTION_ELAPSED = 2 * HOUR;
+
+const wallFormats = new Map<string, Intl.DateTimeFormat>();
+
+/** Wall-clock time in `timeZone` as a UTC-style millisecond count, so day arithmetic ignores offsets. */
+function wallMillis(ms: number, timeZone: string): number | null {
+  if (!Number.isFinite(ms)) return null;
+  try {
+    let format = wallFormats.get(timeZone);
+    if (!format) {
+      format = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        hourCycle: "h23",
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+        hour: "numeric",
+        minute: "numeric",
+        second: "numeric",
+      });
+      wallFormats.set(timeZone, format);
+    }
+    const parts = Object.fromEntries(
+      format.formatToParts(ms).map((part) => [part.type, part.value]),
+    );
+    const wall = Date.UTC(
+      Number(parts.year),
+      Number(parts.month) - 1,
+      Number(parts.day),
+      Number(parts.hour),
+      Number(parts.minute),
+      Number(parts.second),
+    );
+    return Number.isFinite(wall) ? wall : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Weekly goal: 20% per business day (Mon-Fri, no holidays) from the day the current cycle began,
+ * capped at 100% and stepping up at the start of the local day. `resetsAt` is the NEXT reset, so the
+ * cycle began a week earlier. A cycle that begins on a weekend starts counting on Monday.
+ * Returns null for an invalid date or time zone.
+ */
+export function goalPercent(input: {
+  readonly resetsAt: string;
+  readonly now: number;
+  readonly timeZone?: string;
+}): number | null {
+  const timeZone = input.timeZone ?? USAGE_GOAL_TIME_ZONE;
+  const start = wallMillis(Date.parse(input.resetsAt) - WEEK, timeZone);
+  const today = wallMillis(input.now, timeZone);
+  if (start === null || today === null) return null;
+  let businessDays = 0;
+  for (
+    let day = Math.floor(start / DAY);
+    day <= Math.floor(today / DAY) && businessDays < 5;
+    day++
+  ) {
+    if (isBusinessDay(day)) businessDays++;
+  }
+  return Math.min(100, businessDays * USAGE_GOAL_PER_BUSINESS_DAY);
+}
+
+function isBusinessDay(dayIndex: number): boolean {
+  // Day 0 (1970-01-01) was a Thursday.
+  const weekday = (((dayIndex + 4) % 7) + 7) % 7;
+  return weekday !== 0 && weekday !== 6;
+}
+
+/** Mon-Fri milliseconds between two wall-clock instants. */
+function businessMillis(from: number, to: number): number {
+  let total = 0;
+  for (let day = Math.floor(from / DAY); day * DAY < to; day++) {
+    if (isBusinessDay(day)) total += Math.min(to, (day + 1) * DAY) - Math.max(from, day * DAY);
+  }
+  return total;
+}
+
+/** The wall-clock instant reached after spending `amount` business milliseconds from `from`. */
+function advanceBusinessMillis(from: number, amount: number): number {
+  let at = from;
+  let left = amount;
+  while (left > 0) {
+    const day = Math.floor(at / DAY);
+    if (!isBusinessDay(day)) {
+      at = (day + 1) * DAY;
+      continue;
+    }
+    const step = Math.min(left, (day + 1) * DAY - at);
+    at += step;
+    left -= step;
+  }
+  return at;
+}
+
+export type ExhaustionForecast =
+  | { readonly kind: "unknown" }
+  | { readonly kind: "safe" }
+  | { readonly kind: "at"; readonly at: number };
+
+/**
+ * Pace is percent per business hour (Mon-Fri in `timeZone`, from the cycle start) and the
+ * projection advances over business time only. "unknown": too little history; "safe": reset first.
+ */
+export function exhaustionForecast(
+  window: ServerProviderUsageWindow,
+  now: number,
+  timeZone: string = USAGE_GOAL_TIME_ZONE,
+): ExhaustionForecast {
+  const resetsAt = resetMillis(window);
+  if (resetsAt === null || window.usedPercent <= 0 || window.usedPercent >= 100) {
+    return { kind: "unknown" };
+  }
+  const nowWall = wallMillis(now, timeZone);
+  const startWall = wallMillis(resetsAt - WEEK, timeZone);
+  const resetWall = wallMillis(resetsAt, timeZone);
+  if (nowWall === null || startWall === null || resetWall === null || nowWall >= resetWall) {
+    return { kind: "unknown" };
+  }
+  const elapsed = businessMillis(startWall, nowWall);
+  if (elapsed < MIN_PROJECTION_ELAPSED) return { kind: "unknown" };
+  const needed = ((100 - window.usedPercent) * elapsed) / window.usedPercent;
+  if (needed > businessMillis(nowWall, resetWall)) return { kind: "safe" };
+  return { kind: "at", at: now + (advanceBusinessMillis(nowWall, needed) - nowWall) };
+}
+
+export const CLAUDE_WEEKLY_MODEL_LABEL_PREFIX = "Weekly · ";
+
+export interface ClaudeAccountUsage {
+  readonly instanceId: ProviderInstanceId;
+  readonly label: string;
+  readonly accentColor: string | undefined;
+  readonly weekly: ServerProviderUsageWindow | undefined;
+  readonly session: ServerProviderUsageWindow | undefined;
+  /** `CLAUDE_WEEKLY_MODEL_LABEL_PREFIX` + model windows, ordered by id. */
+  readonly scoped: readonly ServerProviderUsageWindow[];
+  readonly goal: number | null;
+  /** The last good reading is older than three minutes. */
+  readonly stale: boolean;
+  readonly limits: ServerProviderUsageLimits;
+  readonly resetCreditInput: ProviderConsumeResetCreditInput;
+}
+
+/**
+ * One entry per enabled Claude account with subscription limits, ordered by instance id.
+ * `sources` are needed to show a hub's reset credits and redeem through it.
+ */
+export function selectClaudeUsageAccounts(input: {
+  readonly providers: readonly ServerProvider[];
+  readonly sources?: UsageLimitSourceSnapshots | undefined;
+  readonly now: number;
+}): readonly ClaudeAccountUsage[] {
+  const first = input.providers.find((provider) => provider.driver === "claudeAgent");
+  if (!first) return [];
+  const report = collectProviderUsageLimits(
+    first.instanceId,
+    input.providers,
+    input.sources ?? [],
+    input.now,
+  );
+  return (report?.accounts ?? [])
+    .flatMap(({ instanceId, displayName, accentColor, limits, resetCreditInput }) => {
+      if (!instanceId || limits.unavailable?.reason === "unsupported") return [];
+      const weekly = limits.windows.find((window) => window.id === "seven_day");
+      const checked = Date.parse(limits.checkedAt);
+      return [
+        {
+          instanceId,
+          label: displayName?.trim() || "Claude",
+          accentColor,
+          weekly,
+          session: limits.windows.find((window) => window.id === "five_hour"),
+          scoped: limits.windows
+            .filter((window) => window.kind === "weekly" && window.id.startsWith("seven_day_"))
+            .sort((a, b) => a.id.localeCompare(b.id)),
+          goal: weekly?.resetsAt
+            ? goalPercent({ resetsAt: weekly.resetsAt, now: input.now })
+            : null,
+          stale: !Number.isFinite(checked) || input.now - checked > STALE_AFTER,
+          limits,
+          resetCreditInput: resetCreditInput ?? { instanceId },
+        } satisfies ClaudeAccountUsage,
+      ];
+    })
+    .sort((a, b) => a.instanceId.localeCompare(b.instanceId));
+}
+
+/** What `selectClaudeUsageAccounts` leaves out: other drivers and Claude accounts known only to a hub. */
+export function limitAccountsBesideClaude(
+  accounts: readonly LimitAccount[],
+): readonly LimitAccount[] {
+  return accounts.filter(
+    (account) => account.driver !== "claudeAgent" || account.environments.length === 0,
+  );
+}
+
+const usedPercent = (window: ServerProviderUsageWindow) => 100 - remainingPercent(window);
+
+/** The weekly reading the composer shows: percent used, today's goal and whether use is past it. */
+export function claudeWeeklyReading(
+  account: Pick<ClaudeAccountUsage, "weekly" | "goal">,
+): { readonly used: number; readonly goal: number | null; readonly over: boolean } | null {
+  if (!account.weekly) return null;
+  const used = usedPercent(account.weekly);
+  return { used, goal: account.goal, over: account.goal !== null && used > account.goal };
+}
+
+/** "Used 36% · today's goal 60%" for the account's weekly window; model windows have no goal. */
+export function claudeGoalSummary(
+  window: ServerProviderUsageWindow,
+  now: number,
+  goal: number | null | undefined = window.resetsAt
+    ? goalPercent({ resetsAt: window.resetsAt, now })
+    : null,
+): string | null {
+  if (!window.resetsAt || window.id !== "seven_day") return null;
+  const used = usedPercent(window);
+  return goal === null ? `Used ${used}%` : `Used ${used}% · today's goal ${goal}%`;
+}
+
+/** The accessible label of the weekly bar: "Weekly: 36% used, today's goal 60%". */
+export function weeklyBarLabel(reading: {
+  readonly used: number;
+  readonly goal: number | null;
+}): string {
+  return `Weekly: ${reading.used}% used${reading.goal === null ? "" : `, today's goal ${reading.goal}%`}`;
+}
+
+/** The block's headline: "On pace" or "14% over goal"; null without a goal to compare against. */
+export function claudeVerdictText(reading: {
+  readonly used: number;
+  readonly goal: number | null;
+  readonly over: boolean;
+}): string | null {
+  if (reading.goal === null) return null;
+  return reading.over ? `${reading.used - reading.goal}% over goal` : "On pace";
+}
+
+/** "14 / 100" against today's goal, "14%" without one. */
+export function claudeUsageValueText(reading: {
+  readonly used: number;
+  readonly goal: number | null;
+}): string {
+  return reading.goal === null ? `${reading.used}%` : `${reading.used} / ${reading.goal}`;
+}
+
+/** The secondary windows on one line: "5h 0% · Fable 12%". A model window with no use is left out. */
+export function claudeWindowsText(account: Pick<ClaudeAccountUsage, "session" | "scoped">): string {
+  return [
+    ...(account.session ? [`5h ${usedPercent(account.session)}%`] : []),
+    ...account.scoped.flatMap((window) => {
+      const used = usedPercent(window);
+      return used > 0
+        ? [`${window.label.replace(CLAUDE_WEEKLY_MODEL_LABEL_PREFIX, "")} ${used}%`]
+        : [];
+    }),
+  ].join(" · ");
+}
+
+/** The account's freshness. A failed read only shows once the last good reading is stale. */
+export function claudeUsageStatusText(
+  account: Pick<ClaudeAccountUsage, "stale" | "limits">,
+  now: number,
+): string {
+  const updated = `Updated ${formatAgo(account.limits.checkedAt, now) || "n/a"}`;
+  const { lastError } = account.limits;
+  if (!account.stale || !lastError) return updated;
+  if (lastError.reason === "signedOut") return `${updated} · open Claude to sign in`;
+  const retryAt = lastError.retryAt ? Date.parse(lastError.retryAt) : Number.NaN;
+  return retryAt > now
+    ? `${updated} · retrying in ${formatDuration(Math.max(retryAt - now, MINUTE))}`
+    : updated;
+}
+
+/** The warning line for a projected run-out; a safe or unknown forecast adds nothing to the verdict. */
+export function forecastWarningText(
+  forecast: ExhaustionForecast | undefined,
+  formatInstant: (ms: number) => string,
+): string | null {
+  return forecast?.kind === "at" ? `Projected to run out ${formatInstant(forecast.at)}` : null;
+}
+
+/** Composer text for one account: "Claude 36/60", with its age when the reading is stale. */
+export function claudeAccountText(
+  account: ClaudeAccountUsage,
+  formatAge: (isoDate: string) => string,
+  withName = true,
+): string {
+  const age = account.stale ? ` ${formatAge(account.limits.checkedAt)}` : "";
+  return `${withName ? `${account.label} ` : ""}${claudeAccountValue(account)}${age}`;
+}
+
+/** Weekly use as the composer shows it: "72/80" against today's goal, "72%" without one, "n/a" with no reading. */
+export function claudeAccountValue(account: Pick<ClaudeAccountUsage, "weekly" | "goal">): string {
+  const reading = claudeWeeklyReading(account);
+  if (!reading) return "n/a";
+  return `${reading.used}${reading.goal === null ? "%" : `/${reading.goal}`}`;
+}
+
+/** "just now", "14m ago", "3h ago", "2d ago". */
+export function formatAgo(isoDate: string, now: number): string {
+  const at = Date.parse(isoDate);
+  if (!Number.isFinite(at)) return "";
+  const minutes = Math.floor(Math.max(0, now - at) / MINUTE);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  return hours < 24 ? `${hours}h ago` : `${Math.floor(hours / 24)}d ago`;
+}
+
+const goalZoneFormats = new Map<
+  string,
+  readonly [day: Intl.DateTimeFormat, time: Intl.DateTimeFormat, weekday: Intl.DateTimeFormat]
+>();
+
+/** "today 18:30", "tomorrow 09:00" or "Mon 09:00" in the goal time zone (America/Sao_Paulo). */
+export function formatGoalZoneInstant(
+  ms: number,
+  now: number,
+  timeZone: string = USAGE_GOAL_TIME_ZONE,
+): string {
+  let formats = goalZoneFormats.get(timeZone);
+  if (!formats) {
+    formats = [
+      new Intl.DateTimeFormat("en-CA", { timeZone }),
+      new Intl.DateTimeFormat("en-GB", {
+        timeZone,
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      }),
+      new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }),
+    ];
+    goalZoneFormats.set(timeZone, formats);
+  }
+  const [dayFormat, timeFormat, weekdayFormat] = formats;
+  const time = timeFormat.format(ms);
+  const day = dayFormat.format(ms);
+  if (day === dayFormat.format(now)) return `today ${time}`;
+  if (day === dayFormat.format(now + DAY)) return `tomorrow ${time}`;
+  return `${weekdayFormat.format(ms)} ${time}`;
+}
+
+/** The account owner's name or email when it differs from the driver label (case-insensitive). */
+export function limitInstanceName(account: LimitAccount, driverLabel: string): string | null {
+  const who = account.displayName?.trim() || account.email;
+  return who && who.toLowerCase() !== driverLabel.toLowerCase() ? who : null;
 }

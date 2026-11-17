@@ -8,7 +8,10 @@ import {
   snoozeWakeLabel,
   threadWokeAt,
 } from "@t3tools/client-runtime/state/thread-settled";
-import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled";
+import {
+  hasUnseenRunFailure,
+  type SnoozePreset,
+} from "@t3tools/client-runtime/state/thread-settled";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import { resolveThreadProviderStack } from "@t3tools/client-runtime/state/models";
 import {
@@ -25,6 +28,7 @@ import {
 import {
   sortActiveThreadsByOrderKey,
   resolveSettledThreadTimestamp,
+  resolveThreadActivityTimestamp,
   sortPinnedThreadsByOrderKey,
   sortSettledThreads,
 } from "@t3tools/client-runtime/state/thread-sort";
@@ -36,11 +40,6 @@ import type { ThreadListProvider } from "../../state/thread-list-environments";
 import type { ThreadMoveAvailability } from "./threadOrder";
 
 import { relativeTime } from "../../lib/time";
-import {
-  nestThreadListSubsessions,
-  THREAD_LIST_SUBSESSION_MAX_INDENT,
-  type ThreadListSubsessions,
-} from "./threadListSubsessions";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 
 import {
@@ -48,10 +47,6 @@ import {
   reconcilePendingThreadOrder,
   type PendingThreadOrder,
 } from "./threadOrder";
-
-const EMPTY_KEYS: ReadonlySet<string> = new Set();
-const keyOfThread = (thread: Pick<EnvironmentThreadShell, "environmentId" | "id">) =>
-  `${thread.environmentId}:${thread.id}`;
 
 export const threadListInboxReturns = createInboxReturnTracker();
 
@@ -192,7 +187,7 @@ export function resolveThreadListV2SnoozeGateExpiryMs(
   >,
   options: { readonly now: string },
 ): number | null {
-  if (thread.hasPendingApprovals || thread.hasPendingUserInput) return null;
+  if (thread.hasPendingApprovals) return null;
   if (thread.pendingSubagentRequest != null) return null;
   if (!hasQueuedTurnStart(thread, options)) return null;
   const messageAtMs = Date.parse(thread.latestUserMessageAt ?? "");
@@ -243,6 +238,8 @@ export function threadHasUnseenCompletion(
 ): boolean {
   const completedAt = thread.latestRun?.completedAt;
   if (!completedAt) return false;
+  const status = thread.latestRun?.status;
+  if (status === "interrupted" || status === "cancelled") return false;
   const completedAtMs = Date.parse(completedAt);
   if (Number.isNaN(completedAtMs)) return false;
   if (!thread.lastVisitedAt) return false;
@@ -304,12 +301,52 @@ export function resolveThreadListV2Status(
   return "ready";
 }
 
+export function threadListV2RowAccessibilityLabel(input: {
+  readonly title: string;
+  readonly variant: "card" | "slim";
+  readonly woke: boolean;
+  readonly statusLabel: string | undefined;
+  readonly timeLabel: string;
+  readonly snoozeWakeLabel: string | undefined;
+  readonly providerNameLabel: string | null;
+  readonly hasQueuedMessages: boolean;
+  readonly regeneratingTitle: boolean;
+}): string {
+  // Mirrors the row's meta line: a card shows Woke, else its status, else the time.
+  const meta =
+    input.variant === "slim"
+      ? (input.snoozeWakeLabel ?? input.timeLabel)
+      : input.woke
+        ? "Woke"
+        : (input.statusLabel ?? input.timeLabel);
+  return [
+    input.title,
+    meta,
+    input.providerNameLabel,
+    input.hasQueuedMessages ? "messages queued to send" : null,
+    input.regeneratingTitle ? "regenerating title" : null,
+  ]
+    .filter((part) => part !== null)
+    .join(", ");
+}
+
+/** Row status: a failure the user has already opened settles to ready, like Done. */
+export function resolveThreadListV2RowStatus(
+  thread: Parameters<typeof resolveThreadListV2Status>[0] &
+    Pick<EnvironmentThreadShell, "latestRun" | "lastVisitedAt">,
+): ThreadListV2Status {
+  const status = resolveThreadListV2Status(thread);
+  // A runtime failure without a failed run has nothing to date it, so it stays.
+  if (status !== "failed" || thread.latestRun?.status !== "failed") return status;
+  return hasUnseenRunFailure(thread) ? status : "ready";
+}
+
 function parseTimestampMs(isoDate: string): number {
   const parsed = Date.parse(isoDate);
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-export function sortThreadsForListV2<
+function sortThreadsForListV2<
   T extends {
     readonly id: string;
     readonly createdAt: string;
@@ -331,10 +368,8 @@ export function getThreadListV2OrderedSection(input: {
   readonly queuedThreadKeys?: ReadonlySet<string>;
 }): EnvironmentThreadShell[] {
   const queuedThreadKeys = input.queuedThreadKeys?.size ? input.queuedThreadKeys : undefined;
-  const { nestedKeys } = nestThreadListSubsessions(input.threads);
   const threads = input.threads.filter((thread) => {
     if (thread.archivedAt !== null || !isListedThreadLineage(thread.lineage)) return false;
-    if (nestedKeys.has(`${thread.environmentId}:${thread.id}`)) return false;
     if (
       (input.settlementEnvironmentIds?.has(thread.environmentId) ?? true) &&
       thread.settledOverride === "settled" &&
@@ -368,17 +403,6 @@ export interface ThreadListV2Item {
   readonly pinned: boolean;
   readonly wokeAt: string | null;
   readonly isLast: boolean;
-  /** Indent level of a subsession row, capped for display; 0 for a top-level row. */
-  readonly depth: number;
-  /** Set on a row that has subsessions listed under it (or folded away). */
-  readonly subsessions: ThreadListV2Subsessions | null;
-}
-
-export interface ThreadListV2Subsessions {
-  readonly count: number;
-  readonly collapsed: boolean;
-  /** The most urgent status among folded subsessions, so work does not hide. */
-  readonly hiddenStatus: ThreadListV2Status | null;
 }
 
 export interface ThreadListV2Layout {
@@ -479,10 +503,6 @@ export function threadListV2ListItemsAreEqual(
         previous.item.snoozed === item.item.snoozed &&
         previous.item.pinned === item.item.pinned &&
         previous.item.wokeAt === item.item.wokeAt &&
-        previous.item.depth === item.item.depth &&
-        previous.item.subsessions?.count === item.item.subsessions?.count &&
-        previous.item.subsessions?.collapsed === item.item.subsessions?.collapsed &&
-        previous.item.subsessions?.hiddenStatus === item.item.subsessions?.hiddenStatus &&
         previous.snoozeWakeLabelText === item.snoozeWakeLabelText &&
         previous.timeLabel === item.timeLabel &&
         previous.snoozePresetMinute === item.snoozePresetMinute &&
@@ -531,7 +551,7 @@ function resolveThreadListV2ItemTimeLabel(
   if (showSnoozeWakeLabel) return "";
   if (
     variant === "card" &&
-    (resolveThreadListV2Status(thread) !== "ready" ||
+    (resolveThreadListV2RowStatus(thread) !== "ready" ||
       item.wokeAt !== null ||
       threadHasUnseenCompletion(thread))
   )
@@ -539,7 +559,7 @@ function resolveThreadListV2ItemTimeLabel(
   const settledTimestamp =
     variant === "slim" && !snoozed ? resolveSettledThreadTimestamp(thread) : null;
   return relativeTime(
-    settledTimestamp ?? thread.latestUserMessageAt ?? thread.updatedAt ?? thread.createdAt,
+    settledTimestamp ?? resolveThreadActivityTimestamp(thread) ?? thread.createdAt,
   );
 }
 
@@ -674,53 +694,6 @@ function sortSettledThreadsReusingLast(
   return lastSettledOutput;
 }
 
-const HIDDEN_STATUS_ORDER: ReadonlyArray<ThreadListV2Status> = [
-  "approval",
-  "input",
-  "request",
-  "failed",
-  "limited",
-  "working",
-];
-
-interface SubsessionEntry {
-  readonly thread: EnvironmentThreadShell;
-  readonly depth: number;
-  readonly subsessions: ThreadListV2Subsessions | null;
-}
-
-/** The thread followed by its subsessions in tree order; a folded thread lists none. */
-export function listThreadWithSubsessions(
-  thread: EnvironmentThreadShell,
-  nesting: ThreadListSubsessions<EnvironmentThreadShell>,
-  collapsedKeys: ReadonlySet<string>,
-): SubsessionEntry[] {
-  const visit = (
-    current: EnvironmentThreadShell,
-    level: number,
-  ): { shown: SubsessionEntry[]; all: EnvironmentThreadShell[] } => {
-    const key = `${current.environmentId}:${current.id}`;
-    const childThreads = nesting.childrenByParent.get(key) ?? [];
-    const children = childThreads.map((child) => visit(child, level + 1));
-    const all = childThreads.flatMap((child, index) => [child, ...children[index]!.all]);
-    const depth = Math.min(level, THREAD_LIST_SUBSESSION_MAX_INDENT);
-    if (all.length === 0) return { shown: [{ thread: current, depth, subsessions: null }], all };
-    const collapsed = collapsedKeys.has(key);
-    const statuses = collapsed ? all.map(resolveThreadListV2Status) : [];
-    const self: SubsessionEntry = {
-      thread: current,
-      depth,
-      subsessions: {
-        count: all.length,
-        collapsed,
-        hiddenStatus: HIDDEN_STATUS_ORDER.find((status) => statuses.includes(status)) ?? null,
-      },
-    };
-    return { shown: collapsed ? [self] : [self, ...children.flatMap((child) => child.shown)], all };
-  };
-  return visit(thread, 0).shown;
-}
-
 export function buildThreadListV2Items(input: {
   readonly pendingOrder?: PendingThreadOrder | null;
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
@@ -743,8 +716,6 @@ export function buildThreadListV2Items(input: {
   readonly settledShelfExpanded?: boolean;
   readonly selectedThreadKey?: string | null;
   readonly queuedThreadKeys?: ReadonlySet<string>;
-  /** Parent thread keys whose subsessions are folded. */
-  readonly collapsedSubsessionKeys?: ReadonlySet<string>;
   /** Whether the shelf may list a settled row yet; older settled rows load in pages. */
   readonly isListedSettled?: (thread: EnvironmentThreadShell) => boolean;
   /** Settled threads in scope that are not local (older settled threads not loaded). */
@@ -776,16 +747,10 @@ export function buildThreadListV2Items(input: {
   const snoozed: EnvironmentThreadShell[] = [];
   let nextSnoozeWakeAt: string | null = null;
   const queuedThreadKeys = input.queuedThreadKeys?.size ? input.queuedThreadKeys : undefined;
-  // A search lists matches flat; otherwise subsessions render under their parent.
-  const nesting = nestThreadListSubsessions(input.threads);
-  const flatSearch = query.length > 0;
-  const collapsedKeys = input.collapsedSubsessionKeys ?? EMPTY_KEYS;
   const listedThreads = input.threads.filter(
     (thread) =>
       thread.archivedAt === null &&
-      (flatSearch
-        ? isListedThreadLineage(thread.lineage) || nesting.nestedKeys.has(keyOfThread(thread))
-        : isListedThreadLineage(thread.lineage) && !nesting.nestedKeys.has(keyOfThread(thread))) &&
+      isListedThreadLineage(thread.lineage) &&
       (input.environmentId === null || thread.environmentId === input.environmentId) &&
       (projectKeys === null || projectKeys.has(`${thread.environmentId}:${thread.projectId}`)),
   );
@@ -865,8 +830,6 @@ export function buildThreadListV2Items(input: {
         pinned: pinnedThreads.has(thread),
         wokeAt: slim.has(thread) ? null : resolveThreadListV2WokeAt(thread, { now }),
         isLast: index === results.length - 1,
-        depth: 0,
-        subsessions: null,
       })),
       hiddenSettledCount: 0,
       listedSettledThreads: [],
@@ -928,42 +891,62 @@ export function buildThreadListV2Items(input: {
         );
 
   const items: ThreadListV2Item[] = [];
-  const pushWithSubsessions = (
-    thread: EnvironmentThreadShell,
-    shelf: { variant: "card" | "slim"; snoozed: boolean; pinned: boolean },
-  ) => {
-    for (const entry of listThreadWithSubsessions(thread, nesting, collapsedKeys)) {
-      const root = entry.depth === 0;
-      items.push({
-        thread: entry.thread,
-        variant: shelf.variant,
-        snoozed: root && shelf.snoozed,
-        pinned: root && shelf.pinned,
-        wokeAt: shelf.variant === "card" ? resolveThreadListV2WokeAt(entry.thread, { now }) : null,
-        isLast: false,
-        depth: entry.depth,
-        subsessions: entry.subsessions,
-      });
-    }
-  };
-  const cardShelf = { variant: "card", snoozed: false, pinned: false } as const;
   for (const thread of applyPendingThreadOrder(
     sortPinnedThreadsByOrderKey(pinned),
     "pinned",
     pending,
   )) {
-    pushWithSubsessions(thread, { ...cardShelf, pinned: true });
+    items.push({
+      thread,
+      variant: "card",
+      snoozed: false,
+      pinned: true,
+      wokeAt: resolveThreadListV2WokeAt(thread, { now }),
+      isLast: false,
+    });
   }
-  for (const thread of orderedActive) pushWithSubsessions(thread, cardShelf);
+  for (const thread of orderedActive) {
+    items.push({
+      thread,
+      variant: "card",
+      snoozed: false,
+      pinned: false,
+      wokeAt: resolveThreadListV2WokeAt(thread, { now }),
+      isLast: false,
+    });
+  }
   const workingShelfHeaderIndex = orderedWorking.length > 0 ? items.length : null;
-  for (const thread of visibleWorking) pushWithSubsessions(thread, cardShelf);
+  for (const thread of visibleWorking) {
+    items.push({
+      thread,
+      variant: "card",
+      snoozed: false,
+      pinned: false,
+      wokeAt: resolveThreadListV2WokeAt(thread, { now }),
+      isLast: false,
+    });
+  }
   const snoozedShelfHeaderIndex = orderedSnoozed.length > 0 ? items.length : null;
   for (const thread of visibleSnoozed) {
-    pushWithSubsessions(thread, { variant: "slim", snoozed: true, pinned: false });
+    items.push({
+      thread,
+      variant: "slim",
+      snoozed: true,
+      pinned: false,
+      wokeAt: null,
+      isLast: false,
+    });
   }
   const settledShelfHeaderIndex = settledTotal > 0 ? items.length : null;
   for (const thread of visibleSettled) {
-    pushWithSubsessions(thread, { variant: "slim", snoozed: false, pinned: false });
+    items.push({
+      thread,
+      variant: "slim",
+      snoozed: false,
+      pinned: false,
+      wokeAt: null,
+      isLast: false,
+    });
   }
   const last = items.at(-1);
   if (last) {

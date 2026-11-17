@@ -34,6 +34,7 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { Input } from "../ui/input";
+import { Switch } from "../ui/switch";
 import { useAssetUrls } from "~/assets/assetUrls";
 import { type ChatFileAttachment, isImageAttachment } from "../../types";
 import { buildExpandedImagePreview, type ExpandedImagePreview } from "./ExpandedImagePreview";
@@ -79,12 +80,13 @@ function GuestShareDialog({
   });
   const { copyToClipboard, isCopied } = useCopyToClipboard({ target: "guest link" });
   const [state, setState] = useState<CreateState>({ status: "idle" });
+  const [requireApproval, setRequireApproval] = useState(true);
 
   const create = async () => {
     setState({ status: "creating" });
     const result = await createGuestShare({
       environmentId: threadRef.environmentId,
-      input: { threadId: threadRef.threadId },
+      input: { threadId: threadRef.threadId, autoSend: !requireApproval },
     });
     if (result._tag === "Success") {
       setState({ status: "created", url: result.value.url });
@@ -113,7 +115,7 @@ function GuestShareDialog({
           <DialogTitle>Share with guest</DialogTitle>
           <DialogDescription>
             The guest sees the thread as you do, including command output and the agent&apos;s
-            reasoning. Each message they send waits for you.
+            reasoning.
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>
@@ -131,11 +133,28 @@ function GuestShareDialog({
               </Button>
             </div>
           ) : (
-            <p className="text-muted-foreground text-sm">
-              {activeShare !== null
-                ? "A new link ends the current one."
-                : "The link works once and expires in 24 hours."}
-            </p>
+            <div className="flex flex-col gap-3">
+              <label className="flex items-start justify-between gap-3 text-sm">
+                <span className="flex flex-col gap-0.5">
+                  <span>Require my approval</span>
+                  <span className="text-muted-foreground text-xs">
+                    {requireApproval
+                      ? "Each message the guest sends waits for you to send or dismiss it."
+                      : "The guest's messages go straight to the agent."}
+                  </span>
+                </span>
+                <Switch
+                  checked={requireApproval}
+                  onCheckedChange={setRequireApproval}
+                  disabled={state.status === "creating"}
+                />
+              </label>
+              <p className="text-muted-foreground text-sm">
+                {activeShare !== null
+                  ? "A new link ends the current one."
+                  : "The link works once and expires in 24 hours."}
+              </p>
+            </div>
           )}
           {state.status === "failed" ? (
             <p role="alert" className="text-destructive text-xs">
@@ -209,7 +228,10 @@ function GuestShareStatus({ share }: { readonly share: ThreadGuestShare }) {
   // The share stays on the thread after it expires, until the owner clears it.
   if (share.expiresAt.slice(0, 16) <= nowMinute) return <span>Guest link expired</span>;
   return (
-    <span>{share.guestName !== null ? `${share.guestName} is a guest` : "Guest link active"}</span>
+    <span>
+      {share.guestName !== null ? `${share.guestName} is a guest` : "Guest link active"}
+      {share.autoSend ? " · sends directly" : null}
+    </span>
   );
 }
 

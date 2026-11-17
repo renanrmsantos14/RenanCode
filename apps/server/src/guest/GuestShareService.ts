@@ -4,10 +4,12 @@ import {
   CommandId,
   GUEST_SHARE_TTL_MS,
   GuestMessageId,
+  MessageId,
   GuestShareCreateError,
   type GuestShareCreateInput,
   type GuestShareCreateResult,
   GuestShareId,
+  type GuestAnswerRequest,
   type GuestRedeemRequest,
   type GuestStreamEvent,
   type GuestSubmitRequest,
@@ -48,13 +50,15 @@ import { CloudManagedEndpointRuntime } from "../cloud/ManagedEndpointRuntime.ts"
 import * as CommandOutputHub from "../orchestration-v2/CommandOutputHub.ts";
 import { GUEST_FAILURE } from "../orchestration-v2/GuestShareDecider.ts";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
+import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import { coalesceThreadLiveStream } from "../orchestration-v2/ThreadLiveEventCoalescer.ts";
 import { buildBoundedThreadStreamSnapshot } from "../orchestration-v2/ThreadStream.ts";
 import {
-  projectDomainEventForWire,
   projectTurnItemForDetail,
   projectTurnItemForWire,
+  threadStreamEventItem,
 } from "../orchestration-v2/WireProjection.ts";
+import * as DocumentText from "../provider/DocumentText.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as AnalyticsService from "../telemetry/AnalyticsService.ts";
@@ -90,6 +94,8 @@ const GUEST_ACCESS_MESSAGES = {
   too_large: "Attached files can total up to 10 MB per message.",
   unsupported_file: "This file cannot be attached. Images must be PNG, JPEG, GIF, or WebP.",
   files_busy: GUEST_FAILURE.filesBusy,
+  needs_owner: "The owner answers the agent's questions on this link.",
+  answered: "This question was already answered.",
 } as const;
 
 /** What a guest is told. The message comes from `reason`, never from a cause. */
@@ -109,6 +115,8 @@ export class GuestShareAccessError extends Schema.TaggedError<GuestShareAccessEr
       "too_large",
       "unsupported_file",
       "files_busy",
+      "needs_owner",
+      "answered",
     ]),
   },
 ) {
@@ -158,6 +166,11 @@ export class GuestShareService extends Context.Service<
       session: string,
       request: GuestSubmitRequest,
       uploads: ReadonlyArray<GuestUpload>,
+    ) => Effect.Effect<void, GuestShareAccessError>;
+    /** Answers a pending question of the agent, on a link whose messages skip the owner. */
+    readonly answer: (
+      session: string,
+      request: GuestAnswerRequest,
     ) => Effect.Effect<void, GuestShareAccessError>;
     readonly stream: (
       session: string,
@@ -220,6 +233,7 @@ const threadOf = (event: OrchestrationV2DomainEvent): OrchestrationV2AppThread |
 
 const make = Effect.gen(function* () {
   const orchestrator = yield* Orchestrator.OrchestratorV2;
+  const threads = yield* ThreadManagementService.ThreadManagementService;
   const commandOutputs = yield* CommandOutputHub.CommandOutputHub;
   const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
@@ -228,6 +242,7 @@ const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const random = yield* SecureRandom.SecureRandom;
   const analytics = yield* AnalyticsService.AnalyticsService;
+  const documents = yield* DocumentText.DocumentText;
   const signer = yield* PayloadSigner.make(SIGNING_SECRET_NAME);
   /** A truncated HMAC keeps invite links short. 128 bits is still far beyond guessing range. */
   const inviteSignature = (shareId: string) =>
@@ -355,6 +370,7 @@ const make = Effect.gen(function* () {
         shareId,
         host,
         expiresAt,
+        ...(input.autoSend ? { autoSend: true } : {}),
       })
       .pipe(Effect.mapError(() => new GuestShareCreateError({ reason: "thread_unavailable" })));
     const { thread } = yield* orchestrator
@@ -394,7 +410,12 @@ const make = Effect.gen(function* () {
         const path = resolveAttachmentPath({ attachmentsDir, attachment });
         return path === null
           ? Effect.void
-          : fileSystem.remove(path, { force: true }).pipe(Effect.ignore);
+          : fileSystem
+              .remove(path, { force: true })
+              .pipe(
+                Effect.andThen(fileSystem.remove(`${path}.txt`, { force: true })),
+                Effect.ignore,
+              );
       },
       { discard: true },
     );
@@ -440,6 +461,7 @@ const make = Effect.gen(function* () {
           yield* fileSystem.makeDirectory(attachmentsDir, { recursive: true });
           yield* fileSystem.copyFile(uploads[index]!.path, path);
           stored.push(attachment);
+          yield* documents.ensure(path);
         }).pipe(Effect.mapError(() => uploadFailed)),
       { discard: true },
     ).pipe(Effect.onError(() => removeStored(stored)));
@@ -459,19 +481,75 @@ const make = Effect.gen(function* () {
       return yield* new GuestShareAccessError({ reason: "empty" });
     }
     const attachments = yield* storeUploads(thread.id, uploads);
+    const guestMessageId = GuestMessageId.make(yield* random.uuidV4());
     yield* dispatchGuestCommand({
       type: "thread.guest-message.submit",
       commandId: yield* commandId("submit"),
       threadId: thread.id,
       shareId: share.id,
-      guestMessageId: GuestMessageId.make(yield* random.uuidV4()),
+      guestMessageId,
       text: request.text,
       ...(attachments.length === 0 ? {} : { attachments }),
     }).pipe(Effect.onError(() => removeStored(attachments)));
+    if (share.autoSend) {
+      // Same send the owner's button makes. If it fails, the message stays waiting for the owner.
+      const sendId = yield* commandId("auto-send");
+      yield* threads
+        .dispatch({
+          type: "message.dispatch",
+          commandId: sendId,
+          threadId: thread.id,
+          messageId: MessageId.make(sendId),
+          guestMessageId,
+          text: "",
+          attachments,
+          dispatchMode: { type: "queue_after_active" },
+          createdBy: "user",
+          creationSource: "server",
+        })
+        .pipe(
+          Effect.catch((error) =>
+            Effect.logWarning("Guest message auto-send failed", { threadId: thread.id, error }),
+          ),
+        );
+    }
     yield* analytics.record("feature.used", {
       feature: "guest_message.submit",
       variant: attachments.length === 0 ? "text_only" : "with_files",
     });
+  });
+
+  const answer = Effect.fn("GuestShareService.answer")(function* (
+    session: string,
+    request: GuestAnswerRequest,
+  ) {
+    const { thread, share } = yield* authorize(session, "session");
+    if (request.shareId !== share.id) {
+      return yield* new GuestShareAccessError({ reason: "stale_page" });
+    }
+    // Answering steers the agent like a message does, so it needs the same trust.
+    if (!share.autoSend) return yield* new GuestShareAccessError({ reason: "needs_owner" });
+    const { runtimeRequests } = yield* orchestrator
+      .getThreadRecords(thread.id, ["runtimeRequests"])
+      .pipe(Effect.mapError(() => inactive));
+    // Only questions: an approval decides what the agent may run on the owner's machine.
+    const pending = runtimeRequests.some(
+      (candidate) =>
+        candidate.id === request.requestId &&
+        candidate.kind === "user_input" &&
+        candidate.status === "pending",
+    );
+    if (!pending) return yield* new GuestShareAccessError({ reason: "answered" });
+    yield* threads
+      .dispatch({
+        type: "runtime-request.respond",
+        commandId: yield* commandId("answer"),
+        threadId: thread.id,
+        requestId: request.requestId,
+        answers: request.answers,
+      })
+      .pipe(Effect.mapError(() => new GuestShareAccessError({ reason: "rejected" })));
+    yield* analytics.record("feature.used", { feature: "guest_question.answer" });
   });
 
   /** Completes once the session no longer opens its share, so open reads end with it. */
@@ -551,11 +629,7 @@ const make = Effect.gen(function* () {
     const live = orchestrator
       .streamStoredEventsFrom({ threadId: thread.id, afterSequence: snapshot.snapshotSequence })
       .pipe(
-        Stream.map((stored) => ({
-          kind: "event" as const,
-          sequence: stored.sequence,
-          event: projectDomainEventForWire(stored.event),
-        })),
+        Stream.map(threadStreamEventItem),
         // Ending the source here flushes what the coalescer holds, so `ended` is not held back.
         Stream.takeUntil((item) => endsShare(item.event)),
         coalesceThreadLiveStream,
@@ -636,9 +710,18 @@ const make = Effect.gen(function* () {
     itemId: string,
   ) {
     const { thread } = yield* authorize(session, "session");
-    const item = yield* orchestrator
-      .getTurnItem({ threadId: thread.id, itemId: TurnItemId.make(itemId) })
-      .pipe(Effect.mapError(() => unavailable));
+    const id = TurnItemId.make(itemId);
+    const item =
+      (yield* orchestrator
+        .getTurnItem({ threadId: thread.id, itemId: id })
+        .pipe(Effect.mapError(() => unavailable))) ??
+      // A fork shows its source's earlier items, which stay in the source thread.
+      (thread.forkedFrom === null
+        ? null
+        : yield* orchestrator.getTimelinePage(thread.id, { itemId: id, limit: 1 }).pipe(
+            Effect.map((page) => page.items[0]?.item ?? null),
+            Effect.mapError(() => unavailable),
+          ));
     return item === null ? yield* unavailable : { thread, item };
   });
 
@@ -647,7 +730,7 @@ const make = Effect.gen(function* () {
     itemId: string,
     variant?: number,
   ) {
-    const { thread, item } = yield* threadItem(session, itemId);
+    const { item } = yield* threadItem(session, itemId);
     if (item.type !== "dynamic_tool") return yield* unavailable;
     const variants = htmlVariantsFromToolItem(item);
     const reference =
@@ -656,7 +739,7 @@ const make = Effect.gen(function* () {
         : variant === undefined
           ? undefined
           : variants[variant];
-    const attachmentId = threadHtmlRenderAttachmentIds(thread.id, [item]).find(
+    const attachmentId = threadHtmlRenderAttachmentIds(item.threadId, [item]).find(
       (id) => id === reference?.attachmentId,
     );
     const path =
@@ -694,9 +777,9 @@ const make = Effect.gen(function* () {
     session: string,
     itemId: string,
   ) {
-    const { thread, item } = yield* threadItem(session, itemId);
+    const { item } = yield* threadItem(session, itemId);
     if (item.type !== "command_execution") return yield* unavailable;
-    return commandOutputs.subscribe({ threadId: thread.id, itemId: item.id }).pipe(
+    return commandOutputs.subscribe({ threadId: item.threadId, itemId: item.id }).pipe(
       // A lost hub stream ends the output; the row reloads it when reopened.
       Stream.catchCause(() => Stream.empty),
       Stream.interruptWhen(untilRevoked(session)),
@@ -772,6 +855,7 @@ const make = Effect.gen(function* () {
     redeem,
     check,
     submit,
+    answer,
     stream,
     render,
     item,

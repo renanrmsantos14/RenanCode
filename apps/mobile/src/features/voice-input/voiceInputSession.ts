@@ -22,7 +22,6 @@ export type VoiceInputTarget = {
   readonly label?: string;
   readonly readDraft: () => VoiceDraftSnapshot | null;
   readonly commitDraft: VoiceInputControllerDependencies["commitDraft"];
-  readonly subscribe: () => () => void;
 };
 
 export type VoiceInputSnapshot = {
@@ -56,27 +55,14 @@ export function createVoiceInputTarget(
   readText: () => string | null,
   commitDraft: VoiceInputTarget["commitDraft"],
   selection: VoiceDraftSnapshot["selection"],
-  subscribeToChanges: (onChange: () => void) => () => void,
 ): VoiceInputTarget {
-  let revision = 0;
   return {
     ownerKey,
     readDraft: () => {
       const text = readText();
-      if (text === null) return null;
-      return { ownerKey, text, selection, revision };
+      return text === null ? null : { ownerKey, text, selection };
     },
     commitDraft,
-    subscribe: () => {
-      let previousText = readText();
-      return subscribeToChanges(() => {
-        const text = readText();
-        if (text !== previousText) {
-          previousText = text;
-          revision += 1;
-        }
-      });
-    },
   };
 }
 
@@ -88,7 +74,7 @@ export class VoiceInputSession {
   readonly controller: VoiceInputController;
   private readonly dependencies: VoiceInputSessionDependencies;
   private target: VoiceInputTarget | null = null;
-  private unsubscribe: (() => void) | null = null;
+  private startText: string | null = null;
   private snapshot: VoiceInputSnapshot = {
     state: IDLE_STATE,
     ownerKey: null,
@@ -107,7 +93,11 @@ export class VoiceInputSession {
       ...dependencies,
       getTranscriber: () => dependencies.getTranscriber(this.target?.environmentId ?? null),
       onStateChange: (state) => this.handleStateChange(state),
-      readDraft: () => this.target?.readDraft() ?? null,
+      // The target's selection is fixed at start, so a draft changed since refuses the transcript.
+      readDraft: () => {
+        const draft = this.target?.readDraft() ?? null;
+        return draft?.text === this.startText ? draft : null;
+      },
       commitDraft: (text, selection) => this.target?.commitDraft(text, selection),
     });
   }
@@ -146,23 +136,17 @@ export class VoiceInputSession {
   start(target: VoiceInputTarget): Promise<void> {
     if (voiceInputBlocksSubmission(this.controller.currentState)) return Promise.resolve();
     this.target = target;
-    this.unsubscribe = target.subscribe();
+    this.startText = target.readDraft()?.text ?? null;
     return this.controller.start();
   }
 
   dispose(): void {
     this.controller.dispose();
     this.stopRecordingActivity();
-    this.unsubscribe?.();
-    this.unsubscribe = null;
     this.listeners.clear();
   }
 
   private handleStateChange(state: VoiceInputState): void {
-    if (!voiceInputBlocksSubmission(state)) {
-      this.unsubscribe?.();
-      this.unsubscribe = null;
-    }
     const previousPhase = this.snapshot.state.phase;
     let elapsedSeconds = this.snapshot.elapsedSeconds;
     if (state.phase !== previousPhase) {

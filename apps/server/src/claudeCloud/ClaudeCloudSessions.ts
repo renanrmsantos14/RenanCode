@@ -30,7 +30,6 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
-import * as Queue from "effect/Queue";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as HttpClientError from "effect/http/HttpClientError";
@@ -177,8 +176,6 @@ export function isMirroredCloudSession(session: CloudSession): boolean {
 function isCloudSessionArchived(session: CloudSession): boolean {
   return session.status === "archived";
 }
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function cloudSessionIdOf(threadId: string): string | null {
   return isClaudeCloudThreadId(threadId)
@@ -700,17 +697,9 @@ const make = Effect.gen(function* () {
     ),
   );
 
-  const wakeups = yield* Queue.sliding<void>(1);
   yield* forkParked(
     tick.pipe(
-      Effect.flatMap((busy) =>
-        Queue.take(wakeups).pipe(
-          Effect.timeoutOrElse({
-            duration: busy ? BUSY_INTERVAL : IDLE_INTERVAL,
-            orElse: () => Effect.void,
-          }),
-        ),
-      ),
+      Effect.flatMap((busy) => Effect.sleep(busy ? BUSY_INTERVAL : IDLE_INTERVAL)),
       Effect.forever,
     ),
   );
@@ -877,17 +866,8 @@ const make = Effect.gen(function* () {
       {
         title,
         environment_id: environment.environment_id,
-        events: [
-          {
-            payload: {
-              ...(UUID_PATTERN.test(input.messageId) ? { uuid: input.messageId } : {}),
-              session_id: "",
-              type: "user",
-              parent_tool_use_id: null,
-              message: { role: "user", content: input.text },
-            },
-          },
-        ],
+        // The first prompt goes through message.dispatch below, so it gets a run like any reply.
+        events: [],
         config: {
           sources: [
             { type: "git_repository", url: `https://github.com/${repo}`, revision: branch },
@@ -926,8 +906,33 @@ const make = Effect.gen(function* () {
       },
       project.id,
     ).pipe(Effect.mapError((cause) => startError("unavailable", cause.message)));
-    yield* Queue.offer(wakeups, undefined);
-    return { threadId: cloudThreadId(sessionId) };
+    const threadId = cloudThreadId(sessionId);
+    yield* orchestrator
+      .dispatch({
+        type: "message.dispatch",
+        commandId: CommandId.make(`server:claude-cloud-start:${input.messageId}`),
+        threadId,
+        messageId: input.messageId,
+        text: input.text,
+        attachments: [],
+        dispatchMode: { type: "start_immediately" },
+        createdBy: "user",
+        creationSource: "server",
+      })
+      .pipe(
+        // The client reports a failed start (or runs locally); do not leave an empty cloud thread behind.
+        Effect.tapError(() =>
+          orchestrator
+            .dispatch({
+              type: "thread.archive",
+              commandId: CommandId.make(`server:claude-cloud-start-failed:${input.messageId}`),
+              threadId,
+            })
+            .pipe(Effect.ignore),
+        ),
+        Effect.mapError((cause) => startError("unavailable", cause.message)),
+      );
+    return { threadId };
   });
 
   return { archive, start, suggestPlacement };

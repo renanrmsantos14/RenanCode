@@ -1,11 +1,14 @@
-import { SubsessionToggle, type SubsessionDot } from "./SubsessionToggle";
+import { useAtomMount } from "@effect/atom-react";
+import { asLaunchingThread } from "@t3tools/client-runtime/state/thread-inbox";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { ThreadTerminalStatusButton } from "../ThreadStatusIndicators";
 import { discardComposerDraft } from "../../lib/discardComposerDraft";
+import { contextMenuSourceOf } from "../../contextMenuSource";
 import { requestCustomSnooze } from "../CustomSnoozeDialog";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { useDeadlinePassed } from "~/hooks/useDeadline";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/client-runtime/thread-pull-requests";
+import { useDraggable } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
@@ -14,19 +17,23 @@ import {
   QUEUED_TURN_START_GRACE_MS,
 } from "@t3tools/client-runtime/state/thread-settled";
 import { formatDiffCount } from "@t3tools/client-runtime/diff-count";
-import { resolveSettledThreadTimestamp } from "@t3tools/client-runtime/state/thread-sort";
+import {
+  resolveSettledThreadTimestamp,
+  resolveThreadActivityTimestamp,
+} from "@t3tools/client-runtime/state/thread-sort";
 import { type EnvironmentThreadSearchMatch } from "@t3tools/client-runtime/state/thread-search";
 import {
   formatWorkingDurationLabel,
   resolveThreadProviderStack,
 } from "@t3tools/client-runtime/state/models";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { toServerClock } from "@t3tools/client-runtime/clock";
 import {
   AuthOrchestrationOperateScope,
   isClaudeCloudThreadId,
+  type ContextMenuSource,
   type EnvironmentId,
   type EnvironmentMachineKind,
-  isProviderNativeSubagentThread,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
 
@@ -47,7 +54,6 @@ import {
   PinIcon,
   PinOffIcon,
   ShieldQuestionIcon,
-  BotIcon,
   SquarePenIcon,
   TerminalIcon,
   Undo2Icon,
@@ -72,7 +78,7 @@ import { resolveSidebarRowVisibility } from "./sidebarRowItems";
 import { useThreadSelectionStore } from "../../threadSelectionStore";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { useNowSecond } from "../../hooks/useNowSecond";
-import { vcsEnvironment } from "../../state/vcs";
+import { vcsEnvironment, vcsBranchRevalidation } from "../../state/vcs";
 import { useEnvironmentQuery } from "../../state/query";
 import { readEnvironmentScope, useEnvironmentScope } from "../../state/session";
 import { formatRelativeTimeLabel, parseTimestampDate } from "../../timestampFormat";
@@ -86,11 +92,12 @@ import {
   hasUnseenCompletion,
   resolveSidebarRowAccessibility,
   type SidebarDropVerb,
-  resolveSidebarThreadStatus,
+  resolveSidebarRowStatus,
   resolveThreadLastVisitedAt,
   shouldRecedeSidebarThread,
   resolveWorkingStartedAt,
   useRetainedValue,
+  withoutRemovedCheckout,
   useSidebarRowSubscriptionLease,
   setFileDragActive,
 } from "../Sidebar.logic";
@@ -122,7 +129,7 @@ import { shouldShowInstanceBadge, type ProviderInstanceEntry } from "../../provi
 import { useThreadRunningTerminalIds } from "../../state/terminalSessions";
 import { InlineButton } from "../ui/button";
 import { Kbd } from "../ui/kbd";
-import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuShortcut, MenuTrigger } from "../ui/menu";
+import { Menu, MenuItem, MenuItemDetail, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { MiddleTruncate } from "../ui/middle-truncate";
 import { useThreadHasUnsentDraft } from "../../composerDraftStore";
@@ -157,10 +164,6 @@ function RelativeTimeLabel(props: { timestamp: string | null }) {
       );
 }
 
-function threadTimeTimestamp(thread: SidebarThreadSummary): string {
-  return thread.latestUserMessageAt ?? thread.updatedAt;
-}
-
 function JumpHintBadge(props: { label: string }) {
   return (
     <Kbd aria-hidden data-jump-hint>
@@ -172,18 +175,20 @@ function JumpHintBadge(props: { label: string }) {
 const JUMP_HINT_SLOT_CLASS_NAME =
   "[&>:not([data-jump-hint])]:invisible [&>:not([data-jump-hint])]:absolute";
 
-function WorkingDuration(props: { startedAt: string | null }) {
+function WorkingDuration(props: { environmentId: EnvironmentId; startedAt: string | null }) {
   const startedMs = props.startedAt !== null ? Date.parse(props.startedAt) : Number.NaN;
   if (Number.isNaN(startedMs)) return null;
-  return <WorkingDurationLabel startedMs={startedMs} />;
+  return <WorkingDurationLabel environmentId={props.environmentId} startedMs={startedMs} />;
 }
 
 // Self-ticking so only this span re-renders each second, not the whole row;
 // the shared tick lands every working row's update in the same frame.
-function WorkingDurationLabel(props: { startedMs: number }) {
+function WorkingDurationLabel(props: { environmentId: EnvironmentId; startedMs: number }) {
   const nowMs = useNowSecond();
   return (
-    <span className="tabular-nums">{formatWorkingDurationLabel(nowMs - props.startedMs)}</span>
+    <span className="tabular-nums">
+      {formatWorkingDurationLabel(toServerClock(props.environmentId, nowMs) - props.startedMs)}
+    </span>
   );
 }
 
@@ -423,7 +428,7 @@ function SnoozeMenuButton(props: {
             }}
           >
             {preset.label}
-            <MenuShortcut>{preset.whenLabel}</MenuShortcut>
+            <MenuItemDetail>{preset.whenLabel}</MenuItemDetail>
           </MenuItem>
         ))}
         {presets.length > 0 ? <MenuSeparator /> : null}
@@ -491,12 +496,12 @@ export function SortableThreadRow(
   const liveThread = useThreadShell(
     scopeThreadRef(rowProps.thread.environmentId, rowProps.thread.id),
   );
-  // A native subagent has no runs; its status comes from its parent's records, on rowProps.
+  // A runtime on the arranged copy but not the run-less live shell is the list's launch overlay.
   const thread =
     liveThread === null
       ? rowProps.thread
-      : isProviderNativeSubagentThread(liveThread)
-        ? { ...liveThread, runtime: rowProps.thread.runtime }
+      : rowProps.thread.runtime !== null
+        ? asLaunchingThread(liveThread)
         : liveThread;
   // Keyed by variant so a card/slim switch remounts the row.
   return <SidebarThreadRow key={rowProps.variant} {...rowProps} thread={thread} sortable={bag} />;
@@ -546,22 +551,6 @@ const TOP_STATUS_ICONS = {
   woke: AlarmClockIcon,
 } as const;
 
-// A native subagent shows its own outcome, which its parent's records give; it has no runs.
-function nativeSubagentTopStatus(status: string | undefined) {
-  switch (status) {
-    case "running":
-      return { label: "Working", icon: "working" as const, className: "text-info-foreground" };
-    case "completed":
-      return { label: "Done", icon: "done" as const, className: "text-success-foreground" };
-    case "failed":
-      return { label: "Failed", icon: "failed" as const, className: "text-error-foreground" };
-    case "cancelled":
-      return { label: "Stopped", icon: "waiting" as const, className: "text-muted-foreground" };
-    default:
-      return null;
-  }
-}
-
 function TopStatusIcon(props: { icon: keyof typeof TOP_STATUS_ICONS; className: string }) {
   const Icon = TOP_STATUS_ICONS[props.icon];
   return <Icon aria-hidden className={cn("shrink-0", props.className)} />;
@@ -586,11 +575,12 @@ type SidebarThreadRowProps = {
   wokeAt: string | null;
   isActive: boolean;
   // Set on the active row only; scrolls it into view when a reveal is owed.
-  revealRef?: ((row: HTMLElement, threadKey: string) => void) | undefined;
+  revealRef?: ((row: HTMLElement, threadKey: string) => (() => void) | undefined) | undefined;
   // Unlike isActive, never true for the ancestor standing in for an open
   // subagent: drafts and PR clicks care about which composer is on screen.
   isRouteThread: boolean;
-  openPullRequestsInRightPanel: boolean;
+  // Read at click time; a prop would re-render every row on entering or leaving a thread route.
+  readOpensPullRequestsInRightPanel: () => boolean;
   jumpLabel: string | null;
   currentEnvironmentId: string | null;
   environmentLabel: string | null;
@@ -604,11 +594,15 @@ type SidebarThreadRowProps = {
   onThreadActivate: (threadRef: ScopedThreadRef) => void;
   onStartRename: (threadRef: ScopedThreadRef, title: string) => void;
   onRenameTitleChange: (title: string) => void;
-  onCommitRename: (threadRef: ScopedThreadRef, title: string, originalTitle: string) => void;
+  onCommitRename: (threadRef: ScopedThreadRef, title: string) => void;
   onCancelRename: () => void;
   isRenaming: boolean;
   renamingTitle: string;
-  onContextMenu: (threadRef: ScopedThreadRef, position: { x: number; y: number }) => void;
+  onContextMenu: (
+    threadRef: ScopedThreadRef,
+    position: { x: number; y: number },
+    source: ContextMenuSource,
+  ) => void;
   onSettle: (threadRef: ScopedThreadRef) => void;
   onTesting: (threadRef: ScopedThreadRef) => void;
   onActionSweepStart: (
@@ -622,11 +616,6 @@ type SidebarThreadRowProps = {
   onUnpin: (threadRef: ScopedThreadRef) => void;
   onAcknowledgeWoke: (threadRef: ScopedThreadRef, visitedAt: string) => void;
   onFileDropThreads?: ((threadRef: ScopedThreadRef, files: File[]) => void) | undefined;
-  // Zero for a row with no subsessions, so such rows keep constant props.
-  subsessionCount: number;
-  subsessionsCollapsed: boolean;
-  subsessionDot: SubsessionDot | null;
-  onToggleSubsessions: (threadKey: string) => void;
 };
 
 // Mounted only while renaming, so each rename starts uncommitted.
@@ -665,7 +654,7 @@ function ThreadRenameInput(props: {
       }}
       onClick={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
-      className="min-w-0 flex-1 rounded-sm border border-input bg-card px-1 text-sm font-medium text-card-foreground outline-none focus:border-foreground"
+      className="-mx-1 min-w-0 flex-1 rounded-sm bg-card px-1 text-sm font-medium text-card-foreground outline-none ring-1 ring-inset ring-input focus:ring-foreground"
     />
   );
 }
@@ -690,7 +679,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     onUnsettle,
     onUnsnooze,
     onUnpin,
-    openPullRequestsInRightPanel,
+    readOpensPullRequestsInRightPanel,
     renamingTitle,
     thread,
     variant,
@@ -707,11 +696,15 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
   const shows = (id: keyof typeof rowVisibility) => !folderRow || rowVisibility[id];
   const { revealRef } = props;
   const rowRef = (row: HTMLElement | null) => {
-    if (row !== null) revealRef?.(row, threadKey);
-    return leaseRowRef(row);
+    const stopReveal = row === null ? undefined : revealRef?.(row, threadKey);
+    const releaseLease = leaseRowRef(row);
+    if (!stopReveal) return releaseLease;
+    return () => {
+      stopReveal();
+      releaseLease?.();
+    };
   };
   const isRegeneratingTitle = thread.titleRegeneration != null;
-  const isNativeSubagent = isProviderNativeSubagentThread(thread);
   const localLastVisitedAt = useUiStateStore((state) => state.threadLastVisitedAtById[threadKey]);
   const lastVisitedAt = resolveThreadLastVisitedAt(thread.lastVisitedAt, localLastVisitedAt);
   const isSelected = useThreadSelectionStore((state) => state.selectedThreadKeys.has(threadKey));
@@ -737,18 +730,24 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     thread.pullRequests,
     thread.branchPullRequest,
   );
-  const gitStatus = useEnvironmentQuery(
+  const branchTarget =
     leaseLiveStatus && (thread.branch != null || thread.worktreePath !== null) && gitCwd !== null
-      ? vcsEnvironment.status({
-          environmentId: thread.environmentId,
-          input: { cwd: gitCwd, includeRemote: false },
-        })
-      : null,
+      ? { environmentId: thread.environmentId, cwd: gitCwd }
+      : null;
+  const gitStatus = useEnvironmentQuery(
+    branchTarget === null
+      ? null
+      : vcsEnvironment.branch({
+          environmentId: branchTarget.environmentId,
+          input: { cwd: branchTarget.cwd },
+        }),
   );
+  useAtomMount(vcsBranchRevalidation(branchTarget));
   const visibleGitStatus = useRetainedValue(
     JSON.stringify([thread.environmentId, gitCwd]),
     gitStatus.data,
   );
+  const checkoutThread = withoutRemovedCheckout(thread, visibleGitStatus);
   const pr = linkedPullRequestStatus?.pr ?? null;
   const supportsMultiplePullRequests = useSupportsMultiplePullRequests(thread.environmentId);
   const currentLinkedPr = supportsMultiplePullRequests
@@ -756,7 +755,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     : null;
 
   const isUnread = hasUnseenCompletion({ ...thread, lastVisitedAt });
-  const status = resolveSidebarThreadStatus(thread);
+  const status = resolveSidebarRowStatus({ ...thread, lastVisitedAt });
   const lastVisitedDate = lastVisitedAt === undefined ? null : parseTimestampDate(lastVisitedAt);
   const wokeAtDate = props.wokeAt === null ? null : parseTimestampDate(props.wokeAt);
   const isWoke =
@@ -770,7 +769,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     isActive: props.isActive,
     isSelected,
   });
-  const threadTopStatus =
+  const topStatus =
     status === "preparing" || status === "working"
       ? {
           label:
@@ -831,9 +830,6 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                           className: "text-success-foreground",
                         }
                       : null;
-  const topStatus = isNativeSubagent
-    ? nativeSubagentTopStatus(thread.runtime?.status)
-    : threadTopStatus;
   const isWokeStatus = topStatus?.icon === "woke";
   const visiblePullRequests = visibleThreadPullRequests(thread.pullRequests ?? []);
   const allPullRequestsMerged =
@@ -862,10 +858,9 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
   });
   const prStatus = prStatusIndicator(pr, linkedPullRequestStatus?.sourceControlProvider);
   // "Done" or "Waiting" is not the end while the pull request still runs checks or awaits a merge.
-  const delivery =
-    isNativeSubagent || isWokeStatus
-      ? null
-      : threadPullRequestDeliveryForStatus(thread.pullRequests, status);
+  const delivery = isWokeStatus
+    ? null
+    : threadPullRequestDeliveryForStatus(thread.pullRequests, status);
   const deliveryStatus = shows("pullRequestStatus")
     ? pullRequestDeliveryPresentation(delivery)
     : null;
@@ -891,21 +886,11 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     : thread.modelSelection.model;
 
   const isRemote = thread.environmentId !== props.currentEnvironmentId;
-  const showsScratchMachine = !thread.branch && props.scratchMachineLabel !== null;
+  const showsScratchMachine = !checkoutThread.branch && props.scratchMachineLabel !== null;
 
-  const subsessionToggle =
-    props.subsessionCount > 0 ? (
-      <SubsessionToggle
-        threadKey={threadKey}
-        count={props.subsessionCount}
-        collapsed={props.subsessionsCollapsed}
-        dot={props.subsessionDot}
-        onToggle={props.onToggleSubsessions}
-      />
-    ) : null;
   const detailsTooltip = (
     <SidebarThreadTooltip
-      thread={thread}
+      thread={checkoutThread}
       project={props.project}
       projectDisplayName={props.projectDisplayName}
       environmentLabel={props.environmentLabel}
@@ -932,7 +917,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
   };
   const handleContextMenu = (event: ReactMouseEvent) => {
     event.preventDefault();
-    onContextMenu(threadRef, { x: event.clientX, y: event.clientY });
+    onContextMenu(threadRef, { x: event.clientX, y: event.clientY }, contextMenuSourceOf(event));
   };
   const handleKeyDown = (event: ReactKeyboardEvent) => {
     if (event.target !== event.currentTarget) return;
@@ -1042,7 +1027,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
   const handlePrClick = (event: ReactMouseEvent<HTMLElement>, targetUrl?: string) => {
     const url = targetUrl ?? pr?.url ?? currentLinkedPr?.url;
     if (!url) return;
-    const showInRightPanel = targetUrl !== undefined || openPullRequestsInRightPanel;
+    const showInRightPanel = targetUrl !== undefined || readOpensPullRequestsInRightPanel();
     const openedInRightPanel = openPrLink(event, url, showInRightPanel ? threadRef : undefined);
     if (openedInRightPanel && showInRightPanel && !props.isRouteThread) {
       onThreadActivate(threadRef);
@@ -1106,7 +1091,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     ) : null;
 
   const accessibility = resolveSidebarRowAccessibility({
-    title: isNativeSubagent ? `Subagent: ${thread.title}` : thread.title,
+    title: thread.title,
     statusLabel: topStatus?.label ?? null,
     projectDisplayName: props.projectDisplayName,
     isActive: props.isActive,
@@ -1116,12 +1101,11 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     <ThreadRenameInput
       title={renamingTitle}
       onTitleChange={onRenameTitleChange}
-      onCommit={() => onCommitRename(threadRef, renamingTitle, thread.title)}
+      onCommit={() => onCommitRename(threadRef, renamingTitle)}
       onCancel={onCancelRename}
     />
   ) : (
     <span
-      aria-hidden
       className={cn(
         "min-w-0 flex-1 text-start text-sm transition-opacity motion-reduce:transition-none",
         showUnreadDot ? "font-semibold" : shouldRecede ? "font-normal" : "font-medium",
@@ -1153,21 +1137,8 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
           className={cn("me-1.5 inline-block size-2 rounded-full align-middle", unreadDotClassName)}
         />
       ) : null}
-      {isNativeSubagent ? (
-        <Tooltip>
-          <TooltipTrigger
-            render={<span className="me-1 inline-flex align-[-2px] text-muted-foreground/60" />}
-          >
-            <BotIcon className="size-3.5" />
-          </TooltipTrigger>
-          <TooltipPopup>Subagent</TooltipPopup>
-        </Tooltip>
-      ) : null}
       {thread.title}
     </span>
-  );
-  const accessibleTitle = isRenaming ? null : (
-    <span className="sr-only">{isNativeSubagent ? `Subagent: ${thread.title}` : thread.title}</span>
   );
 
   const prBadgeShape = supportsMultiplePullRequests
@@ -1263,7 +1234,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
   // The meta line already names the scratch machine, so the trailing icon would repeat it.
   const remoteMachineIcon = showsScratchMachine ? null : machineIcon;
   const diff = shows("diff") ? latestRunDiff(thread) : null;
-  const showsBranch = Boolean(thread.branch) && shows("branch");
+  const showsBranch = Boolean(checkoutThread.branch) && shows("branch");
   const shownPrBadge = shows("pullRequest") ? prBadge : null;
   const providerStack = shows("agent") ? (
     <SidebarProviderStack
@@ -1280,11 +1251,11 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     runningTerminalIds.length === 0;
   const metaLine = metaLineEmpty ? null : (
     <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-xs">
-      {showsBranch && thread.branch ? (
+      {showsBranch && checkoutThread.branch ? (
         <>
-          <ThreadWorktreeIndicator thread={thread} />
+          <ThreadWorktreeIndicator thread={checkoutThread} />
           <span className="flex min-w-0 flex-1">
-            <MiddleTruncate value={thread.branch} showTitle={false} />
+            <MiddleTruncate value={checkoutThread.branch} showTitle={false} />
           </span>
         </>
       ) : showsScratchMachine ? (
@@ -1337,7 +1308,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
           sortable?.isDragging && "relative z-20",
         )}
       >
-        <Tooltip disabled={sortable?.isDragging}>
+        <Tooltip disabled={isRenaming || sortable?.isDragging}>
           <TooltipTrigger
             render={
               <div
@@ -1367,7 +1338,6 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
           >
             {/* `contents` keeps one-line rows a single flex row. */}
             <div className={multiline ? "flex h-6 min-w-0 items-center gap-2.5" : "contents"}>
-              {accessibleTitle}
               {inFolder ? null : (
                 <span
                   className={cn(
@@ -1385,7 +1355,6 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
               {title}
               {multiline ? titleLineIcons : machineIcon}
               {pinIndicator}
-              {subsessionToggle}
               {multiline ? null : terminalStatusIcon}
               {isRegeneratingTitle ? (
                 <span role="status" className="sr-only">
@@ -1442,8 +1411,8 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                         {deliveryStatus.label}
                         <span className="sr-only">, {deliveryStatus.tooltip}</span>
                       </span>
-                    ) : (inFolder || isNativeSubagent) && topStatus ? (
-                      // Folder and subagent rows have no status line, so the status takes the time slot.
+                    ) : inFolder && topStatus ? (
+                      // Folder rows have no status line, so the status takes the time slot.
                       <span
                         className={cn(
                           "inline-flex items-center gap-1 text-xs font-medium",
@@ -1459,7 +1428,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                           timestamp={
                             variantAction === "unsettle"
                               ? resolveSettledThreadTimestamp(thread)
-                              : threadTimeTimestamp(thread)
+                              : resolveThreadActivityTimestamp(thread)
                           }
                         />
                       </span>
@@ -1510,7 +1479,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                             onClick={handleSettleClick}
                             onPointerDown={handleActionPointerDown}
                             className={cn(
-                              "pointer-events-none absolute inset-y-0 right-0 inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-2 text-xs text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:opacity-100",
+                              "pointer-events-none absolute inset-y-0 right-0 -mr-2 inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-2 text-xs text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:opacity-100",
                               isWoke && "group-any-hover/sidebar-row:static",
                             )}
                           />
@@ -1539,13 +1508,15 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
       data-thread-item={threadKey}
       {...sortableRootProps}
       {...(fileDropHandlers ?? {})}
+      // The hints are the rendered heights inside py-0.5. Revealing the open thread measures rows
+      // that have not rendered yet, so a hint off by a pixel lands it a pixel short per row above.
       className={cn(
         "list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_78px]",
-        metaLineEmpty && "[contain-intrinsic-size:auto_58px]",
+        metaLineEmpty && "[contain-intrinsic-size:auto_60px]",
         sortable?.isDragging && "relative z-20",
       )}
     >
-      <Tooltip disabled={snoozeMenuOpen || sortable?.isDragging}>
+      <Tooltip disabled={isRenaming || snoozeMenuOpen || sortable?.isDragging}>
         <TooltipTrigger
           render={
             <div
@@ -1566,7 +1537,6 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
             />
           }
         >
-          {accessibleTitle}
           <div
             className={cn(
               "relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)",
@@ -1644,17 +1614,23 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                           {topStatus.label}
                           {status === "preparing" || status === "working" ? (
                             <span aria-hidden>
-                              <WorkingDuration startedAt={resolveWorkingStartedAt(thread)} />
+                              <WorkingDuration
+                                environmentId={thread.environmentId}
+                                startedAt={resolveWorkingStartedAt(thread)}
+                              />
                             </span>
                           ) : status === "waiting" ? (
                             <span aria-hidden>
-                              <WorkingDuration startedAt={thread.latestRun?.completedAt ?? null} />
+                              <WorkingDuration
+                                environmentId={thread.environmentId}
+                                startedAt={thread.latestRun?.completedAt ?? null}
+                              />
                             </span>
                           ) : null}
                         </span>
                       )
                     ) : (
-                      <RelativeTimeLabel timestamp={threadTimeTimestamp(thread)} />
+                      <RelativeTimeLabel timestamp={resolveThreadActivityTimestamp(thread)} />
                     )}
                   </span>
                   {props.settlementSupported ||
@@ -1747,7 +1723,6 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                 </span>
               ) : null}
               {titleLineIcons}
-              {subsessionToggle}
             </div>
             {metaLine}
           </div>
@@ -1800,22 +1775,36 @@ export const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props
     isActive: props.isRouteActive,
   });
   const threadRef = scopeThreadRef(thread.environmentId, thread.id);
-  const { leaseLiveStatus, rowRef } = useSidebarRowSubscriptionLease(
+  // Results only drag out as chat context; the row keeps its own listbox attributes.
+  const { listeners: dragListeners, setNodeRef: setDragNodeRef } = useDraggable({
+    id: scopedThreadKey(threadRef),
+  });
+  const { leaseLiveStatus, rowRef: leaseRowRef } = useSidebarRowSubscriptionLease(
     props.isHighlighted || props.isRouteActive,
   );
+  const rowRef = (row: HTMLElement | null) => {
+    setDragNodeRef(row);
+    return leaseRowRef(row);
+  };
   const gitCwd = thread.worktreePath ?? props.project?.workspaceRoot ?? null;
-  const gitStatus = useEnvironmentQuery(
+  const branchTarget =
     leaseLiveStatus && (thread.branch != null || thread.worktreePath !== null) && gitCwd !== null
-      ? vcsEnvironment.status({
-          environmentId: thread.environmentId,
-          input: { cwd: gitCwd, includeRemote: false },
-        })
-      : null,
+      ? { environmentId: thread.environmentId, cwd: gitCwd }
+      : null;
+  const gitStatus = useEnvironmentQuery(
+    branchTarget === null
+      ? null
+      : vcsEnvironment.branch({
+          environmentId: branchTarget.environmentId,
+          input: { cwd: branchTarget.cwd },
+        }),
   );
+  useAtomMount(vcsBranchRevalidation(branchTarget));
   const visibleGitStatus = useRetainedValue(
     JSON.stringify([thread.environmentId, gitCwd]),
     gitStatus.data,
   );
+  const checkoutThread = withoutRemovedCheckout(thread, visibleGitStatus);
   const branchMismatch = resolveLocalCheckoutBranchMismatch({
     threadId: thread.id,
     effectiveEnvMode: thread.worktreePath === null ? "local" : "worktree",
@@ -1868,7 +1857,15 @@ export const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props
               aria-current={accessibility.current}
               aria-describedby={`${props.resultId}-pr`}
               aria-label={accessibility.label}
+              {...dragListeners}
               onMouseMove={props.onHighlight}
+              // Focus stays in the search box, as for Enter. A focused result would lose focus as
+              // the results close, and its recovery scrolls the list away from the opened thread.
+              // dnd-kit ignores a prevented press, so the drag listener runs first.
+              onPointerDown={(event) => {
+                dragListeners?.onPointerDown?.(event);
+                event.preventDefault();
+              }}
               onClick={props.onSelect}
               className={cn(
                 "group/sidebar-row group/v2-row flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-1 text-left text-sm outline-none",
@@ -1916,7 +1913,7 @@ export const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props
                 />
               </span>
               <span className="w-8 shrink-0 text-right text-xs text-muted-foreground/55 tabular-nums">
-                <RelativeTimeLabel timestamp={threadTimeTimestamp(thread)} />
+                <RelativeTimeLabel timestamp={resolveThreadActivityTimestamp(thread)} />
               </span>
             </span>
             {props.searchMatch ? (
@@ -1931,7 +1928,7 @@ export const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props
           </span>
         </TooltipTrigger>
         <SidebarThreadTooltip
-          thread={thread}
+          thread={checkoutThread}
           project={props.project}
           projectDisplayName={props.projectDisplayName}
           environmentLabel={props.environmentLabel}

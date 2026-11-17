@@ -30,7 +30,7 @@ export function useFileDrag(
   const bridge = typeof window === "undefined" ? undefined : window.desktopBridge;
   if (
     !bridge?.prepareFileDrag ||
-    !bridge.startFileDrag ||
+    !bridge.startStagedFileDrag ||
     resource === null ||
     (sizeBytes !== undefined && sizeBytes > MAX_PREFETCH_BYTES)
   ) {
@@ -70,7 +70,7 @@ export function useFileDrag(
           ? current.token
           : null;
       if (token !== null) {
-        bridge.startFileDrag(token);
+        bridge.startStagedFileDrag(token);
         return;
       }
       prepare();

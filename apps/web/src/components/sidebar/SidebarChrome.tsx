@@ -1,5 +1,12 @@
-import { ArrowLeftIcon, ArrowRightIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  ChartNoAxesColumnIcon,
+  ListTreeIcon,
+  SettingsIcon,
+} from "lucide-react";
+import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
+import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { memo } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
@@ -12,6 +19,9 @@ import {
   type HistoryDirection,
 } from "../../navigationHistory";
 import { primaryServerKeybindingsAtom } from "../../state/server";
+import { readProjects, readThreadShells } from "../../state/entities";
+import { useNewThreadHandler } from "../../hooks/useHandleNewThread";
+import { sortScopedProjectsForSidebar } from "../Sidebar.logic";
 import { cn } from "../../lib/utils";
 import { usePullRequestsSupported } from "../../state/environments";
 import {
@@ -162,10 +172,37 @@ function HistoryNavigationButton({
   );
 }
 
+const HOME_PROJECT_NAME = "renancode";
+
+function isHomeProject(project: { title: string; workspaceRoot: string }) {
+  const folder = project.workspaceRoot.split(/[\\/]/).findLast((part) => part !== "") ?? "";
+  return (
+    project.title.toLowerCase() === HOME_PROJECT_NAME || folder.toLowerCase() === HOME_PROJECT_NAME
+  );
+}
+
 function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
+  const handleNewThread = useNewThreadHandler();
+  const { isMobile, setOpenMobile } = useSidebar();
+  const openHomeProject = (event: ReactMouseEvent<HTMLAnchorElement>) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+    // Read at click time so the brand does not re-render on every project or thread change.
+    const [project] = sortScopedProjectsForSidebar(
+      readProjects().filter(
+        (candidate) => candidate.archivedAt == null && isHomeProject(candidate),
+      ),
+      readThreadShells(),
+      "updated_at",
+    );
+    if (project === undefined) return;
+    event.preventDefault();
+    if (isMobile) setOpenMobile(false);
+    void handleNewThread(scopeProjectRef(project.environmentId, project.id));
+  };
   return (
     <Link
-      aria-label="RenanCode home"
+      aria-label="New RenanCode thread"
+      onClick={openHomeProject}
       className={cn(
         "relative z-10 ml-[var(--workspace-titlebar-content-left)] hidden h-7 w-fit min-w-0 shrink-0 items-center overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2 focus-visible:ring-inset md:flex",
         onBackdrop ? "text-white" : "text-foreground",
@@ -251,6 +288,11 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     void navigate({ to: "/usage" });
   };
 
+  const handleWorkClick = () => {
+    closeMobileSidebar();
+    void navigate({ to: "/work" });
+  };
+
   const handleBackClick = () => {
     closeMobileSidebar();
     void navigateToMainApp();
@@ -279,6 +321,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
               onClick={handlePullRequestsClick}
             />
           ) : null}
+          <SidebarUtilityItem icon={<ListTreeIcon />} label="Trabalho" onClick={handleWorkClick} />
           <SidebarUtilityItem
             icon={<ChartNoAxesColumnIcon />}
             label="Usage"

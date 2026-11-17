@@ -1,8 +1,6 @@
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
-import { threadKey as runtimeThreadKey } from "@t3tools/client-runtime/state/entities";
-import { subsessionParentRef } from "@t3tools/client-runtime/state/subsessions";
 import { isShownUnderParent } from "@t3tools/client-runtime/state/threads";
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import {
@@ -23,16 +21,17 @@ import {
 import { foldSearchQuery, rankSearchItems, scoreThreadSearch } from "@t3tools/shared/paletteSearch";
 import {
   isClaudeCloudThreadId,
-  isListedThreadLineage,
-  isProviderNativeSubagentThread,
   type ContextMenuItem,
   type EnvironmentId,
+  type ResolvedKeybindingsConfig,
+  type ScopedThreadRef,
   type ThreadId,
 } from "@t3tools/contracts";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
 import type { AsyncResult } from "effect/reactivity";
 import {
   effectiveSnoozed,
+  hasUnseenRunFailure,
   type ThreadSnoozeShell,
 } from "@t3tools/client-runtime/state/thread-settled";
 import {
@@ -45,10 +44,19 @@ import {
 import type { SidebarThreadSummary, Thread } from "../types";
 import { normalizeSearchText } from "../lib/utils";
 import { isLatestRunSettled } from "../session-logic";
+import { THREAD_STATUS_TEXT } from "@t3tools/client-runtime/state/thread-activity-announcement";
 import { observeIntersection } from "../lib/observeIntersection";
-import { deadlineAfter, deadlineStore } from "@t3tools/client-runtime/clock";
+import { deadlineAfter, deadlineStore, type ClockStore } from "@t3tools/client-runtime/clock";
 import { useDeadlinePassed } from "../hooks/useDeadline";
 import { legacyProjectCwdPreferenceKey } from "../uiStateStore";
+import { isElectron } from "../env";
+import { shouldShowThreadJumpHintsForModifiers } from "../keybindings";
+import { isTerminalFocused, subscribeToTerminalFocusChanges } from "../lib/terminalFocus";
+import { isPreviewFocused } from "../lib/previewFocus";
+import { isModelPickerOpen, subscribeToModelPickerVisibility } from "../modelPickerVisibility";
+import { shortcutModifierStore } from "../shortcutModifierState";
+import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
+import { selectActiveRightPanel, useRightPanelStore } from "../rightPanelStore";
 
 export function shouldNavigateAfterThreadPark(input: {
   readonly threadKey: string;
@@ -66,7 +74,7 @@ export function shouldNavigateAfterThreadPark(input: {
   );
 }
 
-const THREAD_JUMP_HINT_SHOW_DELAY_MS = 200;
+export const THREAD_JUMP_HINT_SHOW_DELAY_MS = 200;
 
 export function resolveSidebarRowAccessibility(input: {
   readonly title: string;
@@ -158,6 +166,13 @@ export function useSnoozeWakeClock(
     return nextClockMs;
   }
   return clockMs;
+}
+
+// Live status that says the cwd is not a repository means the checkout was removed.
+export function withoutRemovedCheckout<
+  T extends { readonly branch: string | null; readonly worktreePath: string | null },
+>(thread: T, gitStatus: { readonly isRepo?: boolean | undefined } | null): T {
+  return gitStatus?.isRepo === false ? { ...thread, branch: null, worktreePath: null } : thread;
 }
 
 export function useRetainedValue<T>(key: string | null, value: T | null): T | null {
@@ -576,265 +591,6 @@ export async function deleteSelectedThreadEntries<
   return { deletedThreadKeys, firstFailure };
 }
 
-const NO_NATIVE_PARENTS: ReadonlyMap<string, string> = new Map();
-
-const LIVE_RUNTIME_STATUSES: ReadonlySet<string> = new Set([
-  "preparing",
-  "queued",
-  "starting",
-  "running",
-  "waiting",
-]);
-// Each owner holds a detail stream open; running threads already keep theirs.
-const MAX_LIVE_SUBSESSION_OWNERS = 8;
-
-type SubagentOwnerThread = SubsessionNestingThread & {
-  readonly runtime: Pick<NonNullable<SidebarThreadSummary["runtime"]>, "status"> | null;
-};
-
-/**
- * Threads whose subagent records the sidebar reads: the open thread and each thread above it up
- * to its listed row, then the running subsessions under that row. Native subagents keep no
- * records; `routeNativeParent` names the open one's parent when its shell is not loaded.
- */
-export function sidebarSubagentOwners(input: {
-  readonly route: { readonly environmentId: EnvironmentId; readonly threadId: ThreadId };
-  readonly routeNativeParent: ThreadId | null;
-  readonly threads: readonly SubagentOwnerThread[];
-}): Array<{ readonly environmentId: EnvironmentId; readonly threadId: ThreadId }> {
-  const keyOf = (environmentId: EnvironmentId, threadId: ThreadId) =>
-    scopedThreadKey(scopeThreadRef(environmentId, threadId));
-  const byKey = new Map(
-    input.threads.map((thread) => [keyOf(thread.environmentId, thread.id), thread] as const),
-  );
-  const owners: Array<{ readonly environmentId: EnvironmentId; readonly threadId: ThreadId }> = [];
-  const ownerKeys = new Set<string>();
-  const addOwner = (environmentId: EnvironmentId, threadId: ThreadId) => {
-    const key = keyOf(environmentId, threadId);
-    if (ownerKeys.has(key)) return;
-    ownerKeys.add(key);
-    owners.push({ environmentId, threadId });
-  };
-
-  let anchorKey = keyOf(input.route.environmentId, input.route.threadId);
-  const walked = new Set<string>();
-  let at: { environmentId: EnvironmentId; threadId: ThreadId } | null = input.route;
-  while (at !== null) {
-    const key = keyOf(at.environmentId, at.threadId);
-    if (walked.has(key)) break;
-    walked.add(key);
-    anchorKey = key;
-    const shell = byKey.get(key);
-    if (shell === undefined) {
-      if (at === input.route && input.routeNativeParent !== null) {
-        at = { environmentId: at.environmentId, threadId: input.routeNativeParent };
-        continue;
-      }
-      addOwner(at.environmentId, at.threadId);
-      break;
-    }
-    if (!isProviderNativeSubagentThread(shell)) addOwner(at.environmentId, at.threadId);
-    if (isListedThreadLineage(shell.lineage) || shell.lineage.parentThreadId === null) break;
-    at = { environmentId: at.environmentId, threadId: shell.lineage.parentThreadId };
-  }
-
-  const childrenByParent = new Map<string, SubagentOwnerThread[]>();
-  for (const thread of input.threads) {
-    if (thread.archivedAt !== null) continue;
-    const parent = subsessionParentRef(thread);
-    if (parent === null) continue;
-    const parentKey = keyOf(parent.environmentId, parent.threadId);
-    const siblings = childrenByParent.get(parentKey);
-    if (siblings) siblings.push(thread);
-    else childrenByParent.set(parentKey, [thread]);
-  }
-  let liveOwners = 0;
-  const visited = new Set([anchorKey]);
-  const queue = [anchorKey];
-  while (queue.length > 0 && liveOwners < MAX_LIVE_SUBSESSION_OWNERS) {
-    for (const child of childrenByParent.get(queue.shift()!) ?? []) {
-      const childKey = keyOf(child.environmentId, child.id);
-      if (visited.has(childKey)) continue;
-      visited.add(childKey);
-      queue.push(childKey);
-      if (child.runtime === null || !LIVE_RUNTIME_STATUSES.has(child.runtime.status)) continue;
-      if (liveOwners >= MAX_LIVE_SUBSESSION_OWNERS) break;
-      if (!ownerKeys.has(childKey)) liveOwners += 1;
-      addOwner(child.environmentId, child.id);
-    }
-  }
-  return owners;
-}
-
-export function isSidebarHiddenThread(thread: Pick<SidebarThreadSummary, "lineage">): boolean {
-  return !isListedThreadLineage(thread.lineage);
-}
-
-// Subagent and side-chat threads have no sidebar row, so an open one is represented by
-// its nearest listed ancestor. A broken chain (missing parent, cycle,
-// other environment) resolves to the thread itself, which then matches no row.
-export function resolveSidebarRowThreadId(
-  threadId: ThreadId,
-  environmentId: EnvironmentId,
-  threads: readonly Pick<SidebarThreadSummary, "id" | "environmentId" | "lineage">[],
-): ThreadId {
-  const findThread = (id: ThreadId) =>
-    threads.find((thread) => thread.id === id && thread.environmentId === environmentId);
-  const visited = new Set<ThreadId>();
-  let thread = findThread(threadId);
-  while (thread !== undefined && isSidebarHiddenThread(thread)) {
-    if (thread.lineage.parentThreadId === null || visited.has(thread.id)) return threadId;
-    visited.add(thread.id);
-    thread = findThread(thread.lineage.parentThreadId);
-  }
-  return thread?.id ?? threadId;
-}
-
-type SubsessionNestingThread = Pick<
-  SidebarThreadSummary,
-  | "archivedAt"
-  | "createdAt"
-  | "creationSource"
-  | "delegatedFrom"
-  | "environmentId"
-  | "id"
-  | "launchedFrom"
-  | "lineage"
-> & { projectId: string };
-
-/**
- * Threads nested under a shown parent (oldest first) and each one's parent: a thread whose
- * `subsessionParentRef` is shown in the same project (a delegated task may sit elsewhere), or a
- * provider-native subagent where `nativeParentKeyByChild` places it. Others stay top-level.
- */
-export function nestSidebarSubsessions<T extends SubsessionNestingThread>(
-  threads: readonly T[],
-  visibleThreads: readonly T[],
-  delegatedUnderParent: ReadonlySet<string>,
-  nativeParentKeyByChild: ReadonlyMap<string, string> = NO_NATIVE_PARENTS,
-): {
-  readonly subsessionsByParent: ReadonlyMap<string, readonly T[]>;
-  readonly parentKeyByChild: ReadonlyMap<string, string>;
-} {
-  const keyOf = (thread: Pick<T, "environmentId" | "id">) =>
-    scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
-  const live = new Map<string, T>();
-  for (const thread of threads) {
-    if (thread.archivedAt === null) live.set(keyOf(thread), thread);
-  }
-  const listedKeys = new Set(visibleThreads.map(keyOf));
-  const candidateParentKey = new Map<string, string>();
-  for (const [key, thread] of live) {
-    const ref = subsessionParentRef(thread);
-    const parentKey = ref === null ? nativeParentKeyByChild.get(key) : scopedThreadKey(ref);
-    if (parentKey === undefined) continue;
-    const parent = live.get(parentKey);
-    if (parent === undefined) continue;
-    const sameProject =
-      parent.environmentId === thread.environmentId && parent.projectId === thread.projectId;
-    // delegatedUnderParent holds the client runtime's thread keys, not the sidebar's.
-    const delegated = delegatedUnderParent.has(
-      runtimeThreadKey({ environmentId: thread.environmentId, threadId: thread.id }),
-    );
-    if (sameProject || (thread.delegatedFrom != null && delegated)) {
-      candidateParentKey.set(key, parentKey);
-    }
-  }
-  // A cycle is cut where the walk returns to a thread already on its path.
-  const isShown = (key: string, path: ReadonlySet<string>): boolean => {
-    if (path.has(key)) return false;
-    const parentKey = candidateParentKey.get(key);
-    if (parentKey !== undefined && isShown(parentKey, new Set(path).add(key))) return true;
-    return listedKeys.has(key);
-  };
-  const nested: T[] = [];
-  const parentKeyByChild = new Map<string, string>();
-  // Two threads that launched each other would both nest and vanish; the first edge wins.
-  const closesLoop = (key: string, parentKey: string) => {
-    for (let at: string | undefined = parentKey; at !== undefined; at = parentKeyByChild.get(at)) {
-      if (at === key) return true;
-    }
-    return false;
-  };
-  for (const [key, parentKey] of candidateParentKey) {
-    if (closesLoop(key, parentKey) || !isShown(parentKey, new Set([key]))) continue;
-    nested.push(live.get(key)!);
-    parentKeyByChild.set(key, parentKey);
-  }
-  const subsessionsByParent = new Map<string, T[]>();
-  for (const thread of nested) {
-    const parentKey = parentKeyByChild.get(keyOf(thread))!;
-    const siblings = subsessionsByParent.get(parentKey);
-    if (siblings) siblings.push(thread);
-    else subsessionsByParent.set(parentKey, [thread]);
-  }
-  for (const siblings of subsessionsByParent.values()) {
-    siblings.sort(
-      (left, right) =>
-        Date.parse(left.createdAt) - Date.parse(right.createdAt) || left.id.localeCompare(right.id),
-    );
-  }
-  return { subsessionsByParent, parentKeyByChild };
-}
-
-/** The persisted fold state of a thread's subsessions lives beside the project folders' open state. */
-export function subsessionsExpansionKey(threadKey: string): string {
-  return `subsessions:${threadKey}`;
-}
-
-const NATIVE_SUBAGENTS_OPEN_LIMIT = 5;
-
-/** A saved fold state wins; otherwise subsessions start open unless native subagents crowd them. */
-export function resolveSubsessionsOpen(
-  stored: boolean | undefined,
-  subsessions: readonly Pick<SidebarThreadSummary, "lineage" | "creationSource">[],
-): boolean {
-  if (stored !== undefined) return stored;
-  let native = 0;
-  for (const thread of subsessions) {
-    if (isProviderNativeSubagentThread(thread)) native += 1;
-  }
-  return native <= NATIVE_SUBAGENTS_OPEN_LIMIT;
-}
-
-/** The thread's subsessions at every depth, in tree order. */
-export function listSubsessionDescendants<
-  T extends Pick<SidebarThreadSummary, "environmentId" | "id">,
->(
-  subsessionsByParent: ReadonlyMap<string, readonly T[]>,
-  threadKey: string,
-  isOpen: (threadKey: string) => boolean = () => true,
-): T[] {
-  const out: T[] = [];
-  const seen = new Set([threadKey]);
-  const visit = (key: string) => {
-    if (!isOpen(key)) return;
-    for (const child of subsessionsByParent.get(key) ?? []) {
-      const childKey = scopedThreadKey(scopeThreadRef(child.environmentId, child.id));
-      if (seen.has(childKey)) continue;
-      seen.add(childKey);
-      out.push(child);
-      visit(childKey);
-    }
-  };
-  visit(threadKey);
-  return out;
-}
-
-/** The dot a closed parent shows for work in its subsessions; a finished one stays quiet. */
-export function resolveSubsessionDot(
-  subsessionsByParent: ReadonlyMap<
-    string,
-    readonly (ThreadStatusInput &
-      SidebarThreadStatusInput &
-      Pick<SidebarThreadSummary, "environmentId" | "id">)[]
-  >,
-  threadKey: string,
-): "attention" | "failed" | "working" | null {
-  const dot = resolveSidebarFolderDot(listSubsessionDescendants(subsessionsByParent, threadKey));
-  return dot === "unread" || dot === "ready" ? null : dot;
-}
-
 /**
  * `delegatedUnderParent` holds the tasks linked environments run for a thread
  * the sidebar lists, by thread key; they show under that thread, as subagents do.
@@ -918,19 +674,102 @@ type ThreadStatusInput = Pick<
   blockedOnThreadWait?: boolean | undefined;
 };
 
+// Read at event time: subscribing Sidebar to terminal or modifier state re-renders every row.
+export function threadShortcutContext(routeThreadRef: ScopedThreadRef | null) {
+  return {
+    terminalFocus: isTerminalFocused(),
+    terminalOpen:
+      routeThreadRef !== null &&
+      selectThreadTerminalUiState(
+        useTerminalUiStateStore.getState().terminalUiStateByThreadKey,
+        routeThreadRef,
+      ).terminalOpen,
+    previewFocus: isPreviewFocused(),
+    previewOpen:
+      selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, routeThreadRef) ===
+      "preview",
+    modelPickerOpen: isModelPickerOpen(),
+    isWeb: !isElectron,
+    isDesktop: isElectron,
+  };
+}
+
+/** Whether the current modifier combination, including none, has been held unchanged for `delayMs`. */
+function createModifierHoldStore(delayMs: number): ClockStore<boolean> {
+  const listeners = new Set<() => void>();
+  let held = false;
+  let stopDeadline = () => {};
+  let stopModifiers: (() => void) | null = null;
+
+  const setHeld = (next: boolean) => {
+    if (held === next) return;
+    held = next;
+    for (const listener of listeners) listener();
+  };
+  const onModifiersChange = () => {
+    stopDeadline();
+    const deadline = deadlineStore(deadlineAfter(delayMs));
+    stopDeadline = deadline.subscribe(() => setHeld(true));
+    // A deadline another subscriber already passed never notifies a late joiner.
+    setHeld(deadline.getSnapshot());
+  };
+
+  return {
+    subscribe: (listener) => {
+      listeners.add(listener);
+      if (stopModifiers === null) {
+        stopModifiers = shortcutModifierStore.subscribe(onModifiersChange);
+        onModifiersChange();
+      }
+      return () => {
+        listeners.delete(listener);
+        if (listeners.size > 0) return;
+        stopModifiers?.();
+        stopModifiers = null;
+        stopDeadline();
+        stopDeadline = () => {};
+        held = false;
+      };
+    },
+    getSnapshot: () => held,
+  };
+}
+
+const threadJumpModifierHold = createModifierHoldStore(THREAD_JUMP_HINT_SHOW_DELAY_MS);
+
+function subscribeToThreadJumpHintInputs(listener: () => void): () => void {
+  const unsubscribeHold = threadJumpModifierHold.subscribe(listener);
+  const unsubscribeFocus = subscribeToTerminalFocusChanges(listener);
+  const unsubscribeTerminals = useTerminalUiStateStore.subscribe(listener);
+  const unsubscribeRightPanels = useRightPanelStore.subscribe(listener);
+  const unsubscribeModelPicker = subscribeToModelPickerVisibility(listener);
+  return () => {
+    unsubscribeHold();
+    unsubscribeFocus();
+    unsubscribeTerminals();
+    unsubscribeRightPanels();
+    unsubscribeModelPicker();
+  };
+}
+
 /**
  * Thread jump hints appear once the jump modifier has been held for a moment,
  * so a quick shortcut never flashes them, and hide as soon as it is released.
+ * The snapshot is the visibility itself, so a quick shortcut never re-renders the caller.
  */
-export function useThreadJumpHintsVisible(shouldShow: boolean): boolean {
-  const [showAt, setShowAt] = React.useState<number | null>(null);
-  // The clock is read inside the updater: the compiler caches a bare clock read
-  // in render once per instance, so a second hold would reuse the first deadline.
-  // React discards this render and re-runs with the update.
-  if (shouldShow !== (showAt !== null)) {
-    setShowAt(shouldShow ? () => deadlineAfter(THREAD_JUMP_HINT_SHOW_DELAY_MS) : null);
-  }
-  return useDeadlinePassed(showAt);
+export function useThreadJumpHintsVisible(
+  keybindings: ResolvedKeybindingsConfig,
+  routeThreadRef: ScopedThreadRef | null,
+): boolean {
+  return React.useSyncExternalStore(
+    subscribeToThreadJumpHintInputs,
+    () =>
+      threadJumpModifierHold.getSnapshot() &&
+      shouldShowThreadJumpHintsForModifiers(shortcutModifierStore.getSnapshot(), keybindings, {
+        platform: navigator.platform,
+        context: threadShortcutContext(routeThreadRef),
+      }),
+  );
 }
 
 export function resolveThreadLastVisitedAt(
@@ -945,22 +784,15 @@ export function resolveThreadLastVisitedAt(
 
 export function hasUnseenCompletion(thread: ThreadStatusInput): boolean {
   if (!thread.latestRun?.completedAt) return false;
+  if (thread.latestRun.status === "interrupted" || thread.latestRun.status === "cancelled") {
+    return false;
+  }
   const completedAt = Date.parse(thread.latestRun.completedAt);
   if (Number.isNaN(completedAt)) return false;
   if (!thread.lastVisitedAt) return false;
 
   const lastVisitedAt = Date.parse(thread.lastVisitedAt);
   if (Number.isNaN(lastVisitedAt)) return true;
-  return completedAt > lastVisitedAt;
-}
-
-/** Unopened threads' failures still count as unseen, unlike completions. */
-function hasUnseenFailure(thread: ThreadStatusInput): boolean {
-  if (thread.latestRun?.status !== "failed") return false;
-  if (!thread.lastVisitedAt) return true;
-  const completedAt = Date.parse(thread.latestRun.completedAt ?? "");
-  const lastVisitedAt = Date.parse(thread.lastVisitedAt);
-  if (Number.isNaN(completedAt) || Number.isNaN(lastVisitedAt)) return true;
   return completedAt > lastVisitedAt;
 }
 
@@ -1138,6 +970,35 @@ export function resolveSidebarThreadStatus(thread: SidebarThreadStatusInput): Si
   return "ready";
 }
 
+/** Sidebar row status: a failure the user has already opened settles to ready, like Done. */
+export function resolveSidebarRowStatus(
+  thread: ThreadStatusInput & SidebarThreadStatusInput,
+): SidebarThreadStatus {
+  const status = resolveSidebarThreadStatus(thread);
+  // A runtime failure without a failed run has nothing to date it, so it stays.
+  if (status !== "failed" || thread.latestRun?.status !== "failed") return status;
+  return hasUnseenRunFailure(thread) ? status : "ready";
+}
+
+/** What the window title says the open thread is doing, in the words its announcer uses. */
+export function resolveWindowTitleThreadStatus(thread: SidebarThreadStatusInput): string | null {
+  // A guest waiting doesn't hide that the agent is still working.
+  switch (resolveSidebarThreadStatus({ ...thread, pendingGuestMessageCount: 0 })) {
+    case "approval":
+      return THREAD_STATUS_TEXT.approval;
+    case "input":
+      return THREAD_STATUS_TEXT.input;
+    case "preparing":
+    case "working":
+      return THREAD_STATUS_TEXT.working;
+    case "waiting":
+      // Waiting on a child thread is still this turn, so it must not read as finished.
+      return thread.runtime?.status === "running" ? THREAD_STATUS_TEXT.working : null;
+    default:
+      return null;
+  }
+}
+
 /**
  * The dot on a closed boring-sidebar folder: the most urgent state among its
  * hidden threads. Waiting threads stay quiet, like their rows.
@@ -1149,7 +1010,7 @@ export function resolveSidebarFolderDot(
       Partial<Pick<SidebarThreadSummary, "pullRequests">>
   >,
 ): "attention" | "failed" | "ready" | "unread" | "working" | null {
-  const statuses = new Set(threads.map(resolveSidebarThreadStatus));
+  const statuses = new Set(threads.map(resolveSidebarRowStatus));
   if (
     statuses.has("input") ||
     statuses.has("approval") ||
@@ -1162,7 +1023,7 @@ export function resolveSidebarFolderDot(
   const deliveries = new Set(
     threads.flatMap(
       (thread) =>
-        threadPullRequestDeliveryForStatus(thread.pullRequests, resolveSidebarThreadStatus(thread))
+        threadPullRequestDeliveryForStatus(thread.pullRequests, resolveSidebarRowStatus(thread))
           ?.stage ?? [],
     ),
   );
@@ -1170,7 +1031,7 @@ export function resolveSidebarFolderDot(
   if (deliveries.has("ready")) return "ready";
   // Rows show Done only for ready threads, so the dot follows the same rule.
   const hasUnread = threads.some(
-    (thread) => resolveSidebarThreadStatus(thread) === "ready" && hasUnseenCompletion(thread),
+    (thread) => resolveSidebarRowStatus(thread) === "ready" && hasUnseenCompletion(thread),
   );
   if (hasUnread) return "unread";
   if (
@@ -1425,7 +1286,7 @@ export function resolveThreadStatusPill(input: {
     };
   }
 
-  if (hasUnseenFailure(thread)) {
+  if (hasUnseenRunFailure(thread)) {
     return {
       label: "Failed",
       colorClass: "text-red-600 dark:text-red-300/90",
@@ -1461,17 +1322,23 @@ export function resolveThreadStatusPill(input: {
 }
 
 export function getFallbackThreadIdAfterDelete<
-  T extends Pick<Thread, "id" | "projectId" | "createdAt" | "updatedAt" | "settledOverride"> &
+  T extends Pick<
+    Thread,
+    "id" | "projectId" | "createdAt" | "updatedAt" | "settledOverride" | "lineage"
+  > &
     ThreadSortInput &
-    ThreadSnoozeShell,
+    ThreadSnoozeShell &
+    Pick<Thread, "environmentId">,
 >(input: {
   threads: readonly T[];
   deletedThreadId: T["id"];
   sortOrder: SidebarThreadSortOrder;
   now: string;
   deletedThreadIds?: ReadonlySet<T["id"]>;
+  delegatedUnderParent: ReadonlySet<string>;
 }): T["id"] | null {
-  const { deletedThreadId, deletedThreadIds, sortOrder, now, threads } = input;
+  const { deletedThreadId, deletedThreadIds, sortOrder, now, threads, delegatedUnderParent } =
+    input;
   const deletedThread = threads.find((thread) => thread.id === deletedThreadId);
   if (!deletedThread) {
     return null;
@@ -1485,7 +1352,12 @@ export function getFallbackThreadIdAfterDelete<
           thread.id !== deletedThreadId &&
           !deletedThreadIds?.has(thread.id) &&
           thread.settledOverride !== "settled" &&
-          !effectiveSnoozed(thread, { now }),
+          !effectiveSnoozed(thread, { now }) &&
+          !isShownUnderParent(
+            { environmentId: thread.environmentId, threadId: thread.id },
+            thread.lineage,
+            delegatedUnderParent,
+          ),
       ),
       sortOrder,
     )[0]?.id ?? null

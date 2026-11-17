@@ -99,10 +99,11 @@ export const layer: Layer.Layer<ThreadForkServiceV2> = Layer.succeed(
           cause: forkableSourceRunStatusError(sourceRun),
         });
       }
-      // The remote parent delegated the source thread, not its forks.
+      // The remote parent delegated the source thread, not its forks; likewise only the
+      // source continues the offline original.
       const {
         delegatedFrom: _delegatedFrom,
-        launchedFrom: _launchedFrom,
+        continuedFrom: _continuedFrom,
         ...inherited
       } = input.sourceProjection.thread;
       const targetThread: OrchestrationV2AppThread = {
@@ -117,8 +118,6 @@ export const layer: Layer.Layer<ThreadForkServiceV2> = Layer.succeed(
         title: input.title ?? `${input.sourceProjection.thread.title} fork`,
         // The source's title job completes only on the source thread.
         titleRegeneration: null,
-        // Side chats share the parent's worktree, so they start supervised.
-        ...(input.sideChat ? { runtimeMode: "approval-required" as const } : {}),
         activeProviderThreadId: null,
         lineage: {
           parentThreadId: input.sourceProjection.thread.id,

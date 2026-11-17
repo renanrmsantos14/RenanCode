@@ -28,7 +28,6 @@ export function SidebarSettingsPanel() {
       </SettingsSection>
       <SettingsSection id="sidebar-layout" title="Layout">
         <BoringSidebarRow />
-        <BoringSidebarMultilineRow />
       </SettingsSection>
       <SettingsSection id="sidebar-row" title="Folder rows">
         <SidebarRowItemsRows />
@@ -47,15 +46,18 @@ function BoringSidebarRow() {
       description="Group sidebar threads into project folders. Pinned threads stay on top, and Snoozed and Settled stay below the folders."
       control={
         <Switch
-          checked={settings.boringSidebarEnabled || settings.legacySidebarEnabled}
-          // Turning it off also clears the opt-in of the removed legacy sidebar.
-          onCheckedChange={(checked) =>
-            updateSettings({ boringSidebarEnabled: Boolean(checked), legacySidebarEnabled: false })
-          }
+          checked={settings.boringSidebarEnabled}
+          onCheckedChange={(checked) => updateSettings({ boringSidebarEnabled: Boolean(checked) })}
           aria-label="Boring sidebar (group by project)"
         />
       }
-    />
+    >
+      {settings.boringSidebarEnabled ? (
+        <div className="mt-2 mb-2 border-l-2 border-border/60 ps-3">
+          <BoringSidebarMultilineRow />
+        </div>
+      ) : null}
+    </SettingsRow>
   );
 }
 
@@ -65,6 +67,7 @@ function BoringSidebarMultilineRow() {
   return (
     <SettingsRow
       {...searchableSetting("boring-sidebar-multiline")}
+      className="px-0 py-2 sm:px-0"
       description="Show folder threads on two lines: the title, then the branch, pull request, and agent."
       control={
         <Switch

@@ -23,6 +23,7 @@ export type ThreadActionMenuId =
   | "regenerate-title"
   | "mark-unread"
   | "share-guest"
+  | "continue-elsewhere"
   | "copy"
   | "copy-path"
   | "copy-branch"
@@ -96,6 +97,10 @@ export interface ThreadActionMenuState {
   readonly snoozePresets: ReadonlyArray<SnoozePreset>;
   /** Guest links need their own grant, so the caller checks it instead of `canOperate`. */
   readonly canShareWithGuest?: boolean;
+  /** The thread's machine is offline; the dialog checks the destination's grant. */
+  readonly canContinueElsewhere?: boolean;
+  /** The thread already has a continuation, so the action opens it instead. */
+  readonly hasContinuation?: boolean;
   /** A No project thread with its own folder, on a server that can promote it. */
   readonly canTurnIntoProject?: boolean;
 }
@@ -108,6 +113,7 @@ export function threadActionRequiresOperate(action: ThreadActionMenuId): boolean
     "project-settings",
     "mark-unread",
     "share-guest",
+    "continue-elsewhere",
     "copy",
     "copy-path",
     "copy-branch",
@@ -161,7 +167,8 @@ export function buildThreadActionMenuItems(
                 children: [
                   ...state.snoozePresets.map((preset) => ({
                     id: `snooze:${preset.id}` as const,
-                    label: `${preset.label} (${preset.whenLabel})`,
+                    label: preset.label,
+                    detail: preset.whenLabel,
                   })),
                   {
                     id: "snooze:custom" as const,
@@ -186,6 +193,15 @@ export function buildThreadActionMenuItems(
     { id: "mark-unread", label: "Mark unread", icon: "mail-open" },
     ...(state.canShareWithGuest
       ? [{ id: "share-guest" as const, label: "Share with guest", icon: "user-plus" }]
+      : []),
+    ...(state.canContinueElsewhere
+      ? [
+          {
+            id: "continue-elsewhere" as const,
+            label: state.hasContinuation ? "Open continued thread" : "Continue on another machine",
+            icon: "arrow-right-left",
+          },
+        ]
       : []),
     ...(state.projectFilter
       ? [
@@ -217,12 +233,12 @@ export function buildThreadActionMenuItems(
             children: [
               {
                 id: "auto-settle:enabled" as const,
-                label: "Enabled",
+                label: "Follow settings",
                 checked: state.autoSettleEnabled,
               },
               {
                 id: "auto-settle:disabled" as const,
-                label: "Disabled",
+                label: "Never",
                 checked: !state.autoSettleEnabled,
               },
             ],

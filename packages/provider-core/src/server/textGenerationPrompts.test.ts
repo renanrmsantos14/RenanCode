@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { buildNextActionPrompt } from "./textGenerationPrompts.ts";
+import { buildNextActionPrompt, buildThreadTitlePrompt } from "./textGenerationPrompts.ts";
 import { normalizeCliError } from "./textGenerationUtils.ts";
 
 describe("normalizeCliError", () => {
@@ -26,5 +26,24 @@ describe("buildNextActionPrompt", () => {
     expect(prompt).toContain("Should I open a PR?");
     expect(prompt).not.toContain("START");
     expect(prompt).toContain("[Earlier content truncated]");
+  });
+});
+
+describe("buildThreadTitlePrompt", () => {
+  it("names the project to leave out and puts the user's instructions above the limits", () => {
+    for (const previousTitle of [undefined, "Hyperdrive Config Crash"]) {
+      const { prompt } = buildThreadTitlePrompt({
+        message: "hyperdrive init crashes without a config",
+        previousTitle,
+        projectTitle: "Hyperdrive",
+        instructions: "Prefix every title with the team name.",
+      });
+      expect(prompt).toContain('Never include the project name ("Hyperdrive")');
+      expect(prompt).not.toContain("fewer than 40 characters");
+      expect(prompt).toContain("Title instructions from the user:\nPrefix every title");
+    }
+    expect(buildThreadTitlePrompt({ message: "Fix login", instructions: " " }).prompt).toContain(
+      "3-8 words, fewer than 40 characters.",
+    );
   });
 });

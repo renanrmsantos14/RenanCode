@@ -84,6 +84,7 @@ export function applyUsageLimitsUpdate(input: {
   return {
     ...makeUsageLimits({ checkedAt: input.checkedAt, windows: merged.values() }),
     ...(previous?.resetCredits !== undefined ? { resetCredits: previous.resetCredits } : {}),
+    ...(previous?.zeroSpendCap ? { zeroSpendCap: true } : {}),
     ...(unavailable !== undefined ? { unavailable } : {}),
   };
 }
@@ -94,6 +95,16 @@ function usageWindowEquals(a: ServerProviderUsageWindow, b: ServerProviderUsageW
     a.kind === b.kind &&
     a.label === b.label &&
     a.usedPercent === b.usedPercent &&
+    (a.modelIds === b.modelIds ||
+      (a.modelIds !== undefined &&
+        b.modelIds !== undefined &&
+        a.modelIds.length === b.modelIds.length &&
+        a.modelIds.every((id, index) => id === b.modelIds?.[index]))) &&
+    (a.providerIds === b.providerIds ||
+      (a.providerIds !== undefined &&
+        b.providerIds !== undefined &&
+        a.providerIds.length === b.providerIds.length &&
+        a.providerIds.every((id, index) => id === b.providerIds?.[index]))) &&
     a.resetsAt === b.resetsAt &&
     a.windowDurationMins === b.windowDurationMins
   );
@@ -105,7 +116,11 @@ export function resolveUsageLimitsAfterProbe(input: {
 }): ServerProviderUsageLimits | undefined {
   const { published, probed } = input;
   if (probed?.unavailable?.reason === "probeFailed" && published && !published.unavailable) {
-    return published;
+    return applyUsageReadFailure({
+      previous: published,
+      at: probed.checkedAt,
+      reason: "requestFailed",
+    });
   }
   if (
     published &&
@@ -117,4 +132,85 @@ export function resolveUsageLimitsAfterProbe(input: {
     return { ...probed, checkedAt: published.checkedAt, windows: published.windows };
   }
   return probed;
+}
+
+/**
+ * Keeps the windows and `checkedAt` of the last good reading. A repeated reason publishes
+ * nothing until its retry time passes, so a backoff does not republish on every poll.
+ */
+export function applyUsageReadFailure(input: {
+  readonly previous: ServerProviderUsageLimits | undefined;
+  readonly at: string;
+  readonly reason: NonNullable<ServerProviderUsageLimits["lastError"]>["reason"];
+  readonly retryAt?: string | undefined;
+}): ServerProviderUsageLimits | undefined {
+  const { previous, at, reason, retryAt } = input;
+  if (previous === undefined || previous.unavailable !== undefined) return previous;
+  const last = previous.lastError;
+  const sameFailure = last?.reason === reason;
+  if (
+    sameFailure &&
+    (retryAt === undefined ||
+      (last.retryAt !== undefined && Date.parse(at) < Date.parse(last.retryAt)))
+  ) {
+    return previous;
+  }
+  return {
+    ...previous,
+    lastError: { at: sameFailure ? last.at : at, reason, ...(retryAt ? { retryAt } : {}) },
+  };
+}
+
+// Below the 3 minutes after which clients mark a reading stale, so an unchanged reading never reads as old.
+const UNCHANGED_READING_REPUBLISH_MS = 120_000;
+
+/**
+ * A good reading replaces the windows wholesale, clears `lastError`, and keeps reset credits read elsewhere.
+ * An unchanged reading returns `previous` so nothing is published until it is due to refresh `checkedAt`.
+ */
+export function applyUsageReading(input: {
+  readonly previous: ServerProviderUsageLimits | undefined;
+  readonly reading: ServerProviderUsageLimits;
+}): ServerProviderUsageLimits {
+  const { previous, reading } = input;
+  if (previous?.unavailable?.reason === "unsupported") {
+    return previous;
+  }
+  const checkedAtMs = Date.parse(reading.checkedAt);
+  if (previous && Date.parse(previous.checkedAt) > checkedAtMs) {
+    return previous;
+  }
+  const next: ServerProviderUsageLimits = {
+    ...reading,
+    ...(reading.resetCredits === undefined && previous?.resetCredits !== undefined
+      ? { resetCredits: previous.resetCredits }
+      : {}),
+  };
+  if (
+    previous &&
+    !previous.unavailable &&
+    !previous.lastError &&
+    !next.unavailable &&
+    checkedAtMs - Date.parse(previous.checkedAt) < UNCHANGED_READING_REPUBLISH_MS &&
+    previous.windows.length === next.windows.length &&
+    previous.windows.every((window, index) => usageWindowEquals(window, next.windows[index]!)) &&
+    resetCreditsEqual(previous.resetCredits, next.resetCredits)
+  ) {
+    return previous;
+  }
+  return next;
+}
+
+function resetCreditsEqual(
+  a: ServerProviderUsageLimits["resetCredits"],
+  b: ServerProviderUsageLimits["resetCredits"],
+): boolean {
+  return (
+    a === b ||
+    (a !== undefined &&
+      b !== undefined &&
+      a.availableCount === b.availableCount &&
+      a.nextExpiresAt === b.nextExpiresAt &&
+      a.nextCreditId === b.nextCreditId)
+  );
 }

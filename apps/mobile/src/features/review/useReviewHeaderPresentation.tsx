@@ -1,6 +1,6 @@
 import { useEnvironmentQuery } from "../../state/query";
 import { useSelectedThreadGitActions } from "../../state/use-selected-thread-git-actions";
-import { useSelectedThreadGitState } from "../../state/use-selected-thread-git-state";
+import { useSelectedThreadGitOperationLabel } from "../../state/use-selected-thread-git-state";
 import { useThreadSelection } from "../../state/use-thread-selection";
 import { vcsEnvironment } from "../../state/vcs";
 import { useThreadGitMenuDefinition } from "../threads/ThreadGitControls";
@@ -28,7 +28,7 @@ export function useReviewHeaderPresentation(props: {
   readonly onRefresh: () => Promise<void>;
 }): ReviewHeaderPresentation {
   const { selectedThread } = useThreadSelection();
-  const gitState = useSelectedThreadGitState();
+  const gitOperationLabel = useSelectedThreadGitOperationLabel();
   const gitActions = useSelectedThreadGitActions();
   const gitStatusQuery = useEnvironmentQuery(
     selectedThread !== null && props.selectedThreadCwd !== null
@@ -46,7 +46,7 @@ export function useReviewHeaderPresentation(props: {
     threadId: props.threadId,
     currentBranch: selectedThread?.branch ?? null,
     gitStatus: gitStatusQuery.data,
-    gitOperationLabel: gitState.gitOperationLabel,
+    gitOperationLabel,
     onPull: gitActions.onPullSelectedThreadBranch,
     onRunAction: gitActions.onRunSelectedThreadGitAction,
   });

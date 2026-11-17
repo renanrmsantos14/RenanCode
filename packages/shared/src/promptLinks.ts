@@ -1,4 +1,5 @@
 import { DEFAULT_HOSTED_APP_URL } from "./connectAuth.ts";
+import { parseUrl } from "./url.ts";
 
 export const PROMPT_LINK_MAX_PROMPT_LENGTH = 8_000;
 
@@ -23,6 +24,7 @@ export type NewThreadLink =
       readonly repository: PromptLinkRepository | null;
       readonly provider: string | null;
       readonly model: string | null;
+      readonly moduleId: string | null;
     }
   | {
       readonly kind: "pull-request";
@@ -141,6 +143,10 @@ export function parseNewThreadLink(search: string): PromptLinkResult<NewThreadLi
   if (repo !== null && repository === null) {
     return { ok: false, error: "This link names a repository RenanCode cannot read." };
   }
+  const moduleParam = optionalParam(params, "module");
+  if (moduleParam !== null && !/^[\w:.-]{1,200}$/.test(moduleParam)) {
+    return { ok: false, error: "This link names a work module RenanCode cannot read." };
+  }
   return {
     ok: true,
     value: {
@@ -149,6 +155,7 @@ export function parseNewThreadLink(search: string): PromptLinkResult<NewThreadLi
       repository,
       provider: optionalParam(params, "provider")?.toLowerCase() ?? null,
       model: optionalParam(params, "model"),
+      moduleId: moduleParam ?? null,
     },
   };
 }
@@ -159,7 +166,7 @@ export function parseThreadLinkPrompt(search: string): PromptLinkResult<LinkedPr
 
 export function withoutPromptLinkParams(search: string): string {
   const params = new URLSearchParams(search);
-  for (const key of ["prompt", "repo", "pr", "provider", "model"]) params.delete(key);
+  for (const key of ["prompt", "repo", "pr", "provider", "model", "module"]) params.delete(key);
   const rest = params.toString();
   return rest ? `?${rest}` : "";
 }
@@ -169,6 +176,7 @@ export function buildNewThreadLink(input: {
   readonly repository?: PromptLinkRepository | null;
   readonly provider?: string | null;
   readonly model?: string | null;
+  readonly moduleId?: string | null;
   readonly origin?: string;
 }): string {
   const url = new URL("/new", input.origin ?? DEFAULT_HOSTED_APP_URL);
@@ -178,6 +186,7 @@ export function buildNewThreadLink(input: {
   }
   if (input.provider) url.searchParams.set("provider", input.provider);
   if (input.provider && input.model) url.searchParams.set("model", input.model);
+  if (input.moduleId) url.searchParams.set("module", input.moduleId);
   return url.toString();
 }
 
@@ -188,8 +197,8 @@ export function promptLinkAppPath(
   value: string,
   hostedAppUrl: string = DEFAULT_HOSTED_APP_URL,
 ): string | null {
-  if (!URL.canParse(value)) return null;
-  const url = new URL(value);
+  const url = parseUrl(value);
+  if (!url) return null;
   if (APP_SCHEME.test(url.protocol)) {
     if (url.host === "new" && (url.pathname === "" || url.pathname === "/")) {
       return `/new${url.search}`;
@@ -197,7 +206,7 @@ export function promptLinkAppPath(
     const thread = url.host === "threads" ? THREAD_PATH.exec(url.pathname) : null;
     return thread ? `/${thread[1]}/${thread[2]}${url.search}` : null;
   }
-  if (!URL.canParse(hostedAppUrl) || url.origin !== new URL(hostedAppUrl).origin) return null;
+  if (url.origin !== parseUrl(hostedAppUrl)?.origin) return null;
   if (url.pathname === "/new") return `/new${url.search}`;
   // The web app's own thread route is a link only with a prompt, so reloading a tab never asks.
   const thread = url.pathname.startsWith("/threads/")

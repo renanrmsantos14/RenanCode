@@ -4,22 +4,41 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   type ServerProvider,
+  type ServerProviderUsageLimits,
   UsageLimitSourceId,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
   type LimitAccount,
+  displayLimitWindows,
+  cursorUsageWindowDetails,
   collectProviderUsageLimits,
   sameUsageLimitCommandCoverage,
   withUsageLimitsCommands,
   collectLimitAccounts,
+  limitAccountsBesideClaude,
   collectExternalUsageLinks,
   collectLimitNotices,
   collectLimitPools,
   elapsedShare,
   exhaustedUsageWindow,
+  claudeGoalSummary,
+  forecastWarningText,
+  claudeUsageStatusText,
+  claudeUsageValueText,
+  claudeVerdictText,
+  claudeWindowsText,
+  limitInstanceName,
+  weeklyBarLabel,
+  claudeAccountValue,
+  claudeWeeklyReading,
+  formatAgo,
+  formatGoalZoneInstant,
+  goalPercent,
   paceOf,
+  exhaustionForecast,
+  selectClaudeUsageAccounts,
   paceRemainingPercent,
   usesChatGptSharing,
   resolveNewThreadModelSelection,
@@ -124,33 +143,88 @@ describe("new thread model fallback", () => {
     ).toBeDefined();
   });
   it.each([
-    ["cursor", ["autoPercentUsed"], "claude-opus-5-5", false],
-    ["cursor", ["autoPercentUsed"], "composer-2.5", false],
-    ["cursor", ["autoPercentUsed", "apiPercentUsed"], "composer-2.5", true],
-    ["antigravity", ["gemini-weekly"], "claude-opus-5-5", false],
-    ["antigravity", ["3p-weekly"], "claude-opus-5-5", true],
-    ["antigravity", ["gemini-weekly"], "antigravity-default", true],
-    ["opencode", ["go_weekly"], "opencode/big-pickle", false],
-    ["opencode", ["go_weekly"], "opencode-go/big-pickle", true],
-  ] as const)("matches %s pools %s to %s", (driver, ids, model, usesFallback) => {
-    const defaultSelection = { ...selection, model };
-    expect(
-      resolveNewThreadModelSelection({
-        ...defaults,
-        defaultSelection,
-        providers: [
-          provider({
-            driver: ProviderDriverKind.make(driver),
-            usageLimits: {
-              checkedAt: limited.checkedAt,
-              windows: ids.map((id) => ({ ...window, id, usedPercent: 100 })),
-            },
-          }),
-          available,
-        ],
-      }).selection,
-    ).toEqual(usesFallback ? fallback : defaultSelection);
-  });
+    ["cursor", ["autoPercentUsed"], "claude-opus-5-5", false, undefined, undefined],
+    ["cursor", ["autoPercentUsed"], "composer-2.5", false, undefined, undefined],
+    ["cursor", ["autoPercentUsed", "apiPercentUsed"], "composer-2.5", true, undefined, undefined],
+    ["antigravity", ["gemini-weekly"], "claude-opus-5-5", false, undefined, undefined],
+    ["antigravity", ["3p-weekly"], "claude-opus-5-5", true, undefined, undefined],
+    ["antigravity", ["gemini-weekly"], "antigravity-default", true, undefined, undefined],
+    ["codex", ["individual"], "gpt-5.5", true, undefined, undefined],
+    ["opencode", ["go_weekly"], "opencode/big-pickle", false, undefined, undefined],
+    ["opencode", ["go_weekly"], "opencode-go/big-pickle", true, undefined, undefined],
+    ["opencode", ["budget_model"], "opencode/other", false, ["opencode/limited"], undefined],
+    ["opencode", ["budget_model"], "opencode/limited", true, ["opencode/limited"], undefined],
+    [
+      "opencode",
+      ["budget_set"],
+      "other/model",
+      false,
+      ["opencode/limited", "opencode/second"],
+      undefined,
+    ],
+    [
+      "opencode",
+      ["budget_set"],
+      "opencode/second",
+      true,
+      ["opencode/limited", "opencode/second"],
+      undefined,
+    ],
+    ["opencode", ["budget_empty"], "opencode/other", false, [], undefined],
+    [
+      "opencode",
+      ["budget_all"],
+      "anthropic/claude",
+      false,
+      undefined,
+      ["opencode", "console-custom"],
+    ],
+    [
+      "opencode",
+      ["budget_all"],
+      "opencode-go/model",
+      false,
+      undefined,
+      ["opencode", "console-custom"],
+    ],
+    ["opencode", ["budget_all"], "opencode/model", true, undefined, ["opencode", "console-custom"]],
+    [
+      "opencode",
+      ["budget_all"],
+      "console-custom/model",
+      true,
+      undefined,
+      ["opencode", "console-custom"],
+    ],
+    ["opencode", ["budget_all"], "opencode/model", false, undefined, []],
+  ] as const)(
+    "matches %s pools %s to %s",
+    (driver, ids, model, usesFallback, modelIds, providerIds) => {
+      const defaultSelection = { ...selection, model };
+      expect(
+        resolveNewThreadModelSelection({
+          ...defaults,
+          defaultSelection,
+          providers: [
+            provider({
+              driver: ProviderDriverKind.make(driver),
+              usageLimits: {
+                checkedAt: limited.checkedAt,
+                windows: ids.map((id) => ({
+                  ...window,
+                  id,
+                  usedPercent: 100,
+                  ...(modelIds === undefined ? {} : { modelIds }),
+                  ...(providerIds === undefined ? {} : { providerIds }),
+                })),
+              },
+            }),
+            available,
+          ],
+        }).selection,
+      ).toEqual(usesFallback ? fallback : defaultSelection);
+    },
+  );
 });
 
 describe("pace", () => {
@@ -344,6 +418,45 @@ describe("pools", () => {
     expect(collectLimitAccounts(input)).toHaveLength(1);
   });
 
+  it("merges a local Antigravity login with its hub account by Google account fingerprint", () => {
+    const antigravity = ProviderDriverKind.make("antigravity");
+    const local = provider({
+      driver: antigravity,
+      instanceId: ProviderInstanceId.make("antigravity"),
+      auth: { status: "authenticated" },
+      usageLimits: {
+        checkedAt,
+        credentialFingerprint: "google-key",
+        windows: [{ ...window, id: "gemini-weekly", usedPercent: 20 }],
+      },
+    });
+    const hubAccount = {
+      id: "antigravity-g@example.com.json",
+      driver: antigravity,
+      usageLimits: {
+        checkedAt: "2026-09-03T11:30:00.000Z",
+        credentialFingerprint: "google-key",
+        windows: [{ ...window, id: "gemini-weekly", usedPercent: 30 }],
+      },
+    };
+    const accounts = collectLimitAccounts(
+      new Map([
+        [
+          EnvironmentId.make("env-a"),
+          {
+            ...laptop,
+            serverConfig: {
+              providers: [local],
+              usageLimitSources: [{ ...source, accounts: [hubAccount] }],
+            },
+          },
+        ],
+      ]),
+    );
+    expect(accounts).toHaveLength(1);
+    expect(accounts[0]?.limits.windows[0]?.usedPercent).toBe(30);
+  });
+
   it("takes windows from a fresher hub read but credits and redeem from the native instance", () => {
     const native = provider({
       driver: claude,
@@ -434,6 +547,18 @@ describe("pools", () => {
       input: { sourceId: "hub", accountId: "claude-same@example.com.json", creditId: "hub-credit" },
     });
     expect(account?.limits.resetCredits?.availableCount).toBe(3);
+
+    const [selected] = selectClaudeUsageAccounts({
+      providers: [native],
+      sources: input.get(EnvironmentId.make("env-a"))?.serverConfig.usageLimitSources,
+      now: Date.parse(checkedAt),
+    });
+    expect(selected?.resetCreditInput).toEqual({
+      sourceId: "hub",
+      accountId: "claude-same@example.com.json",
+      creditId: "hub-credit",
+    });
+    expect(limitAccountsBesideClaude(collectLimitAccounts(input))).toEqual([]);
   });
 
   it("redeems on the environment whose snapshot supplied the credits on show", () => {
@@ -567,7 +692,7 @@ describe("pools", () => {
     expect(accounts.map((account) => account.key)).toEqual([
       "env-a:business",
       "env-a:personal",
-      "hub:x.json",
+      "env-a:hub:x.json",
     ]);
     expect(accounts[0]?.limits.windows[0]?.usedPercent).toBe(8);
     const withoutEmail = (id: string, workspaceId: string) => {
@@ -597,8 +722,8 @@ describe("pools", () => {
       ],
     ]);
     expect(collectLimitAccounts(sameFile).map((account) => account.key)).toEqual([
-      "hub:a.json:ws-1",
-      "hub:a.json:ws-2",
+      "env-a:hub:a.json:ws-1",
+      "env-b:hub:a.json:ws-2",
     ]);
     expect(accounts[1]?.environments.map((environment) => environment.label)).toEqual([
       "Laptop",
@@ -643,33 +768,152 @@ describe("pools", () => {
     });
     expect(collectLimitAccounts(withOther(unreadable)).map((account) => account.key)).toEqual([
       "env-a:codex",
-      "hub:claude.json",
+      "env-a:hub:claude.json",
     ]);
+    expect(
+      limitAccountsBesideClaude(collectLimitAccounts(withOther(unreadable))).map(
+        (account) => account.key,
+      ),
+    ).toContain("env-a:hub:claude.json");
   });
 
-  it("keys a hub account without an email by hub, so two environments on one hub share it", () => {
-    const seat = {
-      id: "claude-team-seat.json",
-      driver: claude,
-      usageLimits: { checkedAt, windows: [window] },
-    };
-    const hub = { ...source, accounts: [seat] };
+  it.each([
+    [
+      "one remote hub under environment-local ids",
+      "http://hub:8317",
+      "laptop-hub",
+      "http://hub:8317",
+      1,
+    ],
+    ["two remote hubs under one id", "http://hub:8317", "hub", "http://hub-8317", 2],
+    [
+      "two remote hubs under paths of one origin",
+      "https://proxy.example/team-a",
+      "hub-b",
+      "https://proxy.example/team-b",
+      2,
+    ],
+    [
+      "a shared IPv6 tailnet hub",
+      "http://[fd7a:115c:a1e0::1]:8317",
+      "hub",
+      "http://[fd7a:115c:a1e0::1]:8317",
+      1,
+    ],
+    [
+      "each machine's own localhost hub",
+      "http://localhost:8317",
+      "hub",
+      "http://localhost:8317",
+      2,
+    ],
+    ["each machine's own IPv6 loopback hub", "http://[::1]:8317", "hub", "http://[::1]:8317", 2],
+    [
+      "each machine's own localhost subdomain hub",
+      "http://hub.localhost:8317",
+      "hub",
+      "http://hub.localhost:8317",
+      2,
+    ],
+    [
+      "each machine's own trailing-dot localhost subdomain hub",
+      "http://hub.localhost.:8317",
+      "hub",
+      "http://hub.localhost.:8317",
+      2,
+    ],
+    [
+      "each machine's own mapped IPv4 loopback hub",
+      "http://[::ffff:7f00:1]:8317",
+      "hub",
+      "http://[::ffff:7f00:1]:8317",
+      2,
+    ],
+    ["each machine's own wildcard hub", "http://0.0.0.0:8317", "hub", "http://0.0.0.0:8317", 2],
+    ["hubs that report no endpoint", undefined, "hub", undefined, 2],
+  ] as const)(
+    "keeps email-less hub identity across environments: %s",
+    (_, firstEndpoint, secondId, secondEndpoint, count) => {
+      const seat = {
+        id: "claude-team-seat.json",
+        driver: claude,
+        usageLimits: { checkedAt, windows: [window] },
+      };
+      const hubAt = (id: string, endpoint: string | undefined) => ({
+        ...source,
+        id: UsageLimitSourceId.make(id),
+        ...(endpoint ? { origin: new URL(endpoint).origin, endpoint } : {}),
+        accounts: [seat],
+      });
+      const input = new Map([
+        [
+          EnvironmentId.make("env-a"),
+          {
+            ...laptop,
+            serverConfig: { providers: [], usageLimitSources: [hubAt("hub", firstEndpoint)] },
+          },
+        ],
+        [
+          EnvironmentId.make("env-b"),
+          {
+            entry: { target: { label: "Desktop" } },
+            serverConfig: { providers: [], usageLimitSources: [hubAt(secondId, secondEndpoint)] },
+          },
+        ],
+      ]);
+      const accounts = collectLimitAccounts(input);
+      expect(accounts).toHaveLength(count);
+      expect(accounts[0]?.displayName).toBe("claude-team-seat");
+    },
+  );
+
+  it("keeps public keys apart for different logins in one hub file", () => {
+    const hubAt = (id: string, email: string, usedPercent: number) => ({
+      ...source,
+      id: UsageLimitSourceId.make(id),
+      origin: "https://hub.test",
+      endpoint: "https://hub.test",
+      accounts: [
+        {
+          id: "seat.json",
+          driver: claude,
+          email,
+          usageLimits: { checkedAt, windows: [{ ...window, usedPercent }] },
+        },
+      ],
+    });
     const input = new Map([
       [
         EnvironmentId.make("env-a"),
-        { ...laptop, serverConfig: { providers: [], usageLimitSources: [hub] } },
+        {
+          ...laptop,
+          serverConfig: {
+            providers: [],
+            usageLimitSources: [hubAt("first", "old@example.com", 10)],
+          },
+        },
       ],
       [
         EnvironmentId.make("env-b"),
         {
           entry: { target: { label: "Desktop" } },
-          serverConfig: { providers: [], usageLimitSources: [hub] },
+          serverConfig: {
+            providers: [],
+            usageLimitSources: [hubAt("second", "new@example.com", 80)],
+          },
         },
       ],
     ]);
     const accounts = collectLimitAccounts(input);
-    expect(accounts.map((account) => account.key)).toEqual(["hub:claude-team-seat.json"]);
-    expect(accounts[0]?.displayName).toBe("claude-team-seat");
+    expect(accounts.map((account) => account.key)).toEqual([
+      "env-a:first:seat.json",
+      "env-b:second:seat.json",
+    ]);
+    const columns = collectLimitPools(accounts, Date.parse(checkedAt))[0]?.windows[0]?.columns;
+    expect(columns?.map((column) => [column.account.email, column.window?.usedPercent])).toEqual([
+      ["new@example.com", 80],
+      ["old@example.com", 10],
+    ]);
   });
 
   it("labels a default-named instance merged with a hub account by e-mail, keeping a chosen name", () => {
@@ -762,6 +1006,52 @@ describe("pools", () => {
     ).toEqual(["weekly", "weekly:secondary"]);
   });
 
+  it("weights pooled Codex quota and resets by each account's plan capacity", () => {
+    const [pool] = collectLimitPools(
+      collectLimitAccounts(
+        new Map([
+          [
+            EnvironmentId.make("env-a"),
+            {
+              ...laptop,
+              serverConfig: {
+                providers: [],
+                usageLimitSources: [
+                  {
+                    ...source,
+                    accounts: [
+                      ["pro", "ChatGPT Pro 200 Subscription", 100],
+                      ["plus", "ChatGPT Plus Subscription", 0],
+                    ].map(([id, plan, usedPercent]) => ({
+                      id: String(id),
+                      email: `${id}@example.com`,
+                      driver: ProviderDriverKind.make("codex"),
+                      plan: String(plan),
+                      usageLimits: {
+                        checkedAt,
+                        windows: [{ ...weekly, id: "secondary", usedPercent: Number(usedPercent) }],
+                      },
+                    })),
+                  },
+                ],
+              },
+            },
+          ],
+        ]),
+      ),
+      now,
+    );
+    const [pooledWeekly] = pool?.windows ?? [];
+    // Pro 20x holds 20 of the pool's 21 capacity parts.
+    expect(pooledWeekly?.remainingPercent).toBe(5);
+    expect(
+      pooledWeekly?.resets.map(({ member, restoresPercent }) => [
+        member.account.email,
+        restoresPercent,
+      ]),
+    ).toContainEqual(["pro@example.com", 95]);
+  });
+
   it("pools windows by id across accounts and orders resets by when they land", () => {
     const input = new Map([
       [
@@ -822,7 +1112,7 @@ describe("pools", () => {
     const [session, week] = pools[0]!.windows;
     const untimed = collectLimitPools(
       collectLimitAccounts(input).map((account) =>
-        account.key === "hub:b"
+        account.key === "env-a:hub:b"
           ? {
               ...account,
               limits: {
@@ -844,8 +1134,8 @@ describe("pools", () => {
     expect(
       session?.resets.map((reset) => [reset.member.account.key, reset.restoresPercent]),
     ).toEqual([
-      ["hub:a", 40],
-      ["hub:b", 20],
+      ["env-a:hub:a", 40],
+      ["env-a:hub:b", 20],
     ]);
     expect(week).toMatchObject({ id: "seven_day", remainingPercent: 80, members: [{}] });
     // Codex reports `primary` for both its five-hour and (on Go) monthly window.
@@ -884,8 +1174,14 @@ describe("pools", () => {
       ["weekly", 1],
       ["monthly", 1],
     ]);
-    expect(session?.members.map((member) => member.account.key)).toEqual(["hub:a", "hub:b"]);
-    expect(pools[0]?.accounts.map((account) => account.key)).toEqual(["hub:a", "hub:b"]);
+    expect(session?.members.map((member) => member.account.key)).toEqual([
+      "env-a:hub:a",
+      "env-a:hub:b",
+    ]);
+    expect(pools[0]?.accounts.map((account) => account.key)).toEqual([
+      "env-a:hub:a",
+      "env-a:hub:b",
+    ]);
   });
 });
 
@@ -913,6 +1209,47 @@ describe("pooled account columns", () => {
     pool.windows.map((row) =>
       row.columns.map((member) => (member.window ? member.account.key : null)),
     );
+
+  it.each([
+    {
+      reports: [
+        [14, 14],
+        [14, 14],
+      ],
+      ids: ["autoPercentUsed"],
+      remaining: [86],
+      label: null,
+    },
+    {
+      reports: [
+        [14, 14],
+        [80, 70],
+      ],
+      ids: ["totalPercentUsed", "autoPercentUsed"],
+      remaining: [53, 58],
+      label: "Cursor Models",
+    },
+    {
+      reports: [[undefined, 14]],
+      ids: ["autoPercentUsed"],
+      remaining: [86],
+      label: "Cursor Models",
+    },
+    { reports: [[14, undefined]], ids: ["totalPercentUsed"], remaining: [86], label: null },
+  ])("preserves Cursor totals and scope for $reports", ({ reports, ids, remaining, label }) => {
+    const accounts = reports.map(([total, auto], index) => ({
+      ...account(String(index), [
+        ...(total === undefined ? [] : [{ ...weekly, id: "totalPercentUsed", usedPercent: total }]),
+        ...(auto === undefined ? [] : [{ ...weekly, id: "autoPercentUsed", usedPercent: auto }]),
+      ]),
+      driver: ProviderDriverKind.make("cursor"),
+    }));
+    const pool = collectLimitPools(accounts, now)[0]!;
+    const visible = displayLimitWindows(pool);
+    expect(visible.map((window) => window.id)).toEqual(ids);
+    expect(visible.map((window) => window.remainingPercent)).toEqual(remaining);
+    expect(cursorUsageWindowDetails(ids.at(-1)!, pool)?.label).toBe(label);
+  });
 
   // regression: #20349 sessions stay visible while the weekly quota is exhausted
   it.each([
@@ -1412,6 +1749,17 @@ describe("/usage-limits", () => {
     expect(
       withUsageLimitsCommands([selected], [])[0]?.slashCommands.map((command) => command.name),
     ).toEqual(["usage-limits"]);
+    const unrelated = provider({ driver: ProviderDriverKind.make("claudeAgent") });
+    const disabled = provider({ ...unrelated, enabled: false, usageLimits: limits });
+    const mixed = withUsageLimitsCommands([selected, withWorkspace, unrelated, disabled], []);
+    expect(mixed.map((entry) => entry.slashCommands.map((command) => command.name))).toEqual([
+      ["usage-limits"],
+      ["usage-limits"],
+      [],
+      [],
+    ]);
+    expect(mixed[2]).toBe(unrelated);
+    expect(mixed[3]).toBe(disabled);
   });
 });
 
@@ -1489,6 +1837,23 @@ describe("external usage settings", () => {
     expect(collectLimitAccounts(presentations)).toEqual([]);
     expect(collectLimitNotices(presentations)).toEqual([]);
   });
+
+  it("shows a notice once when environments with one label report the same failure", () => {
+    const failing = provider({
+      usageLimits: {
+        checkedAt: "2026-09-03T11:00:00.000Z",
+        windows: [],
+        unavailable: { reason: "probeFailed" },
+      },
+    });
+    const host = { entry: { target: { label: "Host" } }, serverConfig: { providers: [failing] } };
+    const presentations = new Map([
+      [EnvironmentId.make("a"), host],
+      [EnvironmentId.make("b"), host],
+      [EnvironmentId.make("c"), host],
+    ]);
+    expect(collectLimitNotices(presentations)).toEqual(["Host · codex: Could not read limits."]);
+  });
 });
 
 describe("ChatGPT sharing presentation", () => {
@@ -1504,5 +1869,308 @@ describe("ChatGPT sharing presentation", () => {
         auth: { status: "unauthenticated", subscriptionSharing: true },
       }),
     ).toBe(false);
+  });
+});
+
+describe("weekly goal", () => {
+  // Cycles are anchored on the next reset; America/Sao_Paulo is UTC-3 all year.
+  const thursdayReset = "2026-09-17T18:00:00.000Z";
+  const saturdayReset = "2026-09-19T15:00:00.000Z";
+  const sundayReset = "2026-09-20T15:00:00.000Z";
+
+  it.each([
+    [
+      "Thu reset: reset day counts as the 1st, even before the reset hour",
+      thursdayReset,
+      "2026-09-10T00:05:00-03:00",
+      20,
+    ],
+    ["Thu reset: Thursday afternoon", thursdayReset, "2026-09-10T15:30:00-03:00", 20],
+    ["Fri", thursdayReset, "2026-09-11T09:00:00-03:00", 40],
+    ["Sat keeps Friday's goal", thursdayReset, "2026-09-12T09:00:00-03:00", 40],
+    ["Sun keeps Friday's goal", thursdayReset, "2026-09-13T23:59:59-03:00", 40],
+    ["Mon", thursdayReset, "2026-09-14T00:00:00-03:00", 60],
+    ["Tue", thursdayReset, "2026-09-15T12:00:00-03:00", 80],
+    ["Wed", thursdayReset, "2026-09-16T12:00:00-03:00", 100],
+    ["Thu morning before the reset stays capped", thursdayReset, "2026-09-17T08:00:00-03:00", 100],
+    ["Sat reset: Saturday", saturdayReset, "2026-09-12T10:00:00-03:00", 0],
+    ["Sat reset: Sunday", saturdayReset, "2026-09-13T23:59:00-03:00", 0],
+    ["Sat reset: Monday", saturdayReset, "2026-09-14T00:00:00-03:00", 20],
+    ["Sat reset: next Friday", saturdayReset, "2026-09-18T20:00:00-03:00", 100],
+    ["Sun reset: Sunday", sundayReset, "2026-09-13T12:00:00-03:00", 0],
+    ["Sun reset: Monday", sundayReset, "2026-09-14T12:00:00-03:00", 20],
+  ] as const)("%s", (_name, resetsAt, at, expected) => {
+    expect(goalPercent({ resetsAt, now: Date.parse(at) })).toBe(expected);
+  });
+
+  it("follows the local day, not the UTC day", () => {
+    // 02:59Z Monday is still Sunday night in Sao Paulo; 03:00Z is Monday.
+    expect(goalPercent({ resetsAt: thursdayReset, now: Date.parse("2026-09-14T02:59:59Z") })).toBe(
+      40,
+    );
+    expect(goalPercent({ resetsAt: thursdayReset, now: Date.parse("2026-09-14T03:00:00Z") })).toBe(
+      60,
+    );
+    // A reset at 01:00Z Friday is still Thursday locally and counts as day 1 of its cycle.
+    expect(
+      goalPercent({
+        resetsAt: "2026-09-18T01:00:00Z",
+        now: Date.parse("2026-09-10T12:00:00-03:00"),
+      }),
+    ).toBe(20);
+    expect(
+      goalPercent({
+        resetsAt: thursdayReset,
+        now: Date.parse("2026-09-10T00:30:00Z"),
+        timeZone: "UTC",
+      }),
+    ).toBe(20);
+  });
+
+  it("returns null for invalid dates or time zones", () => {
+    expect(goalPercent({ resetsAt: "soon", now })).toBeNull();
+    expect(goalPercent({ resetsAt: thursdayReset, now: Number.NaN })).toBeNull();
+    expect(goalPercent({ resetsAt: thursdayReset, now, timeZone: "Not/AZone" })).toBeNull();
+  });
+});
+
+describe("projected exhaustion", () => {
+  // Reset Wed 2026-11-11 06:00 São Paulo (UTC-3); the cycle began Wed 11/04 06:00.
+  const weekly = {
+    id: "seven_day",
+    kind: "weekly",
+    label: "Weekly",
+    usedPercent: 37,
+    windowDurationMins: 10_080,
+    resetsAt: "2026-11-11T09:00:00.000Z",
+  } as const;
+  const projectedExhaustAt = (
+    window: Parameters<typeof exhaustionForecast>[0],
+    now: number,
+  ): number | undefined => {
+    const forecast = exhaustionForecast(window, now);
+    return forecast.kind === "at" ? forecast.at : undefined;
+  };
+  const at = (iso: string, usedPercent: number) =>
+    projectedExhaustAt({ ...weekly, usedPercent }, Date.parse(iso));
+
+  it("projects over business time only: Friday noon at 37% does not run out before the reset", () => {
+    // 2.26 business days elapsed -> 16.4%/day; 3.85 days needed, only 2.74 left.
+    expect(at("2026-11-06T15:10:00Z", 37)).toBeUndefined();
+    expect(exhaustionForecast(weekly, Date.parse("2026-11-06T15:10:00Z"))).toEqual({
+      kind: "safe",
+    });
+  });
+
+  it("skips the weekend when the pace runs out on a Tuesday", () => {
+    const next = { ...weekly, resetsAt: "2026-11-18T09:00:00.000Z" };
+    // 54 business hours at 54% -> 1%/h; Fri noon + 12h, Monday + 24h, Tuesday 10:00.
+    expect(
+      projectedExhaustAt({ ...next, usedPercent: 54 }, Date.parse("2026-11-13T15:00:00Z")),
+    ).toBe(Date.parse("2026-11-17T13:00:00Z"));
+  });
+
+  it("keeps the pace on a weekend instead of diluting it", () => {
+    const next = { ...weekly, resetsAt: "2026-11-18T09:00:00.000Z", usedPercent: 60 };
+    const saturdayNoon = projectedExhaustAt(next, Date.parse("2026-11-14T15:00:00Z"));
+    expect(saturdayNoon).toBe(Date.parse("2026-11-17T23:00:00Z"));
+    expect(projectedExhaustAt(next, Date.parse("2026-11-14T23:00:00Z"))).toBe(saturdayNoon);
+  });
+
+  it("gives no estimate without business-time history, usage, a reset, or headroom", () => {
+    const sundayCycle = { ...weekly, resetsAt: "2026-11-21T09:00:00.000Z", usedPercent: 10 };
+    // 30 calendar hours in, zero business time.
+    expect(projectedExhaustAt(sundayCycle, Date.parse("2026-11-15T15:00:00Z"))).toBeUndefined();
+    expect(exhaustionForecast(sundayCycle, Date.parse("2026-11-15T15:00:00Z"))).toEqual({
+      kind: "unknown",
+    });
+    expect(at("2026-11-06T15:10:00Z", 0)).toBeUndefined();
+    expect(at("2026-11-06T15:10:00Z", 100)).toBeUndefined();
+    expect(at("2026-11-04T10:00:00Z", 30)).toBeUndefined();
+    const { resetsAt: _resetsAt, ...undated } = weekly;
+    expect(projectedExhaustAt(undated, Date.parse("2026-11-06T15:10:00Z"))).toBeUndefined();
+  });
+});
+
+describe("Claude account summary", () => {
+  const now = Date.parse("2026-11-06T15:10:00Z");
+  const usageWindow = (id: string, label: string, usedPercent: number) => ({
+    id,
+    kind: "weekly" as const,
+    label,
+    usedPercent,
+  });
+  const limits = (lastError?: ServerProviderUsageLimits["lastError"]) => ({
+    checkedAt: "2026-11-06T15:04:00Z",
+    windows: [],
+    ...(lastError ? { lastError } : {}),
+  });
+
+  it("leads with the verdict against today's goal", () => {
+    expect(claudeVerdictText({ used: 14, goal: 100, over: false })).toBe("On pace");
+    expect(claudeVerdictText({ used: 74, goal: 60, over: true })).toBe("14% over goal");
+    expect(claudeVerdictText({ used: 14, goal: null, over: false })).toBe(null);
+    expect(claudeUsageValueText({ used: 14, goal: 100 })).toBe("14 / 100");
+    expect(claudeUsageValueText({ used: 14, goal: null })).toBe("14%");
+  });
+
+  it("hides a model window with no use", () => {
+    const session = { ...usageWindow("five_hour", "Session", 0), kind: "session" as const };
+    const fable = usageWindow("seven_day_fable", "Weekly · Fable", 0);
+    expect(claudeWindowsText({ session, scoped: [fable] })).toBe("5h 0%");
+    expect(claudeWindowsText({ session, scoped: [{ ...fable, usedPercent: 12 }] })).toBe(
+      "5h 0% · Fable 12%",
+    );
+    expect(claudeWindowsText({ session: undefined, scoped: [] })).toBe("");
+  });
+
+  it("shows a failed read only once the reading is stale", () => {
+    const rateLimited = {
+      at: "2026-11-06T15:05:00Z",
+      reason: "rateLimited" as const,
+      retryAt: "2026-11-06T15:18:00Z",
+    };
+    expect(claudeUsageStatusText({ stale: false, limits: limits(rateLimited) }, now)).toBe(
+      "Updated 6m ago",
+    );
+    expect(claudeUsageStatusText({ stale: true, limits: limits(rateLimited) }, now)).toBe(
+      "Updated 6m ago · retrying in 8m",
+    );
+    expect(
+      claudeUsageStatusText(
+        { stale: true, limits: limits({ ...rateLimited, retryAt: "2026-11-06T15:10:20Z" }) },
+        now,
+      ),
+    ).toBe("Updated 6m ago · retrying in 1m");
+    expect(
+      claudeUsageStatusText(
+        { stale: true, limits: limits({ at: rateLimited.at, reason: "signedOut" }) },
+        now,
+      ),
+    ).toBe("Updated 6m ago · open Claude to sign in");
+  });
+});
+
+describe("Claude account selection", () => {
+  const claude = (instanceId: string, overrides: Partial<ServerProvider> = {}) =>
+    provider({
+      instanceId: ProviderInstanceId.make(instanceId),
+      driver: ProviderDriverKind.make("claudeAgent"),
+      auth: { status: "authenticated", email: `${instanceId}@example.com` },
+      ...overrides,
+    });
+  const limits = (checkedAt: string) => ({
+    checkedAt,
+    windows: [
+      { ...window, usedPercent: 12 },
+      {
+        id: "seven_day",
+        kind: "weekly" as const,
+        label: "Weekly",
+        usedPercent: 50,
+        windowDurationMins: 10_080,
+        resetsAt: "2026-09-17T18:00:00.000Z",
+      },
+      {
+        id: "seven_day_fable",
+        kind: "weekly" as const,
+        label: "Weekly · Fable",
+        usedPercent: 70,
+        windowDurationMins: 10_080,
+      },
+    ],
+  });
+  const at = Date.parse("2026-09-14T15:00:00Z");
+
+  it("lists enabled Claude instances in a stable order with goal, staleness and last error", () => {
+    const accounts = selectClaudeUsageAccounts({
+      now: at,
+      providers: [
+        claude("claudeAgent_claude_renan", {
+          displayName: "Renan",
+          accentColor: "#ff8800",
+          usageLimits: {
+            ...limits("2026-09-14T14:55:00.000Z"),
+            lastError: { at: "2026-09-14T14:59:00.000Z", reason: "rateLimited" },
+          },
+        }),
+        claude("claudeAgent", { usageLimits: limits("2026-09-14T14:58:00.000Z") }),
+        claude("claudeAgent_off", {
+          enabled: false,
+          usageLimits: limits("2026-09-14T14:58:00.000Z"),
+        }),
+        provider({ usageLimits: limits("2026-09-14T14:58:00.000Z") }),
+      ],
+    });
+    expect(accounts.map((account) => account.instanceId)).toEqual([
+      "claudeAgent",
+      "claudeAgent_claude_renan",
+    ]);
+    expect(accounts[0]).toMatchObject({
+      label: "Claude",
+      accentColor: undefined,
+      goal: 60,
+      stale: false,
+      limits: { checkedAt: "2026-09-14T14:58:00.000Z" },
+      weekly: { id: "seven_day" },
+      session: { id: "five_hour" },
+      scoped: [{ id: "seven_day_fable" }],
+      resetCreditInput: { instanceId: "claudeAgent" },
+    });
+    expect(accounts[1]).toMatchObject({
+      label: "Renan",
+      accentColor: "#ff8800",
+      stale: true,
+      limits: { lastError: { reason: "rateLimited" } },
+    });
+  });
+
+  it("returns nothing when no Claude instance is available", () => {
+    expect(selectClaudeUsageAccounts({ now: at, providers: [provider({})] })).toEqual([]);
+  });
+
+  it("reads the weekly window as used percent against today's goal", () => {
+    const [account] = selectClaudeUsageAccounts({
+      now: at,
+      providers: [claude("claudeAgent", { usageLimits: limits("2026-09-14T14:58:00.000Z") })],
+    });
+    expect(account && claudeWeeklyReading(account)).toEqual({ used: 50, goal: 60, over: false });
+    expect(claudeWeeklyReading({ weekly: account?.weekly, goal: 40 })).toMatchObject({
+      over: true,
+    });
+    expect(claudeWeeklyReading({ weekly: undefined, goal: 40 })).toBeNull();
+    expect(account?.weekly && claudeGoalSummary(account.weekly, at)).toBe(
+      "Used 50% · today's goal 60%",
+    );
+    expect(account?.weekly && claudeGoalSummary(account.weekly, at, null)).toBe("Used 50%");
+    expect(
+      account?.weekly && claudeGoalSummary({ ...account.weekly, id: "seven_day_fable" }, at),
+    ).toBeNull();
+    expect(weeklyBarLabel({ used: 50, goal: 60 })).toBe("Weekly: 50% used, today's goal 60%");
+    expect(weeklyBarLabel({ used: 50, goal: null })).toBe("Weekly: 50% used");
+    const at9 = (ms: number) => `@${ms}`;
+    expect(forecastWarningText({ kind: "at", at: 5 }, at9)).toBe("Projected to run out @5");
+    expect(forecastWarningText({ kind: "safe" }, at9)).toBe(null);
+    expect(forecastWarningText(undefined, at9)).toBe(null);
+    const named = { displayName: " Renan ", email: "r@x.com" } as LimitAccount;
+    expect(limitInstanceName(named, "Claude")).toBe("Renan");
+    expect(limitInstanceName(named, "renan")).toBeNull();
+    expect(limitInstanceName({ email: "r@x.com" } as LimitAccount, "Codex")).toBe("r@x.com");
+    expect(limitInstanceName({} as LimitAccount, "Codex")).toBeNull();
+    expect(claudeAccountValue({ weekly: account?.weekly, goal: 60 })).toBe("50/60");
+    expect(claudeAccountValue({ weekly: account?.weekly, goal: null })).toBe("50%");
+    expect(claudeAccountValue({ weekly: undefined, goal: 60 })).toBe("n/a");
+  });
+
+  it("labels ages and São Paulo instants", () => {
+    const now = Date.parse("2026-09-10T15:00:00.000Z");
+    expect(formatAgo("2026-09-10T14:46:00.000Z", now)).toBe("14m ago");
+    expect(formatAgo("2026-09-10T14:59:50.000Z", now)).toBe("just now");
+    expect(formatAgo("2026-09-10T10:00:00.000Z", now)).toBe("5h ago");
+    expect(formatGoalZoneInstant(Date.parse("2026-09-10T21:30:00.000Z"), now)).toBe("today 18:30");
+    expect(formatGoalZoneInstant(Date.parse("2026-09-11T12:00:00.000Z"), now)).toBe(
+      "tomorrow 09:00",
+    );
+    expect(formatGoalZoneInstant(Date.parse("2026-09-14T12:00:00.000Z"), now)).toBe("Mon 09:00");
   });
 });

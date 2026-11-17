@@ -1,5 +1,6 @@
 import type {
   ProviderConsumeResetCreditOutcome,
+  ServerProviderResetCreditOption,
   ServerProviderResetCredits,
 } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
@@ -11,7 +12,7 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
-const API_BASE = "https://api.anthropic.com";
+export const API_BASE = "https://api.anthropic.com";
 const PROGRAM = "cedar_ember";
 const GRANT_ID = /^[a-z0-9_-]{1,40}$/;
 const REQUEST_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -22,7 +23,10 @@ const Credentials = Schema.Struct({
 });
 const Config = Schema.Struct({
   oauthAccount: Schema.optional(
-    Schema.Struct({ organizationUuid: Schema.optional(Schema.String) }),
+    Schema.Struct({
+      organizationUuid: Schema.optional(Schema.String),
+      accountUuid: Schema.optional(Schema.Unknown),
+    }),
   ),
 });
 const Grant = Schema.Struct({
@@ -31,15 +35,15 @@ const Grant = Schema.Struct({
   ends_at: Schema.optional(Schema.NullOr(Schema.String)),
   paused: Schema.optional(Schema.Boolean),
   usable_now: Schema.optional(Schema.Boolean),
+  clears: Schema.optional(Schema.Array(Schema.Unknown)),
+  type: Schema.optional(Schema.Unknown),
+  gives_back_weekly: Schema.optional(Schema.Boolean),
 });
 const decodeGrant = Schema.decodeUnknownOption(Grant);
 const CedarEmber = Schema.Struct({
   eligible: Schema.Boolean,
   grants: Schema.optional(Schema.Array(Schema.Unknown)),
   next_grant_id: Schema.optional(Schema.NullOr(Schema.String)),
-});
-const UsageResponse = Schema.Struct({
-  cedar_ember: Schema.optional(Schema.NullOr(Schema.Unknown)),
 });
 const decodeCedarEmber = Schema.decodeUnknownOption(CedarEmber);
 const ClaimResponse = Schema.Struct({
@@ -95,6 +99,31 @@ const isFutureTimestamp = (value: string, nowMs: number) => {
   );
 };
 
+// Claude Code's own grouping: a grant that gives back weekly usage is a Fable reset, else its
+// declared type, else what it clears.
+const RESET_KINDS = {
+  session: { label: "5-hour reset", description: "Refills your 5-hour limit." },
+  weekly: { label: "Weekly reset", description: "Refills your weekly limit." },
+  fable: {
+    label: "Fable reset",
+    description:
+      "Refills your Fable allowance and gives back what Fable used on your weekly limit. It doesn't reset your whole week.",
+  },
+  full: { label: "Full reset", description: "Refills your 5-hour and weekly limits." },
+} as const;
+type ResetKind = keyof typeof RESET_KINDS;
+
+const grantKind = (grant: typeof Grant.Type): ResetKind => {
+  if (grant.gives_back_weekly) return "fable";
+  if (grant.type === "session" || grant.type === "weekly" || grant.type === "full") {
+    return grant.type;
+  }
+  const clears = grant.clears ?? [];
+  const session = clears.includes("five_hour");
+  const other = clears.some((limit) => limit !== "five_hour");
+  return session && !other ? "session" : other && !session ? "weekly" : "full";
+};
+
 export function claudeResetCreditsToContract(
   block: unknown,
   nowMs: number,
@@ -110,13 +139,38 @@ export function claudeResetCreditsToContract(
         (grant.ends_at == null || isFutureTimestamp(grant.ends_at, nowMs)),
     );
   const next = live.find((grant) => grant.id === parsed.value.next_grant_id);
-  const nextExpiresAt = next?.ends_at ? DateTime.make(next.ends_at) : Option.none();
+  const expiresAt = (grant: typeof Grant.Type | undefined) => {
+    const at = grant?.ends_at ? DateTime.make(grant.ends_at) : Option.none();
+    return Option.isSome(at) ? DateTime.formatIso(at.value) : undefined;
+  };
+  const byKind = new Map<ResetKind, Array<typeof Grant.Type>>();
+  for (const grant of live) {
+    if (grant.resets_left === 0) continue;
+    const kind = grantKind(grant);
+    byKind.set(kind, [...(byKind.get(kind) ?? []), grant]);
+  }
+  const options = (Object.keys(RESET_KINDS) as Array<ResetKind>).flatMap(
+    (kind): Array<ServerProviderResetCreditOption> => {
+      const grants = byKind.get(kind);
+      const target = grants?.[0];
+      if (!grants || !target) return [];
+      const optionExpiresAt = expiresAt(target);
+      return [
+        {
+          creditId: target.id,
+          ...RESET_KINDS[kind],
+          availableCount: grants.reduce((sum, grant) => sum + grant.resets_left, 0),
+          ...(optionExpiresAt ? { expiresAt: optionExpiresAt } : {}),
+        },
+      ];
+    },
+  );
+  const nextExpiresAt = expiresAt(next);
   return {
     availableCount: next ? live.reduce((sum, grant) => sum + grant.resets_left, 0) : 0,
-    ...(Option.isSome(nextExpiresAt)
-      ? { nextExpiresAt: DateTime.formatIso(nextExpiresAt.value) }
-      : {}),
+    ...(nextExpiresAt ? { nextExpiresAt } : {}),
     ...(next ? { nextCreditId: next.id } : {}),
+    ...(next ? { options } : {}),
   };
 }
 
@@ -134,7 +188,7 @@ const readJson = Effect.fn("claudeResetCredits.readJson")(function* <S extends S
   );
 });
 
-const readAccessToken = Effect.fn("claudeResetCredits.readAccessToken")(function* (
+export const readAccessToken = Effect.fn("claudeResetCredits.readAccessToken")(function* (
   configDir: string,
 ) {
   if ((yield* HostProcess.Platform) === "darwin") return undefined;
@@ -143,39 +197,22 @@ const readAccessToken = Effect.fn("claudeResetCredits.readAccessToken")(function
   return credentials.claudeAiOauth?.accessToken?.trim() || undefined;
 });
 
-const withClaudeHeaders = (token: string, version: string) =>
+export const withClaudeHeaders = (token: string, version: string) =>
   HttpClientRequest.setHeaders({
     authorization: `Bearer ${token}`,
     "anthropic-beta": "oauth-2025-04-20",
     "user-agent": `claude-cli/${version} (external, cli)`,
   });
 
-export const readClaudeResetCredits = Effect.fn("readClaudeResetCredits")(
-  function* (configDir: string, version: string) {
-    const token = yield* readAccessToken(configDir);
-    if (!token) return undefined;
-    const client = yield* HttpClient.HttpClient;
-    const response = yield* client.execute(
-      HttpClientRequest.get(`${API_BASE}/api/oauth/usage`, {
-        urlParams: { cedar_ember: "1", skip_spend: "1" },
-      }).pipe(withClaudeHeaders(token, version)),
-    );
-    const body = yield* HttpClientResponse.schemaBodyJson(UsageResponse)(
-      yield* HttpClientResponse.filterStatusOk(response),
-    );
-    return claudeResetCreditsToContract(
-      body.cedar_ember,
-      DateTime.toEpochMillis(yield* DateTime.now),
-    );
-  },
-  Effect.timeout("10 seconds"),
-  Effect.orElseSucceed(() => undefined),
-);
+export const readClaudeOauthAccount = (accountConfigPath: string) =>
+  readJson(Config, accountConfigPath).pipe(
+    Effect.map((config) => config.oauthAccount),
+    Effect.orElseSucceed(() => undefined),
+  );
 
 export const readClaudeOrganizationId = (accountConfigPath: string) =>
-  readJson(Config, accountConfigPath).pipe(
-    Effect.map((config) => config.oauthAccount?.organizationUuid?.trim() || undefined),
-    Effect.orElseSucceed(() => undefined),
+  readClaudeOauthAccount(accountConfigPath).pipe(
+    Effect.map((account) => account?.organizationUuid?.trim() || undefined),
   );
 
 export const claudeAccountConfigPath = Effect.fn("claudeAccountConfigPath")(function* (

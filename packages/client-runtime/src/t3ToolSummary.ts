@@ -327,6 +327,12 @@ export function summarizeT3ToolCalls(
     case "worktree-status":
       label = phrase("Checked", "check", `worktree status ${times}`);
       break;
+    case "work-module-read":
+      label = phrase("Read", "read", `the work board ${times}`);
+      break;
+    case "work-module-suggest":
+      label = phrase("Updated", "update", `the work board ${times}`);
+      break;
     case "project-list":
       label = phrase("Listed", "list", `projects ${times}`);
       break;
@@ -354,6 +360,12 @@ export function summarizeT3ToolCalls(
       break;
     case "environment-update":
       label = phrase("Updated", "update", `environment preferences ${times}`);
+      break;
+    case "theme-read":
+      label = phrase("Checked", "check", `themes ${times}`);
+      break;
+    case "theme-set":
+      label = phrase("Set", "set", `the theme ${times}`);
       break;
     case "environment-links":
       label = phrase("Listed", "list", `linked environments ${times}`);
@@ -481,6 +493,9 @@ export function summarizeT3ToolCalls(
       break;
     case "html-render":
       label = phrase("Rendered", "render", quantity(selected.length, "HTML page"));
+      break;
+    case "send-to-user":
+      label = phrase("Sent", "send", quantity(selected.length, "message"));
       break;
     case "capabilities":
       label = phrase("Checked", "check", `orchestration capabilities ${times}`);

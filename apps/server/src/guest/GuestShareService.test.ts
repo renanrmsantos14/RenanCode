@@ -14,6 +14,7 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   RunId,
+  RuntimeRequestId,
   ThreadId,
   TurnItemId,
 } from "@t3tools/contracts";
@@ -37,12 +38,14 @@ import {
   resolveAttachmentPathById,
   sweepStalePendingAttachments,
 } from "../attachmentStore.ts";
+import { resolveAttachmentRelativePath } from "../attachmentPaths.ts";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import { CloudManagedEndpointRuntime } from "../cloud/ManagedEndpointRuntime.ts";
 import * as ServerConfig from "../config.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexAdapterV2.ts";
 import * as CommandOutputHub from "../orchestration-v2/CommandOutputHub.ts";
+import * as CommandReceiptStore from "../orchestration-v2/CommandReceiptStore.ts";
 import * as EffectOutbox from "../orchestration-v2/EffectOutbox.ts";
 import * as EffectWorker from "../orchestration-v2/EffectWorker.ts";
 import * as EventSink from "../orchestration-v2/EventSink.ts";
@@ -50,7 +53,9 @@ import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterRegistry.ts";
 import * as ResourceCleanupService from "../orchestration-v2/ResourceCleanupService.ts";
+import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as ProviderReplayHarness from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
+import * as DocumentText from "../provider/DocumentText.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as AnalyticsService from "../telemetry/AnalyticsService.ts";
@@ -83,6 +88,7 @@ const layerConnect = Layer.mock(CloudManagedEndpointRuntime)({
     pid: 1,
     readyConnections: 1,
     hostname: value,
+    origin: null,
     protocol: "http2",
   })),
 });
@@ -90,7 +96,7 @@ const layerProviders = Layer.mock(ProviderRegistry.ProviderRegistry)({
   getProviders: Effect.succeed([]),
 });
 const layerConfig = ServerConfig.layerTest(process.cwd(), { prefix: "t3-guest-share-" });
-// The real cleanup also closes terminals and previews; these tests only need the files gone.
+// The real cleanup also closes terminals, previews and devices; these tests only need the files gone.
 const layerCleanup = Layer.effect(
   ResourceCleanupService.ResourceCleanupService,
   Effect.gen(function* () {
@@ -98,8 +104,10 @@ const layerCleanup = Layer.effect(
     const fileSystem = yield* FileSystem.FileSystem;
     return {
       cleanupScheduledTasks: () => Effect.void,
+      cleanupWorkModuleLinks: () => Effect.void,
       cleanupTerminals: () => Effect.void,
       cleanupPreviews: () => Effect.void,
+      cleanupDevices: () => Effect.void,
       cleanupAttachments: (attachmentIds) =>
         Effect.forEach(
           attachmentIds,
@@ -136,6 +144,11 @@ const layerAnalytics = Layer.effectContext(
   }),
 );
 const layerTest = GuestShareService.layer.pipe(
+  Layer.provide(
+    ThreadManagementService.layer.pipe(
+      Layer.provide(CommandReceiptStore.layer.pipe(Layer.provide(layerDatabase))),
+    ),
+  ),
   Layer.provideMerge(
     CommandOutputHub.layer.pipe(
       Layer.provideMerge(layerOrchestration.pipe(Layer.provide(layerCleanup))),
@@ -146,13 +159,14 @@ const layerTest = GuestShareService.layer.pipe(
   Layer.provide(layerConnect),
   Layer.provideMerge(layerAnalytics),
   Layer.provide(ServerSecretStore.layer),
+  Layer.provide(DocumentText.layer),
   Layer.provideMerge(layerConfig),
   Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
 );
 
 const threadId = ThreadId.make("thread:guest-share-service");
 
-const shareThreadFor = Effect.fn(function* (threadId: ThreadId) {
+const shareThreadFor = Effect.fn(function* (threadId: ThreadId, autoSend?: boolean) {
   yield* Ref.set(hostname, "env.t3.test");
   const orchestrator = yield* Orchestrator.OrchestratorV2;
   yield* orchestrator.dispatch({
@@ -170,7 +184,7 @@ const shareThreadFor = Effect.fn(function* (threadId: ThreadId) {
     creationSource: "web",
   });
   const guestShares = yield* GuestShareService.GuestShareService;
-  const { url } = yield* guestShares.create({ threadId });
+  const { url } = yield* guestShares.create({ threadId, ...(autoSend ? { autoSend } : {}) });
   assert.isTrue(url.startsWith("https://env.t3.test/guest#"));
   const credential = url.slice(url.indexOf("#") + 1);
   return { orchestrator, guestShares, credential };
@@ -574,6 +588,80 @@ it.effect("gives the guest a command's detail and output, but no file diffs", ()
   }).pipe(Effect.provide(layerTest)),
 );
 
+it.effect("gives a fork's guest the commands the fork shows from its source thread", () =>
+  Effect.gen(function* () {
+    const { orchestrator, guestShares } = yield* shareThread;
+    const command = yield* writeItem("item:command", {
+      type: "command_execution",
+      status: "completed",
+      input: "ls /work/src",
+      output: "/work/src/auth.ts\n",
+    });
+    const { attachmentsDir } = yield* ServerConfig.ServerConfig;
+    const page = createAttachmentId(threadId, "html")!;
+    yield* (yield* FileSystem.FileSystem).writeFileString(
+      resolveAttachmentRelativePath({ attachmentsDir, relativePath: `${page}.html` })!,
+      "<p>Plan</p>",
+    );
+    const render = yield* writeItem("item:render", {
+      type: "dynamic_tool",
+      status: "completed",
+      toolName: "mcp__t3-code__html_render",
+      input: {},
+      output: [
+        {
+          type: "text",
+          text: JSON.stringify({ htmlRender: { attachmentId: page, title: "Plan", height: 300 } }),
+        },
+      ],
+    });
+    const eventSink = yield* EventSink.EventSinkV2;
+    const now = yield* DateTime.now;
+    const run = (yield* orchestrator.getThreadRecords(threadId, ["runs"])).runs[0]!;
+    yield* eventSink.write({
+      events: [
+        {
+          id: EventId.make("event:run-done"),
+          type: "run.updated",
+          threadId,
+          runId: run.id,
+          providerInstanceId: instanceId,
+          occurredAt: now,
+          payload: { ...run, status: "completed", completedAt: now },
+        },
+      ],
+    });
+    const forkId = ThreadId.make("thread:guest-share-fork");
+    yield* orchestrator.dispatch({
+      type: "thread.fork",
+      commandId: CommandId.make("fork"),
+      sourceThreadId: threadId,
+      targetThreadId: forkId,
+      sourcePoint: { type: "run", runId: run.id },
+      createdBy: "user",
+      creationSource: "web",
+    });
+    const { url } = yield* guestShares.create({ threadId: forkId });
+    const { token: session } = yield* guestShares.redeem({
+      credential: url.slice(url.indexOf("#") + 1),
+      name: "Sam",
+    });
+
+    const detail = (yield* guestShares.item(session, command)).item;
+    assert.deepInclude(detail, { input: "ls /work/src", output: "/work/src/auth.ts\n" });
+    const frames = Array.from(
+      yield* Stream.runCollect(yield* guestShares.commandOutput(session, command)),
+    );
+    assert.deepEqual(frames, [
+      { kind: "replace", text: "/work/src/auth.ts\n", truncated: false, running: false },
+    ]);
+    assert.deepEqual(yield* guestShares.render(session, render), {
+      path: resolveAttachmentPathById({ attachmentsDir, attachmentId: page })!,
+      title: "Plan",
+    });
+  }).pipe(Effect.provide(layerTest)),
+);
+
 it.effect("pages the guest back through turns older than the stream's snapshot", () =>
   Effect.gen(function* () {
     const { guestShares, credential } = yield* shareThread;
@@ -768,6 +856,11 @@ it.effect("refuses too many files, too many bytes, and images that are not what 
           contentType: "text/html",
           bytes: new TextEncoder().encode("<b>"),
         },
+        {
+          name: "notes.rtf",
+          contentType: "application/rtf",
+          bytes: new TextEncoder().encode(String.raw`{\rtf1 Available}`),
+        },
       ]),
     );
     const [message] = yield* waitingMessages;
@@ -781,7 +874,18 @@ it.effect("refuses too many files, too many bytes, and images that are not what 
       [
         { type: "image", name: "screen.png", mimeType: "image/png", sizeBytes: PNG.length },
         { type: "file", name: "notes_fdp.html", mimeType: "text/html", sizeBytes: 3 },
+        { type: "file", name: "notes.rtf", mimeType: "application/rtf", sizeBytes: 17 },
       ],
+    );
+    // Agents read a guest's documents through the same extracted text as the owner's uploads.
+    const { attachmentsDir } = yield* ServerConfig.ServerConfig;
+    const document = resolveAttachmentPath({
+      attachmentsDir,
+      attachment: message!.attachments![2]!,
+    });
+    assert.equal(
+      yield* (yield* FileSystem.FileSystem).readFileString(`${document}.txt`),
+      "Available",
     );
   }).pipe(Effect.scoped, Effect.provide(layerTest)),
 );
@@ -789,18 +893,27 @@ it.effect("refuses too many files, too many bytes, and images that are not what 
 it.effect("caps the bytes of files waiting in one share", () =>
   Effect.gen(function* () {
     const { guestShares, session, shareId } = yield* joinedGuest;
-    const submit = (sizeBytes: number) =>
+    const submit = (sizeBytes: number, ...more: Parameters<typeof uploadsOf>[0]) =>
       Effect.gen(function* () {
         return guestShares.submit(
           session,
           { shareId, text: "Look" },
-          yield* uploadsOf([png("big.png", sizeBytes)]),
+          yield* uploadsOf([png("big.png", sizeBytes), ...more]),
         );
       }).pipe(Effect.flatten);
     yield* submit(9 * MIB);
     yield* submit(9 * MIB);
-    const error = yield* Effect.flip(submit(9 * MIB));
+    const before = yield* storedFiles;
+    const error = yield* Effect.flip(
+      submit(9 * MIB, {
+        name: "notes.rtf",
+        contentType: "application/rtf",
+        bytes: new TextEncoder().encode(String.raw`{\rtf1 Available}`),
+      }),
+    );
     assert.equal(error.reason, "files_busy");
+    // The refused message keeps neither its files nor their extracted text.
+    assert.deepEqual(yield* storedFiles, before);
     // Text alone still goes through.
     yield* guestShares.submit(session, { shareId, text: "One more thing" }, []);
     assert.equal((yield* waitingMessages).length, 3);
@@ -936,6 +1049,143 @@ it.effect("sends a guest's files as the guest's message and keeps them the guest
     }
     assert.isFalse((yield* waitingMessages).some((next) => next.id === message!.id));
     assert.equal((yield* guestShares.attachment(session, copied.id)).attachment.id, copied.id);
+  }).pipe(Effect.scoped, Effect.provide(layerTest)),
+);
+
+it.effect("sends a guest's message without the owner when the link does not need approval", () =>
+  Effect.gen(function* () {
+    const { orchestrator, guestShares, credential } = yield* shareThreadFor(threadId, true);
+    const { token: session, shareId } = yield* guestShares.redeem({ credential, name: "Sam" });
+    yield* guestShares.submit(session, { shareId, text: "Run the tests" }, []);
+    const [message] = yield* waitingMessages;
+    assert.equal(message!.status, "sent");
+    const items = (yield* orchestrator.getThreadSnapshotWindow(threadId, {
+      rowLimit: 20,
+    })).projection.visibleTurnItems.map((entry) => entry.item);
+    const sent = items.find(
+      (item) => item.type === "user_message" && item.context?.guest?.guestMessageId === message!.id,
+    );
+    assert.deepInclude(sent?.type === "user_message" ? sent.context?.guest : undefined, {
+      name: "Sam",
+      text: "Run the tests",
+    });
+    const { messages } = yield* orchestrator.getThreadProjection(threadId);
+    assert.equal(
+      messages.find((entry) => entry.context?.guest?.guestMessageId === message!.id)?.text,
+      "Message from guest Sam, not reviewed by the owner:\n\nRun the tests",
+    );
+  }).pipe(Effect.scoped, Effect.provide(layerTest)),
+);
+
+it.effect("lets a guest answer the agent's questions only on a link without approval", () =>
+  Effect.gen(function* () {
+    const askingThread = ThreadId.make("thread:guest-answers");
+    const approvedLink = yield* shareThreadFor(threadId);
+    const approved = yield* approvedLink.guestShares.redeem({
+      credential: approvedLink.credential,
+      name: "Eve",
+    });
+    const { orchestrator, guestShares, credential } = yield* shareThreadFor(askingThread, true);
+    const { token: session, shareId } = yield* guestShares.redeem({ credential, name: "Sam" });
+    yield* orchestrator.dispatch({
+      type: "message.dispatch",
+      commandId: CommandId.make("ask-guest-answers"),
+      threadId: askingThread,
+      messageId: MessageId.make("message:ask-guest-answers"),
+      text: "Ask me something",
+      attachments: [],
+      dispatchMode: { type: "start_immediately" },
+      createdBy: "user",
+      creationSource: "web",
+    });
+    const run = (yield* orchestrator.getThreadRecords(askingThread, ["runs"])).runs[0]!;
+    const now = yield* DateTime.now;
+    const request = (id: string, kind: "user_input" | "command") =>
+      ({
+        id: EventId.make(`event:${id}`),
+        type: "runtime-request.updated",
+        threadId: askingThread,
+        runId: run.id,
+        occurredAt: now,
+        payload: {
+          id: RuntimeRequestId.make(id),
+          nodeId: run.rootNodeId!,
+          providerTurnId: null,
+          nativeRequestRef: null,
+          kind,
+          status: "pending",
+          responseCapability: { type: "message" },
+          createdAt: now,
+          resolvedAt: null,
+        },
+      }) as const;
+    yield* (yield* EventSink.EventSinkV2).write({
+      events: [
+        request("request:question", "user_input"),
+        request("request:approval", "command"),
+        {
+          id: EventId.make("event:question-item"),
+          type: "turn-item.updated",
+          threadId: askingThread,
+          runId: run.id,
+          occurredAt: now,
+          payload: {
+            id: TurnItemId.make("item:question"),
+            threadId: askingThread,
+            runId: run.id,
+            nodeId: run.rootNodeId!,
+            providerThreadId: null,
+            providerTurnId: null,
+            nativeItemRef: null,
+            parentItemId: null,
+            ordinal: 1,
+            status: "waiting",
+            title: null,
+            startedAt: now,
+            completedAt: null,
+            updatedAt: now,
+            type: "user_input_request",
+            requestId: RuntimeRequestId.make("request:question"),
+            questions: [
+              {
+                id: "scope",
+                header: "Scope",
+                question: "How much should I change?",
+                options: [{ label: "All of it", description: "Everything" }],
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const answerWith = (token: string, share: GuestShareId, requestId: string) =>
+      Effect.flip(
+        guestShares.answer(token, {
+          shareId: share,
+          requestId: RuntimeRequestId.make(requestId),
+          answers: { scope: "All of it" },
+        }),
+      ).pipe(Effect.map((error) => error.reason));
+
+    assert.equal(
+      yield* answerWith(approved.token, approved.shareId, "request:question"),
+      "needs_owner",
+    );
+    // An approval decides what runs on the owner's machine, so a guest never answers one.
+    assert.equal(yield* answerWith(session, shareId, "request:approval"), "answered");
+    yield* guestShares.answer(session, {
+      shareId,
+      requestId: RuntimeRequestId.make("request:question"),
+      answers: { scope: "All of it" },
+    });
+    const { runtimeRequests } = yield* orchestrator.getThreadRecords(askingThread, [
+      "runtimeRequests",
+    ]);
+    assert.notEqual(
+      runtimeRequests.find((entry) => entry.id === "request:question")?.status,
+      "pending",
+    );
+    assert.equal(yield* answerWith(session, shareId, "request:question"), "answered");
   }).pipe(Effect.scoped, Effect.provide(layerTest)),
 );
 

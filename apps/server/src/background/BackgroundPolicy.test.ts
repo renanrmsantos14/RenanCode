@@ -182,6 +182,61 @@ describe("BackgroundPolicy", () => {
     }).pipe(Effect.provide(layerFor(nominalHostPower))),
   );
 
+  it.effect("separates a focused client, an open client and no client in scope demand", () =>
+    Effect.gen(function* () {
+      const policy = yield* BackgroundPolicy.BackgroundPolicy;
+      const scope = { type: "vcs-status", cwd: "/repo" } as const;
+      assert.equal(yield* policy.scopeDemand(scope), "none");
+      yield* policy.reportClientActivity(
+        AuthSessionId.make("session-1"),
+        RpcClientId.make(1),
+        makeReport({ focused: false, visible: false }),
+      );
+      assert.equal(yield* policy.scopeDemand(scope), "background");
+      yield* policy.reportClientActivity(
+        AuthSessionId.make("session-1"),
+        RpcClientId.make(2),
+        makeReport({ focused: true, visible: true }),
+      );
+      assert.equal(yield* policy.scopeDemand(scope), "foreground");
+    }).pipe(Effect.provide(layerFor(nominalHostPower))),
+  );
+
+  it.effect("keeps an unfocused client at full demand on the performance profile", () =>
+    Effect.gen(function* () {
+      const policy = yield* BackgroundPolicy.BackgroundPolicy;
+      yield* policy.reportClientActivity(
+        AuthSessionId.make("session-1"),
+        RpcClientId.make(1),
+        makeReport({ focused: false, visible: false }),
+      );
+      assert.equal(yield* policy.scopeDemand({ type: "vcs-status", cwd: "/repo" }), "foreground");
+    }).pipe(
+      Effect.provide(layerFor(nominalHostPower, { backgroundActivityProfile: "performance" })),
+    ),
+  );
+
+  it.effect("slows scope demand on a locked host and stops it on a suspended one", () =>
+    Effect.gen(function* () {
+      const scope = { type: "vcs-status", cwd: "/repo" } as const;
+      const demandOn = (hostPower: HostPowerSnapshot) =>
+        Effect.gen(function* () {
+          const policy = yield* BackgroundPolicy.BackgroundPolicy;
+          yield* policy.reportClientActivity(
+            AuthSessionId.make("session-1"),
+            RpcClientId.make(1),
+            makeReport({ focused: true, visible: true }),
+          );
+          return yield* policy.scopeDemand(scope);
+        }).pipe(Effect.provide(layerFor(hostPower)));
+      assert.equal(
+        yield* demandOn({ ...nominalHostPower, stale: false, locked: "true" }),
+        "background",
+      );
+      assert.equal(yield* demandOn({ ...nominalHostPower, stale: false, suspended: true }), "none");
+    }),
+  );
+
   it.effect("keeps scoped work active after a recently used visible window loses focus", () =>
     Effect.gen(function* () {
       const policy = yield* BackgroundPolicy.BackgroundPolicy;

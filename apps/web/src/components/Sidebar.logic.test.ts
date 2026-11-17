@@ -1,4 +1,5 @@
 import { presentThreadShell } from "@t3tools/client-runtime/state/models";
+import { threadKey } from "@t3tools/client-runtime/state/entities";
 import { isThreadWorking as isSidebarThreadWorking } from "@t3tools/client-runtime/state/thread-inbox";
 import * as DateTime from "effect/DateTime";
 import { deriveActiveWorkStartedAt } from "../session-logic.ts";
@@ -11,16 +12,13 @@ import {
   deleteSelectedThreadEntries,
   getFallbackThreadIdAfterDelete,
   hasUnseenCompletion,
-  resolveSidebarRowThreadId,
-  nestSidebarSubsessions,
-  resolveSubsessionsOpen,
-  sidebarSubagentOwners,
-  filterSidebarV2VisibleThreads,
   orderItemsByPreferredIds,
   pinOrderKeyBetween,
   resolveSidebarSweepKeys,
+  resolveSidebarRowStatus,
   resolveSidebarThreadStatus,
   resolveThreadStatusPill,
+  resolveWindowTitleThreadStatus,
   resolveWorkingStartedAt,
   searchSidebarThreads,
   shouldRecedeSidebarThread,
@@ -62,7 +60,6 @@ import {
   type Project,
   type Thread,
 } from "../types";
-import { threadKey as runtimeThreadKey } from "@t3tools/client-runtime/state/entities";
 import { makeThreadFixture, type ThreadFixtureOverrides } from "../test-fixtures";
 import {
   completeSidebarRouteReveal,
@@ -145,48 +142,6 @@ describe("deleteSelectedThreadEntries", () => {
       deletedThreadKeys: testCase.deletedThreadKeys,
       firstFailure: testCase.firstFailure,
     });
-  });
-});
-
-describe("sidebar thread lineage helpers", () => {
-  it("maps an open subagent to its nearest visible ancestor's sidebar row", () => {
-    const environmentId = EnvironmentId.make("environment-row");
-    const otherEnvironmentId = EnvironmentId.make("environment-other");
-    const subagentOf = (id: string, parentId: ThreadId, environment = environmentId) =>
-      makeThreadFixture({
-        id: ThreadId.make(id),
-        environmentId: environment,
-        lineage: {
-          rootThreadId: parentId,
-          parentThreadId: parentId,
-          relationshipToParent: "subagent",
-        },
-      });
-    const root = makeThreadFixture({ id: ThreadId.make("thread-root"), environmentId });
-    const fork = makeThreadFixture({
-      id: ThreadId.make("thread-fork"),
-      environmentId,
-      lineage: {
-        rootThreadId: root.id,
-        parentThreadId: root.id,
-        relationshipToParent: "fork",
-      },
-    });
-    const child = subagentOf("thread-child", root.id);
-    const grandchild = subagentOf("thread-grandchild", child.id);
-    const forkChild = subagentOf("thread-fork-child", fork.id);
-    const orphan = subagentOf("thread-orphan", ThreadId.make("thread-missing"));
-    const elsewhere = subagentOf("thread-elsewhere", root.id, otherEnvironmentId);
-    const threads = [root, fork, child, grandchild, forkChild, orphan, elsewhere];
-
-    expect(resolveSidebarRowThreadId(child.id, environmentId, threads)).toBe(root.id);
-    expect(resolveSidebarRowThreadId(grandchild.id, environmentId, threads)).toBe(root.id);
-    expect(resolveSidebarRowThreadId(forkChild.id, environmentId, threads)).toBe(fork.id);
-    expect(resolveSidebarRowThreadId(elsewhere.id, otherEnvironmentId, threads)).toBe(elsewhere.id);
-    expect(resolveSidebarRowThreadId(orphan.id, environmentId, threads)).toBe(orphan.id);
-    const loopA = subagentOf("thread-loop-a", ThreadId.make("thread-loop-b"));
-    const loopB = subagentOf("thread-loop-b", loopA.id);
-    expect(resolveSidebarRowThreadId(loopA.id, environmentId, [loopA, loopB])).toBe(loopA.id);
   });
 });
 
@@ -343,6 +298,66 @@ describe("resolveSidebarThreadStatus", () => {
         runtime: { ...runtime, status: "idle" as const, lastError: "persisted" },
       }),
     ).toBe("waiting");
+  });
+
+  it("titles the window with live work and requests only", () => {
+    const cases = [
+      [{ ...idle, hasPendingApprovals: true, runtime }, "Needs approval"],
+      [{ ...idle, hasPendingUserInput: true }, "Needs your input"],
+      [{ ...idle, runtime: { ...runtime, status: "preparing" as const } }, "Working"],
+      [{ ...idle, runtime }, "Working"],
+      [{ ...idle, runtime, pendingGuestMessageCount: 1 }, "Working"],
+      [{ ...idle, runtime, blockedOnThreadWait: true }, "Working"],
+      [{ ...idle, runtime: { ...runtime, status: "idle" as const } }, null],
+      [{ ...idle, runtime: { ...runtime, status: "failed" as const } }, null],
+      [{ ...idle, runtime: { ...runtime, status: "completed" as const } }, null],
+      [idle, null],
+    ] as const;
+    for (const [thread, title] of cases) {
+      expect(resolveWindowTitleThreadStatus(thread)).toBe(title);
+    }
+  });
+});
+
+describe("resolveSidebarRowStatus", () => {
+  const failedRuntime = {
+    status: "failed" as const,
+    activeRunId: null,
+    providerInstanceId: ProviderInstanceId.make("codex"),
+    providerName: "Codex",
+    lastError: "Provider turn failed.",
+    updatedAt: "2026-03-09T10:05:00.000Z",
+  };
+  const failed = {
+    hasActionableProposedPlan: false,
+    hasPendingApprovals: false,
+    hasPendingUserInput: false,
+    interactionMode: "default" as const,
+    runtime: failedRuntime,
+    latestRun: { ...makeLatestRun(), status: "failed" as const },
+  };
+
+  it("settles a failure the user opened to ready, without showing Done", () => {
+    expect(resolveSidebarRowStatus({ ...failed, lastVisitedAt: undefined })).toBe("failed");
+
+    const opened = { ...failed, lastVisitedAt: "2026-03-09T10:06:00.000Z" };
+    expect(resolveSidebarRowStatus(opened)).toBe("ready");
+    expect(hasUnseenCompletion(opened)).toBe(false);
+    // A runtime failure without a failed run has no date, so a visit cannot settle it.
+    expect(resolveSidebarRowStatus({ ...opened, latestRun: null })).toBe("failed");
+  });
+
+  it("does not show a stopped run as an unseen completion", () => {
+    for (const status of ["interrupted", "cancelled"] as const) {
+      const stopped = {
+        ...failed,
+        runtime: { ...failedRuntime, status, lastError: null },
+        latestRun: { ...makeLatestRun(), status },
+        lastVisitedAt: "2026-03-09T10:01:00.000Z",
+      };
+      expect(hasUnseenCompletion(stopped)).toBe(false);
+      expect(resolveThreadStatusPill({ thread: stopped })).toBeNull();
+    }
   });
 });
 
@@ -663,6 +678,7 @@ describe("getFallbackThreadIdAfterDelete", () => {
       deletedThreadIds: new Set([ThreadId.make("thread-active"), ThreadId.make("thread-newest")]),
       sortOrder: "created_at",
       now: "2026-03-09T10:10:00.000Z",
+      delegatedUnderParent: new Set(),
     });
 
     expect(fallbackThreadId).toBe(ThreadId.make("thread-next"));
@@ -673,8 +689,30 @@ describe("getFallbackThreadIdAfterDelete", () => {
       "snoozed",
       { snoozedUntil: "2099-01-01T00:00:00.000Z", snoozedAt: "2026-03-09T10:06:00.000Z" },
     ],
+    ["delegated", { id: ThreadId.make("thread-delegated") }],
     ["settled", { settledOverride: "settled", settledAt: "2026-03-09T10:06:00.000Z" }],
-  ] as const)("skips a %s thread parked on its shelf", (_state, parked) => {
+    [
+      "side chat",
+      {
+        lineage: {
+          rootThreadId: ThreadId.make("thread-visible"),
+          parentThreadId: ThreadId.make("thread-visible"),
+          relationshipToParent: "fork",
+          sideChat: true,
+        },
+      },
+    ],
+    [
+      "subagent",
+      {
+        lineage: {
+          rootThreadId: ThreadId.make("thread-visible"),
+          parentThreadId: ThreadId.make("thread-visible"),
+          relationshipToParent: "subagent",
+        },
+      },
+    ],
+  ] as const)("skips a %s thread the sidebar does not list", (_state, parked) => {
     const fallbackThreadId = getFallbackThreadIdAfterDelete({
       threads: [
         makeThread({
@@ -697,6 +735,12 @@ describe("getFallbackThreadIdAfterDelete", () => {
       deletedThreadId: ThreadId.make("thread-active"),
       sortOrder: "created_at",
       now: "2026-03-09T10:10:00.000Z",
+      delegatedUnderParent: new Set([
+        threadKey({
+          environmentId: localEnvironmentId,
+          threadId: ThreadId.make("thread-delegated"),
+        }),
+      ]),
     });
 
     expect(fallbackThreadId).toBe(ThreadId.make("thread-visible"));
@@ -1494,6 +1538,7 @@ describe("resolveSidebarRouteReveal", () => {
       resolveSidebarRouteReveal({
         reveal: { observedKey: "environment-test:other", pendingKey: null },
         routeKey: hiddenKey,
+        routeKeyInPlace: false,
         isSearching: false,
         scopedProjectKeys,
         delegatedUnderParent: new Set(),
@@ -1508,6 +1553,7 @@ describe("resolveSidebarRouteReveal", () => {
       resolveSidebarRouteReveal({
         reveal: { observedKey: hiddenKey, pendingKey: null },
         routeKey: hiddenKey,
+        routeKeyInPlace: false,
         isSearching: false,
         scopedProjectKeys,
         delegatedUnderParent: new Set(),
@@ -1524,6 +1570,7 @@ describe("resolveSidebarRouteReveal", () => {
       resolveSidebarRouteReveal({
         reveal,
         routeKey,
+        routeKeyInPlace: false,
         isSearching: false,
         scopedProjectKeys,
         delegatedUnderParent: new Set(),
@@ -1538,6 +1585,7 @@ describe("resolveSidebarRouteReveal", () => {
       resolveSidebarRouteReveal({
         reveal: { observedKey: hiddenKey, pendingKey: hiddenKey },
         routeKey: hiddenKey,
+        routeKeyInPlace: false,
         isSearching: true,
         scopedProjectKeys,
         delegatedUnderParent: new Set(),
@@ -1709,182 +1757,5 @@ describe("shouldCreateNewThreadInCurrentProject", () => {
     expect(shouldCreateNewThreadInCurrentProject(false, 1, 3)).toBe(true);
     expect(shouldCreateNewThreadInCurrentProject(false, 0, 0)).toBe(true);
     expect(shouldCreateNewThreadInCurrentProject(true, 2, 2)).toBe(true);
-  });
-});
-
-describe("nestSidebarSubsessions", () => {
-  const environmentId = EnvironmentId.make("environment-nest");
-  const keyOf = (id: ThreadId) => `${environmentId}:${id}`;
-  const make = (id: string, extra: ThreadFixtureOverrides = {}) =>
-    makeThreadFixture({ id: ThreadId.make(id), environmentId, ...extra });
-  const launched = (id: string, parent: ThreadId, extra: ThreadFixtureOverrides = {}) =>
-    make(id, { launchedFrom: parent, creationSource: "mcp", ...extra });
-  const nest = (
-    threads: ReturnType<typeof make>[],
-    delegated: string[] = [],
-    nativeParents: ReadonlyMap<string, string> = new Map(),
-  ) => {
-    const visible = filterSidebarV2VisibleThreads(threads, null, new Set(delegated));
-    return nestSidebarSubsessions(threads, visible, new Set(delegated), nativeParents);
-  };
-
-  it("nests launched threads under a visible parent, oldest first, recursively", () => {
-    const root = make("n-root");
-    const late = launched("n-late", root.id, { createdAt: "2026-03-09T10:05:00.000Z" });
-    const early = launched("n-early", root.id, { createdAt: "2026-03-09T10:01:00.000Z" });
-    const deep = launched("n-deep", early.id);
-    const { subsessionsByParent, parentKeyByChild } = nest([root, late, early, deep]);
-
-    expect(subsessionsByParent.get(keyOf(root.id))?.map((thread) => thread.id)).toEqual([
-      early.id,
-      late.id,
-    ]);
-    expect(subsessionsByParent.get(keyOf(early.id))?.map((thread) => thread.id)).toEqual([deep.id]);
-    expect([...parentKeyByChild.keys()].toSorted()).toEqual(
-      [early, late, deep].map((thread) => keyOf(thread.id)).toSorted(),
-    );
-  });
-
-  it("keeps a launched thread top-level when its parent is archived, elsewhere or missing", () => {
-    const archived = make("n-archived", { archivedAt: "2026-03-09T11:00:00.000Z" });
-    const otherProject = make("n-other", { projectId: ProjectId.make("project-other") });
-    const orphan = launched("n-orphan", ThreadId.make("n-gone"));
-    const underArchived = launched("n-under-archived", archived.id);
-    const crossProject = launched("n-cross", otherProject.id);
-
-    expect(
-      nest([archived, otherProject, orphan, underArchived, crossProject]).parentKeyByChild.size,
-    ).toBe(0);
-  });
-
-  it("hides a delegate_task child only while its parent is shown, and nests native subagents only where placed", () => {
-    const root = make("n-parent");
-    const task = make("n-task", {
-      creationSource: "mcp",
-      lineage: { rootThreadId: root.id, parentThreadId: root.id, relationshipToParent: "subagent" },
-    });
-    const native = make("n-native", {
-      creationSource: "provider",
-      createdAt: "2026-03-09T10:09:00.000Z",
-      lineage: { rootThreadId: root.id, parentThreadId: root.id, relationshipToParent: "subagent" },
-    });
-    const nested = make("n-native-nested", {
-      creationSource: "provider",
-      lineage: { rootThreadId: root.id, parentThreadId: root.id, relationshipToParent: "subagent" },
-    });
-    const { subsessionsByParent } = nest([root, task, native, nested]);
-    expect(subsessionsByParent.get(keyOf(root.id))?.map((thread) => thread.id)).toEqual([task.id]);
-    expect(nest([task, native]).subsessionsByParent.size).toBe(0);
-
-    const placed = nest(
-      [root, task, native, nested],
-      [],
-      new Map([
-        [keyOf(native.id), keyOf(root.id)],
-        [keyOf(nested.id), keyOf(native.id)],
-      ]),
-    ).subsessionsByParent;
-    expect(placed.get(keyOf(root.id))?.map((thread) => thread.id)).toEqual([task.id, native.id]);
-    expect(placed.get(keyOf(native.id))?.map((thread) => thread.id)).toEqual([nested.id]);
-  });
-
-  it("nests a delegated task from a linked environment under its parent", () => {
-    const root = make("n-delegator");
-    const task = make("n-delegated", {
-      environmentId: EnvironmentId.make("environment-linked"),
-      projectId: ProjectId.make("project-linked"),
-      delegatedFrom: { environmentId, threadId: root.id, title: "Pai" },
-    });
-    // The client runtime's key, as delegatedUnderParentAtom builds it.
-    const taskKey = runtimeThreadKey({ environmentId: task.environmentId, threadId: task.id });
-
-    expect(nest([root, task], [taskKey]).subsessionsByParent.get(keyOf(root.id))).toEqual([task]);
-    expect(nest([root, task]).subsessionsByParent.size).toBe(0);
-  });
-
-  it("folds a thread's subsessions by default only when native subagents crowd them", () => {
-    const native = (id: string) =>
-      make(id, {
-        creationSource: "provider",
-        lineage: {
-          rootThreadId: ThreadId.make("n-busy"),
-          parentThreadId: ThreadId.make("n-busy"),
-          relationshipToParent: "subagent",
-        },
-      });
-    const five = ["a", "b", "c", "d", "e"].map((id) => native(`n-native-${id}`));
-    const six = [...five, native("n-native-f")];
-    const launchedSix = six.map((thread) => launched(`${thread.id}-mcp`, ThreadId.make("n-busy")));
-
-    expect(resolveSubsessionsOpen(undefined, five)).toBe(true);
-    expect(resolveSubsessionsOpen(undefined, six)).toBe(false);
-    expect(resolveSubsessionsOpen(undefined, launchedSix)).toBe(true);
-    expect(resolveSubsessionsOpen(true, six)).toBe(true);
-    expect(resolveSubsessionsOpen(false, five)).toBe(false);
-  });
-
-  it("reads subagent records up the open thread's chain and from its running subsessions", () => {
-    const remote = EnvironmentId.make("environment-remote");
-    const running = {
-      status: "running" as const,
-      activeRunId: null,
-      providerInstanceId: ProviderInstanceId.make("claudeAgent"),
-      providerName: "Claude",
-      lastError: null,
-      updatedAt: "2026-03-09T10:00:00.000Z",
-    };
-    const parent = make("o-parent");
-    const delegateChild = (id: string, extra: ThreadFixtureOverrides = {}) =>
-      make(id, {
-        creationSource: "mcp",
-        lineage: {
-          rootThreadId: parent.id,
-          parentThreadId: parent.id,
-          relationshipToParent: "subagent",
-        },
-        ...extra,
-      });
-    const liveLocal = delegateChild("o-live", { runtime: running });
-    const doneLocal = delegateChild("o-done");
-    const liveRemote = makeThreadFixture({
-      id: ThreadId.make("o-remote"),
-      environmentId: remote,
-      projectId: ProjectId.make("project-remote"),
-      delegatedFrom: { environmentId, threadId: parent.id, title: "Mãe" },
-      runtime: running,
-    });
-    const native = make("o-native", {
-      creationSource: "provider",
-      lineage: {
-        rootThreadId: parent.id,
-        parentThreadId: doneLocal.id,
-        relationshipToParent: "subagent",
-      },
-    });
-    const threads = [parent, liveLocal, doneLocal, liveRemote, native];
-    const owners = (threadId: ThreadId, routeNativeParent: ThreadId | null = null) =>
-      sidebarSubagentOwners({ route: { environmentId, threadId }, routeNativeParent, threads }).map(
-        (owner) => `${owner.environmentId}:${owner.threadId}`,
-      );
-
-    // The parent row, then its running subsessions in either environment; finished ones wait to be opened.
-    expect(owners(parent.id)).toEqual([
-      keyOf(parent.id),
-      keyOf(liveLocal.id),
-      `${remote}:${liveRemote.id}`,
-    ]);
-    // An open delegate_task child keeps its own records, though its row nests under the parent.
-    expect(owners(doneLocal.id).slice(0, 2)).toEqual([keyOf(doneLocal.id), keyOf(parent.id)]);
-    // A native subagent has no records: its launcher's do, even before its shell loads.
-    expect(owners(native.id)[0]).toBe(keyOf(doneLocal.id));
-    expect(owners(ThreadId.make("o-unloaded"), doneLocal.id)[0]).toBe(keyOf(doneLocal.id));
-  });
-
-  it("lists one of two threads that launched each other", () => {
-    const a = make("n-a", { launchedFrom: ThreadId.make("n-b") });
-    const b = make("n-b", { launchedFrom: ThreadId.make("n-a") });
-    const { parentKeyByChild } = nest([a, b]);
-
-    expect(parentKeyByChild.size).toBe(1);
   });
 });

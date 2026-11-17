@@ -1,4 +1,5 @@
 import type {
+  BackgroundDemand,
   BackgroundScope,
   ChatAttachment,
   ServerSettings,
@@ -44,6 +45,9 @@ export class ProviderHost extends Context.Service<
       readonly subscribe: Effect.Effect<Stream.Stream<ServerSettings>, never, Scope.Scope>;
     };
     readonly shouldRunBackgroundWork: (scope: BackgroundScope) => Effect.Effect<boolean>;
+    readonly backgroundDemand: (scope: BackgroundScope) => Effect.Effect<BackgroundDemand>;
+    /** Completes once server startup finishes; first provider checks wait for it. */
+    readonly awaitServerReady?: Effect.Effect<void>;
     /** Absolute attachment path, or null if the ID does not resolve inside attachmentsDir. */
     readonly resolveAttachmentPath: (attachment: ChatAttachment) => string | null;
     readonly resolveExtractedTextPath?: (path: string) => Effect.Effect<string | undefined>;

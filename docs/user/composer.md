@@ -91,8 +91,10 @@ start of the composer to edit the most recently queued message. Change
 
 Mobile has the same choice under **Settings → Chat**. While a turn is
 running the send button shows which action it will take. Long-press it to use the
-other action for a single message, or hold `Cmd` while sending from a hardware
-keyboard. The button only offers Steer when the running agent supports it.
+other action for a single message. From a hardware keyboard, `Cmd+Return`
+(`Ctrl+Return` on Android) uses the other action, or `Cmd+Shift+Return`
+(`Ctrl+Shift+Return`) when Return inserts a new line. The button only offers
+Steer when the running agent supports it.
 
 ## Queue messages offline on mobile
 
@@ -162,16 +164,19 @@ the text is an unedited recalled prompt, with the caret on the first visual line
 the last visual line for `ArrowDown`, counting wrapped lines. Editing a recalled prompt turns it
 into a normal draft.
 
-## Suggested next message
+## Suggested next prompt
 
-Turn on **Settings > Chat > Suggest next message** to get a guess at your next message after a turn
-you watched finishes. It appears in the empty composer as faded text. Press `Tab` to put it in the
-composer without sending, or `Escape` to dismiss it. Typing, switching threads, or starting another
-turn also discards it. Suggestions use your text generation model, so each one is a small model
-request on the environment running the thread.
+Turn on **Suggest next prompt** in Settings > Labs. After a Claude or Codex turn completes, the
+empty composer shows a predicted next message. Press `Tab` to fill it in, then edit or send it, or
+press `Escape` to dismiss it. Each suggestion is one extra request that reuses the turn's prompt
+cache, so it uses a little of your plan's usage. Claude skips suggestions on the first turn of a
+thread and near usage limits. Codex needs version 0.165 or later; if RenanCode manages
+Codex, update it in Settings > Providers. Codex follows a change to the setting at once; open Claude
+threads follow it after they restart. Suggestions show on web and desktop.
 
-On mobile, turn it on in **Settings > Chat**. The suggestion appears above the composer; tap it to
-put it in the composer, or tap the close button to dismiss it.
+On mobile, turn on **Settings > Threads > Suggest next message**. The environment writes a
+suggestion when a turn finishes and it appears above the composer; tap it to put it in the
+composer, or tap the close button to dismiss it.
 
 ## Edit an earlier prompt
 
@@ -201,31 +206,44 @@ Stashes containing uploaded files must be restored in their original environment
 Those files are retained for 24 hours. After an upload expires, restore the prompt
 and use **Attach again** or remove the missing file before sending.
 
-## Voice input on iPhone
+## Voice input on mobile
 
-On supported iPhones with iOS 26 or later, use the composer's microphone to record,
-then confirm to transcribe. Text is inserted where your selection was when
-recording started, ready for you to review and edit before sending.
+Use the composer's microphone to record, then confirm to transcribe. Text is
+inserted where your selection was when recording started, ready for you to review
+and edit before sending.
 
-Voice input depends on Apple's on-device speech transcription. On a device without
-it, the composer has no microphone button and **Settings → Microphone** says voice
-input isn't available.
+By default, audio stays on the phone. Local transcription needs a supported iPhone
+with iOS 26 or later, or Android 12 or later with compatible Google speech services.
+To use a paired environment instead, open **Settings → Voice → Transcribe on**,
+choose the environment, and confirm. Finished recordings go only to that environment,
+even when a draft belongs to another one. This also works on phones without local
+speech recognition. If the chosen environment disconnects, dictation stops; it never
+switches hosts. Choose **This device** to revoke access and discard pending audio.
+For [cloud dictation](./voice-input.md#choose-where-audio-goes), open **Cloud providers**
+under the environment in **Settings → Voice** and confirm which provider may receive recordings.
+On Android, keep RenanCode open while recording and transcribing.
 
-The first use may download Apple's speech model and needs a network connection.
-Later transcription works offline for that language. Recordings can be up to five
-minutes long. Canceling, leaving the screen, or an audio interruption discards the
-recording and preserves your existing draft. While recording, the screen stays
+On-device dictation may need a network connection to download a speech model the
+first time. After that it works offline for that language. iPhone dictates in the
+first of your preferred languages (**Settings → General → Language & Region**)
+that Apple’s speech model supports. If none is supported, it tries the app’s
+language. Android transcribes on the device while you
+record and finishes after you stop. Recordings can be up to five
+minutes long. Canceling or an audio interruption discards the recording and
+preserves your existing draft. Navigating to another screen keeps dictation active;
+use the floating controls to finish or cancel. While recording, the screen stays
 awake; it can sleep normally once recording stops.
 
-Voice input records from the first connected microphone in **Settings → Microphone**.
-The list mixes kinds (built-in, other wired, other Bluetooth, CarPlay) with wired and
-Bluetooth devices you have dictated with, listed by name. Drag to rank them together:
+Choose a preferred order in **Settings → Voice**. Voice input requests the first
+connected microphone in the list. The list mixes kinds (built-in, other wired, other
+Bluetooth, and CarPlay on iOS) with wired and Bluetooth devices you have dictated
+with, listed by name. Drag to rank them together:
 for example, put **Other Bluetooth** above your AirPods so a new headset is preferred
 while the AirPods microphone stays low. By default, CarPlay comes after the built-in
 microphone. Swipe a device left to forget it.
 
-Transcription runs on your device. T3 Code deletes the temporary audio after
-transcription or cancellation; only the message text is sent when you submit.
+T3 Code deletes the temporary recording from your phone after transcription or
+cancellation. The transcript stays in your draft until you send the message to the agent.
 
 ## Queued messages
 
@@ -242,8 +260,12 @@ images. **Send now** sends a message right away, into the running turn if there 
 also edit or remove it.
 
 If you stop the agent or the server restarts, queued messages keep their order and are held.
-Press **Resume** in an empty composer to continue. **Resume** also continues a stopped
-run or one that hit a usage limit, even with nothing queued. Sending a new message also resumes the queue, unless it steers a turn that is already
+Press **Resume** in an empty composer to continue. For stopped runs and usage limits,
+this uses the provider's native continuation without sending a new prompt. If the provider
+does not support it, send a message to continue instead. If the original request never reached
+the provider, Resume sends that request again.
+
+Sending a new message also resumes the queue, unless it steers a turn that is already
 running. You can edit or remove held messages without starting them.
 
 The pencil on a queued message opens it in the composer for editing. The original message
@@ -268,15 +290,20 @@ session** in the command palette on web and desktop. The conversation continues,
 and your next message starts the agent again with the new setup.
 
 Provider commands must start the message to run. T3 Code commands such as
-`/model` and `/plan`, and skill mentions, work on any line.
+`/model` and skill mentions work on any line.
 
 Send `/compact` in an existing conversation to reduce context usage when the
-provider supports it, even with the context meter turned off.
+provider supports it.
 
-On web and desktop, turn on **Settings → Labs → Legacy → Context
-window indicator (legacy)** to see context usage. The meter is off by default
-and appears once the provider reports usage. Open it for usage details and
-**Compact context** when the provider supports compaction.
+Send `/clear` on its own, or pick it from the slash menu, to start a fresh session
+in the same thread. Your next message goes to a new provider session that doesn't see the
+earlier messages, and the thread marks where it began with **New session**.
+Earlier messages and diffs stay in the thread. Dismiss the notice above the
+composer to keep the current session instead.
+
+On web and desktop, turn on **Context window** in **Settings → Appearance →
+Thread details** to see context usage in the thread details card. It appears
+once the provider reports usage.
 
 Claude instances can also compact idle threads for you. See
 [compact long conversations](./providers-claude.md#compact-long-conversations).
@@ -306,15 +333,15 @@ switches them back on in each folder at the next session.
 
 ## Goals
 
-With Codex and Claude, send `/goal` followed by what "done" means, for example
+With Codex, Claude, and OpenCode 2.2.5 or later, send `/goal` followed by what "done" means, for example
 `/goal all tests in packages/api pass`. The agent keeps working across turns
 until it judges the goal met. The thread shows **Goal** while it works, and a
 line at the end of the thread (above the composer on mobile) shows the goal and
 its progress.
 
 - `/goal` alone shows the current goal. `/goal clear` removes it.
-- Codex also supports `/goal pause` and `/goal resume`. Stopping a Codex goal
-  pauses it, and so does Codex ending its work without meeting the goal.
+- Codex and OpenCode also support `/goal pause` and `/goal resume`. Stopping
+  their goal pauses it. Codex also pauses when its work ends without meeting the goal.
 - Stopping Claude ends the current turn, but the goal stays set. Claude checks it
   again at the end of your next message.
 - Sending a new goal, or `/goal resume`, while the agent works stops the current
@@ -355,6 +382,10 @@ environment must be connected and up to date. The transcript includes the visibl
 saved text context at the time of the drop; later messages and the contents of attached files
 are not copied. The agent can read the saved transcript after the source disconnects. Normal
 file attachment limits apply.
+
+Type `@` and part of a model or provider name, such as `@opus`, to name that model for the
+agent, for example when delegating. It does not change the thread's model. Join words with
+`:`, `/` or `-`, as in `@opus:opencode`.
 
 Images keep their thumbnail shelf above the text and also get a chip at your cursor, so you can
 say exactly which image you mean. Deleting an image chip leaves the image on the shelf; removing

@@ -1,7 +1,7 @@
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
-import { Platform, View } from "react-native";
+import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/ui/AppText";
@@ -10,7 +10,6 @@ import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/
 import { ListChoiceRow as SettingsChoiceRow } from "../../components/ui/ListChoiceRow";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsScreen } from "./components/SettingsScreen";
-import { SettingsSwitchRow } from "./components/SettingsSwitchRow";
 
 const FOLLOW_UP_OPTIONS: ReadonlyArray<{
   readonly behavior: FollowUpBehavior;
@@ -37,9 +36,6 @@ export function SettingsFollowUpRouteScreen() {
   const selectedBehavior = AsyncResult.isSuccess(preferencesResult)
     ? (preferencesResult.value.followUpBehavior ?? DEFAULT_FOLLOW_UP_BEHAVIOR)
     : null;
-  const suggestionsEnabled =
-    AsyncResult.isSuccess(preferencesResult) &&
-    preferencesResult.value.nextActionSuggestionsEnabled === true;
 
   const content = (
     <ScrollView
@@ -64,25 +60,10 @@ export function SettingsFollowUpRouteScreen() {
       </SettingsSection>
       <Text className="px-2 text-sm text-foreground-muted">
         Long-press the send button to use the other option for a single message. With a hardware
-        keyboard, hold Command while sending.
+        keyboard, hold {Platform.OS === "android" ? "Ctrl" : "Command"} while sending.
       </Text>
-      <SettingsSection title="After a turn">
-        <SettingsSwitchRow
-          label="Suggest next message"
-          subtitle="Offer a likely next message when a turn you watched finishes. Each suggestion is a small request to the text generation model."
-          value={suggestionsEnabled}
-          disabled={!preferencesReady}
-          onValueChange={(value) => savePreferences({ nextActionSuggestionsEnabled: value })}
-        />
-      </SettingsSection>
     </ScrollView>
   );
 
-  return Platform.OS === "android" ? (
-    <SettingsScreen title="Chat">{content}</SettingsScreen>
-  ) : (
-    <View collapsable={false} className="flex-1 bg-sheet">
-      {content}
-    </View>
-  );
+  return <SettingsScreen title="Chat">{content}</SettingsScreen>;
 }

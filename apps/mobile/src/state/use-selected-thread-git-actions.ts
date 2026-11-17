@@ -21,9 +21,9 @@ import {
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
 
-import { useBranches } from "../state/queries";
-import { threadEnvironment } from "../state/threads";
-import { vcsActionManager, vcsEnvironment } from "../state/vcs";
+import { refreshBranches } from "./queries";
+import { threadEnvironment } from "./threads";
+import { vcsActionManager, vcsEnvironment } from "./vcs";
 import { uuidv4 } from "../lib/uuid";
 import { appAtomRegistry } from "./atom-registry";
 import { readEnvironmentScope, useEnvironmentScope } from "./session";
@@ -85,9 +85,7 @@ export function useSelectedThreadGitActions() {
   const branchTarget = {
     environmentId: selectedThread?.environmentId ?? null,
     cwd: selectedThreadGitRootCwd,
-    query: null,
   };
-  const branchState = useBranches(branchTarget);
   const updateThreadGitContext = async (
     thread: NonNullable<typeof selectedThread>,
     nextState: {
@@ -238,7 +236,7 @@ export function useSelectedThreadGitActions() {
     const updateResult = input.nextThreadState
       ? await updateThreadGitContext(input.thread, input.nextThreadState)
       : AsyncResult.success(undefined);
-    branchState.refresh();
+    refreshBranches(branchTarget);
     await refreshSelectedThreadGitStatus({ quiet: true, cwd: input.cwd });
     return AsyncResult.isFailure(updateResult)
       ? AsyncResult.failure(updateResult.cause)

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { applyUsageLimitsUpdate, resolveUsageLimitsAfterProbe } from "./usageLimits.ts";
+import {
+  applyUsageLimitsUpdate,
+  applyUsageReadFailure,
+  applyUsageReading,
+  resolveUsageLimitsAfterProbe,
+} from "./usageLimits.ts";
 
 const checkedAt = "2026-09-03T12:00:00.000Z";
 const session = {
@@ -33,6 +38,29 @@ describe("applyUsageLimitsUpdate", () => {
       },
     });
     expect(next).toBe(published);
+    const scoped = { checkedAt, windows: [{ ...weekly, modelIds: ["opencode/a"] }] };
+    const providerScoped = { checkedAt, windows: [{ ...weekly, providerIds: ["opencode"] }] };
+    expect(
+      applyUsageLimitsUpdate({
+        previous: providerScoped,
+        checkedAt,
+        update: { windows: [{ ...weekly, providerIds: ["console-custom"] }] },
+      })?.windows[0]?.providerIds,
+    ).toEqual(["console-custom"]);
+    expect(
+      applyUsageLimitsUpdate({
+        previous: scoped,
+        checkedAt,
+        update: { windows: [{ ...weekly, modelIds: ["opencode/a"] }] },
+      }),
+    ).toBe(scoped);
+    expect(
+      applyUsageLimitsUpdate({
+        previous: scoped,
+        checkedAt,
+        update: { windows: [{ ...weekly, modelIds: ["opencode/b"] }] },
+      })?.windows[0]?.modelIds,
+    ).toEqual(["opencode/b"]);
   });
 
   it("upserts by id and keeps the reset a percent-only update omits", () => {
@@ -66,10 +94,10 @@ describe("applyUsageLimitsUpdate", () => {
     ).toEqual({ checkedAt, windows: [weekly], unavailable: { reason: "probeFailed" } });
   });
 
-  it("preserves reset credits when a streamed window update changes usage", () => {
+  it("preserves reset credits and a $0 cap when a streamed window update changes usage", () => {
     const resetCredits = { availableCount: 2, nextExpiresAt: "2026-10-01T00:00:00.000Z" };
     const next = applyUsageLimitsUpdate({
-      previous: { ...published, resetCredits },
+      previous: { ...published, resetCredits, zeroSpendCap: true },
       checkedAt: "2026-09-03T12:00:05.000Z",
       update: { windows: [{ ...session, usedPercent: 55 }] },
     });
@@ -78,6 +106,7 @@ describe("applyUsageLimitsUpdate", () => {
       checkedAt: "2026-09-03T12:00:05.000Z",
       windows: [{ ...session, usedPercent: 55 }, weekly],
       resetCredits,
+      zeroSpendCap: true,
     });
   });
 });
@@ -115,8 +144,111 @@ describe("resolveUsageLimitsAfterProbe", () => {
   it("keeps the last good windows through a failed probe but not an unsupported one", () => {
     const failed = { checkedAt, windows: [], unavailable: { reason: "probeFailed" as const } };
     const unsupported = { checkedAt, windows: [], unavailable: { reason: "unsupported" as const } };
-    expect(resolveUsageLimitsAfterProbe({ published, probed: failed })).toBe(published);
+    expect(resolveUsageLimitsAfterProbe({ published, probed: failed })).toEqual({
+      ...published,
+      lastError: { at: checkedAt, reason: "requestFailed" },
+    });
+    const stillFailing = {
+      ...published,
+      lastError: { at: checkedAt, reason: "requestFailed" as const },
+    };
+    expect(resolveUsageLimitsAfterProbe({ published: stillFailing, probed: failed })).toBe(
+      stillFailing,
+    );
     expect(resolveUsageLimitsAfterProbe({ published, probed: unsupported })).toBe(unsupported);
     expect(resolveUsageLimitsAfterProbe({ published: undefined, probed: failed })).toBe(failed);
+  });
+});
+
+describe("usage readings", () => {
+  const later = "2026-09-03T12:01:00.000Z";
+  const reading = { checkedAt: later, windows: [{ ...session, usedPercent: 41 }, weekly] };
+
+  it("replaces windows, advances checkedAt, and clears a recorded failure", () => {
+    const failed = applyUsageReadFailure({
+      previous: published,
+      at: later,
+      reason: "rateLimited",
+    });
+    expect(failed?.lastError).toEqual({ at: later, reason: "rateLimited" });
+    expect(applyUsageReading({ previous: failed, reading })).toEqual(reading);
+  });
+
+  it("keeps windows and checkedAt through a failure and records the first failure of a reason only", () => {
+    const failed = applyUsageReadFailure({ previous: published, at: later, reason: "signedOut" });
+    expect(failed).toEqual({ ...published, lastError: { at: later, reason: "signedOut" } });
+    expect(
+      applyUsageReadFailure({
+        previous: failed,
+        at: "2026-09-03T12:02:00.000Z",
+        reason: "signedOut",
+      }),
+    ).toBe(failed);
+    expect(
+      applyUsageReadFailure({ previous: failed, at: later, reason: "requestFailed" })?.lastError
+        ?.reason,
+    ).toBe("requestFailed");
+  });
+
+  it("refreshes the retry time of a repeated failure only after it passes", () => {
+    const retryAt = "2026-09-03T12:03:00.000Z";
+    const failed = applyUsageReadFailure({
+      previous: published,
+      at: later,
+      reason: "rateLimited",
+      retryAt,
+    });
+    expect(failed?.lastError).toEqual({ at: later, reason: "rateLimited", retryAt });
+    expect(
+      applyUsageReadFailure({
+        previous: failed,
+        at: "2026-09-03T12:02:00.000Z",
+        reason: "rateLimited",
+        retryAt: "2026-09-03T12:04:00.000Z",
+      }),
+    ).toBe(failed);
+    expect(
+      applyUsageReadFailure({
+        previous: failed,
+        at: retryAt,
+        reason: "rateLimited",
+        retryAt: "2026-09-03T12:07:00.000Z",
+      })?.lastError,
+    ).toEqual({ at: later, reason: "rateLimited", retryAt: "2026-09-03T12:07:00.000Z" });
+  });
+
+  it("ignores failures without a good reading to attach to and readings older than the published one", () => {
+    expect(applyUsageReadFailure({ previous: undefined, at: later, reason: "signedOut" })).toBe(
+      undefined,
+    );
+    const unavailable = { checkedAt, windows: [], unavailable: { reason: "probeFailed" as const } };
+    expect(applyUsageReadFailure({ previous: unavailable, at: later, reason: "signedOut" })).toBe(
+      unavailable,
+    );
+    expect(
+      applyUsageReading({
+        previous: { ...published, checkedAt: later },
+        reading: { checkedAt, windows: [] },
+      }).checkedAt,
+    ).toBe(later);
+  });
+
+  it("keeps reset credits that the reading does not carry", () => {
+    const resetCredits = { availableCount: 1 };
+    expect(
+      applyUsageReading({ previous: { ...published, resetCredits }, reading }).resetCredits,
+    ).toEqual(resetCredits);
+  });
+
+  it("publishes an identical reading only once the last one is 120 s old, and a changed one at once", () => {
+    const first = applyUsageReading({
+      previous: published,
+      reading: { ...published, checkedAt: later },
+    });
+    expect(first).toBe(published);
+    const due = { ...published, checkedAt: "2026-09-03T12:02:00.000Z" };
+    expect(applyUsageReading({ previous: published, reading: due })).toEqual(due);
+    const changed = { checkedAt: later, windows: [{ ...session, usedPercent: 41 }, weekly] };
+    expect(applyUsageReading({ previous: published, reading: changed })).toEqual(changed);
   });
 });

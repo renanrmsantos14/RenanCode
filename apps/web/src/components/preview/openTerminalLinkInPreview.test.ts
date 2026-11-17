@@ -3,6 +3,7 @@ import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
+import type { OpenPreviewMutation } from "~/browser/openFileInPreview";
 import { openTerminalLinkInPreview } from "./openTerminalLinkInPreview";
 
 vi.mock("~/previewStateStore", () => ({
@@ -33,9 +34,18 @@ vi.mock("~/browser/browserLinkTarget", () => ({
   isWebUrl: (url: string) => /^https?:/u.test(url),
 }));
 
+const entityMocks = vi.hoisted(() => ({ serverBrowser: vi.fn<() => boolean>() }));
+
+vi.mock("~/state/entities", () => ({
+  readEnvironmentSupportsServerBrowser: () => entityMocks.serverBrowser(),
+  useEnvironmentSupportsServerBrowser: () => entityMocks.serverBrowser(),
+}));
+
 const hydratedDefaults = {
   viewport: { _tag: "fixed", width: 1280, height: 720 } as const,
   profileId: "work",
+  zoomFactor: 0.8,
+  appearance: "dark",
 };
 
 const threadRef = {
@@ -47,6 +57,7 @@ beforeEach(() => {
   browserDefaultsMocks.resolve.mockReset();
   browserDefaultsMocks.resolve.mockResolvedValue(hydratedDefaults);
   linkTargetMocks.preference.mockReturnValue("app");
+  entityMocks.serverBrowser.mockReturnValue(false);
 });
 
 afterEach(() => {
@@ -63,10 +74,27 @@ describe("openTerminalLinkInPreview", () => {
       threadRef,
       openPreview: async () => AsyncResult.failure(Cause.interrupt()),
       fallbackToBrowser,
-      forceBrowser: false,
     });
 
     expect(reportError).not.toHaveBeenCalled();
     expect(fallbackToBrowser).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["http://localhost:36472/", "server"],
+    ["http://127.0.0.1:36472/", "server"],
+  ])("opens %s with runtime %s on a server-browser environment", async (url, runtime) => {
+    entityMocks.serverBrowser.mockReturnValue(true);
+    const openPreview = vi.fn<OpenPreviewMutation<never>>(async () =>
+      AsyncResult.failure(Cause.interrupt()),
+    );
+
+    await openTerminalLinkInPreview({ url, threadRef, openPreview, fallbackToBrowser: vi.fn() });
+
+    expect(openPreview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({ runtime, zoomFactor: 0.8, colorScheme: "dark" }),
+      }),
+    );
   });
 });

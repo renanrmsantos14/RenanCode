@@ -1,6 +1,10 @@
 import type { AssetResource, ProjectReadFileError, ScopedThreadRef } from "@t3tools/contracts";
 import { mediaFileReference } from "@t3tools/client-runtime/media-reference";
-import { isHostPath, workspaceRelativeFilePath } from "@t3tools/shared/path";
+import {
+  isHostPath,
+  resolveWorkspaceFilePath,
+  workspaceRelativeFilePath,
+} from "@t3tools/shared/path";
 
 export function resolveFilePreviewPath(path: string | null, cwd: string): string | null {
   if (path === null) return null;
@@ -27,6 +31,45 @@ export function filePreviewReadErrorMessage(error: ProjectReadFileError): string
     default:
       return error.message;
   }
+}
+
+/** A relative path the read could not find in `cwd`, which another worktree of the repository may hold. */
+export function isMissingRelativeFile(
+  relativePath: string,
+  readError: ProjectReadFileError | null,
+): boolean {
+  return (
+    !isHostPath(relativePath) &&
+    readError?.failure === "operation_failed" &&
+    readError.operation === "realpath-target"
+  );
+}
+
+/** The same path in the repository's other worktrees, keeping `cwd`'s offset inside its own worktree. */
+export function worktreeFallbackPaths(
+  relativePath: string,
+  cwd: string,
+  readError: ProjectReadFileError | null,
+  refs: ReadonlyArray<{ readonly worktreePath: string | null }>,
+): string[] {
+  if (!isMissingRelativeFile(relativePath, readError)) return [];
+  const roots = [...new Set(refs.flatMap((ref) => (ref.worktreePath ? [ref.worktreePath] : [])))];
+  const ownRoot = roots
+    .filter(
+      (root) => cwd === root || (cwd.startsWith(root) && /^[/\\]/.test(cwd.slice(root.length))),
+    )
+    .reduce<string | null>(
+      (longest, root) => (longest !== null && longest.length >= root.length ? longest : root),
+      null,
+    );
+  const offset = ownRoot === null ? "" : cwd.slice(ownRoot.length);
+  return (
+    roots
+      .filter((root) => root !== ownRoot)
+      // filesystem.getMetadata accepts at most 64 paths.
+      .slice(0, 64)
+      .map((root) => resolveWorkspaceFilePath(relativePath, root + offset))
+  );
 }
 
 export function shouldShowFileExplorer(input: {

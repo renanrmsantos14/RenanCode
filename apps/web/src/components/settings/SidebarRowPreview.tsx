@@ -10,6 +10,7 @@ import { SidebarThreadRow, type SidebarProviderEntry } from "../sidebar/SidebarT
 
 const NOOP = () => {};
 const EMPTY_PROVIDER_ENTRIES: ReadonlyMap<string, SidebarProviderEntry> = new Map();
+const opensPullRequestsInline = () => false;
 
 interface PreviewCase {
   readonly label: string;
@@ -146,7 +147,7 @@ export function SidebarRowPreview() {
                 wokeAt={null}
                 isActive={false}
                 isRouteThread={false}
-                openPullRequestsInRightPanel={false}
+                readOpensPullRequestsInRightPanel={opensPullRequestsInline}
                 jumpLabel={null}
                 currentEnvironmentId={source.environmentId}
                 environmentLabel={null}
@@ -175,10 +176,6 @@ export function SidebarRowPreview() {
                 onSnooze={NOOP}
                 onUnpin={NOOP}
                 onAcknowledgeWoke={NOOP}
-                subsessionCount={0}
-                subsessionsCollapsed
-                subsessionDot={null}
-                onToggleSubsessions={NOOP}
               />
             </ul>
           </li>

@@ -128,13 +128,9 @@ jobs:
                 -q '.commits[] | select(.parents | length == 1) | .commit.message | split("\n")[0]' |
                 grep -v '^chore(release)' | sed 's/^/- /' || true)
               echo "${changes:-- Sem mudanças de código desde $prev.}"
-              echo
-              echo "Comparação completa: https://github.com/$GITHUB_REPOSITORY/compare/$prev...android-v$VERSION"
             else
               echo "- Primeira versão Android publicada."
             fi
-            echo
-            echo "APK Android (arm64), gerado de $GITHUB_SHA."
           } > notes.md
           gh release create "android-v$VERSION" "$apk" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "RenanCode Android $VERSION" --notes-file notes.md --latest=false

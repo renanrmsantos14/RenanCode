@@ -120,6 +120,7 @@ export function decideGuestShareCommand(input: {
         expiresAt: command.expiresAt,
         guestName: null,
         messages: [],
+        ...(command.autoSend ? { autoSend: true } : {}),
       });
     }
     case "thread.guest-share.close":
@@ -192,7 +193,8 @@ export function decideGuestShareCommand(input: {
 
 /**
  * Marks a guest message sent. `text` is what the agent receives: it names the guest so the agent
- * does not mistake it for the owner's words, and so a guest cannot start a slash command.
+ * does not mistake it for the owner's words, and so a guest cannot start a slash command. On a
+ * link that sends directly, it tells the agent the owner did not review the message.
  * `guest` lets clients show the guest's own text with their name beside it.
  */
 export function decideGuestMessageSend(input: {
@@ -212,9 +214,10 @@ export function decideGuestMessageSend(input: {
   const message = share.messages.find((candidate) => candidate.id === input.guestMessageId);
   const name = share.guestName ?? "Guest";
   const guestText = message?.text ?? "";
+  const byOwner = share.autoSend ? "not reviewed by the owner" : "sent by the owner";
   return Result.map(resolveMessage(share, input.guestMessageId, "sent"), (next) => ({
     thread: { ...input.thread, guestShare: next, updatedAt: input.now },
-    text: `Message from guest ${name}, sent by the owner:\n\n${guestText}`,
+    text: `Message from guest ${name}, ${byOwner}:\n\n${guestText}`,
     guest: { guestMessageId: input.guestMessageId, name, text: guestText, shareId: share.id },
   }));
 }

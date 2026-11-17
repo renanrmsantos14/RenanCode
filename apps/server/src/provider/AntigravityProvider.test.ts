@@ -116,6 +116,7 @@ const layerTest = ProviderHostLive.layer.pipe(
   Layer.provideMerge(
     Layer.mock(BackgroundPolicy.BackgroundPolicy)({
       shouldRunScopeWork: () => Effect.succeed(false),
+      scopeDemand: () => Effect.succeed("none"),
     }),
   ),
   Layer.provideMerge(ServerSettings.layerTest()),
@@ -732,7 +733,10 @@ it.layer(layerTest)("Antigravity provider snapshots", (it) => {
           });
           yield* harness.provider.snapshot.refresh;
           yield* Deferred.await(failedReadApplied);
-          expect((yield* harness.provider.snapshot.getSnapshot).usageLimits).toEqual(limits);
+          expect((yield* harness.provider.snapshot.getSnapshot).usageLimits).toEqual({
+            ...limits,
+            lastError: { at: "2026-10-09T12:01:00.000Z", reason: "requestFailed" },
+          });
           yield* harness.provider.onSignedOut;
           expect((yield* harness.provider.snapshot.getSnapshot).usageLimits).toBeUndefined();
           yield* Ref.set(usage, {

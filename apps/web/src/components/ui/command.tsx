@@ -3,6 +3,7 @@ import { SearchIcon } from "lucide-react";
 import { useRef } from "react";
 import type * as React from "react";
 import { cn } from "~/lib/utils";
+import { useNativeTitlebarHeight } from "~/lib/windowControlsOverlay";
 import {
   Autocomplete,
   AutocompleteCollection,
@@ -31,6 +32,7 @@ function CommandDialogBackdrop({ className, ...props }: CommandDialogPrimitive.B
       className={cn(
         DIALOG_BACKDROP_CLASS,
         "transition-none! data-ending-style:opacity-100! data-starting-style:opacity-100!",
+        "data-ending-style:pointer-events-none",
         className,
       )}
       data-slot="command-dialog-backdrop"
@@ -40,13 +42,19 @@ function CommandDialogBackdrop({ className, ...props }: CommandDialogPrimitive.B
 }
 
 function CommandDialogViewport({ className, ...props }: CommandDialogPrimitive.Viewport.Props) {
+  // Short desktop windows would put the search field under the native window controls.
+  const nativeTitlebarHeight = useNativeTitlebarHeight();
+  const titlebarStyle = {
+    "--command-titlebar-height": `${nativeTitlebarHeight}px`,
+  } as React.CSSProperties;
   return (
     <CommandDialogPrimitive.Viewport
       className={cn(
-        "pointer-events-none fixed inset-0 z-50 flex flex-col items-center px-4 py-[max(--spacing(4),4vh)] sm:py-[10vh]",
+        "pointer-events-none fixed inset-0 z-50 flex flex-col items-center px-4 [-webkit-app-region:no-drag] pt-[max(--spacing(4),4vh,calc(var(--command-titlebar-height)+--spacing(2)))] pb-[max(--spacing(4),4vh)] sm:pt-[max(10vh,calc(var(--command-titlebar-height)+--spacing(2)))] sm:pb-[10vh]",
         className,
       )}
       data-slot="command-dialog-viewport"
+      style={titlebarStyle}
       {...props}
     />
   );
@@ -72,7 +80,7 @@ function CommandDialogPopup({
           className={cn(
             DIALOG_POPUP_CLASS,
             /* Opened by shortcut dozens of times a day: no enter/exit motion. */
-            "pointer-events-auto max-h-105 max-w-xl text-foreground transition-none! will-change-auto! data-ending-style:scale-100! data-starting-style:scale-100! data-ending-style:opacity-100! data-starting-style:opacity-100!",
+            "pointer-events-auto max-h-105 max-w-xl text-foreground transition-none! will-change-auto! data-ending-style:scale-100! data-starting-style:scale-100! data-ending-style:opacity-100! data-starting-style:opacity-100! data-ending-style:pointer-events-none",
             className,
           )}
           data-slot="command-dialog-popup"

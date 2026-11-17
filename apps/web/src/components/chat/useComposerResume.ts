@@ -13,12 +13,12 @@ import {
 import { useState } from "react";
 import { newMessageId } from "~/lib/utils";
 import type { ComposerHandleRef } from "../../composerHandleContext";
+import { DEFAULT_INTERACTION_MODE } from "../../types";
 import { threadEnvironment } from "../../state/threads";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import type { makeThreadErrorSetter } from "../ChatView.logic";
 import { draftSendState } from "./chatViewSend";
 import type { useTimelineFollow } from "./useTimelineFollow";
-import type { useUsageLimitsPanel } from "./useUsageLimitsPanel";
 
 interface ComposerResumeInput {
   readonly environmentId: EnvironmentId;
@@ -27,12 +27,12 @@ interface ComposerResumeInput {
   readonly activeThread: EnvironmentThreadShell | undefined;
   readonly resumableRunId: RunId | null;
   readonly hasHeldQueuedRuns: boolean;
+  readonly canResume: boolean;
   readonly isSendBusy: boolean;
   readonly isRevertingCheckpoint: boolean;
   readonly threadDetailLoading: boolean;
   readonly activeEnvironmentUnavailable: boolean;
   readonly runtimeMode: RuntimeMode;
-  readonly interactionMode: ProviderInteractionMode;
   readonly localCheckoutBranchMismatch: { readonly currentBranch: string } | null;
   readonly composerRef: ComposerHandleRef;
   readonly persistThreadSettingsForNextTurn: (input: {
@@ -42,13 +42,12 @@ interface ComposerResumeInput {
     runtimeMode: RuntimeMode;
     interactionMode: ProviderInteractionMode;
   }) => Promise<AtomCommandResult<void, unknown>>;
-  readonly clearUsageLimitsFor: ReturnType<typeof useUsageLimitsPanel>["clearFor"];
   readonly scrollToEnd: ReturnType<typeof useTimelineFollow>["scrollToEnd"];
   readonly setThreadError: ReturnType<typeof makeThreadErrorSetter>;
 }
 
 /**
- * Resumes an interrupted run ("Continue where you left off.") and/or releases the turns held
+ * Resumes an interrupted run and/or releases the turns held
  * in its queue. Shares the per-route send lock with the composer's send paths.
  */
 export function useComposerResume(input: ComposerResumeInput) {
@@ -59,16 +58,15 @@ export function useComposerResume(input: ComposerResumeInput) {
     activeThread,
     resumableRunId,
     hasHeldQueuedRuns,
+    canResume,
     isSendBusy,
     isRevertingCheckpoint,
     threadDetailLoading,
     activeEnvironmentUnavailable,
     runtimeMode,
-    interactionMode,
     localCheckoutBranchMismatch,
     composerRef,
     persistThreadSettingsForNextTurn,
-    clearUsageLimitsFor,
     scrollToEnd,
     setThreadError,
   } = input;
@@ -87,7 +85,7 @@ export function useComposerResume(input: ComposerResumeInput) {
   const onResume = async () => {
     if (
       !activeThread ||
-      (resumableRunId === null && !hasHeldQueuedRuns) ||
+      !canResume ||
       isSendBusy ||
       isResuming ||
       isRevertingCheckpoint ||
@@ -117,7 +115,7 @@ export function useComposerResume(input: ComposerResumeInput) {
           ? { branch: localCheckoutBranchMismatch.currentBranch }
           : {}),
         runtimeMode,
-        interactionMode,
+        interactionMode: DEFAULT_INTERACTION_MODE,
       });
       if (settingsResult._tag === "Failure") return settingsResult;
       const turnResult = await startThreadTurn({
@@ -129,16 +127,15 @@ export function useComposerResume(input: ComposerResumeInput) {
           message: {
             messageId: newMessageId(),
             role: "user",
-            text: "Continue where you left off.",
+            text: "",
             attachments: [],
           },
           runtimeMode,
-          interactionMode,
+          interactionMode: DEFAULT_INTERACTION_MODE,
           dispatchMode: "start",
         },
       });
       if (turnResult._tag === "Failure" || !hasHeldQueuedRuns) return turnResult;
-      clearUsageLimitsFor(routeThreadKey);
       return resumeThreadQueue({ environmentId, input: { threadId } });
     };
     const result = await resume();
@@ -151,7 +148,6 @@ export function useComposerResume(input: ComposerResumeInput) {
         );
       }
     } else {
-      clearUsageLimitsFor(routeThreadKey);
       if (currentRouteThreadKeyRef.current === routeThreadKey) scrollToEnd();
     }
     sendInFlightRef.current = false;

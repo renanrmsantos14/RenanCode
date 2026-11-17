@@ -10,6 +10,7 @@ import {
   createThreadEnvironmentAtoms,
   createThreadFamilyAtoms,
 } from "@t3tools/client-runtime/state/threads";
+import { createSteadyShellAtoms } from "@t3tools/client-runtime/state/shell";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { AsyncResult, Atom } from "effect/reactivity";
 
@@ -47,6 +48,23 @@ export const environmentThreadShells = createEnvironmentThreadShellAtoms({
   snapshotAtom: threadEnvironment.snapshotAtom,
   hiddenThreadTagsAtom: serverEnvironment.hiddenThreadTagsAtom,
 });
+const steadyShells = createSteadyShellAtoms({
+  catalogValueAtom: environmentCatalog.catalogValueAtom,
+  snapshotAtom: threadEnvironment.snapshotAtom,
+  shellStateAtom: environmentShell.stateValueAtom,
+  rowActionsAtom: threadEnvironment.rowActionsAtom,
+  connectionStateAtom: environmentCatalog.stateAtom,
+});
+/**
+ * The threads that lists arrange. Rows wait while their environment synchronizes, so a list
+ * changes once when environments connect, not once per environment.
+ */
+export const steadyShellsHoldingAtom = steadyShells.holdingAtom;
+export const steadyNavigationThreadShellsAtom = createEnvironmentThreadShellAtoms({
+  catalogValueAtom: environmentCatalog.catalogValueAtom,
+  snapshotAtom: steadyShells.snapshotAtom,
+  hiddenThreadTagsAtom: serverEnvironment.hiddenThreadTagsAtom,
+}).navigationThreadShellsAtom;
 export const childThreadApprovalsAtom = createChildThreadApprovalsAtom({
   childThreadInputsAtom: environmentThreadShells.childThreadInputsAtom,
   pendingRequestsAtom: environmentThreadDetails.pendingRequestsAtom,
@@ -77,6 +95,14 @@ export function startOpeningEnvironmentThread(
   if (detailRef === null) return;
   const release = appAtomRegistry.mount(environmentThreads.stateAtom(environmentId, threadId));
   setTimeout(release, holdMs);
+}
+
+// Covers a quick look at another thread or Home: coming back finds the subscription still live.
+const LEFT_THREAD_HOLD_MS = 30_000;
+
+/** Keeps a thread whose screen just closed loaded for a while, so reopening it is instant. */
+export function holdLeftEnvironmentThread(environmentId: EnvironmentId, threadId: ThreadId) {
+  startOpeningEnvironmentThread(environmentId, threadId, LEFT_THREAD_HOLD_MS);
 }
 
 const EMPTY_THREAD_STATE_ATOM = Atom.make(AsyncResult.success(EMPTY_ENVIRONMENT_THREAD_STATE)).pipe(

@@ -128,6 +128,12 @@ const ICON_PATHS: Record<string, ReadonlyArray<{ tag: string; attrs: Record<stri
     },
     { tag: "circle", attrs: { cx: "12", cy: "12", r: "3" } },
   ],
+  "arrow-right-left": [
+    { tag: "path", attrs: { d: "m16 3 4 4-4 4" } },
+    { tag: "path", attrs: { d: "M20 7H4" } },
+    { tag: "path", attrs: { d: "m8 21-4-4 4-4" } },
+    { tag: "path", attrs: { d: "M4 17h16" } },
+  ],
   "user-plus": [
     { tag: "path", attrs: { d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" } },
     { tag: "circle", attrs: { cx: "9", cy: "7", r: "4" } },
@@ -399,7 +405,7 @@ export function showContextMenuFallback<T extends string>(
       menu.className =
         "dropdown-glass fixed z-[10000] min-w-32 max-w-sm overflow-hidden rounded-lg bg-clip-padding text-popover-foreground outline-none";
       menu.style.cssText =
-        "position:fixed;z-index:10000;min-width:8rem;max-width:24rem;overflow:hidden;border-radius:var(--radius-lg);background-clip:padding-box;color:var(--contrast-popover-foreground);outline:none;pointer-events:auto;";
+        "position:fixed;z-index:10000;min-width:8rem;max-width:24rem;overflow:hidden;border-radius:var(--radius-lg);background-clip:padding-box;color:var(--contrast-popover-foreground);outline:none;pointer-events:auto;-webkit-app-region:no-drag;";
       menu.style.left = `${preferredLeft}px`;
       menu.style.top = `${preferredTop}px`;
       menu.dataset.level = String(level);
@@ -487,6 +493,17 @@ export function showContextMenuFallback<T extends string>(
         label.textContent = item.label;
         button.appendChild(label);
 
+        if (item.detail) {
+          // The comma gives screen readers a pause between label and detail.
+          button.setAttribute("aria-label", `${item.label}, ${item.detail}`);
+          const detail = document.createElement("span");
+          detail.className = "ms-auto shrink-0 ps-4 text-muted-foreground text-xs";
+          detail.style.cssText =
+            "margin-inline-start:auto;flex-shrink:0;padding-inline-start:1rem;color:var(--contrast-muted-foreground);font-size:0.75rem;";
+          detail.textContent = item.detail;
+          button.appendChild(detail);
+        }
+
         if (hasChildren) {
           button.setAttribute("aria-haspopup", "menu");
           button.setAttribute("aria-expanded", "false");
@@ -550,10 +567,6 @@ export function showContextMenuFallback<T extends string>(
               if (!childMenu) {
                 return;
               }
-              const childRect = childMenu.getBoundingClientRect();
-              if (childRect.right > window.innerWidth) {
-                clampMenuPosition(childMenu, rect.left - childRect.width - 4, rect.top);
-              }
               if (focusFirstItem) {
                 [...childMenu.querySelectorAll<HTMLButtonElement>("button")]
                   .find((childButton) => !childButton.disabled)
@@ -585,13 +598,31 @@ export function showContextMenuFallback<T extends string>(
       menu.addEventListener("mouseenter", () => {
         closeMenusFromLevel(level + 1);
       });
+      // Like a native menu, take thumb Back/Forward presses instead of letting Chromium
+      // run the app router's history underneath.
+      const swallowThumbButton = (event: MouseEvent) => {
+        if (event.button === 3 || event.button === 4) event.preventDefault();
+      };
+      menu.addEventListener("mousedown", swallowThumbButton);
+      menu.addEventListener("mouseup", swallowThumbButton);
 
       document.body.appendChild(menu);
       menuStack[level] = menu;
       submenuTriggerStack[level] = parentTrigger;
 
       requestAnimationFrame(() => {
-        clampMenuPosition(menu, preferredLeft, preferredTop);
+        if (!parentTrigger) {
+          clampMenuPosition(menu, preferredLeft, preferredTop);
+          return;
+        }
+        // A fixed menu near the right edge shrinks to the space left; measure its real width.
+        menu.style.width = "max-content";
+        menu.style.maxWidth = "min(24rem, calc(100vw - 0.5rem))";
+        const { width } = menu.getBoundingClientRect();
+        const roomLeft = parentTrigger.getBoundingClientRect().left - 4;
+        const roomRight = window.innerWidth - preferredLeft;
+        const flipLeft = width > roomRight && roomLeft > roomRight;
+        clampMenuPosition(menu, flipLeft ? roomLeft - width : preferredLeft, preferredTop);
       });
     };
 

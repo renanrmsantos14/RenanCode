@@ -1,6 +1,7 @@
 import {
   type AuthSessionId,
   type BackgroundPolicySnapshot,
+  type BackgroundDemand,
   type BackgroundScope,
   type ClientActivityLease,
   type ClientActivityReportInput,
@@ -35,6 +36,8 @@ export class BackgroundPolicy extends Context.Service<
     ) => Effect.Effect<void>;
     readonly snapshot: Effect.Effect<BackgroundPolicySnapshot>;
     readonly shouldRunScopeWork: (scope: BackgroundScope) => Effect.Effect<boolean>;
+    /** Who is watching a scope, for work that slows down rather than stops without focus. */
+    readonly scopeDemand: (scope: BackgroundScope) => Effect.Effect<BackgroundDemand>;
     readonly shouldRunOpportunisticWork: Effect.Effect<boolean>;
   }
 >()("t3/background/BackgroundPolicy") {}
@@ -261,6 +264,36 @@ export const make = Effect.fn("background.policy.make")(function* () {
     );
   });
 
+  const scopeDemand: BackgroundPolicy["Service"]["scopeDemand"] = Effect.fn(
+    "BackgroundPolicy.scopeDemand",
+  )(function* (scope) {
+    const [current, settings] = yield* Effect.all([snapshot, backgroundActivitySettings]);
+    const watching = current.leases.filter(
+      (lease) =>
+        isLeaseActive(lease, current.updatedAt) &&
+        leaseHasScope(lease, scope) &&
+        !isClientConstrained(lease, settings),
+    );
+    const { hostPower } = current;
+    const demand: BackgroundDemand =
+      watching.length === 0 ||
+      (!hostPower.stale && (hostPower.suspended || hasThermalPressure(hostPower)))
+        ? "none"
+        : !isHostConstrained(hostPower, settings) &&
+            (settings.profile === "performance" ||
+              watching.some((lease) => isForegroundLease(lease, current.updatedAt)))
+          ? "foreground"
+          : "background";
+    yield* Effect.annotateCurrentSpan({
+      "background.demand": demand,
+      "background.watching": watching.length,
+      "background.host.locked": hostPower.locked,
+      "background.host.suspended": hostPower.suspended,
+      "background.host.stale": hostPower.stale,
+    });
+    return demand;
+  });
+
   const shouldRunOpportunisticWork = Effect.map(
     snapshot,
     (current) => current.shouldRunOpportunisticWork,
@@ -290,6 +323,7 @@ export const make = Effect.fn("background.policy.make")(function* () {
     removeRpcClient,
     snapshot,
     shouldRunScopeWork,
+    scopeDemand,
     shouldRunOpportunisticWork,
   });
 });

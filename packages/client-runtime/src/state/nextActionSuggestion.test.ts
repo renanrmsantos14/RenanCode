@@ -1,44 +1,66 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  isNextActionSuggestionCurrent,
-  type NextActionRunObservation,
-  shouldRequestNextAction,
+  dismissNextAction,
+  isNextActionDismissed,
+  nextActionDismissalKey,
+  resolveNextActionDisplay,
 } from "./nextActionSuggestion.ts";
 
-const seen = (
-  threadKey: string,
-  runId: string | null,
-  status: NextActionRunObservation["status"],
-): NextActionRunObservation => ({ threadKey, runId, status });
+const ready = {
+  status: "completed",
+  nextActionSuggestion: { status: "ready", text: "Run it" },
+} as const;
 
-describe("shouldRequestNextAction", () => {
+describe("resolveNextActionDisplay", () => {
   it.each([
-    ["the watched run completes", seen("a", "r1", "running"), seen("a", "r1", "completed"), true],
     [
-      "a new run arrives completed",
-      seen("a", "r1", "completed"),
-      seen("a", "r2", "completed"),
-      true,
+      "ready",
+      { run: ready, dismissed: false, promptEmpty: true },
+      { status: "ready", text: "Run it" },
     ],
-    ["nothing changed", seen("a", "r1", "completed"), seen("a", "r1", "completed"), false],
-    ["the user switched threads", seen("a", "r1", "running"), seen("b", "r9", "completed"), false],
-    ["the composer just mounted", null, seen("a", "r1", "completed"), false],
-    ["the run was interrupted", seen("a", "r1", "running"), seen("a", "r1", "interrupted"), false],
-    ["the run failed", seen("a", "r1", "running"), seen("a", "r1", "failed"), false],
-  ] as const)("%s -> %s", (_name, previous, current, expected) => {
-    expect(shouldRequestNextAction(previous, current)).toBe(expected);
+    [
+      "pending",
+      {
+        run: { status: "completed", nextActionSuggestion: { status: "pending" } },
+        dismissed: false,
+        promptEmpty: true,
+      },
+      { status: "pending" },
+    ],
+    ["hidden while typing", { run: ready, dismissed: false, promptEmpty: false }, null],
+    [
+      "back when the draft is cleared",
+      { run: ready, dismissed: false, promptEmpty: true },
+      { status: "ready", text: "Run it" },
+    ],
+    ["dismissed", { run: ready, dismissed: true, promptEmpty: true }, null],
+    [
+      "none",
+      {
+        run: { status: "completed", nextActionSuggestion: { status: "none" } },
+        dismissed: false,
+        promptEmpty: true,
+      },
+      null,
+    ],
+    [
+      "a newer run is running",
+      { run: { status: "running" }, dismissed: false, promptEmpty: true },
+      null,
+    ],
+    ["no run", { run: null, dismissed: false, promptEmpty: true }, null],
+  ] as const)("%s", (_name, input, expected) => {
+    expect(resolveNextActionDisplay(input)).toEqual(expected);
   });
 });
 
-describe("isNextActionSuggestionCurrent", () => {
-  const requested = seen("a", "r1", "completed");
-  it.each([
-    ["unchanged and empty", seen("a", "r1", "completed"), "", true],
-    ["the user typed", seen("a", "r1", "completed"), "h", false],
-    ["a new turn started", seen("a", "r2", "running"), "", false],
-    ["another thread is open", seen("b", "r1", "completed"), "", false],
-  ] as const)("%s", (_name, current, prompt, expected) => {
-    expect(isNextActionSuggestionCurrent(requested, current, prompt)).toBe(expected);
+describe("dismissNextAction", () => {
+  it("is keyed by thread and run", () => {
+    const key = nextActionDismissalKey("env:thread-a", "run-1");
+    dismissNextAction(key);
+    expect(isNextActionDismissed(key)).toBe(true);
+    expect(isNextActionDismissed(nextActionDismissalKey("env:thread-a", "run-2"))).toBe(false);
+    expect(isNextActionDismissed(nextActionDismissalKey("env:thread-b", "run-1"))).toBe(false);
   });
 });

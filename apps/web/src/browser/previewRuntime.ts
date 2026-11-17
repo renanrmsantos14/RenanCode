@@ -1,6 +1,8 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId, PreviewRuntime, PreviewSessionSnapshot } from "@t3tools/contracts";
 
+import { isLoopbackHost } from "@t3tools/shared/preview";
+
 import { isElectron } from "~/env";
 import { isPreviewSupportedInRuntime } from "~/previewStateStore";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
@@ -19,6 +21,16 @@ export function previewRuntimeFor(environmentId: EnvironmentId): PreviewRuntime 
     return undefined;
   }
   return "server";
+}
+
+// Loopback URLs name the environment host, so only its server browser can reach them.
+export function previewRuntimeForUrl(
+  environmentId: EnvironmentId,
+  url: string,
+): PreviewRuntime | undefined {
+  const loopback = isLoopbackHost(URL.parse(url)?.hostname ?? "");
+  if (loopback && readEnvironmentSupportsServerBrowser(environmentId)) return "server";
+  return previewRuntimeFor(environmentId);
 }
 
 export function alternatePreviewRuntime(

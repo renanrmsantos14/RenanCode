@@ -2,9 +2,11 @@ import * as Schema from "effect/Schema";
 import { GitPreparePullRequestThreadInput, GitRunStackedActionInput } from "./git.ts";
 import {
   AuthAccessWriteScope,
+  AuthEnvironmentMaintainScope,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   AuthPreviewOperateScope,
+  AuthProvidersManageScope,
   AuthSettingsWriteScope,
   AuthSourceControlWriteScope,
   AuthTerminalOperateScope,
@@ -15,11 +17,17 @@ import { WS_METHODS } from "./rpc.ts";
 
 /** Incremental client enforcement; the server still authorizes every request. */
 export const CLIENT_GUARDED_RPC_SCOPES = {
+  [WS_METHODS.providerAuthRemoveMethod]: AuthProvidersManageScope,
   [WS_METHODS.previewClose]: AuthPreviewOperateScope,
   // Stopping a server signals its processes, as closing a terminal does.
   [WS_METHODS.previewStopLocalServer]: AuthTerminalOperateScope,
   [WS_METHODS.serverRunStorageCleanup]: AuthSettingsWriteScope,
+  // Restarts the server, as an update does.
+  [WS_METHODS.serverReclaimDatabaseSpace]: AuthEnvironmentMaintainScope,
   [WS_METHODS.serverCheckOtlpEndpoint]: AuthSettingsWriteScope,
+  [WS_METHODS.serverCheckSecretSource]: AuthSettingsWriteScope,
+  // Listing models spends the stored API key, so only those who can choose a model may.
+  [WS_METHODS.serverListTextGeneratorModels]: AuthSettingsWriteScope,
   [WS_METHODS.serverRefreshProviders]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsRunAction]: AuthSourceControlWriteScope,
   [WS_METHODS.pullRequestsUpdate]: AuthSourceControlWriteScope,
@@ -35,11 +43,10 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   // Writing a guide runs a model on this environment's providers, which reading one does not.
   [WS_METHODS.pullRequestsGenerateReviewGuide]: AuthOrchestrationOperateScope,
   [WS_METHODS.projectsCreateFromThread]: AuthOrchestrationOperateScope,
-  // Suggesting a next message runs a model on this environment's providers.
-  [WS_METHODS.threadsSuggestNextAction]: AuthOrchestrationOperateScope,
   // Keep-warm pings and handoff summaries are real billed turns on this environment's providers.
   [WS_METHODS.threadsCacheKeepWarm]: AuthOrchestrationOperateScope,
   [WS_METHODS.threadsHandoff]: AuthOrchestrationOperateScope,
+  [WS_METHODS.threadsContinue]: AuthOrchestrationOperateScope,
   // Starts a billed Claude Code cloud session with this environment's Claude login.
   [WS_METHODS.claudeCloudStartSession]: AuthOrchestrationOperateScope,
   // Runs a billed classification turn on the text generation model.
@@ -70,6 +77,12 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.scheduledTasksDelete]: AuthOrchestrationOperateScope,
   [WS_METHODS.scheduledTasksRunNow]: AuthOrchestrationOperateScope,
   [WS_METHODS.scheduledTasksRotateWebhookToken]: AuthOrchestrationOperateScope,
+  [WS_METHODS.workModulesUpsert]: AuthOrchestrationOperateScope,
+  [WS_METHODS.workModulesMove]: AuthOrchestrationOperateScope,
+  [WS_METHODS.workModulesDelete]: AuthOrchestrationOperateScope,
+  [WS_METHODS.workModulesLinkThread]: AuthOrchestrationOperateScope,
+  [WS_METHODS.workModulesUnlinkThread]: AuthOrchestrationOperateScope,
+  [WS_METHODS.workModulesConfirmSuggestion]: AuthOrchestrationOperateScope,
   [ORCHESTRATION_V2_WS_METHODS.stopWorkflow]: AuthOrchestrationOperateScope,
   // Force stop kills agent processes, as Stop on a terminal does.
   [ORCHESTRATION_V2_WS_METHODS.forceStopThread]: AuthOrchestrationOperateScope,
