@@ -4,7 +4,7 @@ import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/mod
 import { isShownUnderParent } from "@t3tools/client-runtime/state/threads";
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import {
-  threadPullRequestDelivery,
+  threadPullRequestDeliveryForStatus,
   threadPullRequestSearchTerms,
 } from "@t3tools/shared/threadPullRequests";
 import * as React from "react";
@@ -1019,12 +1019,12 @@ export function resolveSidebarFolderDot(
   ) {
     return "attention";
   }
-  // Ready rows show their pull request's delivery in place of Done, so the dot follows it.
+  // Rows show their pull request's delivery in place of Done or Waiting, so the dot follows it.
   const deliveries = new Set(
-    threads.flatMap((thread) =>
-      resolveSidebarRowStatus(thread) === "ready"
-        ? (threadPullRequestDelivery(thread.pullRequests)?.stage ?? [])
-        : [],
+    threads.flatMap(
+      (thread) =>
+        threadPullRequestDeliveryForStatus(thread.pullRequests, resolveSidebarRowStatus(thread))
+          ?.stage ?? [],
     ),
   );
   if (statuses.has("failed") || deliveries.has("failed")) return "failed";

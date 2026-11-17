@@ -22,6 +22,7 @@ export type SettingsPath =
   | "/settings/diagnostics"
   | "/settings/voice"
   | "/settings/appearance"
+  | "/settings/sidebar"
   | "/settings/chat"
   | "/settings/diffs"
   | "/settings/keybindings"
@@ -98,6 +99,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/projects": msg("Projects"),
   "/settings/general": msg("General"),
   "/settings/appearance": msg("Appearance"),
+  "/settings/sidebar": msg("Sidebar"),
   "/settings/chat": msg("Chat"),
   "/settings/diffs": msg("Diffs & pull requests"),
   "/settings/keybindings": msg("Keybindings"),
@@ -132,6 +134,7 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
     paths: [
       "/settings/general",
       "/settings/appearance",
+      "/settings/sidebar",
       "/settings/chat",
       "/settings/diffs",
       "/settings/keybindings",
@@ -475,16 +478,30 @@ export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "boring-sidebar",
     title: "Boring sidebar (group by project)",
-    to: "/settings/labs",
+    to: "/settings/sidebar",
     searchTerms: ["beta folders project tree classic sidebar"],
   },
   {
     id: "boring-sidebar-multiline",
     title: "Two-line folder rows",
-    to: "/settings/labs",
+    to: "/settings/sidebar",
     // Shown inside the boring sidebar row only while it is on, so search lands on the parent.
     targetId: "boring-sidebar",
     searchTerms: ["beta boring sidebar folder rows multiline branch pull request details"],
+  },
+  {
+    id: "sidebar-row-items",
+    title: "Folder row details",
+    to: "/settings/sidebar",
+    searchTerms: [
+      "boring sidebar folder row customize show hide branch pull request checks deploy agent diff machine preview",
+    ],
+  },
+  {
+    id: "sidebar-row-highlight",
+    title: "Highlight pull request rows",
+    to: "/settings/sidebar",
+    searchTerms: ["boring sidebar folder row tint color ready merge failed checks deploy"],
   },
   {
     id: "tool-call-visibility",
@@ -1452,6 +1469,7 @@ const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScop
   "/settings/general": null,
   "/settings/voice": null,
   "/settings/appearance": null,
+  "/settings/sidebar": null,
   "/settings/chat": null,
   "/settings/diffs": null,
   "/settings/snap-shot": null,
