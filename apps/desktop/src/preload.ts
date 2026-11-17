@@ -111,8 +111,10 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     }
     return result as ReturnType<DesktopBridge["getAppBranding"]>;
   },
-  getRelayTelemetryEnabled: () =>
-    ipcRenderer.sendSync(IpcChannels.GET_RELAY_TELEMETRY_ENABLED_CHANNEL) === true,
+  getRelayTelemetryEnabled: () => {
+    const enabled = ipcRenderer.sendSync(IpcChannels.GET_RELAY_TELEMETRY_ENABLED_CHANNEL);
+    return enabled === null ? null : enabled === true;
+  },
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
   prepareFileDrag: (input) => ipcRenderer.invoke(IpcChannels.PREPARE_FILE_DRAG_CHANNEL, input),
   // Fire-and-forget: startDrag must run synchronously inside the renderer's dragstart.

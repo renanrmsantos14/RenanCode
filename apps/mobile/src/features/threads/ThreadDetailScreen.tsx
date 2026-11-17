@@ -114,21 +114,14 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useBarOverlap } from "../../components/ui/useBarInset";
 import {
   useWorkspaceContentWidth,
   WorkspaceSettledContentWidthContext,
   useWorkspaceSettledContentWidth,
 } from "../layout/workspace-content-width";
-import { useAdaptiveWorkspaceLayout } from "../layout/adaptive-workspace-context";
 import { useNativeWorkspaceColumnsSupported } from "../../native/NativeWorkspaceColumns";
-import {
-  useDeviceType,
-  useDuoBottomBarInset,
-  useNativeColumnLayoutMetrics,
-  useNativeLayoutMetrics,
-} from "../../native/native-layout-metrics";
+import { useDeviceType, useNativeColumnLayoutMetrics } from "../../native/native-layout-metrics";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { selectClaudeUsageAccounts } from "@t3tools/shared/usageLimits";
 import { openSettings } from "../settings/settings-navigation";
@@ -194,9 +187,9 @@ import {
   derivePendingUserInputMaxHeight,
   USER_INPUT_TOGGLE_DURATION_MS,
 } from "./pendingUserInputLayout";
+import { useComposerBottomInset } from "../../components/ComposerSurface";
 import {
   COMPOSER_COLLAPSED_CHROME,
-  THREAD_COMPOSER_BOTTOM_GUTTER,
   ThreadComposer,
   type ThreadComposerProps,
 } from "./ThreadComposer";
@@ -229,7 +222,6 @@ export interface ThreadDetailScreenProps {
     readonly interactionLocked: boolean;
   };
   readonly worktreeSetup?: WorktreeSetupCardProps | null;
-  readonly setupWorkingStartedAt?: string | null;
   readonly canOperateThread: boolean;
   readonly selectedThread: EnvironmentThreadShell;
   /** Use this for detail reads; it stays null until queued creation reaches the server. */
@@ -404,7 +396,6 @@ function ThreadDetailBody(
   },
 ) {
   const usesNativeWorkspaceColumns = useNativeWorkspaceColumnsSupported();
-  const { layout } = useAdaptiveWorkspaceLayout();
   const deviceType = useDeviceType();
   const workspace = useWorkspaceTabs();
   const sidebarSearchActive =
@@ -451,7 +442,6 @@ function ThreadDetailBody(
       ...(tabId === undefined ? {} : { tabId }),
     });
   };
-  const insets = useSafeAreaInsets();
   const isKeyboardVisible = useKeyboardState((state) => state.isVisible);
   const liveKeyboardHeight = useKeyboardState((state) => state.height);
   // Android can lose IME hide callbacks on backgrounding. Quarantine translation on resume unless focused input retained its keyboard.
@@ -489,7 +479,6 @@ function ThreadDetailBody(
   const navigationHeaderHeight = useBarOverlap();
   const [screenMetrics, setScreenMetrics] = useState<NativeLayoutMetrics | null>(null);
   const columnMetrics = useNativeColumnLayoutMetrics();
-  const windowMetrics = useNativeLayoutMetrics();
   const nativeMetrics = usesNativeWorkspaceColumns ? columnMetrics : screenMetrics;
   const controlInsets = deriveBottomControlInsets(nativeMetrics);
   const selectedThreadKey = scopedThreadKey(props.environmentId, props.selectedThread.id);
@@ -539,27 +528,8 @@ function ThreadDetailBody(
   const [isAtEnd, setIsAtEnd] = useState(true);
   const [sendingWithKeyboard, setSendingWithKeyboard] = useState(false);
   if (sendingWithKeyboard && !isKeyboardVisible) setSendingWithKeyboard(false);
-  // Keep the bottom padding fixed while the keyboard animates. Changing it at
-  // keyboardDidHide makes the composer land low, then jump back above the safe area.
-  const bottomBarInset = useDuoBottomBarInset();
   const hasSidebarTabBar = useSidebarWorkspaceTabs() === "picker";
-  // A pushed screen temporarily inherits the outgoing tab bar's safe area.
-  // Use the window edge so hiding that bar cannot move the composer mid-push.
-  const bottomSafeArea =
-    Platform.OS === "ios" ? (windowMetrics?.safeArea.bottom ?? insets.bottom) : insets.bottom;
-  // The pill already adds its own gutter; iPad and Duo align its edge with the native bar.
-  const alignedBottomInset =
-    bottomBarInset ??
-    (Platform.OS === "ios" && Platform.isPad
-      ? Math.max(bottomSafeArea, 12) - (layout.usesSplitView ? 5 : 0)
-      : undefined);
-  // The Duo's floating sidebar pill ends three points below the composer's usual gutter.
-  const composerBottomInset = Math.max(
-    0,
-    (alignedBottomInset !== undefined
-      ? alignedBottomInset - THREAD_COMPOSER_BOTTOM_GUTTER
-      : Math.max(bottomSafeArea, 12)) - (hasSidebarTabBar ? 3 : 0),
-  );
+  const composerBottomInset = useComposerBottomInset();
   const composerKeyboardOffset = composerBottomInset;
   const contentPresentationKind = props.contentPresentation.kind;
   const interruptThreadTurn = useAtomCommand(threadEnvironment.interruptTurn, {
@@ -1389,7 +1359,6 @@ function ThreadDetailBody(
                   pendingHandoff={props.pendingHandoff}
                   statusLines={statusLines}
                   worktreeSetup={props.worktreeSetup}
-                  setupWorkingStartedAt={props.setupWorkingStartedAt}
                   preparingWorktree={
                     props.creationState?.kind === "preparing" &&
                     props.creationState.preparingWorktree &&
