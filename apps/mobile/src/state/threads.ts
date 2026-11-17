@@ -97,6 +97,14 @@ export function startOpeningEnvironmentThread(
   setTimeout(release, holdMs);
 }
 
+// Covers a quick look at another thread or Home: coming back finds the subscription still live.
+const LEFT_THREAD_HOLD_MS = 30_000;
+
+/** Keeps a thread whose screen just closed loaded for a while, so reopening it is instant. */
+export function holdLeftEnvironmentThread(environmentId: EnvironmentId, threadId: ThreadId) {
+  startOpeningEnvironmentThread(environmentId, threadId, LEFT_THREAD_HOLD_MS);
+}
+
 const EMPTY_THREAD_STATE_ATOM = Atom.make(AsyncResult.success(EMPTY_ENVIRONMENT_THREAD_STATE)).pipe(
   Atom.withLabel("mobile-environment-thread:empty"),
 );

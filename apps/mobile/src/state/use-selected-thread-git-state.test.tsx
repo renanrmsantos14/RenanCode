@@ -23,10 +23,6 @@ vi.mock("./use-selected-thread-worktree", () => ({
 vi.mock("./use-vcs-action-state", () => ({
   useVcsActionState: () => ({ currentLabel: null }),
 }));
-vi.mock("./sourceControl", () => ({
-  sourceControlEnvironment: { discovery: () => null },
-}));
-vi.mock("./query", () => ({ useEnvironmentQuery: () => ({ data: null }) }));
 vi.mock("./queries", () => ({
   useBranches: ({ cwd }: { cwd: string }) => ({
     data: {

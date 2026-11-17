@@ -135,18 +135,20 @@ export const make = Effect.gen(function* () {
       );
   };
 
-  return SourceControlDiscovery.of({
-    discover: Effect.andThen(
-      refreshPath,
-      Effect.all({
-        versionControlSystems: Effect.all(
-          VCS_PROBES.map((entry) => probe(entry)) as ReadonlyArray<Effect.Effect<VcsDiscoveryItem>>,
-          { concurrency: "unbounded" },
-        ),
-        sourceControlProviders: sourceControlProviders.discover,
-      }),
-    ),
-  });
+  // Callers that arrive mid-scan share it, since each scan spawns every CLI (slow on Windows).
+  // A finished scan is never reused, so a rescan always sees newly installed tools.
+  const discover = yield* Effect.andThen(
+    refreshPath,
+    Effect.all({
+      versionControlSystems: Effect.all(
+        VCS_PROBES.map((entry) => probe(entry)) as ReadonlyArray<Effect.Effect<VcsDiscoveryItem>>,
+        { concurrency: "unbounded" },
+      ),
+      sourceControlProviders: sourceControlProviders.discover,
+    }),
+  ).pipe(Effect.cachedWithTTL(Duration.zero));
+
+  return SourceControlDiscovery.of({ discover });
 });
 
 export const layer = Layer.effect(SourceControlDiscovery, make);

@@ -18,9 +18,9 @@ import {
   recordHomeFocus,
   recordHomeTransitionEnd,
   recordHomeTransitionStart,
-  useAtomValueWhileVisible,
   useHomeRouteVisible,
 } from "./home-route-visibility";
+import { useAtomValueWhileVisible } from "../../state/atom-value-while-visible";
 
 const shellsAtom = Atom.make(0).pipe(Atom.keepAlive);
 

@@ -279,24 +279,34 @@ export function useThreadSearch(
   };
 }
 
-export function useBranches(input: {
+interface BranchesTarget {
   readonly environmentId: EnvironmentId | null;
   readonly cwd: string | null;
   readonly query?: string | null;
-}) {
+}
+
+function branchesAtom(input: BranchesTarget) {
   const query = input.query?.trim() ?? "";
-  return useEnvironmentQuery(
-    input.environmentId !== null && input.cwd !== null
-      ? vcsEnvironment.listRefs({
-          environmentId: input.environmentId,
-          input: {
-            cwd: input.cwd,
-            ...(query.length > 0 ? { query } : {}),
-            limit: VCS_REF_LIST_LIMIT,
-          },
-        })
-      : null,
-  );
+  return input.environmentId !== null && input.cwd !== null
+    ? vcsEnvironment.listRefs({
+        environmentId: input.environmentId,
+        input: {
+          cwd: input.cwd,
+          ...(query.length > 0 ? { query } : {}),
+          limit: VCS_REF_LIST_LIMIT,
+        },
+      })
+    : null;
+}
+
+export function useBranches(input: BranchesTarget) {
+  return useEnvironmentQuery(branchesAtom(input));
+}
+
+/** Refetches a branch list for whoever reads it, without subscribing the caller to it. */
+export function refreshBranches(input: BranchesTarget) {
+  const atom = branchesAtom(input);
+  if (atom !== null) appAtomRegistry.refresh(atom);
 }
 
 export function usePaginatedBranches(target: VcsRefTarget) {

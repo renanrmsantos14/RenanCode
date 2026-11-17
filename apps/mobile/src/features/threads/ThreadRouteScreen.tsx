@@ -17,6 +17,7 @@ import {
   use,
   useEffect,
   useEffectEvent,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -88,13 +89,15 @@ import { NewTaskDraftRouteScreen, type NewTaskDraftRouteParams } from "./NewTask
 import { GitOverviewSheet } from "./git/GitOverviewSheet";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useSelectedThreadGitActions } from "../../state/use-selected-thread-git-actions";
-import { useSelectedThreadGitState } from "../../state/use-selected-thread-git-state";
+import { useSelectedThreadGitOperationLabel } from "../../state/use-selected-thread-git-state";
 import { useSelectedThreadRequests } from "../../state/use-selected-thread-requests";
 import { useSelectedThreadWorktree } from "../../state/use-selected-thread-worktree";
 import { useThreadComposerState } from "../../state/use-thread-composer-state";
 import { resolveMergeBackTargetThreadId } from "@t3tools/client-runtime/state/thread-relationships";
 import { resolveLatestMergeBackRun } from "@t3tools/client-runtime/state/thread-workflows";
-import { threadEnvironment } from "../../state/threads";
+import { holdLeftEnvironmentThread, threadEnvironment } from "../../state/threads";
+import { useThreadSecondaryReadsReady } from "./use-thread-secondary-reads";
+import { traceThreadOpenStage } from "./threadOpenTrace";
 import { EMPTY_ENVIRONMENT_THREAD_STATE } from "@t3tools/client-runtime/state/threads";
 import { useProjects } from "../../state/entities";
 import {
@@ -256,6 +259,11 @@ function LiveThreadRouteController(props: ThreadRouteScreenProps) {
   const environmentIdRaw = firstRouteParam(params.environmentId);
   const threadIdRaw = firstRouteParam(params.threadId);
   const environmentId = environmentIdRaw ? EnvironmentId.make(environmentIdRaw) : null;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps the thread's subscription alive after the screen leaves it
+  useEffect(() => {
+    if (environmentId === null || threadIdRaw === null) return;
+    return () => holdLeftEnvironmentThread(environmentId, ThreadId.make(threadIdRaw));
+  }, [environmentId, threadIdRaw]);
   const routeEnvironmentRuntime = useRemoteEnvironmentRuntime(environmentId);
   const routeEnvironmentShellState = useEnvironmentShellReadiness(environmentId);
   const { onReconnectEnvironment } = useRemoteConnections();
@@ -386,7 +394,19 @@ function ThreadRouteContent(
   const { selectedThreadCwd } = useSelectedThreadWorktree();
   const startSideChat = useStartSideChat();
   const composer = useThreadComposerState({ startSideChat });
-  const gitState = useSelectedThreadGitState();
+  const secondaryReadsReady = useThreadSecondaryReadsReady(selectedThreadDetailState.status);
+  const traceThreadKey = selectedThread
+    ? scopedThreadKey(selectedThread.environmentId, selectedThread.id)
+    : null;
+  const detailStatus = selectedThreadDetailState.status;
+  const detailHasData = selectedThreadDetail !== null;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- records when the opened thread's data arrives, for the opt-in open trace
+  useLayoutEffect(() => {
+    if (traceThreadKey === null) return;
+    traceThreadOpenStage(`detail-${detailStatus}`, traceThreadKey);
+    if (detailHasData) traceThreadOpenStage("detail-data", traceThreadKey);
+  }, [detailHasData, detailStatus, traceThreadKey]);
+  const gitOperationLabel = useSelectedThreadGitOperationLabel();
   const gitActions = useSelectedThreadGitActions();
   const requests = useSelectedThreadRequests();
   useThreadStatusAnnouncements({
@@ -557,7 +577,7 @@ function ThreadRouteContent(
       : null,
   );
   const { sessions: knownTerminalSessions } = useKnownTerminalSessions({
-    environmentId: selectedThread?.environmentId ?? null,
+    environmentId: secondaryReadsReady ? (selectedThread?.environmentId ?? null) : null,
     threadId: selectedThread?.id ?? null,
   });
   const terminalMenuSessions = buildTerminalMenuSessions({
@@ -814,7 +834,7 @@ function ThreadRouteContent(
         : undefined,
     currentBranch: selectedThread?.branch ?? null,
     gitStatus: gitStatus.data,
-    gitOperationLabel: gitState.gitOperationLabel,
+    gitOperationLabel,
     canOpenTerminal:
       Boolean(selectedThreadProject?.workspaceRoot) && (canReadTerminal || canOperateTerminal),
     canOperateTerminal,
@@ -1029,6 +1049,7 @@ function ThreadRouteContent(
             )
           }
           canOperateThread={canOperateThread}
+          secondaryReadsReady={secondaryReadsReady}
           selectedThread={selectedThreadWithDraftSettings ?? selectedThread}
           selectedThreadDetailRef={selectedThreadDetailRef}
           contentPresentation={contentPresentation}
