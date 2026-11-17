@@ -28,7 +28,7 @@ export function AgentActivityWidget(
         surface: palette.background,
         onSurface: palette.foreground,
         onSurfaceVariant: palette.secondary,
-        primary: palette.accent,
+        primary: palette.foreground,
         error: palette.danger,
       }
     : getMaterialColors({ scheme: appearance });
