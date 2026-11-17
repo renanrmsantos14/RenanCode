@@ -29,7 +29,7 @@
   "cbf6a6bbc17e75e1": "Muestra un aviso cuando otro hilo termina, falla o necesita una respuesta o aprobación mientras la app está en primer plano.",
   "83ca942c7163904f": "Combina los repositorios coincidentes de distintos entornos.",
   "609da998ca13521e": "Orden de los proyectos en el selector de la barra lateral y en la paleta de comandos.",
-  "b4c541137a76b351": "Agrupa los hilos en curso y en seguimiento en una sección Working. Vuelven arriba de la bandeja de entrada cuando te necesitan. La boring sidebar de Labs no tiene sección Working.",
+  "6bf140af465efa9f": "Agrupa los hilos en curso y en seguimiento en una sección Working. Vuelven arriba de la bandeja de entrada cuando te necesitan. La boring sidebar no tiene sección Working.",
   "e815f49e5abedcfd": "Pregunta antes de desfijar un hilo de la sección de fijados.",
   "41210f99adeeba78": "Pide un segundo clic en la acción de archivar antes de archivar un hilo.",
   "84f3d2cefc8d2a74": "Pregunta antes de eliminar un hilo y su historial de chat.",
