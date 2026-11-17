@@ -56,10 +56,9 @@ const isChildRunLive = (
       thread.status === "waiting";
 
 /**
- * Whether a thread shows under its parent rather than in thread lists: a
- * subagent, a side chat, or a task a linked environment delegated here whose parent the
- * client lists (`delegatedUnderParent`, by thread key). A task whose parent
- * the client cannot list stays in the lists, so its work is never out of reach.
+ * Whether a thread shows under its parent rather than in lists: a subagent, a side chat,
+ * or a task in `delegatedUnderParent`. A delegated task stays listed when its reachable
+ * parent is missing or archived, or when its parent is unreachable and it waits on the user.
  */
 export function isShownUnderParent(
   ref: ScopedThreadRef,
@@ -719,12 +718,14 @@ export function createEnvironmentThreadShellAtoms(input: {
     for (const environmentId of environmentIds) {
       for (const thread of get(environmentThreadsAtom(environmentId))) {
         const parent = thread.delegatedFrom;
+        if (parent === undefined) continue;
         if (
-          parent !== undefined &&
-          environmentIds.has(parent.environmentId) &&
-          // An archived parent leaves navigation; its task there stays listed on its own.
-          get(environmentThreadIndexAtom(parent.environmentId)).get(parent.threadId)?.archivedAt ===
-            null
+          environmentIds.has(parent.environmentId)
+            ? // An archived parent leaves navigation; its task stays listed on its own.
+              get(environmentThreadIndexAtom(parent.environmentId)).get(parent.threadId)
+                ?.archivedAt === null
+            : // A parent this client does not reach hides its task unless it waits on the user.
+              thread.pendingRuntimeRequest === null
         ) {
           next.add(threadKey({ environmentId, threadId: thread.id }));
         }

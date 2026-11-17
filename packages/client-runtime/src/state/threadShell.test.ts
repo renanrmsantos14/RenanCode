@@ -431,8 +431,7 @@ describe("v2 thread shell lists", () => {
       "user_input",
     );
 
-    // A task whose parent is gone there is listed on its own, as is one whose
-    // parent's environment is switched off.
+    // A task whose parent is gone there is listed on its own.
     registry.set(snapshotAtom(environmentId), { ...v2ShellSnapshot, threads: [] });
     expect(listed()).toEqual([`${remoteEnvironmentId}/${task.id}`]);
     // Archiving the parent here leaves the task there unarchived, so it is listed on its own.
@@ -447,6 +446,13 @@ describe("v2 thread shell lists", () => {
     const entries = new Map(catalog.entries);
     entries.set(environmentId, { ...entries.get(environmentId)!, enabled: false });
     registry.set(catalogValueAtom, { ...catalog, entries });
+    // A parent on a machine this client does not reach keeps its task off the list,
+    // until the task waits on the user here.
+    expect(listed()).toEqual([]);
+    registry.set(snapshotAtom(remoteEnvironmentId), {
+      ...v2ShellSnapshot,
+      threads: [{ ...task, pendingRuntimeRequest: approval }, helper],
+    });
     expect(listed()).toEqual([`${remoteEnvironmentId}/${task.id}`]);
     disposeInputs();
     disposeParent();
