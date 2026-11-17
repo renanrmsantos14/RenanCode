@@ -5,7 +5,6 @@ import {
   questionAttachmentDraftPrefix,
   questionAttachmentPreparationAtom,
 } from "./question-attachments";
-import { scopedThreadKey } from "../lib/scopedEntities";
 import {
   appendComposerDraftAttachments,
   clearComposerDraft,
