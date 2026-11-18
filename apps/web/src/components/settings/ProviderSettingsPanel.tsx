@@ -96,6 +96,7 @@ import { ExpandableText } from "./ExpandableText";
 import { IntervalSecondsField } from "./IntervalSecondsField";
 import { ProviderInstanceCard } from "./ProviderInstanceCard";
 import { useSecretSources } from "./SecretSourceInput";
+import { ProviderTeamsSettings } from "./ProviderTeamsSettings";
 import { TextGeneratorsSettings } from "./TextGeneratorsSettings";
 import { UsageProviderSettings } from "./UsageProviderSettings";
 import { ProviderSetupSection, readAntigravityAuthMethod } from "./ProviderSetupSection";
@@ -1104,6 +1105,13 @@ export function EnvironmentProviderSettings({
           readOnly={readOnly}
         />
       ) : null}
+
+      <ProviderTeamsSettings
+        key={`provider-teams:${environmentId}`}
+        environmentId={environmentId}
+        providers={serverProviders}
+        readOnly={readOnly}
+      />
 
       <SettingsSection title="Advanced">
         <SettingsRow

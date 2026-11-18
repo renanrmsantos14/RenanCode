@@ -677,6 +677,7 @@ function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
     case "thread.runtime-mode.set":
     case "thread.interaction-mode.set":
     case "thread.mcp-server.set":
+    case "thread.team.set":
     case "thread.mcp-server-request.answer":
     case "thread.model-selection.set":
     case "provider-session.detach":
@@ -4145,6 +4146,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           | "thread.runtime-mode.set"
           | "thread.interaction-mode.set"
           | "thread.mcp-server.set"
+          | "thread.team.set"
           | "thread.model-selection.set"
           | "provider.switch";
       }
@@ -5237,6 +5239,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             updatedAt: now,
           };
         }
+        case "thread.team.set":
+          return { ...thread, teamId: command.teamId, updatedAt: now };
         case "thread.model-selection.set":
         case "provider.switch":
           return {
@@ -5329,6 +5333,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           return "thread.interaction-mode-updated" as const;
         case "thread.mcp-server.set":
           return "thread.mcp-servers-updated" as const;
+        // Reuses an existing event so older clients still apply the payload.
+        case "thread.team.set":
+          return "thread.metadata-updated" as const;
         case "thread.model-selection.set":
           return thread.providerInstanceId === command.modelSelection.instanceId
             ? ("thread.model-selection-updated" as const)
@@ -15410,6 +15417,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       case "thread.runtime-mode.set":
       case "thread.interaction-mode.set":
       case "thread.mcp-server.set":
+      case "thread.team.set":
       case "thread.model-selection.set":
       case "provider.switch":
         yield* dispatchThreadMutation(command, events, effects);

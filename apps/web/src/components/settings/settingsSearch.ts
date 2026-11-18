@@ -1063,6 +1063,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     providerSettingsOnly: true,
   },
   {
+    id: "provider-teams",
+    title: "Teams",
+    to: "/settings/providers",
+    searchTerms: ["team roster members lead delegate subagents providers models failover"],
+    providerSettingsOnly: true,
+  },
+  {
     id: "text-generators",
     title: "Text generators",
     to: "/settings/providers",

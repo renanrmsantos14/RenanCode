@@ -51,6 +51,7 @@ import {
   revertThreadCheckpoint,
   setThreadInteractionMode,
   setThreadMcpServer,
+  setThreadTeam,
   answerThreadMcpServerRequest,
   setThreadRuntimeMode,
   pinThread,
@@ -339,6 +340,12 @@ export function createThreadEnvironmentAtoms<R, E, StateError>(
     setMcpServer: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:set-mcp-server",
       execute: setThreadMcpServer,
+      scheduler,
+      concurrency,
+    }),
+    setTeam: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:set-team",
+      execute: setThreadTeam,
       scheduler,
       concurrency,
     }),

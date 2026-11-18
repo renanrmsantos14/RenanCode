@@ -79,6 +79,7 @@ import {
   RuntimeMode,
 } from "./providerPolicy.ts";
 import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
+import { ProviderTeamId } from "./providerTeam.ts";
 import { OrchestrationProjectShell } from "./orchestrationProject.ts";
 import {
   TurnTokenUsage,
@@ -496,6 +497,8 @@ export const OrchestrationV2AppThread = Schema.Struct({
   interactionMode: ProviderInteractionMode,
   /** MCP servers switched on for this thread when its provider starts sessions without them. */
   enabledMcpServers: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
+  /** Provider team this thread leads; its members are `delegate_task` targets. */
+  teamId: Schema.optional(Schema.NullOr(ProviderTeamId)),
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
@@ -3487,6 +3490,12 @@ export const OrchestrationV2Command = Schema.Union([
     threadId: ThreadId,
     server: TrimmedNonEmptyString,
     enabled: Schema.Boolean,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("thread.team.set"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    teamId: Schema.NullOr(ProviderTeamId),
   }),
   /** Answers an agent's MCP server card; enabling switches the server on for the thread. */
   Schema.Struct({

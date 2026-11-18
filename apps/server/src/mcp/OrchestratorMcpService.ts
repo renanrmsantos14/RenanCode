@@ -138,6 +138,12 @@ import {
   taskPrompt,
 } from "./delegatedTaskModes.ts";
 import { assertTargetWithinLimits, isLiveCallerShell, threadNotFound } from "./threadAccess.ts";
+import {
+  resolveTeamMemberTarget,
+  teamCapability,
+  usageLimitReached,
+  type MemberConstraints,
+} from "./providerTeamTarget.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
 import * as PeerForwarding from "../peer/PeerForwarding.ts";
 import * as RemoteDelegation from "../peer/RemoteDelegation.ts";
@@ -1543,7 +1549,54 @@ const make = Effect.gen(function* () {
       })
       .pipe(Effect.mapError(threadManagementFailure));
 
-  const resolveTargetRechecking = (input: Parameters<typeof resolveTarget>[0]) => {
+  const teamMemberConstraints = Effect.fn("OrchestratorMcpService.teamMemberConstraints")(
+    function* (parent: Pick<OrchestrationV2ThreadProjection, "thread"> | undefined) {
+      const orchestrationCapableInstanceIds = yield* loadOrchestrationCapableInstanceIds();
+      const settings = yield* serverSettings.getSettings.pipe(
+        Effect.mapError(() => failure("orchestration_error", "Unable to read server settings.")),
+      );
+      const nowMs = yield* Clock.currentTimeMillis;
+      const team =
+        parent?.thread.teamId == null ? undefined : settings.providerTeams[parent.thread.teamId];
+      const constraints: MemberConstraints = (provider, model) => {
+        const enabledForCaller =
+          parent === undefined ||
+          resolveProjectProviderInstanceEnabled(
+            settings,
+            parent.thread.projectId,
+            provider.instanceId,
+          );
+        return [
+          ...providerConstraints(
+            enabledForCaller ? provider : { ...provider, enabled: false },
+            orchestrationCapableInstanceIds.has(provider.instanceId),
+          ),
+          ...(usageLimitReached(provider, model, nowMs) ? ["Usage limit reached."] : []),
+        ];
+      };
+      return { team, constraints };
+    },
+  );
+
+  /** Expands `target.teamMember` from the thread's team into a provider, model and options. */
+  const expandTeamMember = Effect.fn("OrchestratorMcpService.expandTeamMember")(function* (
+    parent: Pick<OrchestrationV2ThreadProjection, "thread">,
+    target: OrchestratorMcpTarget | undefined,
+    providers: ReadonlyArray<ServerProvider>,
+  ) {
+    if (target?.teamMember === undefined) return { target, role: undefined };
+    const { team, constraints } = yield* teamMemberConstraints(parent);
+    const resolved = resolveTeamMemberTarget({ team, target, providers, constraints });
+    if (resolved._tag === "failed") return yield* failure("invalid_request", resolved.message);
+    return { target: resolved.target, role: resolved.role };
+  });
+
+  const resolveTargetRechecking = (input: Parameters<typeof resolveTarget>[0]) =>
+    expandTeamMember(input.parent, input.target, input.providers).pipe(
+      Effect.flatMap(({ target }) => resolveTargetRecheckingExpanded({ ...input, target })),
+    );
+
+  const resolveTargetRecheckingExpanded = (input: Parameters<typeof resolveTarget>[0]) => {
     const instanceId =
       input.target?.providerInstanceId ??
       (input.target?.driverKind === undefined
@@ -2683,6 +2736,7 @@ const make = Effect.gen(function* () {
       const settings = yield* serverSettings.getSettings.pipe(
         Effect.mapError(() => failure("orchestration_error", "Unable to read server settings.")),
       );
+      const { team, constraints } = yield* teamMemberConstraints(parent);
       const inherited = parent?.thread.modelSelection;
       const searchTerms = input.search?.toLowerCase().split(/\s+/).filter(Boolean) ?? [];
       return {
@@ -2699,6 +2753,7 @@ const make = Effect.gen(function* () {
           ) ?? [],
         runtimeMode: limits.runtimeMode,
         interactionMode: limits.interactionMode,
+        ...(team === undefined ? {} : { team: teamCapability(team, providers, constraints) }),
         providers: providers.map((provider) => {
           // Snapshots list instances any project enables; delegate_task checks the caller's project.
           const enabledForCaller =
@@ -2865,7 +2920,10 @@ const make = Effect.gen(function* () {
           parentThreadId: scope.thread.threadId,
           parentRunId: parentRun.id,
           parentNodeId: parentRun.rootNodeId,
-          task: taskPrompt(input),
+          task: taskPrompt({
+            ...input,
+            role: input.role ?? (yield* expandTeamMember(parent, input.target, providers)).role,
+          }),
           ...(input.title === undefined ? {} : { title: input.title }),
           modelSelection: target.modelSelection,
           runtimeMode,

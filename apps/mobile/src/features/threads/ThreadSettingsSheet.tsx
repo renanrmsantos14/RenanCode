@@ -5,7 +5,12 @@ import {
 import * as Dialog from "../../components/ui/Dialog";
 import { createV5StackNavigator as createNativeStackNavigator } from "../../native/createV5StackNavigator";
 import { useSheetStackOptions } from "../layout/nested-stacks";
-import { DEFAULT_SERVER_SETTINGS, mcpServerIsOn, ProviderInstanceId } from "@t3tools/contracts";
+import {
+  DEFAULT_SERVER_SETTINGS,
+  mcpServerIsOn,
+  ProviderInstanceId,
+  type ProviderTeamId,
+} from "@t3tools/contracts";
 import { mcpServerNote, splitMcpServers } from "@t3tools/client-runtime/mcp-server-request";
 import {
   modelPreferencesMigrationPatch,
@@ -278,6 +283,12 @@ type ThreadMcpServers = {
   readonly onChange: (server: string, enabled: boolean) => void;
 };
 
+type ThreadTeam = {
+  readonly teams: ReadonlyArray<{ readonly id: ProviderTeamId; readonly name: string }>;
+  readonly teamId: ProviderTeamId | null;
+  readonly onChange: (teamId: ProviderTeamId | null) => void;
+};
+
 type ThreadSettingsSubmenuPage =
   | { readonly kind: "descriptor"; readonly id: string }
   | { readonly kind: "runtime" };
@@ -300,6 +311,7 @@ type ThreadSettingsSessionProps = {
   readonly runtimeMode: RuntimeMode;
   readonly onUpdateRuntimeMode: (mode: RuntimeMode) => void;
   readonly mcpServers?: ThreadMcpServers | undefined;
+  readonly team?: ThreadTeam | undefined;
 };
 
 /** The composer draft the sheet edits: the thread's own, or a queued message being edited. */
@@ -324,6 +336,7 @@ type ThreadSettingsSessionValue = {
   readonly runtimeModeChoices: ReadonlyArray<RuntimeModeChoice>;
   readonly onUpdateRuntimeMode: (mode: RuntimeMode) => void;
   readonly mcpServers: ThreadMcpServers | undefined;
+  readonly team: ThreadTeam | undefined;
   readonly displayedDescriptors: ReadonlyArray<ProviderOptionDescriptor>;
   readonly promptTraits: ReturnType<typeof getPromptControlledTraits>;
   readonly displayedModelSelection: ModelSelection | null;
@@ -643,6 +656,7 @@ function ThreadSettingsSessionProvider(
     runtimeModeChoices,
     onUpdateRuntimeMode: props.onUpdateRuntimeMode,
     mcpServers: props.mcpServers,
+    team: props.team,
     displayedDescriptors,
     promptTraits,
     displayedModelSelection: pendingModel?.selection ?? props.selectedModel,
@@ -954,6 +968,8 @@ function ThreadSettingsOptionsItem(props: {
         <ThreadSettingsMcpServers mcpServers={session.mcpServers} />
       ) : null}
 
+      {session.team ? <ThreadSettingsTeam team={session.team} /> : null}
+
       <Text className="px-5 pb-2 pt-7 text-sm font-t3-medium text-foreground-muted">Catalog</Text>
       <View className="mx-4 overflow-hidden rounded-2xl bg-grouped-card">
         <SwitchRow
@@ -1003,6 +1019,27 @@ function ThreadSettingsMcpServers(props: { readonly mcpServers: ThreadMcpServers
             </Text>
           </Pressable>
         ) : null}
+      </View>
+    </>
+  );
+}
+
+/** The team this thread leads; at most one is on. */
+function ThreadSettingsTeam(props: { readonly team: ThreadTeam }) {
+  const { teams, teamId, onChange } = props.team;
+  return (
+    <>
+      <Text className="px-5 pb-2 pt-7 text-sm font-t3-medium text-foreground-muted">Team</Text>
+      <View className="mx-4 overflow-hidden rounded-2xl bg-grouped-card">
+        {teams.map((team, index) => (
+          <SwitchRow
+            key={team.id}
+            label={team.name}
+            value={team.id === teamId}
+            onValueChange={(value) => onChange(value ? team.id : null)}
+            isLast={index === teams.length - 1}
+          />
+        ))}
       </View>
     </>
   );
@@ -1437,6 +1474,7 @@ export function ExistingThreadSettingsRouteScreen({
   const draftKey = activeComposerDraftKey(threadKey, route.params.draftKey, queuedRunEdit);
   const prompt = useComposerDraft(draftKey).text;
   const setMcpServer = useAtomCommand(threadEnvironment.setMcpServer, "set MCP server");
+  const setTeam = useAtomCommand(threadEnvironment.setTeam, "set team");
 
   if (!selectedThread) {
     return <View className="flex-1 bg-sheet" />;
@@ -1484,6 +1522,23 @@ export function ExistingThreadSettingsRouteScreen({
             }),
         }
       : undefined;
+  const providerTeams = serverConfig?.settings.providerTeams ?? {};
+  const teams = (Object.keys(providerTeams) as Array<ProviderTeamId>).map((id) => ({
+    id,
+    name: providerTeams[id]!.name,
+  }));
+  const team =
+    projection && teams.length > 0
+      ? {
+          teams,
+          teamId: projection.thread.teamId ?? null,
+          onChange: (teamId: ProviderTeamId | null) =>
+            void setTeam({
+              environmentId: selectedThread.environmentId,
+              input: { threadId: selectedThread.id, teamId },
+            }),
+        }
+      : undefined;
 
   return (
     <ThreadSettingsPickerScreen
@@ -1517,6 +1572,7 @@ export function ExistingThreadSettingsRouteScreen({
       runtimeMode={draftSettings.runtimeMode ?? selectedThread.runtimeMode}
       onUpdateRuntimeMode={(runtimeMode) => updateComposerDraftSettings(threadKey, { runtimeMode })}
       mcpServers={mcpServers}
+      team={team}
       onClose={() => navigation.goBack()}
     />
   );

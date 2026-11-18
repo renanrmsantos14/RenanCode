@@ -203,6 +203,7 @@ import type {
   ComposerContextRecord,
   OrchestrationV2ProviderMcpServer,
   OrchestrationV2Run,
+  ProviderTeamId,
   ThreadPullRequestLink,
 } from "@t3tools/contracts";
 import { threadContextAttachment } from "~/lib/threadContextAttachment";
@@ -225,6 +226,7 @@ import { useComposerVoiceInput } from "./voice/useComposerVoiceInput";
 import { voiceInputBlocksSubmission } from "@t3tools/client-runtime/voice-input";
 import { ComposerFooterPrimaryActions } from "./ComposerFooterControls";
 import { McpServersMenu } from "./McpServersMenu";
+import { TeamMenu } from "./TeamMenu";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import { resolveComposerMenuActiveItemId } from "./composerMenuHighlight";
 import { buildPullRequestReferenceContext } from "../pullRequest/pullRequestDetail.logic";
@@ -447,6 +449,9 @@ export interface ChatComposerProps {
   pinnedMcpServers: ReadonlyArray<string>;
   onMcpServerChange: (server: string, enabled: boolean) => void;
   onMcpServerPinnedChange: (server: string, pinned: boolean) => void;
+  /** Undefined before the thread exists on the server; a team is set on a thread. */
+  teamId: ProviderTeamId | null | undefined;
+  onTeamChange: (teamId: ProviderTeamId | null) => void;
   compactThreadUnavailable: boolean;
   compactDisabled: boolean;
   compactDisabledReason: string | null;
@@ -574,6 +579,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     pinnedMcpServers,
     onMcpServerChange,
     onMcpServerPinnedChange,
+    teamId,
+    onTeamChange,
     compactThreadUnavailable,
     compactDisabled,
     compactDisabledReason,
@@ -3891,6 +3898,15 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     {composerControls}
                   </div>
                   {voice.available ? <ComposerVoiceControl voice={voice} /> : null}
+                  {teamId !== undefined &&
+                  (teamId !== null || Object.keys(settings.providerTeams).length > 0) ? (
+                    <TeamMenu
+                      teams={settings.providerTeams}
+                      teamId={teamId}
+                      disabled={!canOperateThread}
+                      onTeamChange={onTeamChange}
+                    />
+                  ) : null}
                   {mcpServers.length > 0 ? (
                     <McpServersMenu
                       servers={mcpServers}

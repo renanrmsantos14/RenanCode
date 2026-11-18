@@ -331,6 +331,24 @@ also record them as disabled for that folder in Claude Code's own config, so
 `claude` run there in a terminal starts with them off too. **Load all servers**
 switches them back on in each folder at the next session.
 
+## Teams
+
+A team is a named list of members. Each member has a provider, a model, and an
+optional role. Create one in **Settings → Providers → Teams**, then pick it with the
+people button in the composer on web and desktop, or in the Team section of the thread
+settings on mobile. The button appears once the thread has started and at least one
+team exists.
+
+The thread then leads the team. It splits your request into delegated tasks and hands
+each task to a member by name. Claude and Codex threads get the team's roster and lead
+guidance with every message. Other providers see the team when the agent lists its
+orchestration capabilities.
+
+If a member's provider is unavailable, signed out, or at its usage limit, the task runs
+on another instance of the same provider that has the same model, for example a second
+Claude account. When no instance can run that model, the agent is told why and can
+choose another member.
+
 ## Goals
 
 With Codex, Claude, and OpenCode 2.2.5 or later, send `/goal` followed by what "done" means, for example
