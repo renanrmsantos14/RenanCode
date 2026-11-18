@@ -131,6 +131,14 @@ interface AntigravityFlavorServices {
   readonly host: ProviderHost.ProviderHost["Service"];
 }
 
+// t3_background_wait is Claude/OpenCode only; Antigravity waits through WaitMsBeforeAsync.
+const ANTIGRAVITY_COMMAND_WAIT_INSTRUCTIONS = `
+
+### Commands you wait on
+
+When you need a command's result before you go on (tests, a build, a commit or push), set \`WaitMsBeforeAsync\` on \`run_command\` to cover how long it usually takes, so it finishes inside this turn. A command that outlives it moves to the background; the user still sees its result and your follow-up when it completes. Do not call \`t3_background_wait\`.
+`;
+
 export function makeAntigravityAcpAdapterFlavor(
   options: AntigravityAdapterV2Options & AntigravityFlavorServices,
 ): AcpAdapterV2Flavor {
@@ -146,7 +154,7 @@ export function makeAntigravityAcpAdapterFlavor(
           options.makeRuntime({
             ...input,
             clientFileReads: true,
-            sessionSystemPromptAppend: PULL_REQUEST_LINKING_INSTRUCTIONS,
+            sessionSystemPromptAppend: `${PULL_REQUEST_LINKING_INSTRUCTIONS}${ANTIGRAVITY_COMMAND_WAIT_INSTRUCTIONS}`,
             additionalDirectories: [options.host.paths.attachmentsDir],
           }),
         )
@@ -281,6 +289,8 @@ export function makeAntigravityAcpAdapterFlavor(
     // 1.4.5 returns the root trajectory's Gemini usageMetadata delta; 1.4.1 returns none.
     reportsPerTurnPromptUsage: true,
     geminiPromptUsage: true,
+    // run_command past WaitMsBeforeAsync ends the prompt; its completion wakes the root later.
+    enablePostSettleContinuation: true,
     ...(profileDirectory === undefined
       ? {}
       : {
