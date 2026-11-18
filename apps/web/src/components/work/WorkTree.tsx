@@ -24,6 +24,7 @@ import {
   type WorkModuleNode,
 } from "@t3tools/client-runtime/workModuleTree";
 import type { WorkModuleId } from "@t3tools/contracts";
+import { T, useGT } from "gt-react";
 import { ChevronRightIcon, GripVerticalIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -69,6 +70,7 @@ export function WorkTree(
     loading: boolean;
   } & WorkBoardHandlers,
 ) {
+  const gt = useGT();
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [creatingIn, setCreatingIn] = useState<WorkBoardProject | null>(null);
   const toggle = (key: string) => {
@@ -86,7 +88,7 @@ export function WorkTree(
 
   if (props.loading && withModules.length === 0) {
     return (
-      <div className="flex flex-col gap-2 p-4" role="status" aria-label="Carregando módulos">
+      <div className="flex flex-col gap-2 p-4" role="status" aria-label={gt("Loading modules")}>
         {[0, 1, 2, 3].map((row) => (
           <Skeleton key={row} className="h-7 w-full" />
         ))}
@@ -96,7 +98,7 @@ export function WorkTree(
   if (props.projects.length === 0) {
     return (
       <p className="p-6 text-sm text-muted-foreground">
-        Nenhum projeto ainda. Adicione um projeto para planejar módulos nele.
+        <T>No projects yet. Add a project to plan modules in it.</T>
       </p>
     );
   }
@@ -104,15 +106,23 @@ export function WorkTree(
   return (
     <div className="flex min-w-[560px] flex-col px-4 pb-6">
       <div className={cn(GRID, "border-b py-2 text-xs text-muted-foreground")}>
-        <span>Módulo</span>
-        <span>Status</span>
-        <span>Prazo</span>
-        <span>Threads</span>
+        <span>
+          <T>Module</T>
+        </span>
+        <span>
+          <T>Status</T>
+        </span>
+        <span>
+          <T>Due date</T>
+        </span>
+        <span>
+          <T>Threads</T>
+        </span>
         <span />
       </div>
       {withModules.length === 0 ? (
         <p className="py-4 text-sm text-muted-foreground">
-          Nenhum módulo ainda. Crie o primeiro com “+ Módulo” ou num projeto abaixo.
+          <T>No modules yet. Create the first one with “+ Module” or in a project below.</T>
         </p>
       ) : null}
       {withModules.map((project) => {
@@ -135,7 +145,7 @@ export function WorkTree(
               <Button
                 variant="ghost"
                 size="icon-xs"
-                aria-label={expanded ? "Recolher projeto" : "Expandir projeto"}
+                aria-label={expanded ? gt("Collapse project") : gt("Expand project")}
                 aria-expanded={expanded}
                 onClick={() => toggle(key)}
               >
@@ -152,7 +162,7 @@ export function WorkTree(
               <ProgressBar done={done} total={total} />
               {project.connected && !project.unavailable ? null : (
                 <Badge variant="outline" size="sm">
-                  {project.unavailable ? "indisponível neste servidor" : "offline"}
+                  {project.unavailable ? gt("unavailable on this server") : gt("offline")}
                 </Badge>
               )}
             </div>
@@ -163,19 +173,19 @@ export function WorkTree(
         );
       })}
       {withoutModules.length > 0 ? (
-        <ul className="flex flex-col pt-3" aria-label="Projetos sem módulos">
+        <ul className="flex flex-col pt-3" aria-label={gt("Projects without modules")}>
           {withoutModules.map((project) => (
             <li key={projectKey(project)} className="flex items-center gap-2 py-1">
               <span className="truncate text-muted-foreground">{project.project.title}</span>
               {project.connected && !project.unavailable ? null : (
                 <Badge variant="outline" size="sm">
-                  {project.unavailable ? "indisponível neste servidor" : "offline"}
+                  {project.unavailable ? gt("unavailable on this server") : gt("offline")}
                 </Badge>
               )}
               {project.canWrite ? (
                 <Button variant="ghost-muted" size="xs" onClick={() => setCreatingIn(project)}>
                   <PlusIcon />
-                  Adicionar primeiro módulo
+                  <T>Add first module</T>
                 </Button>
               ) : null}
             </li>
@@ -184,8 +194,8 @@ export function WorkTree(
       ) : null}
       {creatingIn === null ? null : (
         <WorkTitleDialog
-          title={`Primeiro módulo em ${creatingIn.project.title}`}
-          submitLabel="Criar"
+          title={gt("First module in {title}", { title: creatingIn.project.title })}
+          submitLabel={gt("Create")}
           onSubmit={(title) => props.onCreate(creatingIn, null, title)}
           onClose={() => setCreatingIn(null)}
         />
@@ -195,12 +205,13 @@ export function WorkTree(
 }
 
 function ProgressBar(props: { done: number; total: number }) {
+  const gt = useGT();
   if (props.total === 0) return null;
   return (
     <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
       <span
         role="progressbar"
-        aria-label="Progresso"
+        aria-label={gt("Progress")}
         aria-valuemin={0}
         aria-valuemax={props.total}
         aria-valuenow={props.done}
@@ -272,6 +283,7 @@ function SiblingList(props: {
 }
 
 function SortableModule(props: { context: TreeContext; node: WorkModuleNode; depth: number }) {
+  const gt = useGT();
   const { context, node } = props;
   const { project, filters } = context;
   const workModule = node.module;
@@ -304,7 +316,7 @@ function SortableModule(props: { context: TreeContext; node: WorkModuleNode; dep
               ref={setActivatorNodeRef}
               {...attributes}
               {...listeners}
-              aria-label={`Reordenar ${workModule.title}`}
+              aria-label={gt("Reorder {title}", { title: workModule.title })}
               className="flex size-5 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/70 opacity-0 outline-none group-hover:opacity-100 hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:cursor-grabbing"
             >
               <GripVerticalIcon className="size-3.5" />
@@ -315,7 +327,9 @@ function SortableModule(props: { context: TreeContext; node: WorkModuleNode; dep
               variant="ghost"
               size="icon-xs"
               aria-label={
-                expanded ? `Recolher ${workModule.title}` : `Expandir ${workModule.title}`
+                expanded
+                  ? gt("Collapse {title}", { title: workModule.title })
+                  : gt("Expand {title}", { title: workModule.title })
               }
               aria-expanded={expanded}
               onClick={() => context.toggle(workModule.id)}
@@ -345,7 +359,7 @@ function SortableModule(props: { context: TreeContext; node: WorkModuleNode; dep
           {node.pendingSuggestions > 0 ? (
             <span
               role="img"
-              aria-label="Thread sugerida aguardando você"
+              aria-label={gt("Suggested thread waiting for you")}
               className="size-1.5 shrink-0 rounded-full bg-info"
             />
           ) : null}

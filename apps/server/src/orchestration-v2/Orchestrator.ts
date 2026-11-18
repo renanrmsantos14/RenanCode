@@ -5525,6 +5525,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         now,
         cancelQueuedDelivery: false,
       });
+    }
+    if (command.type === "thread.archive" || command.type === "thread.settle") {
       yield* closePendingUserCards({ command, events, threadId: command.threadId, now });
     }
 
@@ -10927,8 +10929,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
 
   /**
    * Closes the link and MCP server cards still waiting for the user. Their
-   * agent stopped waiting long ago, so nobody is woken: stopping or archiving
-   * the thread means the user is done with it.
+   * agent stopped waiting long ago, so nobody is woken: stopping, settling or
+   * archiving the thread means the user is done with it.
    */
   const closePendingUserCards = Effect.fn("orchestrationV2.closePendingUserCards")(
     function* (input: {

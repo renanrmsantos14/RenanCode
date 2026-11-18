@@ -8,6 +8,8 @@ import {
   threadPullRequestSearchTerms,
 } from "@t3tools/shared/threadPullRequests";
 import * as React from "react";
+import { msg } from "gt-react";
+import { m, type MessageResolver } from "../i18n/messages";
 import {
   isAtomCommandInterrupted,
   type AtomCommandResult,
@@ -625,13 +627,13 @@ export function buildBulkTitleRegenerationContextMenuItem(input: {
   if (input.actionableCount === 0) {
     return {
       id: "regenerate-title",
-      label: `Regenerating… (${input.supportedCount})`,
+      label: m(msg("Regenerating… ({count})", { count: input.supportedCount })),
       disabled: true,
     };
   }
   return {
     id: "regenerate-title",
-    label: `Regenerate titles (${input.actionableCount})`,
+    label: m(msg("Regenerate titles ({count})", { count: input.actionableCount })),
   };
 }
 
@@ -639,20 +641,12 @@ export function buildBulkUnpinContextMenuItem(input: {
   pinnedCount: number;
 }): ContextMenuItem<"unpin"> | null {
   if (input.pinnedCount === 0) return null;
-  return { id: "unpin", label: `Unpin (${input.pinnedCount})` };
+  return { id: "unpin", label: m(msg("Unpin ({count})", { count: input.pinnedCount })) };
 }
 
 export interface ThreadStatusPill {
-  label:
-    | "Working"
-    | "Connecting"
-    | "Completed"
-    | "Failed"
-    | "Pending Approval"
-    | "Awaiting Input"
-    | "Guest Request"
-    | "Waiting"
-    | "Plan Ready";
+  /** A `msg()` string; render it through `useMessages()`. */
+  label: string;
   colorClass: string;
   dotClass: string;
   pulse: boolean;
@@ -981,19 +975,22 @@ export function resolveSidebarRowStatus(
 }
 
 /** What the window title says the open thread is doing, in the words its announcer uses. */
-export function resolveWindowTitleThreadStatus(thread: SidebarThreadStatusInput): string | null {
+export function resolveWindowTitleThreadStatus(
+  thread: SidebarThreadStatusInput,
+  resolve: MessageResolver = m,
+): string | null {
   // A guest waiting doesn't hide that the agent is still working.
   switch (resolveSidebarThreadStatus({ ...thread, pendingGuestMessageCount: 0 })) {
     case "approval":
-      return THREAD_STATUS_TEXT.approval;
+      return resolve(THREAD_STATUS_TEXT.approval);
     case "input":
-      return THREAD_STATUS_TEXT.input;
+      return resolve(THREAD_STATUS_TEXT.input);
     case "preparing":
     case "working":
-      return THREAD_STATUS_TEXT.working;
+      return resolve(THREAD_STATUS_TEXT.working);
     case "waiting":
       // Waiting on a child thread is still this turn, so it must not read as finished.
-      return thread.runtime?.status === "running" ? THREAD_STATUS_TEXT.working : null;
+      return thread.runtime?.status === "running" ? resolve(THREAD_STATUS_TEXT.working) : null;
     default:
       return null;
   }
@@ -1224,7 +1221,7 @@ export function resolveThreadStatusPill(input: {
 
   if (thread.hasPendingApprovals || thread.pendingSubagentRequest === "approval") {
     return {
-      label: "Pending Approval",
+      label: msg("Pending Approval"),
       colorClass: "text-amber-600 dark:text-amber-300/90",
       dotClass: "bg-amber-500 dark:bg-amber-300/90",
       pulse: false,
@@ -1233,7 +1230,7 @@ export function resolveThreadStatusPill(input: {
 
   if (thread.hasPendingUserInput || thread.pendingSubagentRequest === "user_input") {
     return {
-      label: "Awaiting Input",
+      label: msg("Awaiting Input"),
       colorClass: "text-yellow-600 dark:text-yellow-300/90",
       dotClass: "bg-yellow-500 dark:bg-yellow-300/90",
       pulse: false,
@@ -1242,7 +1239,7 @@ export function resolveThreadStatusPill(input: {
 
   if ((thread.pendingGuestMessageCount ?? 0) > 0) {
     return {
-      label: "Guest Request",
+      label: msg("Guest Request"),
       colorClass: "text-guest-foreground",
       dotClass: "bg-guest",
       pulse: false,
@@ -1254,7 +1251,7 @@ export function resolveThreadStatusPill(input: {
     thread.runtime?.status === "waiting"
   ) {
     return {
-      label: "Working",
+      label: msg("Working"),
       colorClass: "text-sky-600 dark:text-sky-300/80",
       dotClass: "bg-sky-500 dark:bg-sky-300/80",
       pulse: true,
@@ -1267,7 +1264,7 @@ export function resolveThreadStatusPill(input: {
     thread.runtime?.status === "queued"
   ) {
     return {
-      label: "Connecting",
+      label: msg("Connecting"),
       colorClass: "text-sky-600 dark:text-sky-300/80",
       dotClass: "bg-sky-500 dark:bg-sky-300/80",
       pulse: true,
@@ -1279,7 +1276,7 @@ export function resolveThreadStatusPill(input: {
     backgroundWorkHoldsCompletion(thread.pendingBackgroundTasks ?? [])
   ) {
     return {
-      label: "Waiting",
+      label: msg("Waiting"),
       colorClass: "text-sidebar-muted-foreground",
       dotClass: "bg-sidebar-muted-foreground",
       pulse: false,
@@ -1288,7 +1285,7 @@ export function resolveThreadStatusPill(input: {
 
   if (hasUnseenRunFailure(thread)) {
     return {
-      label: "Failed",
+      label: msg("Failed"),
       colorClass: "text-red-600 dark:text-red-300/90",
       dotClass: "bg-red-500 dark:bg-red-300/90",
       pulse: false,
@@ -1302,7 +1299,7 @@ export function resolveThreadStatusPill(input: {
     thread.hasActionableProposedPlan;
   if (hasPlanReadyPrompt) {
     return {
-      label: "Plan Ready",
+      label: msg("Plan Ready"),
       colorClass: "text-violet-600 dark:text-violet-300/90",
       dotClass: "bg-violet-500 dark:bg-violet-300/90",
       pulse: false,
@@ -1311,7 +1308,7 @@ export function resolveThreadStatusPill(input: {
 
   if (hasUnseenCompletion(thread)) {
     return {
-      label: "Completed",
+      label: msg("Completed"),
       colorClass: "text-emerald-600 dark:text-emerald-300/90",
       dotClass: "bg-emerald-500 dark:bg-emerald-300/90",
       pulse: false,

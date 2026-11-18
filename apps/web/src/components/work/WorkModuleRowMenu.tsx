@@ -1,5 +1,6 @@
 import type { WorkModuleId } from "@t3tools/contracts";
 import type { WorkModuleNode } from "@t3tools/client-runtime/workModuleTree";
+import { T, useGT, Var } from "gt-react";
 import { EllipsisIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
@@ -43,6 +44,7 @@ export function WorkTitleDialog(props: {
   onSubmit: (value: string) => void;
   onClose: () => void;
 }) {
+  const gt = useGT();
   const [value, setValue] = useState(props.initialValue ?? "");
   const trimmed = value.trim();
   return (
@@ -68,8 +70,8 @@ export function WorkTitleDialog(props: {
           <DialogPanel>
             {props.children}
             <Input
-              aria-label="Título"
-              placeholder="Título do módulo"
+              aria-label={gt("Title")}
+              placeholder={gt("Module title")}
               maxLength={200}
               value={value}
               onChange={(event) => setValue(event.target.value)}
@@ -77,7 +79,9 @@ export function WorkTitleDialog(props: {
             />
           </DialogPanel>
           <DialogFooter>
-            <DialogClose render={<Button type="button" variant="outline" />}>Cancelar</DialogClose>
+            <DialogClose render={<Button type="button" variant="outline" />}>
+              <T>Cancel</T>
+            </DialogClose>
             <Button type="submit" disabled={trimmed === "" || props.canSubmit === false}>
               {props.submitLabel}
             </Button>
@@ -103,9 +107,10 @@ function MoveDialog(props: {
   onMove: (parentId: WorkModuleId | null, index: number) => void;
   onClose: () => void;
 }) {
+  const gt = useGT();
   const targets = moveTargets(props.projectNodes, props.node.module.id);
   const [target, setTarget] = useState<string>(props.node.module.parentId ?? ROOT);
-  const labels = new Map<string, string>([[ROOT, "Nível principal"]]);
+  const labels = new Map<string, string>([[ROOT, gt("Top level")]]);
   for (const candidate of targets) {
     labels.set(
       candidate.module.id,
@@ -133,7 +138,11 @@ function MoveDialog(props: {
           }}
         >
           <DialogHeader>
-            <DialogTitle>Mover {props.node.module.title}</DialogTitle>
+            <DialogTitle>
+              <T>
+                Move <Var>{props.node.module.title}</Var>
+              </T>
+            </DialogTitle>
           </DialogHeader>
           <DialogPanel>
             <Select
@@ -142,7 +151,7 @@ function MoveDialog(props: {
                 if (typeof value === "string") setTarget(value);
               }}
             >
-              <SelectTrigger aria-label="Novo módulo pai">
+              <SelectTrigger aria-label={gt("New parent module")}>
                 <SelectValue>{labels.get(target)}</SelectValue>
               </SelectTrigger>
               <SelectPopup>
@@ -155,9 +164,11 @@ function MoveDialog(props: {
             </Select>
           </DialogPanel>
           <DialogFooter>
-            <DialogClose render={<Button type="button" variant="outline" />}>Cancelar</DialogClose>
+            <DialogClose render={<Button type="button" variant="outline" />}>
+              <T>Cancel</T>
+            </DialogClose>
             <Button type="submit" disabled={target === (props.node.module.parentId ?? ROOT)}>
-              Mover
+              <T>Move</T>
             </Button>
           </DialogFooter>
         </form>
@@ -176,6 +187,7 @@ export function WorkModuleRowMenu(props: {
   onNewThread: () => void;
   onDelete: () => void;
 }) {
+  const gt = useGT();
   const [dialog, setDialog] = useState<"add" | "rename" | "move" | "delete" | null>(null);
   const close = () => setDialog(null);
   const title = props.node.module.title;
@@ -184,24 +196,38 @@ export function WorkModuleRowMenu(props: {
     <>
       <Menu>
         <MenuTrigger
-          render={<Button variant="ghost" size="icon-xs" aria-label={`Ações de ${title}`} />}
+          render={
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={gt("Actions for {title}", { title })}
+            />
+          }
         >
           <EllipsisIcon />
         </MenuTrigger>
         <MenuPopup align="end">
           {props.canWrite ? (
             <>
-              <MenuItem onClick={() => setDialog("add")}>Adicionar submódulo</MenuItem>
-              <MenuItem onClick={() => setDialog("rename")}>Renomear</MenuItem>
-              <MenuItem onClick={() => setDialog("move")}>Mover para…</MenuItem>
+              <MenuItem onClick={() => setDialog("add")}>
+                <T>Add submodule</T>
+              </MenuItem>
+              <MenuItem onClick={() => setDialog("rename")}>
+                <T>Rename</T>
+              </MenuItem>
+              <MenuItem onClick={() => setDialog("move")}>
+                <T>Move to…</T>
+              </MenuItem>
             </>
           ) : null}
-          <MenuItem onClick={props.onNewThread}>Nova thread aqui</MenuItem>
+          <MenuItem onClick={props.onNewThread}>
+            <T>New thread here</T>
+          </MenuItem>
           {props.canWrite ? (
             <>
               <MenuSeparator />
               <MenuItem variant="destructive" onClick={() => setDialog("delete")}>
-                Excluir
+                <T>Delete</T>
               </MenuItem>
             </>
           ) : null}
@@ -209,16 +235,16 @@ export function WorkModuleRowMenu(props: {
       </Menu>
       {dialog === "add" ? (
         <WorkTitleDialog
-          title={`Novo submódulo em ${title}`}
-          submitLabel="Criar"
+          title={gt("New submodule in {title}", { title })}
+          submitLabel={gt("Create")}
           onSubmit={props.onAddChild}
           onClose={close}
         />
       ) : null}
       {dialog === "rename" ? (
         <WorkTitleDialog
-          title="Renomear módulo"
-          submitLabel="Salvar"
+          title={gt("Rename module")}
+          submitLabel={gt("Save")}
           initialValue={title}
           onSubmit={props.onRename}
           onClose={close}
@@ -242,13 +268,20 @@ export function WorkModuleRowMenu(props: {
           <AlertDialogHeader>
             <AlertDialogTitle>
               {descendants === 0
-                ? `Excluir ${title}?`
-                : `Excluir ${title} e ${descendants} submódulos?`}
+                ? gt("Delete {title}?", { title })
+                : gt(
+                    "{count, plural, one {Delete {title} and {count} submodule?} other {Delete {title} and {count} submodules?}}",
+                    { title, count: descendants },
+                  )}
             </AlertDialogTitle>
-            <AlertDialogDescription>As threads ligadas continuam existindo.</AlertDialogDescription>
+            <AlertDialogDescription>
+              <T>Linked threads are kept.</T>
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogClose render={<Button variant="outline" />}>Cancelar</AlertDialogClose>
+            <AlertDialogClose render={<Button variant="outline" />}>
+              <T>Cancel</T>
+            </AlertDialogClose>
             <Button
               variant="destructive"
               onClick={() => {
@@ -256,7 +289,7 @@ export function WorkModuleRowMenu(props: {
                 props.onDelete();
               }}
             >
-              Excluir
+              <T>Delete</T>
             </Button>
           </AlertDialogFooter>
         </AlertDialogPopup>

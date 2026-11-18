@@ -3,9 +3,11 @@ import Constants from "expo-constants";
 import { File, Paths } from "expo-file-system";
 import { getContentUriAsync } from "expo-file-system/legacy";
 import * as IntentLauncher from "expo-intent-launcher";
+import { msg } from "gt-react-native";
 import { AppState, Platform } from "react-native";
 
 import * as Dialog from "../../components/ui/Dialog";
+import { m } from "../../i18n/messages";
 import { type ApkRelease, pickNewerApkRelease } from "./apk-release";
 import type { AppUpdateCheckState } from "./app-updates";
 
@@ -47,10 +49,10 @@ export async function runApkUpdateCheck({
     }
     onStateChange?.("ready");
     Dialog.confirm({
-      title: "Update available",
-      message: `Version ${release.version} is ready to install.`,
-      cancelText: "Later",
-      confirmText: "Update",
+      title: m(msg("Update available")),
+      message: m(msg("Version {version} is ready to install.", { version: release.version })),
+      cancelText: m(msg("Later")),
+      confirmText: m(msg("Update", { $context: "verb, installs the app update" })),
       onCancel: () => {
         postponedVersionCode = release.versionCode;
         onStateChange?.("idle");
@@ -59,7 +61,7 @@ export async function runApkUpdateCheck({
     });
   } catch (error) {
     onStateChange?.("idle");
-    if (interactive) Dialog.alert("Update failed", errorMessage(error));
+    if (interactive) Dialog.alert(m(msg("Update failed")), errorMessage(error));
   } finally {
     checkInFlight = false;
   }
@@ -84,7 +86,7 @@ async function installApk(
     onStateChange?.("idle");
   } catch (error) {
     onStateChange?.("idle");
-    Dialog.alert("Update failed", errorMessage(error));
+    Dialog.alert(m(msg("Update failed")), errorMessage(error));
   }
 }
 

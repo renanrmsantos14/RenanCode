@@ -4,6 +4,7 @@ import {
 } from "@t3tools/client-runtime/mcp-server-request";
 import { isAtomCommandInterrupted } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId, OrchestrationV2ProjectedTurnItem } from "@t3tools/contracts";
+import { T, useMessages, Var } from "gt-react";
 import { CheckIcon, LockIcon, MinusIcon, PlugIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -18,11 +19,12 @@ export function McpServerRequestCard(props: {
   readonly visibility: OrchestrationV2ProjectedTurnItem["visibility"];
 }) {
   const { item } = props;
+  const m = useMessages();
   const answer = useOrchestrationCommand(threadEnvironment.answerMcpServerRequest);
   const [submitting, setSubmitting] = useState(false);
   const [failed, setFailed] = useState(false);
 
-  const display = mcpServerRequestDisplay(item, props.visibility);
+  const display = mcpServerRequestDisplay(item, props.visibility, m);
   if (display.kind !== "pending") {
     const Icon =
       display.kind === "pending-elsewhere" ? LockIcon : display.enabled ? CheckIcon : MinusIcon;
@@ -57,7 +59,11 @@ export function McpServerRequestCard(props: {
       <div className="flex min-w-0 items-start gap-2">
         <PlugIcon className="mt-0.5 size-4 shrink-0 text-icon-muted" aria-hidden />
         <div className="flex min-w-0 flex-col gap-1">
-          <p className="text-sm font-medium text-foreground">Turn on {item.server}?</p>
+          <T>
+            <p className="text-sm font-medium text-foreground">
+              Turn on <Var>{item.server}</Var>?
+            </p>
+          </T>
           {item.reason.trim() ? (
             <p className="text-sm text-muted-foreground">{item.reason}</p>
           ) : null}
@@ -65,15 +71,15 @@ export function McpServerRequestCard(props: {
       </div>
       {failed ? (
         <p role="alert" className="text-xs text-destructive">
-          Could not send your answer. Try again.
+          <T>Could not send your answer. Try again.</T>
         </p>
       ) : null}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" disabled={submitting} onClick={() => void send(false)}>
-          Not now
+          <T>Not now</T>
         </Button>
         <Button disabled={submitting} onClick={() => void send(true)}>
-          Turn on
+          <T>Turn on</T>
         </Button>
       </div>
     </div>

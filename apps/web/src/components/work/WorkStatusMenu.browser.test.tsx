@@ -12,12 +12,12 @@ describe("WorkStatusMenu", () => {
       <WorkStatusMenu status="active" waitingReason={null} onChange={onChange} />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Status: Em andamento" }));
-    await userEvent.click(page.getByRole("menuitem", { name: "Esperando" }));
+    await userEvent.click(screen.getByRole("button", { name: "Status: In progress" }));
+    await userEvent.click(page.getByRole("menuitem", { name: "Waiting" }));
     expect(onChange).not.toHaveBeenCalled();
 
     await userEvent.type(
-      page.getByRole("textbox", { name: "Esperando o quê" }),
+      page.getByRole("textbox", { name: "Waiting on what" }),
       "DNS from client{Enter}",
     );
     expect(onChange).toHaveBeenCalledWith({ status: "waiting", waitingReason: "DNS from client" });

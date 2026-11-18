@@ -1,4 +1,7 @@
 import type { VoiceRecorder, VoiceRecorderStatus } from "@t3tools/client-runtime/voice-input";
+import { msg } from "gt-react";
+
+import { m } from "~/i18n/messages";
 
 export type WebVoiceRecorder = VoiceRecorder & {
   /** Current loudness from 0 to 1. */
@@ -62,7 +65,7 @@ export function createWebVoiceRecorder(
         onStatus({
           isFinished: false,
           hasError: true,
-          error: "Microphone recording failed.",
+          error: m(msg("Microphone recording failed.")),
           url: null,
         }),
       );

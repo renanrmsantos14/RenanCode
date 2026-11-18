@@ -1,3 +1,5 @@
+import { T, useGT } from "gt-react";
+
 import {
   AlertDialog,
   AlertDialogDescription,
@@ -22,6 +24,7 @@ export function ColdCacheDialog(props: {
   readonly prompt: ColdCachePrompt | null;
   readonly onChoose: (choice: ColdCacheChoice) => void;
 }) {
+  const gt = useGT();
   const { prompt, onChoose } = props;
   return (
     <AlertDialog
@@ -33,32 +36,36 @@ export function ColdCacheDialog(props: {
       <AlertDialogPopup>
         <AlertDialogHeader>
           <AlertDialogTitle>
-            Cache expired
             {prompt?.costUsd == null
-              ? ""
-              : ` · estimated re-read ${formatContextWindowCost({ amount: prompt.costUsd, currency: "USD" })}`}
+              ? gt("Cache expired")
+              : gt("Cache expired · estimated re-read {cost}", {
+                  cost: formatContextWindowCost({ amount: prompt.costUsd, currency: "USD" }),
+                })}
           </AlertDialogTitle>
           <AlertDialogDescription>
-            This thread has about {prompt?.usedTokens.toLocaleString("en-US")} tokens and its prompt
-            cache expired, so sending re-reads the whole history at full price. The cost is an
-            estimate.
+            {gt(
+              "This thread has about {tokens} tokens and its prompt cache expired, so sending re-reads the whole history at full price. The cost is an estimate.",
+              { tokens: prompt?.usedTokens.toLocaleString("en-US") ?? "" },
+            )}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <Button variant="outline" onClick={() => onChoose("cancel")}>
-            Cancel
+            <T>Cancel</T>
           </Button>
           {prompt?.canHandoff ? (
             <Button variant="outline" onClick={() => onChoose("handoff")}>
-              Handoff
+              <T>Handoff</T>
             </Button>
           ) : null}
           {prompt?.canCompact ? (
             <Button variant="outline" onClick={() => onChoose("compact")}>
-              Compact
+              <T>Compact</T>
             </Button>
           ) : null}
-          <Button onClick={() => onChoose("send")}>Send anyway</Button>
+          <Button onClick={() => onChoose("send")}>
+            <T>Send anyway</T>
+          </Button>
         </AlertDialogFooter>
       </AlertDialogPopup>
     </AlertDialog>

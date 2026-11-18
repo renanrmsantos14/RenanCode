@@ -1,8 +1,10 @@
 import { AuthPreviewOperateScope, type EnvironmentId } from "@t3tools/contracts";
 import type { AnyRouter } from "@tanstack/react-router";
+import { msg } from "gt-react";
 
 import { dispatchCacheAction, type CacheAction } from "~/components/chat/cacheActionBus";
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
+import { m } from "~/i18n/messages";
 import { isPreviewAvailableFor } from "../browser/previewRuntime";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { useComposerDraftStore } from "../composerDraftStore";
@@ -174,8 +176,8 @@ export function installChatRouteCommands(router: AnyRouter): () => void {
           toastManager.add(
             stackedThreadToast({
               type: "info",
-              title: "Preview is desktop-only",
-              description: "Open RenanCode in the desktop app to use the in-app preview.",
+              title: m(msg("Preview is desktop-only")),
+              description: m(msg("Open RenanCode in the desktop app to use the in-app preview.")),
             }),
           );
           return;

@@ -1,3 +1,5 @@
+import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
+import { T, useGT, useMessages } from "gt-react";
 import { ExternalLinkIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -11,7 +13,7 @@ import { openDesktopUpdateReleaseNotes } from "../desktopUpdate.toast";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { SettingsRow } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 
 type ReleaseHistoryState =
   | { readonly status: "idle" | "loading" }
@@ -29,6 +31,9 @@ async function fetchReleases() {
 }
 
 export function ReleaseHistorySettingsRow() {
+  const searchableSetting = useSearchableSetting();
+  const gt = useGT();
+  const m = useMessages();
   const [state, setState] = useState<ReleaseHistoryState>({ status: "idle" });
 
   const load = async () => {
@@ -38,7 +43,7 @@ export function ReleaseHistorySettingsRow() {
     } catch (error) {
       setState({
         status: "error",
-        message: error instanceof Error ? error.message : "Could not load releases",
+        message: thrownErrorMessage(error, m) ?? gt("Could not load releases"),
       });
     }
   };
@@ -56,8 +61,10 @@ export function ReleaseHistorySettingsRow() {
       {...searchableSetting("release-history")}
       description={
         state.status === "error"
-          ? `Could not load releases: ${state.message}`
-          : "Published versions of this app. Install the newest one with the Version button above."
+          ? gt("Could not load releases: {message}", { message: state.message })
+          : gt(
+              "Published versions of this app. Install the newest one with the Version button above.",
+            )
       }
       control={
         <Button
@@ -67,23 +74,33 @@ export function ReleaseHistorySettingsRow() {
           onClick={() => void load()}
         >
           {state.status === "loading"
-            ? "Loading…"
+            ? gt("Loading…")
             : state.status === "idle"
-              ? "Show versions"
-              : "Refresh"}
+              ? gt("Show versions")
+              : gt("Refresh")}
         </Button>
       }
     >
       {state.status === "loaded" ? (
         state.releases.length === 0 ? (
-          <p className="mt-3 text-xs text-muted-foreground">No published releases yet.</p>
+          <p className="mt-3 text-xs text-muted-foreground">
+            <T>No published releases yet.</T>
+          </p>
         ) : (
           <ul className="mt-3 divide-y divide-border rounded-md border">
             {state.releases.map((release) => (
               <li key={release.version} className="flex items-center gap-2 px-3 py-2 text-xs">
                 <code className="font-medium">v{release.version}</code>
-                {release.version === APP_VERSION ? <Badge variant="outline">Current</Badge> : null}
-                {release.prerelease ? <Badge variant="secondary">Pre-release</Badge> : null}
+                {release.version === APP_VERSION ? (
+                  <Badge variant="outline">
+                    <T context="the installed app version">Current</T>
+                  </Badge>
+                ) : null}
+                {release.prerelease ? (
+                  <Badge variant="secondary">
+                    <T>Pre-release</T>
+                  </Badge>
+                ) : null}
                 <span className="ml-auto text-muted-foreground">
                   {release.publishedAt
                     ? releaseDateFormat.format(new Date(release.publishedAt))
@@ -92,7 +109,7 @@ export function ReleaseHistorySettingsRow() {
                 <Button
                   size="icon-xs"
                   variant="ghost"
-                  aria-label={`Open notes for v${release.version}`}
+                  aria-label={gt("Open notes for v{version}", { version: release.version })}
                   onClick={() => openRelease(release.url)}
                 >
                   <ExternalLinkIcon aria-hidden />

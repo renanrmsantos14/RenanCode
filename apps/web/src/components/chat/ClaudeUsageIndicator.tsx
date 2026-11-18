@@ -6,6 +6,7 @@ import {
   claudeWeeklyReading,
   selectClaudeUsageAccounts,
 } from "@t3tools/shared/usageLimits";
+import { useGT } from "gt-react";
 import { GaugeIcon } from "lucide-react";
 import { Fragment, useRef, useState } from "react";
 
@@ -86,6 +87,7 @@ export function ClaudeUsageIndicator({
   readonly compact: boolean;
   readonly detail: ClaudeUsageDetailControl;
 }) {
+  const gt = useGT();
   const config = useAtomValue(serverEnvironment.configValueAtom(environmentId));
   const nowMinute = useNowMinute();
   const now = Date.parse(`${nowMinute}:00Z`);
@@ -109,7 +111,7 @@ export function ClaudeUsageIndicator({
             size="xs"
             variant="ghost-muted"
             className="min-w-0 shrink"
-            aria-label={`Claude usage: ${summary}`}
+            aria-label={gt("Claude usage: {summary}", { summary })}
             title={compact ? summary : undefined}
           />
         }

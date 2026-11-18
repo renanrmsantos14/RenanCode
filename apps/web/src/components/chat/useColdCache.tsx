@@ -3,6 +3,7 @@ import type { CacheKeepWarmStatus, EnvironmentId, ThreadId } from "@t3tools/cont
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { KEEP_WARM_DEFAULT_HOURS, supportsPromptCacheFeatures } from "@t3tools/shared/promptCache";
 import { useNavigate } from "@tanstack/react-router";
+import { T, useGT } from "gt-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { useStableCallback } from "~/hooks/useStableCallback";
@@ -39,6 +40,7 @@ export function useColdCache(input: {
   readonly onCompact: () => void;
 }) {
   const { environmentId, threadId, driver, model, usage, nowMinute, isWorking } = input;
+  const gt = useGT();
   const navigate = useNavigate();
   const canOperate = useAtomValue(threadEnvironment.cacheKeepWarm.permissionAtom(environmentId));
   const keepWarmCommand = useAtomCommand(threadEnvironment.cacheKeepWarm, {
@@ -88,8 +90,8 @@ export function useColdCache(input: {
     if (threadId === null) return;
     toastManager.add({
       type: "info",
-      title: "Handoff started",
-      description: "The model is writing a summary.",
+      title: gt("Handoff started"),
+      description: gt("The model is writing a summary."),
     });
     const result = await handoffCommand({ environmentId, input: { threadId } });
     if (result._tag !== "Success") return;
@@ -152,16 +154,22 @@ export function useColdCache(input: {
   const control: ReactNode =
     supported && canOperate ? (
       <div className="mt-1 flex flex-col gap-1 border-t pt-2">
-        <div className="text-2xs font-medium text-secondary-label">Prompt cache</div>
+        <div className="text-2xs font-medium text-secondary-label">
+          <T>Prompt cache</T>
+        </div>
         {status.active && status.deadlineAt ? (
           <div className="text-2xs text-secondary-label">
-            Warm until {formatClock(status.deadlineAt)} · {status.pings}{" "}
-            {status.pings === 1 ? "ping" : "pings"}
+            {gt(
+              "{count, plural, one {Warm until {time} · {count} ping} other {Warm until {time} · {count} pings}}",
+              { count: status.pings, time: formatClock(status.deadlineAt) },
+            )}
           </div>
         ) : (
           <div className="text-pretty text-2xs text-secondary-label">
-            Keep warm sends a real, billed turn shortly before each cache expiry, for up to{" "}
-            {KEEP_WARM_DEFAULT_HOURS} hours while the thread is idle.
+            {gt(
+              "Keep warm sends a real, billed turn shortly before each cache expiry, for up to {hours} hours while the thread is idle.",
+              { hours: KEEP_WARM_DEFAULT_HOURS },
+            )}
           </div>
         )}
         <Button
@@ -170,7 +178,7 @@ export function useColdCache(input: {
           className="w-full justify-center"
           onClick={toggleKeepWarm}
         >
-          {status.active ? "Off" : "Keep warm"}
+          {status.active ? gt("Off", { $context: "turn keep warm off" }) : gt("Keep warm")}
         </Button>
       </div>
     ) : null;

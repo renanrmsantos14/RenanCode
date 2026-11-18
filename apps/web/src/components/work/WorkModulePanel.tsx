@@ -10,6 +10,7 @@ import {
 import type { ThreadId, WorkModuleId, WorkModuleThreadLink } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { CheckIcon, LinkIcon, PlusIcon, LightbulbIcon, UnlinkIcon, XIcon } from "lucide-react";
 import { type ReactNode, useRef, useState } from "react";
 
@@ -43,16 +44,17 @@ import { WorkDueDatePicker } from "./WorkDueDatePicker";
 import { formatShortDate } from "./WorkDueDatePicker";
 import { WorkStatusPicker } from "./WorkStatusMenu";
 
+/** `msg()` strings; render them through `useMessages()`. */
 const THREAD_STATUS_LABEL: Record<SidebarThreadStatus, string> = {
-  approval: "Aprovação",
-  input: "Resposta",
-  request: "Pedido",
-  preparing: "Preparando",
-  working: "Trabalhando",
-  waiting: "Aguardando",
-  failed: "Falhou",
-  limited: "Limite",
-  ready: "Pronta",
+  approval: msg("Approval", { $context: "thread status" }),
+  input: msg("Input", { $context: "thread status" }),
+  request: msg("Request", { $context: "thread status" }),
+  preparing: msg("Preparing", { $context: "thread status" }),
+  working: msg("Working", { $context: "thread status" }),
+  waiting: msg("Waiting", { $context: "thread status" }),
+  failed: msg("Failed", { $context: "thread status" }),
+  limited: msg("Limit", { $context: "thread status" }),
+  ready: msg("Ready", { $context: "thread status" }),
 };
 
 const findNode = (nodes: WorkModuleNode[], id: WorkModuleId): WorkModuleNode | null => {
@@ -85,6 +87,7 @@ function ThreadRow(props: {
   onOpen: () => void;
   children?: ReactNode;
 }) {
+  const m = useMessages();
   const status = props.thread === undefined ? null : resolveSidebarThreadStatus(props.thread);
   // Shells drop archived and long-settled threads, so the snapshot's title stands in for them.
   const title = props.thread?.title ?? props.link.threadTitle;
@@ -103,7 +106,9 @@ function ThreadRow(props: {
           )}
         />
         {title === undefined ? (
-          <span className="truncate text-muted-foreground italic">Thread indisponível</span>
+          <span className="truncate text-muted-foreground italic">
+            <T>Thread unavailable</T>
+          </span>
         ) : (
           <span className={cn("truncate", status === null && "text-muted-foreground")}>
             {title}
@@ -111,7 +116,7 @@ function ThreadRow(props: {
         )}
         {status !== null || props.link.threadArchived ? (
           <span className="ms-auto shrink-0 text-xs text-muted-foreground">
-            {status === null ? "Arquivada" : THREAD_STATUS_LABEL[status]}
+            {status === null ? <T>Archived</T> : m(THREAD_STATUS_LABEL[status])}
           </span>
         ) : null}
       </button>
@@ -161,6 +166,7 @@ function LinkThreadDialog(props: {
   onLink: (threadId: ThreadId) => void;
   onClose: () => void;
 }) {
+  const gt = useGT();
   return (
     <Dialog
       open
@@ -170,7 +176,9 @@ function LinkThreadDialog(props: {
     >
       <DialogPopup>
         <DialogHeader>
-          <DialogTitle>Ligar thread existente</DialogTitle>
+          <DialogTitle>
+            <T>Link existing thread</T>
+          </DialogTitle>
         </DialogHeader>
         <DialogPanel>
           <Combobox<EnvironmentThreadShell>
@@ -182,9 +190,17 @@ function LinkThreadDialog(props: {
               props.onLink(thread.id);
             }}
           >
-            <ComboboxInput aria-label="Thread" placeholder="Buscar thread…" autoFocus />
+            <ComboboxInput
+              aria-label={gt("Thread")}
+              placeholder={gt("Search threads…")}
+              autoFocus
+            />
             <ComboboxPopup>
-              <ComboboxEmpty>Nenhuma thread livre em {props.projectTitle}.</ComboboxEmpty>
+              <ComboboxEmpty>
+                <T>
+                  No unlinked threads in <Var>{props.projectTitle}</Var>.
+                </T>
+              </ComboboxEmpty>
               <ComboboxList>
                 {(thread: EnvironmentThreadShell) => (
                   <ComboboxItem key={thread.id} value={thread}>
@@ -208,6 +224,7 @@ export function WorkModulePanel(props: {
   onUpdate: WorkBoardHandlers["onUpdate"];
   onNewThread: WorkBoardHandlers["onNewThread"];
 }) {
+  const gt = useGT();
   const { project } = props;
   const environmentId = project.project.environmentId;
   const snapshot = AsyncResult.getOrElse(
@@ -277,7 +294,7 @@ export function WorkModulePanel(props: {
             </p>
             <textarea
               key={workModule.title}
-              aria-label="Título"
+              aria-label={gt("Title")}
               rows={1}
               defaultValue={workModule.title}
               maxLength={200}
@@ -305,8 +322,8 @@ export function WorkModulePanel(props: {
         <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 pb-6">
           <textarea
             key={note.text}
-            aria-label="Nota"
-            placeholder={canWrite ? "Adicionar nota…" : "Sem nota"}
+            aria-label={gt("Note")}
+            placeholder={canWrite ? gt("Add a note…") : gt("No note")}
             defaultValue={note.text}
             maxLength={20_000}
             disabled={!canWrite}
@@ -321,7 +338,9 @@ export function WorkModulePanel(props: {
           />
           {/* Full width: the four statuses side by side do not fit the label column grid. */}
           <div className="flex flex-col items-start gap-2">
-            <span className="text-sm text-muted-foreground">Status</span>
+            <span className="text-sm text-muted-foreground">
+              <T>Status</T>
+            </span>
             <WorkStatusPicker
               status={workModule.status}
               waitingReason={workModule.waitingReason}
@@ -332,11 +351,15 @@ export function WorkModulePanel(props: {
           <dl className="grid grid-cols-[5.5rem_1fr] items-center gap-x-3 gap-y-1 text-sm">
             {workModule.waitingReason === null ? null : (
               <>
-                <dt className="text-muted-foreground">Motivo</dt>
+                <dt className="text-muted-foreground">
+                  <T>Reason</T>
+                </dt>
                 <dd className="py-1.5">{workModule.waitingReason}</dd>
               </>
             )}
-            <dt className="text-muted-foreground">Prazo</dt>
+            <dt className="text-muted-foreground">
+              <T>Due date</T>
+            </dt>
             <dd className="-ms-2.5 flex h-8 items-center">
               <WorkDueDatePicker
                 value={workModule.dueDate}
@@ -348,7 +371,9 @@ export function WorkModulePanel(props: {
           </dl>
           <section className="flex flex-col gap-2 border-t pt-5">
             <header className="flex items-center gap-2">
-              <h3 className="text-sm font-medium">Threads</h3>
+              <h3 className="text-sm font-medium">
+                <T>Threads</T>
+              </h3>
               {confirmed.length === 0 ? null : (
                 <span className="text-xs tabular-nums text-muted-foreground">
                   {confirmed.length}
@@ -362,17 +387,19 @@ export function WorkModulePanel(props: {
                     onClick={() => props.onNewThread(project, node)}
                   >
                     <PlusIcon />
-                    Nova
+                    <T>New</T>
                   </Button>
                   <Button size="xs" variant="ghost" onClick={() => setLinking(true)}>
                     <LinkIcon />
-                    Ligar
+                    <T>Link</T>
                   </Button>
                 </div>
               ) : null}
             </header>
             {confirmed.length === 0 ? (
-              <p className="py-2 text-sm text-muted-foreground">Nenhuma thread ligada.</p>
+              <p className="py-2 text-sm text-muted-foreground">
+                <T>No linked threads.</T>
+              </p>
             ) : (
               <ul className="-mx-2 flex flex-col">
                 {confirmed.map((link) => (
@@ -384,7 +411,7 @@ export function WorkModulePanel(props: {
                   >
                     {canWrite ? (
                       <RowAction
-                        label="Desvincular"
+                        label={gt("Unlink")}
                         reveal
                         onClick={() => void unlinkThread(threadInput(link.threadId))}
                       >
@@ -399,7 +426,7 @@ export function WorkModulePanel(props: {
               <div className="mt-2 flex flex-col gap-1">
                 <h4 className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <LightbulbIcon className="size-3.5" />
-                  Sugeridas
+                  <T>Suggested</T>
                 </h4>
                 <ul className="-mx-2 flex flex-col">
                   {suggested.map((link) => (
@@ -412,13 +439,13 @@ export function WorkModulePanel(props: {
                       {canWrite ? (
                         <>
                           <RowAction
-                            label="Confirmar"
+                            label={gt("Confirm")}
                             onClick={() => void confirmSuggestion(threadInput(link.threadId))}
                           >
                             <CheckIcon />
                           </RowAction>
                           <RowAction
-                            label="Descartar"
+                            label={gt("Dismiss")}
                             onClick={() => void unlinkThread(threadInput(link.threadId))}
                           >
                             <XIcon />
@@ -433,7 +460,9 @@ export function WorkModulePanel(props: {
           </section>
           {note.agentLines.length === 0 ? null : (
             <section className="flex flex-col gap-2 border-t pt-5">
-              <h3 className="text-sm font-medium">Atividade</h3>
+              <h3 className="text-sm font-medium">
+                <T>Activity</T>
+              </h3>
               <ol className="flex flex-col gap-1.5 text-sm">
                 {note.agentLines.map((line, index) => {
                   const [date = "", ...rest] = line.split(" · agent: ");

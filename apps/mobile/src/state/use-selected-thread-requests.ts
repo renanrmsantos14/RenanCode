@@ -1,4 +1,6 @@
 import * as Dialog from "../components/ui/Dialog";
+import { msg } from "gt-react-native";
+import { m } from "../i18n/messages";
 import { useServerConfigs } from "./entities";
 import {
   questionAttachmentDraftKey,
@@ -371,7 +373,7 @@ export function useSelectedThreadRequests() {
       result,
       { environmentId: selectedThreadShell.environmentId, threadId: selectedThreadShell.id },
       requestId,
-      "Failed to submit approval decision.",
+      m(msg("Failed to submit approval decision.")),
     );
     return result;
   };
@@ -416,8 +418,8 @@ export function useSelectedThreadRequests() {
         )
       ) {
         Dialog.alert(
-          "Attachments are not ready",
-          "Wait for uploads to finish, or retry failed uploads.",
+          m(msg("Attachments are not ready")),
+          m(msg("Wait for uploads to finish, or retry failed uploads.")),
         );
         return;
       }
@@ -453,7 +455,7 @@ export function useSelectedThreadRequests() {
       result,
       { environmentId: selectedThreadShell.environmentId, threadId: selectedThreadShell.id },
       activePendingUserInput.requestId,
-      "Failed to submit answer.",
+      m(msg("Failed to submit answer.")),
     );
     if (result._tag === "Success") {
       collectAnsweredRequestDrafts(
@@ -489,7 +491,7 @@ export function useSelectedThreadRequests() {
       result,
       { environmentId: selectedThreadShell.environmentId, threadId: selectedThreadShell.id },
       activePendingUserInput.requestId,
-      "Failed to dismiss the question.",
+      m(msg("Failed to dismiss the question.")),
     );
     if (result._tag === "Success") {
       collectAnsweredRequestDrafts(

@@ -1,7 +1,9 @@
 import type { AssetResource, EnvironmentId } from "@t3tools/contracts";
+import { msg } from "gt-react";
 import { useRef, type DragEvent } from "react";
 
 import { toastManager } from "~/components/ui/toast";
+import { m } from "~/i18n/messages";
 
 import { useAssetUrlRefresh } from "./assetUrls";
 
@@ -74,7 +76,7 @@ export function useFileDrag(
         return;
       }
       prepare();
-      toastManager.add({ type: "info", title: "Preparing file…" });
+      toastManager.add({ type: "info", title: m(msg("Preparing file…")) });
     },
   };
 }

@@ -3,6 +3,8 @@ import {
   type OrchestrationV2ProviderMcpServer,
   type OrchestrationV2TurnItem,
 } from "@t3tools/contracts";
+import { mFallback, msg } from "gt-i18n";
+import type { MFunctionType } from "gt-i18n/types";
 
 export type McpServerRequestItem = Extract<
   OrchestrationV2TurnItem,
@@ -15,9 +17,9 @@ export type McpServerRequestDisplay =
   | { readonly kind: "answered"; readonly enabled: boolean; readonly label: string };
 
 const OUTCOME_LABELS = {
-  enabled: "Turned on",
-  declined: "Kept off",
-  cancelled: "Closed",
+  enabled: msg("Turned on"),
+  declined: msg("Kept off"),
+  cancelled: msg("Closed", { $context: "MCP server request outcome" }),
 } as const;
 
 /**
@@ -27,33 +29,39 @@ const OUTCOME_LABELS = {
 export function mcpServerRequestDisplay(
   item: Pick<McpServerRequestItem, "mcpServerStatus">,
   visibility: "local" | "inherited" | "synthetic",
+  resolve: MFunctionType = mFallback,
 ): McpServerRequestDisplay {
   if (item.mcpServerStatus !== "pending") {
     return {
       kind: "answered",
       enabled: item.mcpServerStatus === "enabled",
-      label: OUTCOME_LABELS[item.mcpServerStatus],
+      label: resolve(OUTCOME_LABELS[item.mcpServerStatus]),
     };
   }
   return visibility === "local"
     ? { kind: "pending" }
-    : { kind: "pending-elsewhere", label: "Waiting for an answer in the original thread" };
+    : {
+        kind: "pending-elsewhere",
+        label: resolve(msg("Waiting for an answer in the original thread")),
+      };
 }
 
 const STATUS_NOTES: Partial<Record<OrchestrationV2ProviderMcpServer["status"], string>> = {
-  failed: "Failed",
-  "needs-auth": "Needs sign-in",
-  pending: "Connecting",
+  failed: msg("Failed", { $context: "MCP server status" }),
+  "needs-auth": msg("Needs sign-in"),
+  pending: msg("Connecting", { $context: "MCP server status" }),
 };
 
 /** The hint under a server's switch: why it is locked, pending, or unhealthy. */
 export function mcpServerNote(
   server: OrchestrationV2ProviderMcpServer,
   on: boolean,
+  resolve: MFunctionType = mFallback,
 ): string | undefined {
-  if (server.alwaysOn) return "Always on in settings";
-  if (on !== (server.status !== "disabled")) return "Applies on next message";
-  return on ? STATUS_NOTES[server.status] : undefined;
+  if (server.alwaysOn) return resolve(msg("Always on in settings"));
+  if (on !== (server.status !== "disabled")) return resolve(msg("Applies on next message"));
+  const note = on ? STATUS_NOTES[server.status] : undefined;
+  return note === undefined ? undefined : resolve(note);
 }
 
 /**

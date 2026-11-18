@@ -1,5 +1,6 @@
 import { VoiceTranscriptionSettings as VoiceTranscriptionSettingsSchema } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
+import { T, useGT } from "gt-react";
 import { useState } from "react";
 
 import { serverEnvironment } from "../../state/server";
@@ -14,12 +15,13 @@ import { useScopedSettings } from "./useScopedSettings";
 const DEFINITION = { settingsSchema: VoiceTranscriptionSettingsSchema };
 
 export function VoiceTranscriptionSettings() {
+  const gt = useGT();
   const { environment, scope } = useSettingsScope();
   if (scope.kind !== "environment" || !environment) {
     return (
-      <SettingsSection title="Voice dictation" id="voice-dictation">
+      <SettingsSection title={gt("Voice dictation")} id="voice-dictation">
         <SettingsScopeNotice target="environment">
-          Choose one environment to configure voice dictation.
+          {gt("Choose one environment to configure voice dictation.")}
         </SettingsScopeNotice>
       </SettingsSection>
     );
@@ -28,6 +30,7 @@ export function VoiceTranscriptionSettings() {
 }
 
 function VoiceTranscriptionForm() {
+  const gt = useGT();
   const { environment } = useSettingsScope();
   const saved = useScopedSettings((settings) => settings.voiceTranscription);
   const [draft, setDraft] = useState<Record<string, unknown> | undefined>(undefined);
@@ -38,7 +41,7 @@ function VoiceTranscriptionForm() {
   const updateSettings = useAtomCommand(serverEnvironment.updateSettings, { reportFailure: true });
 
   return (
-    <SettingsSection title="Voice dictation" id="voice-dictation">
+    <SettingsSection title={gt("Voice dictation")} id="voice-dictation">
       <form
         className="grid gap-4 px-4 py-4 sm:px-5"
         onSubmit={async (event) => {
@@ -54,13 +57,21 @@ function VoiceTranscriptionForm() {
         }}
       >
         <p className="text-xs text-muted-foreground">
-          Uses Groq's free Whisper by default. Create a key at console.groq.com.
-          {saved.apiKey === "" ? " Not configured." : null}
+          {saved.apiKey === ""
+            ? gt(
+                "Uses Groq's free Whisper by default. Create a key at console.groq.com. Not configured.",
+              )
+            : gt("Uses Groq's free Whisper by default. Create a key at console.groq.com.")}
         </p>
         {!canEdit && (
           <p className="text-xs text-muted-foreground">
-            This connection lacks permission to change settings on{" "}
-            {environment?.label ?? "the selected environment"}.
+            {environment
+              ? gt("This connection lacks permission to change settings on {environment}.", {
+                  environment: environment.label,
+                })
+              : gt(
+                  "This connection lacks permission to change settings on the selected environment.",
+                )}
           </p>
         )}
         <ProviderSettingsForm
@@ -72,7 +83,7 @@ function VoiceTranscriptionForm() {
         />
         <div className="flex justify-end">
           <Button type="submit" disabled={!canEdit || saving || draft === undefined}>
-            Save
+            <T>Save</T>
           </Button>
         </div>
       </form>
