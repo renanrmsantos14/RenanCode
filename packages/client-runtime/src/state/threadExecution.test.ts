@@ -565,6 +565,21 @@ describe("deriveRunlessWorkStartedAt", () => {
     expect(deriveThreadRuntime(projection)).toBeNull();
   });
 
+  it("times a mirrored cloud session while it works without a run", () => {
+    const working = {
+      ...v2Projection,
+      runs: [],
+      thread: { ...v2Projection.thread, cloudWorkStartedAt: later },
+    };
+    expect(deriveRunlessWorkStartedAt(working)).toBe("2026-07-28T10:05:00.000Z");
+    expect(
+      deriveRunlessWorkStartedAt({
+        ...working,
+        runs: [{ ...v2Projection.runs[0]!, status: "running" }],
+      }),
+    ).toBeNull();
+  });
+
   it("ignores root turns that belong to a run, and threads the provider does not run", () => {
     const owned = { ...rootTurn("running"), runId: RunId.make("run-1") };
     expect(deriveRunlessWorkStartedAt({ ...nativeChild, nodes: [owned] })).toBeNull();

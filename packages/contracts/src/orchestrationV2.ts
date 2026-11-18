@@ -542,6 +542,8 @@ export const OrchestrationV2AppThread = Schema.Struct({
   pinnedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   testingAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
+  /** Set while a mirrored Claude cloud session works without a T3 run; the shell then reads as running. */
+  cloudWorkStartedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   /** Absent on threads written before tags existed; read as empty. */
@@ -2542,6 +2544,7 @@ export const OrchestrationV2AppThreadJson = OrchestrationV2AppThread.mapFields((
   pinnedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtcFromString)),
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtcFromString)),
   testingAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtcFromString)),
+  cloudWorkStartedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtcFromString)),
   lastVisitedAt: Schema.NullOr(Schema.DateTimeUtcFromString).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),

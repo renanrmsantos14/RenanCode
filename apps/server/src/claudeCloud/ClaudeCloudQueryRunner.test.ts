@@ -7,6 +7,7 @@ import {
   isCanUseToolRequest,
   isClaudeSdkFrame,
   routeClaudeQueryRunner,
+  withNativeSessionId,
 } from "./ClaudeCloudQueryRunner.ts";
 
 describe("Claude cloud query runner", () => {
@@ -17,6 +18,9 @@ describe("Claude cloud query runner", () => {
     expect(isClaudeSdkFrame({ type: "autocompact_state" })).toBe(false);
     expect(isClaudeSdkFrame({ type: "control_request" })).toBe(false);
     expect(isClaudeSdkFrame(null)).toBe(false);
+    const init = { type: "system", subtype: "init", session_id: "cli-uuid" } as never;
+    expect(withNativeSessionId(init, "native-1")).toMatchObject({ session_id: "native-1" });
+    expect(withNativeSessionId(init, "cli-uuid")).toBe(init);
   });
 
   it("answers only tool permission requests", () => {
