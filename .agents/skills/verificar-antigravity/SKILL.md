@@ -1,6 +1,6 @@
 ---
 name: verificar-antigravity
-description: "Verifica o adapter do Antigravity (agy): turno de continuação para comando em segundo plano, instruções do prompt de sessão (espera e mensagens de progresso), ferramentas MCP do T3 reconhecidas, imagem lida virando print e falha clara quando o agy é parado. Use após mudar apps/server/src/orchestration-v2/Adapters/AntigravityAdapterV2.ts, packages/provider-acp/src/server/adapter.ts ou runtimeModel.ts."
+description: "Verifica o adapter do Antigravity (agy): turno de continuação para comando em segundo plano, instruções do prompt de sessão (espera e mensagens de progresso), ferramentas MCP do T3 reconhecidas, imagem lida virando print e falha clara quando o agy é parado. Use após mudar apps/server/src/orchestration-v2/Adapters/AntigravityAdapterV2.ts, apps/server/src/provider/ProviderInstanceRegistry.ts, ProviderTurnLeases.ts, packages/provider-acp/src/server/adapter.ts ou runtimeModel.ts."
 ---
 
 # Verificar Antigravity
@@ -13,13 +13,15 @@ description: "Verifica o adapter do Antigravity (agy): turno de continuação pa
   - `ANTIGRAVITY_PROGRESS_INSTRUCTIONS` pede uma frase antes da 1ª ferramenta e atualizações curtas durante o trabalho. Sem ela, o Gemini roda dezenas de ferramentas calado.
 - `T3_MCP_TITLE_CALL` em `runtimeModel.ts` reconhece o título `Run mcp_t3-code_<tool>` do agy como ferramenta do T3.
 - Leitura ACP (`kind: "read"`) de imagem do workspace preenche `viewedImagePath`, e o web mostra o print.
-- Prompt interrompido sem Stop do usuário, por exemplo num reload da instância ao mudar as configurações do provider, termina com a mensagem "<harness> was stopped before it finished this turn…" em vez de "Provider turn failed.".
+- Salvar as configurações da instância (inclusive `environment`) não derruba turno em andamento: a instância antiga segue viva até o último turno dela acabar (`ProviderTurnLeases`), e só turnos novos usam a config nova. Sessões ociosas da instância antiga fecham na hora; as com turno fecham quando ele acaba, então a sessão seguinte já abre na config nova. Remover a instância continua parando tudo na hora.
+- Prompt interrompido sem Stop do usuário, por exemplo na remoção da instância, termina com a mensagem "<harness> was stopped before it finished this turn…" em vez de "Provider turn failed.".
 
 ## Roteiro
 
 1. Testes, a partir de `apps/server` com Node 26:
    - `vp test run src/orchestration-v2/Adapters/AntigravityAdapterV2.test.ts`
    - `vp test run src/orchestration-v2/Adapters/AcpAdapterV2.test.ts`, com os casos "explains a prompt interrupted by T3 stopping the agent process" e a fidelidade, que inclui `shots/home.png`.
+   - `vp test run src/provider/ProviderInstanceRegistry.test.ts`, bloco "turns in flight": config salva com turno rodando, instância ociosa, remoção, duas edições seguidas, segredo trocado, Stop da sessão, `startTurn` que falha e fechamento das sessões da instância antiga.
    - De `packages/provider-acp`: `vp test run src/server/runtimeModel.test.ts`
 2. `vp run check:changed`.
 3. Eval de progresso. Custa cota da conta Google; rode só se mudar o texto do prompt.
@@ -35,4 +37,5 @@ description: "Verifica o adapter do Antigravity (agy): turno de continuação pa
 - Sem `extractBackgroundTaskId` para o agy: a linha do `run_command` aparece "completed" sem saída no fim do 1º turno; o resultado real chega no turno de continuação.
 - As instruções de sessão só chegam quando o agy aceita `_meta.antigravity.systemPrompt.append`.
 - `git push` parado em "Username for github.com" não é problema do adapter. O `DBUS_SESSION_BUS_ADDRESS` falso da instância impede o `gh` de ler o chaveiro. A correção é pôr `GH_TOKEN` (Sensitive) no `environment` da instância.
-- Mudar as configurações de uma instância (inclusive `environment`) recarrega a instância e mata os agy dela, interrompendo tarefas em andamento. Evite com tarefas rodando.
+- Mudar as configurações de uma instância (inclusive `environment`) não interrompe tarefa em andamento, mas a config nova só vale para turnos novos. Para aplicar já, use o Stop. Turno de continuação ou comando em segundo plano que só começa depois do `turn.terminal` não segura a instância antiga: ela fecha e leva o processo junto.
+- Sem limite de tempo: um turno que nunca termina mantém a instância antiga viva até o Stop.

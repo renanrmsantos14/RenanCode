@@ -28,6 +28,7 @@ import * as Stream from "effect/Stream";
 import * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
 
 import { buildUnavailableProviderSnapshot } from "./unavailableProviderSnapshot.ts";
+import { makeTurnLeases, trackTurns, type TurnLeases } from "./ProviderTurnLeases.ts";
 import * as ProviderInstanceRegistryMutator from "./ProviderInstanceRegistryMutator.ts";
 import type { AnyProviderDriver, ProviderInstance } from "@t3tools/provider-core/server/driver";
 
@@ -53,6 +54,7 @@ interface InstanceSecrets {
 interface LiveEntry {
   readonly instance: ProviderInstance;
   readonly scope: Scope.Closeable;
+  readonly leases: TurnLeases;
   readonly entry: ProviderInstanceConfig;
   readonly secrets: InstanceSecrets;
 }
@@ -350,11 +352,16 @@ const buildEntry = Effect.fn("ProviderInstanceRegistry.buildEntry")(function* <R
     };
   }
 
+  const leases = makeTurnLeases();
   return {
     kind: "live" as const,
     live: {
-      instance: createResult.success,
+      instance: {
+        ...createResult.success,
+        orchestrationAdapter: trackTurns(createResult.success.orchestrationAdapter, leases),
+      },
       scope: childScope,
+      leases,
       entry,
       secrets,
     },
@@ -383,7 +390,8 @@ const makeReconcile = <R>(input: {
         nextRaw.map(([raw]) => ProviderInstanceId.make(raw)),
       );
 
-      // Close changed/removed scopes before replacements to preserve one live scope per id.
+      // A removed instance closes now. A replaced one leaves the map now, so new turns take the
+      // new config, but closes only once its running turns end: closing kills them.
       const removedIds: Array<ProviderInstanceId> = [];
       const replacedIds = new Set<ProviderInstanceId>();
       for (const [instanceId, live] of previousEntries) {
@@ -407,8 +415,17 @@ const makeReconcile = <R>(input: {
       }
       for (const id of retiredIds) {
         const live = previousEntries.get(id);
-        if (live) {
-          yield* Scope.close(live.scope, Exit.void).pipe(Effect.ignore);
+        if (live === undefined) continue;
+        const close = Scope.close(live.scope, Exit.void).pipe(Effect.ignore);
+        if (replacedIds.has(id) && (yield* live.leases.hasActive)) {
+          yield* live.leases.retire;
+          yield* live.leases.whenIdle.pipe(
+            Effect.andThen(close),
+            Effect.forkIn(parentScope),
+            Effect.asVoid,
+          );
+        } else {
+          yield* close;
         }
       }
 
