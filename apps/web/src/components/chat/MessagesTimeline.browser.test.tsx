@@ -1762,7 +1762,11 @@ describe("MessagesTimeline attachments", () => {
             kind: "viewed-images",
             id: "viewed",
             createdAt: CREATED_AT,
-            paths: ["/repo/first.png", "/repo/second.png", "/repo/third.png"],
+            images: [
+              { path: "/repo/first.png" },
+              { path: "/repo/second.png" },
+              { path: "/repo/third.png" },
+            ],
           }}
         />
       </TimelineRowCtx>,

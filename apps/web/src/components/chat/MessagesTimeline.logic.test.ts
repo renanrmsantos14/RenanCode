@@ -2373,12 +2373,13 @@ describe("deriveMessagesTimelineRows", () => {
       completedAt: at(ordinal),
       updatedAt: at(ordinal),
     });
-    const read = (id: string, ordinal: number, filePath: string) => ({
+    const read = (id: string, ordinal: number, filePath: string, outputHasImage = false) => ({
       ...base(id, ordinal),
       type: "dynamic_tool" as const,
       toolName: "Read",
       // The Claude adapter tags reads of image files.
       ...(filePath.endsWith(".png") ? { viewedImagePath: filePath } : {}),
+      ...(outputHasImage ? { outputOmitted: true, outputHasImage } : {}),
       input: { file_path: filePath },
     });
     const items = (settled: boolean) =>
@@ -2395,7 +2396,7 @@ describe("deriveMessagesTimelineRows", () => {
         },
         read("read-sidebar", 1, "/repo/docs/sidebar.png"),
         read("read-notes", 2, "/repo/docs/notes.md"),
-        read("read-sidebar-again", 3, "/repo/docs/sidebar.png"),
+        read("read-sidebar-again", 3, "/repo/docs/sidebar.png", true),
         read("read-topbar", 4, "/repo/docs/topbar.png"),
         settled
           ? {
@@ -2440,15 +2441,19 @@ describe("deriveMessagesTimelineRows", () => {
         supportsConversationRollback: false,
       });
       return rows.flatMap((row, index) =>
-        row.kind === "viewed-images" ? [{ after: rows[index - 1]?.kind, paths: row.paths }] : [],
+        row.kind === "viewed-images" ? [{ after: rows[index - 1]?.kind, images: row.images }] : [],
       );
     };
-    const paths = ["/repo/docs/sidebar.png", "/repo/docs/topbar.png"];
+    // The repeated read keeps one image, taken from the read whose output holds the bytes.
+    const images = [
+      { path: "/repo/docs/sidebar.png", itemId: "read-sidebar-again" },
+      { path: "/repo/docs/topbar.png" },
+    ];
 
-    expect(viewedImages(false)).toEqual([{ after: "work-live", paths }]);
+    expect(viewedImages(false)).toEqual([{ after: "work-live", images }]);
     // A settled turn's fold keeps hiding its work, images included, until it is opened.
     expect(viewedImages(true)).toEqual([]);
-    expect(viewedImages(true, new Set([runId]))).toEqual([{ after: "work-toggle", paths }]);
+    expect(viewedImages(true, new Set([runId]))).toEqual([{ after: "work-toggle", images }]);
   });
 
   it("keeps imported V1 turns folded once the thread's first V2 run starts", () => {

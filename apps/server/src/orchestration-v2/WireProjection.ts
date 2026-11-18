@@ -17,6 +17,7 @@ import {
 } from "@t3tools/shared/orchestrationV2DedupedBodies";
 import { MCP_APP_OUTPUT_KEY, readMcpAppReference } from "@t3tools/shared/mcpApp";
 import {
+  MAX_TOOL_OUTPUT_IMAGE_BASE64_LENGTH,
   compactDynamicToolOutput,
   omitToolOutputImageData,
   toolOutputImages,
@@ -200,11 +201,17 @@ export function projectTurnItemForWire(item: OrchestrationV2TurnItem): Orchestra
         input: summarizeDynamicValue(item.input),
         ...(output === undefined ? {} : { output }),
         ...(hasDynamicValue(rawOutput) ? { outputOmitted: true } : {}),
+        ...(hasServableOutputImage(rawOutput) ? { outputHasImage: true } : {}),
       };
     }
     default:
       return item;
   }
+}
+
+function hasServableOutputImage(output: unknown): boolean {
+  const data = toolOutputImages(output)[0]?.data;
+  return data !== undefined && data.length <= MAX_TOOL_OUTPUT_IMAGE_BASE64_LENGTH;
 }
 
 function hasDynamicValue(value: unknown): boolean {

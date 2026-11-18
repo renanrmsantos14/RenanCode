@@ -102,6 +102,23 @@ describe("orchestration V2 wire projection", () => {
     expect(decoded).toMatchObject({ viewedImagePath: "/workspace/reference.png" });
     expect(decoded).not.toHaveProperty("output");
     expect(item.output.data).toBe("private-image-data");
+    expect(decoded).not.toHaveProperty("outputHasImage");
+
+    const withBytes = projectTurnItemForWire({
+      ...item,
+      output: {
+        content: [
+          { type: "image", source: { type: "base64", media_type: "image/jpeg", data: "AAAA" } },
+        ],
+      },
+    });
+    expect(JSON.stringify(withBytes)).not.toContain("AAAA");
+    expect(
+      decodeTurnItem(decodeTurnItemJson(encodeTurnItemJson(decodeTurnItem(withBytes)))),
+    ).toMatchObject({
+      outputOmitted: true,
+      outputHasImage: true,
+    });
   });
 
   it("keeps transcript bodies out of shell rows", () => {

@@ -18,7 +18,7 @@ import {
   resolveViewedImageAsset,
   resolveWorkEntryToolPresentation,
   toolGroupAction,
-  workEntryViewedImagePath,
+  workEntryViewedImage,
 } from "@t3tools/client-runtime/work-log/presentation";
 import { t3ToolResultIndicatesFailure } from "@t3tools/client-runtime/t3ToolSummary";
 import {
@@ -256,10 +256,11 @@ export function ViewedImagesTimelineRow({
   if (!threadRef) return null;
   return (
     <div className="flex flex-wrap items-start gap-2 px-0.5" data-image-gallery>
-      {row.paths.map((path) => {
+      {row.images.map(({ path, itemId }) => {
         const image = resolveViewedImageAsset(path, {
           threadId: threadRef.threadId,
           workspaceRoot,
+          itemId,
         });
         return image ? (
           <ChatMarkdownAssetImage
@@ -413,7 +414,8 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
     workEntry.questionAnswer && hasQuestionAnswer(workEntry.questionAnswer)
       ? getQuestionAnswerPreview(workEntry.questionAnswer)
       : null;
-  const viewedImagePath = workEntryViewedImagePath(workEntry);
+  const viewedImageRef = workEntryViewedImage(workEntry);
+  const viewedImagePath = viewedImageRef?.path ?? null;
   const payload = workEntry.structuredPayload;
   const skill =
     payload?.type === "dynamic_tool"
@@ -430,6 +432,7 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
       ? resolveViewedImageAsset(viewedImagePath, {
           threadId: threadRef.threadId,
           workspaceRoot,
+          itemId: viewedImageRef?.itemId,
         })
       : null;
   const groupViewedImages = groupView?.viewedImages;
