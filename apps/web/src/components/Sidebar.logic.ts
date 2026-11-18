@@ -1492,20 +1492,30 @@ export function sortScopedProjectsForSidebar<
   );
 }
 
-/** Every environment logged into the same Claude account mirrors the same cloud session; show it once. */
+/** Every environment logged into the same Claude account mirrors the same cloud session; show it once, preferring the copy that owns the run. */
 export function dedupeClaudeCloudThreads<
-  T extends { readonly id: string; readonly environmentId: EnvironmentId },
+  T extends {
+    readonly id: string;
+    readonly environmentId: EnvironmentId;
+    readonly activeRunId?: unknown;
+    readonly latestRunId?: unknown;
+  },
 >(threads: readonly T[], preferredEnvironmentId: EnvironmentId | null): readonly T[] {
+  const rank = (thread: T) =>
+    (thread.activeRunId != null ? 4 : 0) +
+    (thread.latestRunId != null ? 2 : 0) +
+    (thread.environmentId === preferredEnvironmentId ? 1 : 0);
   const chosen = new Map<string, T>();
   let hasDuplicate = false;
   for (const thread of threads) {
     if (!isClaudeCloudThreadId(thread.id)) continue;
-    if (!chosen.has(thread.id)) {
+    const current = chosen.get(thread.id);
+    if (current === undefined) {
       chosen.set(thread.id, thread);
       continue;
     }
     hasDuplicate = true;
-    if (thread.environmentId === preferredEnvironmentId) chosen.set(thread.id, thread);
+    if (rank(thread) > rank(current)) chosen.set(thread.id, thread);
   }
   if (!hasDuplicate) return threads;
   return threads.filter(

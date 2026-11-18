@@ -7,6 +7,8 @@ import {
   cloudMessages,
   cloudSessionBranch,
   cloudSessionRepository,
+  cloudToolCalls,
+  cloudToolItemSequence,
   isMirroredCloudSession,
   localOnlyReason,
   projectForRepository,
@@ -146,5 +148,61 @@ describe("Claude cloud session mirroring", () => {
       { sequence: "1", uuid: "sent-from-t3", role: "user", text: "Fix the bug" },
       { sequence: "2", uuid: null, role: "assistant", text: "On it." },
     ]);
+  });
+
+  describe("tool calls", () => {
+    const event = (sequence: number, payload: unknown, created_at = "2026-11-05T10:00:00Z") => ({
+      sequence_num: String(sequence),
+      created_at,
+      payload,
+    });
+    const toolUse = (id: string, name: string, input: unknown) => ({
+      type: "assistant",
+      message: { content: [{ type: "tool_use", id, name, input }] },
+    });
+    const toolResult = (id: string, content: string, isError = false) => ({
+      type: "user",
+      message: {
+        content: [{ type: "tool_result", tool_use_id: id, content, is_error: isError }],
+      },
+    });
+
+    it("pairs each call with its result and leaves unanswered calls running", () => {
+      const calls = cloudToolCalls([
+        event(2, toolUse("t1", "Bash", { command: "ls" })),
+        event(3, toolResult("t1", "a.ts"), "2026-11-05T10:00:05Z"),
+        event(4, toolUse("t2", "Read", { file_path: "/repo/a.ts" })),
+        event(5, toolUse("t3", "Bash", { command: "false" })),
+        event(6, toolResult("t3", "boom", true)),
+      ]);
+      expect(
+        calls.map((call) => ({
+          sequence: call.sequence,
+          id: call.toolUseId,
+          done: call.result === null ? null : !call.result.failed,
+          completedAt: call.result?.completedAt,
+        })),
+      ).toEqual([
+        { sequence: "2", id: "t1", done: true, completedAt: "2026-11-05T10:00:05Z" },
+        { sequence: "4", id: "t2", done: null, completedAt: undefined },
+        { sequence: "5", id: "t3", done: false, completedAt: "2026-11-05T10:00:00Z" },
+      ]);
+    });
+
+    it("leaves out subagents, background-task tools and sidechain traffic", () => {
+      const calls = cloudToolCalls([
+        event(1, toolUse("a", "Agent", { prompt: "x" })),
+        event(2, toolUse("b", "Task", { prompt: "x" })),
+        event(3, { ...toolUse("c", "Bash", { command: "ls" }), parent_tool_use_id: "a" }),
+        event(4, { ...toolUse("d", "Bash", { command: "ls" }), isSidechain: true }),
+        event(5, toolUse("e", "Grep", { pattern: "x" })),
+      ]);
+      expect(calls.map((call) => call.toolUseId)).toEqual(["e"]);
+    });
+
+    it("recovers the event sequence from tool item ids only", () => {
+      expect(cloudToolItemSequence("claude-cloud:turn-item:claude-cloud:s1:tool:t1:42")).toBe(42);
+      expect(cloudToolItemSequence("claude-cloud:turn-item:claude-cloud:s1:42")).toBeNull();
+    });
   });
 });

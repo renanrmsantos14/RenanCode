@@ -1899,9 +1899,11 @@ export function threadShellFromProjection(
       latestRun != null && isBackgroundWakeRunForShell(latestRun, projection),
     activeRunId: activeRun?.id ?? null,
     blockedOnThreadWait: deriveBlockedOnThreadWait({ activeRun, turnItems: projection.turnItems }),
-    activityRunStatus: activityRun?.status ?? null,
-    activityRunStartedAt:
+    ...cloudWorkActivity(
+      projection.thread,
+      activityRun?.status ?? null,
       activityRun === null ? null : orchestrationV2RunWorkStartedAt(activityRun),
+    ),
     status: latestRun?.status ?? "idle",
     ...threadErrorSummary(
       latestRootProviderFailure(latestRun, projection.turnItems),
@@ -2162,6 +2164,20 @@ function visibleItemCountForShell(input: {
   );
 }
 
+/** A mirrored Claude cloud session working without a T3 run still reads as running. */
+function cloudWorkActivity(
+  thread: { readonly cloudWorkStartedAt?: DateTime.Utc | null | undefined },
+  activityRunStatus: ShellActivityRunStatus | null,
+  activityRunStartedAt: DateTime.Utc | null,
+): {
+  readonly activityRunStatus: ShellActivityRunStatus | null;
+  readonly activityRunStartedAt: DateTime.Utc | null;
+} {
+  return activityRunStatus === null && thread.cloudWorkStartedAt != null
+    ? { activityRunStatus: "running", activityRunStartedAt: thread.cloudWorkStartedAt }
+    : { activityRunStatus, activityRunStartedAt };
+}
+
 function shellFromState(input: {
   readonly state: ShellThreadState;
   readonly visibleItemCount: number;
@@ -2212,8 +2228,11 @@ function shellFromState(input: {
     latestRunBackgroundWake: input.state.latestRunBackgroundWake,
     activeRunId: input.state.activeRunId,
     blockedOnThreadWait: input.state.blockedOnThreadWait,
-    activityRunStatus: input.state.activityRunStatus,
-    activityRunStartedAt: input.state.activityRunStartedAt,
+    ...cloudWorkActivity(
+      input.state.thread,
+      input.state.activityRunStatus,
+      input.state.activityRunStartedAt,
+    ),
     status: input.state.latestRunStatus,
     lastError: input.state.lastError,
     lastErrorClass: input.state.lastErrorClass,

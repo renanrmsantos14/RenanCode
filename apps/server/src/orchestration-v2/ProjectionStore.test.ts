@@ -8961,6 +8961,48 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
           false,
         )?.commandId.startsWith("limit-resume:"),
       );
+
+      // A mirrored cloud session working without a run reads as running in both shell paths.
+      yield* store.apply({
+        id: EventId.make("event:settled-parent-limit:active:cloud-working"),
+        type: "thread.metadata-updated",
+        threadId: activeParentChild,
+        occurredAt: afterReset,
+        payload: {
+          ...threadPayload(
+            activeParentChild,
+            ThreadId.make("thread:settled-parent-limit:active:parent"),
+            null,
+          ),
+          cloudWorkStartedAt: afterReset,
+        },
+      });
+      const cloudWorking = yield* store.getThreadProjection(activeParentChild);
+      for (const shell of [
+        (yield* store.getShellSnapshot()).threads.find((row) => row.id === activeParentChild)!,
+        ProjectionStore.threadShellFromProjection(cloudWorking),
+      ]) {
+        assert.equal(shell.activityRunStatus, "running");
+        assert.equal(
+          DateTime.toEpochMillis(shell.activityRunStartedAt!),
+          DateTime.toEpochMillis(afterReset),
+        );
+        assert.equal(shell.activeRunId, null);
+      }
+      yield* store.apply({
+        id: EventId.make("event:settled-parent-limit:active:cloud-idle"),
+        type: "thread.metadata-updated",
+        threadId: activeParentChild,
+        occurredAt: afterReset,
+        payload: {
+          ...threadPayload(
+            activeParentChild,
+            ThreadId.make("thread:settled-parent-limit:active:parent"),
+            null,
+          ),
+          cloudWorkStartedAt: null,
+        },
+      });
     }),
   );
 

@@ -74,6 +74,16 @@ export function isClaudeSdkFrame(payload: unknown): payload is SDKMessage {
   return typeof type === "string" && SDK_FRAME_TYPES.has(type);
 }
 
+/**
+ * Cloud frames carry the CLI's own session id. The adapter adopts a different id as a /clear
+ * and then cannot reuse this query, so the next send replaces it, which background agents block.
+ */
+export function withNativeSessionId(frame: SDKMessage, nativeSessionId: string): SDKMessage {
+  return "session_id" in frame && frame.session_id !== nativeSessionId
+    ? { ...frame, session_id: nativeSessionId }
+    : frame;
+}
+
 export function isCanUseToolRequest(payload: unknown): payload is CloudControlRequest {
   const value = payload as Partial<CloudControlRequest> | null;
   return (
@@ -147,6 +157,7 @@ export const makeClaudeCloudQueryRunner = Effect.fn("makeClaudeCloudQueryRunner"
         : input.threadId;
       const messages = yield* Queue.unbounded<SDKMessage, ClaudeAgentSdkQueryRunnerError>();
       const canUseTool = input.options.canUseTool;
+      const nativeSessionId = input.options.resume ?? input.options.sessionId ?? sessionId;
 
       const answerPermission = (request: CloudControlRequest) =>
         random.uuidV4().pipe(
@@ -195,7 +206,7 @@ export const makeClaudeCloudQueryRunner = Effect.fn("makeClaudeCloudQueryRunner"
           if (isCanUseToolRequest(event.payload)) {
             yield* Effect.forkDetach(answerPermission(event.payload));
           } else if (isClaudeSdkFrame(event.payload)) {
-            yield* Queue.offer(messages, event.payload);
+            yield* Queue.offer(messages, withNativeSessionId(event.payload, nativeSessionId));
           }
         }
       }).pipe(

@@ -194,7 +194,14 @@ export function deriveThreadActivityRun(projection: ThreadStructure): ThreadRunS
  */
 export function deriveRunlessWorkStartedAt(projection: ThreadStructure): string | null {
   const status = deriveProviderSubagentStatus(projection);
-  return status !== null && isOrchestrationV2WorkActive(status.status) ? status.startedAt : null;
+  if (status !== null) {
+    return isOrchestrationV2WorkActive(status.status) ? status.startedAt : null;
+  }
+  const cloudWorkStartedAt = projection.thread.cloudWorkStartedAt;
+  return cloudWorkStartedAt != null &&
+    !projection.runs.some((run) => ACTIVITY_RUN_STATUSES.has(run.status))
+    ? DateTime.formatIso(cloudWorkStartedAt)
+    : null;
 }
 
 export interface ProviderSubagentStatus {

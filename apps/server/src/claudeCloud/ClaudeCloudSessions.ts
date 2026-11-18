@@ -35,6 +35,18 @@ import * as Schema from "effect/Schema";
 import * as HttpClientError from "effect/http/HttpClientError";
 import * as Path from "effect/Path";
 
+import {
+  type ClaudeNativeToolInput,
+  type ClaudeNativeToolOutput,
+  type ClaudeToolPresentation,
+  claudeNativeToolInputFromUnknown,
+  claudeToolPresentationsFromAssistantMessage,
+  claudeToolResultEntriesFromMessage,
+  claudeToolTurnItem,
+  claudeToolUseBlocksFromAssistantMessage,
+  classifyClaudeNativeTool,
+  isClaudeToolResultError,
+} from "../orchestration-v2/Adapters/ClaudeAdapterV2.ts";
 import * as EventSink from "../orchestration-v2/EventSink.ts";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as ProjectService from "../project/ProjectService.ts";
@@ -375,6 +387,125 @@ function messageEvents(
   ];
 }
 
+const CLOUD_TOOL_ITEM_MARKER = ":tool:";
+// Subagent and background-task tools have their own surfaces; the mirror leaves them out.
+const CLOUD_HIDDEN_TOOLS = new Set(["agent", "task", "taskstop", "sendmessage", "monitor"]);
+
+type CloudSdkMessage = Parameters<typeof claudeToolResultEntriesFromMessage>[0];
+
+interface CloudToolCall {
+  readonly sequence: string;
+  readonly toolUseId: string;
+  readonly toolName: string;
+  readonly input: ClaudeNativeToolInput;
+  readonly presentation: ClaudeToolPresentation | undefined;
+  readonly startedAt: string;
+  readonly result: {
+    readonly output: ClaudeNativeToolOutput;
+    readonly failed: boolean;
+    readonly completedAt: string;
+  } | null;
+}
+
+/** Tool calls of the main conversation, each paired with its result when one has arrived. */
+export function cloudToolCalls(events: ReadonlyArray<CloudEvent>): ReadonlyArray<CloudToolCall> {
+  const calls = new Map<string, CloudToolCall>();
+  for (const event of events) {
+    const payload = event.payload as
+      | { type?: unknown; isSidechain?: unknown; parent_tool_use_id?: unknown }
+      | undefined;
+    if (payload?.type !== "user" && payload?.type !== "assistant") continue;
+    if (payload.isSidechain === true || payload.parent_tool_use_id != null) continue;
+    const message = payload as unknown as CloudSdkMessage;
+    if (payload.type === "assistant") {
+      const presentations = claudeToolPresentationsFromAssistantMessage(message);
+      for (const block of claudeToolUseBlocksFromAssistantMessage(message)) {
+        if (CLOUD_HIDDEN_TOOLS.has(classifyClaudeNativeTool(block.name).normalizedName)) continue;
+        calls.set(block.id, {
+          sequence: String(event.sequence_num),
+          toolUseId: block.id,
+          toolName: block.name,
+          input: claudeNativeToolInputFromUnknown(block.input),
+          presentation: presentations.get(block.id),
+          startedAt: event.created_at,
+          result: null,
+        });
+      }
+    }
+    for (const { toolResult, output } of claudeToolResultEntriesFromMessage(message)) {
+      const call = calls.get(toolResult.tool_use_id);
+      if (call === undefined) continue;
+      calls.set(call.toolUseId, {
+        ...call,
+        result: {
+          output,
+          failed: isClaudeToolResultError(toolResult),
+          completedAt: event.created_at,
+        },
+      });
+    }
+  }
+  return [...calls.values()];
+}
+
+export function cloudToolItemSequence(itemId: string): number | null {
+  if (!itemId.includes(CLOUD_TOOL_ITEM_MARKER)) return null;
+  const sequence = Number(itemId.split(":").at(-1));
+  return Number.isFinite(sequence) ? sequence : null;
+}
+
+function toolEvents(
+  threadId: ThreadId,
+  call: CloudToolCall,
+  ordinal: number,
+  sessionRunning: boolean,
+): ReadonlyArray<OrchestrationV2DomainEvent> {
+  const key = `${threadId}${CLOUD_TOOL_ITEM_MARKER}${call.toolUseId}:${call.sequence}`;
+  const startedAt = DateTime.makeUnsafe(call.startedAt);
+  // A call without a result in a session that stopped will never get one.
+  const status = call.result
+    ? call.result.failed
+      ? ("failed" as const)
+      : ("completed" as const)
+    : sessionRunning
+      ? ("running" as const)
+      : ("interrupted" as const);
+  const finishedAt =
+    status === "running" ? null : DateTime.makeUnsafe(call.result?.completedAt ?? call.startedAt);
+  const updatedAt = finishedAt ?? startedAt;
+  const turnItem = claudeToolTurnItem({
+    toolName: call.toolName,
+    classification: classifyClaudeNativeTool(call.toolName),
+    toolInput: call.input,
+    output: call.result?.output ?? { type: "none" },
+    presentation: call.presentation,
+    base: {
+      id: TurnItemId.make(`${EVENT_ID_PREFIX}:turn-item:${key}`),
+      threadId,
+      runId: null,
+      nodeId: null,
+      providerThreadId: null,
+      providerTurnId: null,
+      nativeItemRef: null,
+      parentItemId: null,
+      ordinal,
+      status,
+      startedAt,
+      completedAt: finishedAt,
+      updatedAt,
+    },
+  });
+  return [
+    {
+      id: EventId.make(`${EVENT_ID_PREFIX}:turn-item-event:${key}:${status}`),
+      type: "turn-item.updated",
+      threadId,
+      occurredAt: updatedAt,
+      payload: turnItem,
+    },
+  ];
+}
+
 function cloudThreadTitle(session: CloudSession): string {
   const title = session.title?.trim();
   return title ? title : "Cloud session";
@@ -484,6 +615,19 @@ const make = Effect.gen(function* () {
           : Math.max(latest, DateTime.toEpochMillis(run.completedAt)),
       0,
     );
+    const sessionRunning = isCloudSessionBusy(session);
+    const knownItems = new Map(
+      Option.isSome(existing)
+        ? existing.value.turnItems.map((item) => [String(item.id), item])
+        : [],
+    );
+    // A tool still running when last synced needs the events after its call, not only new ones.
+    const pendingToolSequence = Math.min(
+      Infinity,
+      ...[...knownItems.values()].flatMap((item) =>
+        item.status === "running" ? [cloudToolItemSequence(String(item.id)) ?? Infinity] : [],
+      ),
+    );
     const known = syncedSequence.get(session.id);
     const afterSequence =
       known ??
@@ -503,6 +647,8 @@ const make = Effect.gen(function* () {
       existing.value.thread.title === title &&
       (cloudSessionBranch(session) ?? existing.value.thread.branch) ===
         existing.value.thread.branch &&
+      (existing.value.thread.cloudWorkStartedAt != null) === sessionRunning &&
+      pendingToolSequence === Infinity &&
       DateTime.formatIso(existing.value.thread.updatedAt) ===
         DateTime.formatIso(DateTime.makeUnsafe(session.last_event_at ?? session.created_at));
     if (unchanged) return;
@@ -515,7 +661,11 @@ const make = Effect.gen(function* () {
         Effect.orElseSucceed(() => null),
       )) ??
       (Option.isSome(existing) ? existing.value.thread.branch : null);
-    const events = yield* listEventsAfter(account, session.id, afterSequence);
+    const events = yield* listEventsAfter(
+      account,
+      session.id,
+      Math.min(afterSequence, pendingToolSequence - 1),
+    );
     const sentFromT3 = new Set(
       Option.isSome(existing)
         ? existing.value.turnItems.flatMap((item) =>
@@ -525,9 +675,21 @@ const make = Effect.gen(function* () {
     );
     const messages = cloudMessages(events).filter(
       (message) =>
+        Number(message.sequence) > afterSequence &&
         (message.uuid === null || !sentFromT3.has(message.uuid)) &&
         Date.parse(message.createdAt) > lastRunEndedAt,
     );
+    const toolCalls = cloudToolCalls(events).filter((call) => {
+      const id = `${EVENT_ID_PREFIX}:turn-item:${threadId}${CLOUD_TOOL_ITEM_MARKER}${call.toolUseId}:${call.sequence}`;
+      const item = knownItems.get(id);
+      return item === undefined
+        ? Number(call.sequence) > afterSequence && Date.parse(call.startedAt) > lastRunEndedAt
+        : item.status === "running";
+    });
+    const entries = [
+      ...messages.map((message) => ({ sequence: Number(message.sequence), message })),
+      ...toolCalls.map((call) => ({ sequence: Number(call.sequence), call })),
+    ].toSorted((left, right) => left.sequence - right.sequence);
     const lastSequence = Math.max(
       afterSequence,
       ...events.map((event) => Number(event.sequence_num)),
@@ -535,10 +697,11 @@ const make = Effect.gen(function* () {
     const updatedAt = DateTime.makeUnsafe(session.last_event_at ?? session.created_at);
     // A prompt sent from T3 moves the thread's updatedAt without new cloud content; nothing to write.
     if (
-      messages.length === 0 &&
+      entries.length === 0 &&
       Option.isSome(existing) &&
       existing.value.thread.title === title &&
-      existing.value.thread.branch === branch
+      existing.value.thread.branch === branch &&
+      (existing.value.thread.cloudWorkStartedAt != null) === sessionRunning
     ) {
       syncedSequence.set(session.id, lastSequence);
       return;
@@ -548,15 +711,19 @@ const make = Effect.gen(function* () {
     // The thread remembers its account so replies and archives go through the same login.
     const instanceId = account.instanceId;
 
+    const cloudWorkStartedAt = sessionRunning
+      ? ((Option.isSome(existing) ? existing.value.thread.cloudWorkStartedAt : null) ??
+        (yield* DateTime.now))
+      : null;
     const threadEvent: OrchestrationV2DomainEvent = Option.isSome(existing)
       ? {
           id: EventId.make(
-            `${EVENT_ID_PREFIX}:thread:${threadId}:updated:${lastSequence}:${DateTime.toEpochMillis(updatedAt)}:${branch ?? ""}`,
+            `${EVENT_ID_PREFIX}:thread:${threadId}:updated:${lastSequence}:${DateTime.toEpochMillis(updatedAt)}:${branch ?? ""}:${cloudWorkStartedAt === null ? "idle" : "working"}`,
           ),
           type: "thread.metadata-updated",
           threadId,
           occurredAt: updatedAt,
-          payload: { ...existing.value.thread, title, branch, updatedAt },
+          payload: { ...existing.value.thread, title, branch, updatedAt, cloudWorkStartedAt },
         }
       : {
           id: EventId.make(`${EVENT_ID_PREFIX}:thread:${threadId}:created`),
@@ -597,6 +764,7 @@ const make = Effect.gen(function* () {
             pinOrderKey: null,
             activeOrderKey: null,
             lastVisitedAt: null,
+            cloudWorkStartedAt,
             deletedAt: null,
           } satisfies OrchestrationV2AppThread,
         };
@@ -604,9 +772,18 @@ const make = Effect.gen(function* () {
     yield* eventSink.write({
       events: [
         threadEvent,
-        ...messages.flatMap((message, index) =>
-          messageEvents(threadId, message, ordinalBase + index + 1),
-        ),
+        ...entries.flatMap((entry, index) => {
+          if ("message" in entry) {
+            return messageEvents(threadId, entry.message, ordinalBase + index + 1);
+          }
+          const id = `${EVENT_ID_PREFIX}:turn-item:${threadId}${CLOUD_TOOL_ITEM_MARKER}${entry.call.toolUseId}:${entry.call.sequence}`;
+          return toolEvents(
+            threadId,
+            entry.call,
+            knownItems.get(id)?.ordinal ?? ordinalBase + index + 1,
+            sessionRunning,
+          );
+        }),
       ],
     });
     syncedSequence.set(session.id, lastSequence);

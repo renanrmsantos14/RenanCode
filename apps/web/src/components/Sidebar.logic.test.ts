@@ -179,6 +179,24 @@ describe("dedupeClaudeCloudThreads", () => {
     expect(dedupeClaudeCloudThreads(threads, null)[0]).toBe(threads[0]);
     const unique = threads.slice(0, 2);
     expect(dedupeClaudeCloudThreads(unique, local)).toBe(unique);
+
+    const run = (id: string) => id as never;
+    const mirror = {
+      id: "claude-cloud:s2",
+      environmentId: local,
+      activeRunId: null,
+      latestRunId: null,
+    };
+    const withLatest = { ...mirror, environmentId: other, latestRunId: run("r1") };
+    const withActive = {
+      ...mirror,
+      environmentId: other,
+      activeRunId: run("r2"),
+      latestRunId: run("r2"),
+    };
+    expect(dedupeClaudeCloudThreads([mirror, withLatest], local)).toEqual([withLatest]);
+    expect(dedupeClaudeCloudThreads([mirror, withLatest, withActive], local)).toEqual([withActive]);
+    expect(dedupeClaudeCloudThreads([withActive, mirror], local)).toEqual([withActive]);
   });
 });
 
