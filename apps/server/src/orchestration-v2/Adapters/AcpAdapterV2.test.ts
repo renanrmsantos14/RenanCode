@@ -4563,6 +4563,16 @@ describe("AcpAdapterV2", () => {
         read?.type === "dynamic_tool" ? { title: read.title, input: read.input } : null,
         { title: "Read src/env.ts", input: { path: "src/env.ts" } },
       );
+      assert.isUndefined(read?.type === "dynamic_tool" ? read.viewedImagePath : null);
+      const imageRead = items.findLast(
+        (item) => item.type === "dynamic_tool" && item.toolName === "Read",
+      );
+      assert.deepEqual(
+        imageRead?.type === "dynamic_tool"
+          ? { input: imageRead.input, viewedImagePath: imageRead.viewedImagePath }
+          : null,
+        { input: { path: "shots/home.png" }, viewedImagePath: "shots/home.png" },
+      );
       const search = items.find((item) => item.type === "file_search");
       assert.deepEqual(
         search?.type === "file_search" ? { title: search.title, pattern: search.pattern } : null,
@@ -6792,6 +6802,26 @@ describe("AcpAdapterV2", () => {
         command?.type === "turn_item.updated" ? command.turnItem.status : undefined,
         "completed",
       );
+    }).pipe(Effect.provide(layerTest)),
+  );
+
+  it.effect("explains a prompt interrupted by T3 stopping the agent process", () =>
+    Effect.gen(function* () {
+      // Antigravity's instance owns its agy process; a settings reload stops it under the prompt.
+      const harness = yield* makePromptInactivityHarness({
+        environment: () => ({}),
+        wrapPrompt: () => () => Effect.interrupt,
+      });
+      yield* harness.startTurn(1);
+      const [event] = yield* harness.terminals(1);
+      assert.equal(event?.status, "failed");
+      assert.deepEqual(event?.failure, {
+        class: "provider_error",
+        message:
+          "acp-test was stopped before it finished this turn, for example because its provider settings changed. Send a message to continue.",
+        code: null,
+        retryable: null,
+      });
     }).pipe(Effect.provide(layerTest)),
   );
 

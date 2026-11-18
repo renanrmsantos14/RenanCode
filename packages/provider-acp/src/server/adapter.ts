@@ -35,6 +35,7 @@ import {
   type TurnTokenUsage,
 } from "@t3tools/contracts";
 import { AgentScope, AgentScopeThreadId } from "@t3tools/shared/AgentScope";
+import { isWorkspaceImagePreviewPath } from "@t3tools/shared/filePreview";
 import { HTML_RENDER_TOOL_NAME } from "@t3tools/shared/htmlRender";
 import { modelSelectionsEqual } from "@t3tools/shared/model";
 import { type SelfInvocation, selfInvocationArgs } from "@t3tools/shared/nodeRuntime";
@@ -4468,6 +4469,12 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                       ? (rawInputRecord ?? {})
                       : { ...rawInputRecord, path },
                   ...(rawOutput === undefined ? {} : { output: rawOutput }),
+                  ...(path !== undefined &&
+                  path.length <= 4096 &&
+                  !/[\r\n]/.test(path) &&
+                  isWorkspaceImagePreviewPath(path)
+                    ? { viewedImagePath: path }
+                    : {}),
                 };
                 break;
               case "search": {
@@ -9027,11 +9034,15 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                     yield* finalizeTurn(
                       context,
                       interrupted ? "interrupted" : "failed",
-                      flavor.promptFailure?.(failure) ??
-                        makeProviderFailure({
-                          cause: failure,
-                          class: "provider_error",
-                        }),
+                      // Without a user Stop, only T3 closing the agent process (e.g. an instance reload) interrupts the prompt.
+                      Cause.hasInterruptsOnly(cause)
+                        ? makeProviderFailure({
+                            cause: failure,
+                            class: "provider_error",
+                            message: `${flavor.runtimeHarness ?? driver} was stopped before it finished this turn, for example because its provider settings changed. Send a message to continue.`,
+                          })
+                        : (flavor.promptFailure?.(failure) ??
+                            makeProviderFailure({ cause: failure, class: "provider_error" })),
                     ).pipe(
                       Effect.andThen(
                         Effect.logWarning("orchestration-v2.acp-prompt-failed", {

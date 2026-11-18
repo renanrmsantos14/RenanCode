@@ -375,6 +375,8 @@ class T3ComposerEditorView(context: Context, appContext: AppContext) : ExpoView(
   }
 
   fun blurEditor() {
+    // Hiding by window token closes any field's keyboard, such as a secret field the tap just focused.
+    if (!editor.hasFocus()) return
     editor.clearFocus()
     val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
     imm?.hideSoftInputFromWindow(editor.windowToken, 0)
