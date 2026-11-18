@@ -1262,6 +1262,15 @@ const program = Effect.gen(function* () {
           },
           {
             sessionUpdate: "tool_call_update",
+            toolCallId: "structured-image-read",
+            title: "Read `shots/home.png`",
+            kind: "read",
+            status: "completed",
+            rawInput: { path: "shots/home.png" },
+            locations: [{ path: "shots/home.png" }],
+          },
+          {
+            sessionUpdate: "tool_call_update",
             toolCallId: "structured-search",
             title: "Grep",
             kind: "search",
