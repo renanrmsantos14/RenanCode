@@ -1,3 +1,4 @@
+import { useGT } from "gt-react";
 import { MicIcon, SquareIcon, XIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 
@@ -49,19 +50,34 @@ function VoiceWaveform({ level }: { readonly level: () => number }) {
 }
 
 export function ComposerVoiceControl({ voice }: { readonly voice: ComposerVoiceInput }) {
+  const gt = useGT();
   const { phase, error } = voice.state;
 
   if (phase === "recording") {
     return (
-      <div role="status" aria-label="Recording dictation" className="flex items-center gap-1.5">
+      <div
+        role="status"
+        aria-label={gt("Recording dictation")}
+        className="flex items-center gap-1.5"
+      >
         <VoiceWaveform level={voice.level} />
         <span className="w-8 text-end text-xs tabular-nums text-muted-foreground">
           {formatElapsed(voice.elapsedSeconds)}
         </span>
-        <Button variant="ghost" size="icon-sm" aria-label="Cancel dictation" onClick={voice.cancel}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={gt("Cancel dictation")}
+          onClick={voice.cancel}
+        >
           <XIcon />
         </Button>
-        <Button variant="default" size="icon-sm" aria-label="Finish dictation" onClick={voice.stop}>
+        <Button
+          variant="default"
+          size="icon-sm"
+          aria-label={gt("Finish dictation")}
+          onClick={voice.stop}
+        >
           <SquareIcon className="fill-current" />
         </Button>
       </div>
@@ -72,7 +88,7 @@ export function ComposerVoiceControl({ voice }: { readonly voice: ComposerVoiceI
     return (
       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Spinner size="sm" />
-        {phase === "transcribing" ? "Transcribing…" : null}
+        {phase === "transcribing" ? gt("Transcribing…") : null}
       </span>
     );
   }
@@ -85,11 +101,16 @@ export function ComposerVoiceControl({ voice }: { readonly voice: ComposerVoiceI
         </span>
       ) : null}
       {phase === "error" ? (
-        <Button variant="ghost" size="icon-sm" aria-label="Dismiss" onClick={voice.cancel}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={gt("Dismiss", { $context: "dismiss dictation error" })}
+          onClick={voice.cancel}
+        >
           <XIcon />
         </Button>
       ) : null}
-      <Button variant="ghost" size="icon-sm" aria-label="Dictate" onClick={voice.toggle}>
+      <Button variant="ghost" size="icon-sm" aria-label={gt("Dictate")} onClick={voice.toggle}>
         <MicIcon />
       </Button>
     </div>

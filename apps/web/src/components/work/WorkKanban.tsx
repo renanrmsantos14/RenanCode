@@ -18,6 +18,7 @@ import {
   type WorkModuleNode,
 } from "@t3tools/client-runtime/workModuleTree";
 import { WORK_MODULE_STATUSES, type WorkModuleStatus } from "@t3tools/contracts";
+import { useGT, useMessages } from "gt-react";
 import { GripVerticalIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
@@ -139,10 +140,12 @@ export function WorkKanban(
 
 function KanbanColumn(props: { status: WorkModuleStatus; count: number; children: ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: props.status });
+  const m = useMessages();
+  const label = m(WORK_STATUS_LABEL[props.status]);
   return (
     <section
       ref={setNodeRef}
-      aria-label={WORK_STATUS_LABEL[props.status]}
+      aria-label={label}
       className={cn(
         "flex min-h-40 flex-col gap-2 rounded-lg border bg-muted/30 p-2",
         isOver && "bg-accent/50",
@@ -150,7 +153,7 @@ function KanbanColumn(props: { status: WorkModuleStatus; count: number; children
     >
       <header className="flex items-center gap-2 px-1 text-sm font-medium">
         <Badge variant={WORK_STATUS_BADGE[props.status]} size="sm">
-          {WORK_STATUS_LABEL[props.status]}
+          {label}
         </Badge>
         <span className="text-xs text-muted-foreground tabular-nums">{props.count}</span>
       </header>
@@ -164,6 +167,7 @@ function KanbanCard(props: {
   today: string;
   onOpen: WorkBoardHandlers["onOpen"];
 }) {
+  const gt = useGT();
   const { project, node } = props.entry;
   const workModule = node.module;
   const draggable = project.canWrite;
@@ -204,7 +208,7 @@ function KanbanCard(props: {
             ref={setActivatorNodeRef}
             {...attributes}
             {...listeners}
-            aria-label={`Mover ${workModule.title}`}
+            aria-label={gt("Move {title}", { title: workModule.title })}
             className="flex size-5 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/70 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:cursor-grabbing"
           >
             <GripVerticalIcon className="size-3.5" />
@@ -223,11 +227,13 @@ function KanbanCard(props: {
         <span className="ms-auto flex items-center gap-2 tabular-nums">
           {node.pendingSuggestions === 0 ? null : (
             <span className="text-info-foreground">
-              {node.pendingSuggestions} {node.pendingSuggestions === 1 ? "sugerida" : "sugeridas"}
+              {gt("{count, plural, one {{count} suggested} other {{count} suggested}}", {
+                count: node.pendingSuggestions,
+              })}
             </span>
           )}
           <span>
-            {linked} {linked === 1 ? "thread" : "threads"}
+            {gt("{count, plural, one {{count} thread} other {{count} threads}}", { count: linked })}
           </span>
         </span>
       </div>

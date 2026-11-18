@@ -1,6 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import type { ThreadPullRequestLink, ThreadPullRequestSnapshot } from "@t3tools/contracts";
+import { msg, T, useGT, useMessages } from "gt-react";
 
 import { useClientSettings } from "../../hooks/useSettings";
 import { useEnvironmentMachines } from "../../state/environments";
@@ -21,23 +22,23 @@ interface PreviewCase {
 const MERGED = { state: "merged", mergedAt: "2026-01-01T00:00:00.000Z" } as const;
 
 const PREVIEW_CASES: ReadonlyArray<PreviewCase> = [
-  { label: "Agent working", agent: "working", pullRequest: { checksState: "passing" } },
-  { label: "Waiting on checks", agent: "waiting", pullRequest: { checksState: "pending" } },
-  { label: "Checks failed", agent: "idle", pullRequest: { checksState: "failing" } },
-  { label: "Conflict", agent: "idle", pullRequest: { mergeability: "conflicting" } },
-  { label: "Ready to merge", agent: "idle", pullRequest: { checksState: "passing" } },
+  { label: msg("Agent working"), agent: "working", pullRequest: { checksState: "passing" } },
+  { label: msg("Waiting on checks"), agent: "waiting", pullRequest: { checksState: "pending" } },
+  { label: msg("Checks failed"), agent: "idle", pullRequest: { checksState: "failing" } },
+  { label: msg("Conflict"), agent: "idle", pullRequest: { mergeability: "conflicting" } },
+  { label: msg("Ready to merge"), agent: "idle", pullRequest: { checksState: "passing" } },
   {
-    label: "Deploying",
+    label: msg("Deploying"),
     agent: "idle",
     pullRequest: { ...MERGED, mergeCommitChecksState: "pending" },
   },
   {
-    label: "Deploy failed",
+    label: msg("Deploy failed"),
     agent: "idle",
     pullRequest: { ...MERGED, mergeCommitChecksState: "failing" },
   },
   {
-    label: "Delivered",
+    label: msg("Delivered"),
     agent: "idle",
     pullRequest: { ...MERGED, mergeCommitChecksState: "passing" },
   },
@@ -105,6 +106,8 @@ function previewThread(thread: EnvironmentThreadShell, index: number, preview: P
  * state. The rows read the same settings, so the preview follows every change at once.
  */
 export function SidebarRowPreview() {
+  const gt = useGT();
+  const m = useMessages();
   const shells = useVisibleThreadShells();
   const multiline = useClientSettings((settings) => settings.boringSidebarMultilineRows);
   const timestampFormat = useClientSettings((settings) => settings.timestampFormat);
@@ -117,19 +120,19 @@ export function SidebarRowPreview() {
   if (recent.length === 0) {
     return (
       <p className="px-4 py-3 text-muted-foreground text-xs">
-        Start a thread to preview folder rows with it.
+        <T>Start a thread to preview folder rows with it.</T>
       </p>
     );
   }
   return (
-    <ul className="flex flex-col gap-1 p-2" aria-label="Folder row preview">
+    <ul className="flex flex-col gap-1 p-2" aria-label={gt("Folder row preview")}>
       {PREVIEW_CASES.map((preview, index) => {
         const source = recent[index % recent.length]!;
         const thread = previewThread(source, index, preview);
         return (
           <li key={preview.label} className="flex list-none items-center gap-3">
             <span className="w-28 shrink-0 text-right text-muted-foreground text-xs">
-              {preview.label}
+              {m(preview.label)}
             </span>
             <ul className="w-72 min-w-0 rounded-md bg-sidebar py-0.5">
               <SidebarThreadRow

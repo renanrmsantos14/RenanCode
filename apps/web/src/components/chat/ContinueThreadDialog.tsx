@@ -12,6 +12,7 @@ import {
   type ScopedThreadRef,
 } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
+import { T, useGT } from "gt-react";
 import { useEffect, useState } from "react";
 
 import { useLogicalProjectEnvironments } from "~/hooks/useLogicalProjectEnvironments";
@@ -90,6 +91,7 @@ function ContinueThreadDialog({
   readonly threadRef: ScopedThreadRef;
   readonly onClose: () => void;
 }) {
+  const gt = useGT();
   const navigate = useNavigate();
   const readCachedThread = useAtomCommand(cachedThreadReader, { reportFailure: false });
   const readRefs = useAtomCommand(vcsEnvironment.readRefs, { reportFailure: false });
@@ -144,7 +146,7 @@ function ContinueThreadDialog({
     (candidates.length === 1 ? candidates[0]! : null);
   const sourceLabel =
     machines.find((machine) => machine.environmentId === threadRef.environmentId)?.label ??
-    "the original machine";
+    gt("the original machine");
 
   const submit = async () => {
     if (copy.status !== "ready" || destination === null || destination.projectId === null) return;
@@ -171,7 +173,7 @@ function ContinueThreadDialog({
         },
       });
       if (refs._tag !== "Success") {
-        fail("Could not check the branch on the other machine.");
+        fail(gt("Could not check the branch on the other machine."));
         return;
       }
       const workspace = resolveContinuationWorkspace(thread.branch, refs.value.refs);
@@ -187,7 +189,7 @@ function ContinueThreadDialog({
         });
         if (created._tag !== "Success") {
           const error = squashAtomCommandFailure(created);
-          fail(error instanceof Error ? error.message : "Could not create the worktree.");
+          fail(error instanceof Error ? error.message : gt("Could not create the worktree."));
           return;
         }
         branch = created.value.worktree.refName;
@@ -211,15 +213,15 @@ function ContinueThreadDialog({
     });
     if (result._tag !== "Success") {
       const error = squashAtomCommandFailure(result);
-      fail(error instanceof Error ? error.message : "Could not continue the thread.");
+      fail(error instanceof Error ? error.message : gt("Could not continue the thread."));
       return;
     }
     onClose();
     if (missingBranch !== null) {
       toastManager.add({
         type: "warning",
-        title: `Branch ${missingBranch} does not exist on this machine`,
-        description: "Code that was not pushed stayed on the original machine.",
+        title: gt("Branch {branch} does not exist on this machine", { branch: missingBranch }),
+        description: gt("Code that was not pushed stayed on the original machine."),
       });
     }
     void navigate({
@@ -231,9 +233,9 @@ function ContinueThreadDialog({
   const threadBranch = copy.status === "ready" ? copy.projection.thread.branch : null;
   const disabledReason =
     copy.status === "missing"
-      ? "No local copy of this thread"
+      ? gt("No local copy of this thread")
       : copy.status === "ready" && candidates.length === 0
-        ? "No connected machine has this project"
+        ? gt("No connected machine has this project")
         : null;
 
   return (
@@ -245,20 +247,26 @@ function ContinueThreadDialog({
     >
       <DialogPopup className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Continue on another machine</DialogTitle>
+          <DialogTitle>
+            <T>Continue on another machine</T>
+          </DialogTitle>
           <DialogDescription>
-            {sourceLabel} is offline. This starts a new thread from the conversation saved on this
-            device. The original stays where it is and is archived when {sourceLabel} is back.
+            {gt(
+              "{machine} is offline. This starts a new thread from the conversation saved on this device. The original stays where it is and is archived when {machine} is back.",
+              { machine: sourceLabel },
+            )}
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>
           {disabledReason !== null ? (
             <p className="text-muted-foreground text-sm">{disabledReason}</p>
           ) : copy.status === "loading" ? (
-            <p className="text-muted-foreground text-sm">Reading the saved copy...</p>
+            <p className="text-muted-foreground text-sm">
+              <T>Reading the saved copy...</T>
+            </p>
           ) : (
             <RadioGroup
-              aria-label="Machine"
+              aria-label={gt("Machine")}
               value={destination?.environmentId ?? ""}
               onValueChange={(value) => setChosen(value as EnvironmentId)}
             >
@@ -272,8 +280,10 @@ function ContinueThreadDialog({
           )}
           {threadBranch !== null && copy.status === "ready" ? (
             <p className="mt-3 text-muted-foreground text-xs">
-              The thread worked on branch {threadBranch}. If it is missing on the other machine, the
-              thread starts in the project folder.
+              {gt(
+                "The thread worked on branch {branch}. If it is missing on the other machine, the thread starts in the project folder.",
+                { branch: threadBranch },
+              )}
             </p>
           ) : null}
           {run.status === "failed" ? (
@@ -284,14 +294,16 @@ function ContinueThreadDialog({
         </DialogPanel>
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose} disabled={run.status === "running"}>
-            Cancel
+            <T>Cancel</T>
           </Button>
           <Button
             size="sm"
             onClick={() => void submit()}
             disabled={destination === null || run.status === "running"}
           >
-            {run.status === "running" ? "Continuing..." : "Continue"}
+            {run.status === "running"
+              ? gt("Continuing...")
+              : gt("Continue", { $context: "verb, button" })}
           </Button>
         </DialogFooter>
       </DialogPopup>

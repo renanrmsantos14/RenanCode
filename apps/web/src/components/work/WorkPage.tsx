@@ -1,6 +1,7 @@
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import type { WorkModuleNode } from "@t3tools/client-runtime/workModuleTree";
 import type { WorkModuleId, WorkModuleUpsertInput } from "@t3tools/contracts";
+import { T, useGT } from "gt-react";
 import { CheckIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -64,6 +65,7 @@ function CreateModuleDialog(props: {
   onCreate: (project: WorkBoardProject, title: string) => void;
   onClose: () => void;
 }) {
+  const gt = useGT();
   const [selectedKey, setSelectedKey] = useState(() => {
     const keys = props.projects.map(boardProjectKey);
     const preferred = [props.preferredKey, readLastProject()].find(
@@ -75,8 +77,8 @@ function CreateModuleDialog(props: {
   const selected = props.projects.find((project) => boardProjectKey(project) === selectedKey);
   return (
     <WorkTitleDialog
-      title="Novo módulo"
-      submitLabel="Criar"
+      title={gt("New module")}
+      submitLabel={gt("Create")}
       canSubmit={selected !== undefined}
       onSubmit={(title) => {
         if (selected !== undefined) props.onCreate(selected, title);
@@ -89,8 +91,8 @@ function CreateModuleDialog(props: {
           if (typeof value === "string") setSelectedKey(value);
         }}
       >
-        <SelectTrigger aria-label="Projeto">
-          <SelectValue>{selected?.project.title ?? "Escolha um projeto"}</SelectValue>
+        <SelectTrigger aria-label={gt("Project")}>
+          <SelectValue>{selected?.project.title ?? gt("Choose a project")}</SelectValue>
         </SelectTrigger>
         <SelectPopup>
           {props.projects.map((project) => (
@@ -105,6 +107,7 @@ function CreateModuleDialog(props: {
 }
 
 export function WorkPage() {
+  const gt = useGT();
   const board = useWorkBoard();
   const nowMinute = useNowMinute();
   const [view, setView] = useState<View>(readView);
@@ -187,23 +190,29 @@ export function WorkPage() {
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none">
       <WorkspacePageHeader electron={isElectron} className="border-b border-border">
-        <h1 className="truncate text-sm font-medium">Trabalho</h1>
+        <h1 className="truncate text-sm font-medium">
+          <T>Work</T>
+        </h1>
         <ToggleGroup
-          aria-label="Visão"
+          aria-label={gt("View")}
           value={[view]}
           onValueChange={(next) => {
             const value = next[0];
             if (value === "tree" || value === "kanban") changeView(value);
           }}
         >
-          <ToggleGroupItem value="tree">Árvore</ToggleGroupItem>
-          <ToggleGroupItem value="kanban">Kanban</ToggleGroupItem>
+          <ToggleGroupItem value="tree">
+            <T>Tree</T>
+          </ToggleGroupItem>
+          <ToggleGroupItem value="kanban">
+            <T>Kanban</T>
+          </ToggleGroupItem>
         </ToggleGroup>
         {writableProjects.length === 0 ? null : (
           <div className="ms-auto">
             <Button size="xs" variant="outline" onClick={() => setCreating(true)}>
               <PlusIcon />
-              Módulo
+              <T>Module</T>
             </Button>
           </div>
         )}
@@ -216,11 +225,13 @@ export function WorkPage() {
               if (typeof value === "string") setProjectFilter(value);
             }}
           >
-            <SelectTrigger size="sm" aria-label="Projeto">
-              <SelectValue>{filteredProject?.project.title ?? "Todos os projetos"}</SelectValue>
+            <SelectTrigger size="sm" aria-label={gt("Project")}>
+              <SelectValue>{filteredProject?.project.title ?? gt("All projects")}</SelectValue>
             </SelectTrigger>
             <SelectPopup>
-              <SelectItem value={ALL_PROJECTS}>Todos os projetos</SelectItem>
+              <SelectItem value={ALL_PROJECTS}>
+                <T>All projects</T>
+              </SelectItem>
               {board.projects.map((project) => (
                 <SelectItem key={boardProjectKey(project)} value={boardProjectKey(project)}>
                   {project.project.title}
@@ -236,11 +247,11 @@ export function WorkPage() {
           onPressedChange={setDueThisMonth}
         >
           {dueThisMonth ? <CheckIcon /> : null}
-          Vence este mês
+          <T>Due this month</T>
         </Toggle>
         <Toggle variant="outline" size="sm" pressed={hideDone} onPressedChange={setHideDone}>
           {hideDone ? <CheckIcon /> : null}
-          Ocultar finalizados
+          <T>Hide done</T>
         </Toggle>
       </div>
       <div className="min-h-0 flex-1 overflow-auto">

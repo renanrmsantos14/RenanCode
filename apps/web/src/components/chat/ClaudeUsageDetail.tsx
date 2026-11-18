@@ -17,16 +17,19 @@ import {
   weeklyBarLabel,
   claudeWeeklyReading,
   collectLimitAccounts,
-  collectLimitNotices,
-  formatDuration,
   type LimitAccount,
   limitAccountsBesideClaude,
-  limitsNotice,
   exhaustionForecast,
   USAGE_GOAL_TIME_ZONE,
   type ResetCreditChoice,
-  resetCreditChoices,
 } from "@t3tools/shared/usageLimits";
+import {
+  collectLimitNotices,
+  formatDuration,
+  limitsNotice,
+  resetCreditChoices,
+} from "@t3tools/shared/usageLimitsCopy";
+import { T, useGT, useMessages } from "gt-react";
 import type { ReactNode } from "react";
 
 import { ensureLocalApi } from "../../localApi";
@@ -47,13 +50,14 @@ export interface ResetCreditTarget {
 }
 
 function AccountName({ label }: { readonly label: string }) {
+  const gt = useGT();
   return label.includes("@") ? (
     <RedactedSensitiveText
       key={label}
       value={label}
-      ariaLabel="Toggle account label visibility"
-      revealTooltip="Click to reveal account"
-      hideTooltip="Click to hide account"
+      ariaLabel={gt("Toggle account label visibility")}
+      revealTooltip={gt("Click to reveal account")}
+      hideTooltip={gt("Click to hide account")}
       className="max-w-full truncate align-bottom font-sans text-xs leading-normal"
     />
   ) : (
@@ -111,10 +115,11 @@ function CreditsRow({
   readonly canManage: boolean;
   readonly onUse: (choice: ResetCreditChoice) => void;
 }) {
+  const messages = useMessages();
   if (credits.availableCount === 0) return null;
   return (
     <>
-      {resetCreditChoices(credits, input, now, true).map((choice) => (
+      {resetCreditChoices(credits, input, now, true, messages).map((choice) => (
         <div
           key={choice.key}
           className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"
@@ -142,6 +147,8 @@ function ClaudeAccountBlock({
   readonly canManage: boolean;
   readonly onRedeem: (choice: ResetCreditChoice) => void;
 }) {
+  const gt = useGT();
+  const messages = useMessages();
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const color =
     normalizeProviderAccentColor(account.accentColor) ?? PROVIDER_PRESENTATION.claude.color;
@@ -194,9 +201,24 @@ function ClaudeAccountBlock({
           </div>
           {Number.isFinite(resetsAt) && weekly.resetsAt ? (
             <span className="text-xs text-muted-foreground">
-              Resets{" "}
-              {formatUpcomingTimestamp(weekly.resetsAt, timestampFormat, now, USAGE_GOAL_TIME_ZONE)}
-              {resetsAt > now ? ` · in ${formatDuration(resetsAt - now)}` : ""}
+              {resetsAt > now
+                ? gt("Resets {time} · in {duration}", {
+                    time: formatUpcomingTimestamp(
+                      weekly.resetsAt,
+                      timestampFormat,
+                      now,
+                      USAGE_GOAL_TIME_ZONE,
+                    ),
+                    duration: formatDuration(resetsAt - now, messages),
+                  })
+                : gt("Resets {time}", {
+                    time: formatUpcomingTimestamp(
+                      weekly.resetsAt,
+                      timestampFormat,
+                      now,
+                      USAGE_GOAL_TIME_ZONE,
+                    ),
+                  })}
             </span>
           ) : null}
           {forecastWarning ? (
@@ -204,7 +226,9 @@ function ClaudeAccountBlock({
           ) : null}
         </>
       ) : (
-        <span className="text-xs text-muted-foreground">No weekly reading yet</span>
+        <span className="text-xs text-muted-foreground">
+          <T>No weekly reading yet</T>
+        </span>
       )}
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-xs tabular-nums">
         <span className="text-muted-foreground">{claudeWindowsText(account)}</span>
@@ -242,7 +266,8 @@ function OtherAccountBlock({
   readonly canManage: boolean;
   readonly onRedeem: (target: ResetCreditTarget) => void;
 }) {
-  const notice = limitsNotice(account.limits);
+  const messages = useMessages();
+  const notice = limitsNotice(account.limits, messages);
   const externalUsage = account.limits.externalUsage;
   const { redeem } = account;
   return (
@@ -269,7 +294,7 @@ function OtherAccountBlock({
           className="self-start"
           onClick={() => void ensureLocalApi().shell.openExternal(externalUsage.url)}
         >
-          Manage usage
+          <T>Manage usage</T>
         </Button>
       ) : null}
       {redeem && account.limits.resetCredits ? (
@@ -303,7 +328,8 @@ export function ClaudeUsageDetail({
   );
   const presentations = presentation ? new Map([[environmentId, presentation]]) : new Map();
   const others = limitAccountsBesideClaude(collectLimitAccounts(presentations));
-  const notices = collectLimitNotices(presentations);
+  const messages = useMessages();
+  const notices = collectLimitNotices(presentations, messages);
   const sections: ReactNode[] = [];
   for (const account of accounts) {
     sections.push(

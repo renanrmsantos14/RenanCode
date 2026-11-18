@@ -1,3 +1,5 @@
+import { vcsActionLabelText } from "@t3tools/client-runtime/state/vcs";
+import { useMessages } from "gt-react-native";
 import { useMemo } from "react";
 
 import { dedupeRemoteBranchesWithLocalMatches } from "@t3tools/shared/git";
@@ -9,12 +11,14 @@ import { useSelectedThreadWorktree } from "./use-selected-thread-worktree";
 
 /** The running git action's label, without the branch list a screen header doesn't need. */
 export function useSelectedThreadGitOperationLabel() {
+  const messages = useMessages();
   const { selectedThread } = useThreadSelection();
   const { selectedThreadCwd } = useSelectedThreadWorktree();
-  return useVcsActionState({
+  const gitActionState = useVcsActionState({
     environmentId: selectedThread?.environmentId ?? null,
     cwd: selectedThreadCwd,
-  }).currentLabel;
+  });
+  return vcsActionLabelText(gitActionState, messages);
 }
 
 export function useSelectedThreadGitState() {

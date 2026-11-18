@@ -1,6 +1,7 @@
 import { RegistryContext } from "@effect/atom-react";
 import type { AgentSessionProjectCandidate, EnvironmentId } from "@t3tools/contracts";
 import { AuthOrchestrationOperateScope, CommandId } from "@t3tools/contracts";
+import { T, useGT } from "gt-react";
 import { ChevronRightIcon } from "lucide-react";
 import { useContext, useState } from "react";
 
@@ -44,10 +45,6 @@ type ThreadCheckedChange = (
   listedFilePaths: ReadonlyArray<string>,
 ) => void;
 
-function pluralThreads(count: number) {
-  return `${count} ${count === 1 ? "conversation" : "conversations"}`;
-}
-
 export function HistoryImportSettings() {
   const { environment } = useSettingsScope();
   const environmentId = environment?.environmentId ?? null;
@@ -55,7 +52,7 @@ export function HistoryImportSettings() {
     return (
       <SettingsPageContainer>
         <p className="text-sm text-muted-foreground">
-          Connect an environment to import Claude Code and Codex history.
+          <T>Connect an environment to import Claude Code and Codex history.</T>
         </p>
       </SettingsPageContainer>
     );
@@ -65,6 +62,7 @@ export function HistoryImportSettings() {
 }
 
 function HistoryImportBody({ environmentId }: { readonly environmentId: EnvironmentId }) {
+  const gt = useGT();
   const registry = useContext(RegistryContext);
   const [scan] = useProjectScans([environmentId]);
   const canImport = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
@@ -143,29 +141,39 @@ function HistoryImportBody({ environmentId }: { readonly environmentId: Environm
     }
     const problems = [
       skippedCount > 0
-        ? `${pluralThreads(skippedCount)} skipped. Run import again to continue.`
+        ? gt(
+            "{count, plural, one {{count} conversation skipped.} other {{count} conversations skipped.}} Run import again to continue.",
+            { count: skippedCount },
+          )
         : "",
       failedProjects > 0
-        ? `${failedProjects} ${failedProjects === 1 ? "project" : "projects"} failed.`
+        ? gt("{count, plural, one {{count} project failed.} other {{count} projects failed.}}", {
+            count: failedProjects,
+          })
         : "",
     ].filter(Boolean);
     toastManager.add({
       type: problems.length > 0 ? "warning" : "success",
-      title: `Imported ${pluralThreads(importedCount)}`,
+      title: gt(
+        "{count, plural, one {Imported {count} conversation} other {Imported {count} conversations}}",
+        { count: importedCount },
+      ),
       ...(problems.length > 0 ? { description: problems.join(" ") } : {}),
     });
   };
 
   return (
     <SettingsPageContainer className="gap-8">
-      <SettingsSection title="Import history">
+      <SettingsSection title={gt("Import history")}>
         <SettingsRow
-          title="Conversations since"
-          description="Import Claude Code and Codex conversations last active on or after this date. Conversations already imported are kept."
+          title={gt("Conversations since")}
+          description={gt(
+            "Import Claude Code and Codex conversations last active on or after this date. Conversations already imported are kept.",
+          )}
           control={
             <Input
               type="date"
-              aria-label="Conversations since"
+              aria-label={gt("Conversations since")}
               className="w-40"
               value={sinceDate}
               max={today}
@@ -177,7 +185,7 @@ function HistoryImportBody({ environmentId }: { readonly environmentId: Environm
       </SettingsSection>
 
       <SettingsSection
-        title="Projects"
+        title={gt("Projects")}
         headerAction={
           <Button
             size="sm"
@@ -185,31 +193,35 @@ function HistoryImportBody({ environmentId }: { readonly environmentId: Environm
             onClick={() => void runImport()}
           >
             {isImporting ? <Spinner size="sm" /> : null}
-            Import {selected.length > 0 ? `${selected.length} selected` : ""}
+            {selected.length > 0
+              ? gt("Import {count} selected", { count: selected.length })
+              : gt("Import", { $context: "verb, button" })}
           </Button>
         }
       >
         <div className="space-y-0.5 p-2">
           {!canImport ? (
             <p className="px-2 py-1 text-sm text-muted-foreground" role="alert">
-              This connection cannot import projects or thread history.
+              <T>This connection cannot import projects or thread history.</T>
             </p>
           ) : null}
           {scan === undefined || (scan.isPending && scan.data === null) ? (
             <div className="flex items-center gap-2 px-2 py-3 text-sm text-muted-foreground">
               <Spinner size="md" />
-              Looking for Claude Code and Codex projects…
+              <T>Looking for Claude Code and Codex projects…</T>
             </div>
           ) : scan.error !== null ? (
             <div role="alert" className="flex items-center justify-between gap-3 px-2 text-sm">
-              <span className="text-muted-foreground">Could not check projects. {scan.error}</span>
+              <span className="text-muted-foreground">
+                {gt("Could not check projects. {error}", { error: scan.error })}
+              </span>
               <Button variant="ghost" size="sm" onClick={scan.refresh}>
-                Retry
+                <T>Retry</T>
               </Button>
             </div>
           ) : candidates.length === 0 ? (
             <p className="px-2 py-2 text-sm text-muted-foreground">
-              No Claude Code or Codex projects found.
+              <T>No Claude Code or Codex projects found.</T>
             </p>
           ) : (
             candidates.map((candidate) => (
@@ -271,11 +283,12 @@ function HistoryProjectRow({
   readonly onExpandedChange: (expanded: boolean) => void;
   readonly onThreadCheckedChange: ThreadCheckedChange;
 }) {
+  const gt = useGT();
   return (
     <div>
       <div className="flex items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-muted/40">
         <Checkbox
-          aria-label={`Import ${candidate.title}`}
+          aria-label={gt("Import {project}", { project: candidate.title })}
           checked={checked}
           disabled={disabled}
           onCheckedChange={(next) => onCheckedChange(next === true)}
@@ -290,14 +303,22 @@ function HistoryProjectRow({
           <span className="min-w-0 truncate text-sm">{candidate.title}</span>
           <span className="min-w-0 truncate text-xs text-muted-foreground">{candidate.path}</span>
           <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">
-            {candidate.alreadyImported ? "In T3 · " : ""}
-            {pluralThreads(candidate.threadCount)}
+            {candidate.alreadyImported
+              ? gt(
+                  "{count, plural, one {In T3 · {count} conversation} other {In T3 · {count} conversations}}",
+                  { count: candidate.threadCount },
+                )
+              : gt("{count, plural, one {{count} conversation} other {{count} conversations}}", {
+                  count: candidate.threadCount,
+                })}
           </span>
         </button>
       </div>
       {expanded ? (
         since === null ? (
-          <p className="py-1.5 pl-10 text-xs text-muted-foreground">Choose a valid date.</p>
+          <p className="py-1.5 pl-10 text-xs text-muted-foreground">
+            <T>Choose a valid date.</T>
+          </p>
         ) : (
           <HistoryThreadList
             environmentId={environmentId}
@@ -331,18 +352,19 @@ function HistoryThreadList({
   readonly excludedFiles: ReadonlySet<string>;
   readonly onThreadCheckedChange: ThreadCheckedChange;
 }) {
+  const gt = useGT();
   const listing = useEnvironmentQuery(
     agentSessionListThreads({ environmentId, input: { workspaceRoot, since } }),
   );
   if (listing.data === null) {
     return listing.error !== null ? (
       <p role="alert" className="py-1.5 pl-10 text-xs text-muted-foreground">
-        Could not list conversations. {listing.error}
+        {gt("Could not list conversations. {error}", { error: listing.error })}
       </p>
     ) : (
       <div className="flex items-center gap-2 py-1.5 pl-10 text-xs text-muted-foreground">
         <Spinner size="sm" />
-        Reading conversations…
+        <T>Reading conversations…</T>
       </div>
     );
   }
@@ -352,7 +374,7 @@ function HistoryThreadList({
     <div className="space-y-0.5 pb-1 pl-8">
       {threads.length === 0 ? (
         <p className="px-2 py-1 text-xs text-muted-foreground">
-          No new conversations since this date.
+          <T>No new conversations since this date.</T>
         </p>
       ) : (
         threads.map((thread) => (
@@ -377,10 +399,16 @@ function HistoryThreadList({
       {alreadyImportedCount > 0 || skippedCount > 0 ? (
         <p className="px-2 py-1 text-xs text-muted-foreground" role="status">
           {alreadyImportedCount > 0
-            ? `${pluralThreads(alreadyImportedCount)} already imported. `
+            ? `${gt(
+                "{count, plural, one {{count} conversation already imported.} other {{count} conversations already imported.}}",
+                { count: alreadyImportedCount },
+              )} `
             : ""}
           {skippedCount > 0
-            ? `${pluralThreads(skippedCount)} not listed: unreadable or beyond this batch.`
+            ? gt(
+                "{count, plural, one {{count} conversation not listed: unreadable or beyond this batch.} other {{count} conversations not listed: unreadable or beyond this batch.}}",
+                { count: skippedCount },
+              )
             : ""}
         </p>
       ) : null}

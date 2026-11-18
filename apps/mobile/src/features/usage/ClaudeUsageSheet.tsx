@@ -13,13 +13,13 @@ import {
   weeklyBarLabel,
   claudeWeeklyReading,
   collectLimitAccounts,
-  collectLimitNotices,
   exhaustionForecast,
   limitAccountsBesideClaude,
-  formatDuration,
   formatGoalZoneInstant,
   selectClaudeUsageAccounts,
 } from "@t3tools/shared/usageLimits";
+import { collectLimitNotices, formatDuration } from "@t3tools/shared/usageLimitsCopy";
+import { T, useGT, useMessages } from "gt-react-native";
 import { Platform, ScrollView, View } from "react-native";
 import { ScreenStack } from "react-native-screens";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -88,6 +88,8 @@ function ClaudeAccountBlock(props: {
   readonly now: number;
 }) {
   const { account, now } = props;
+  const gt = useGT();
+  const m = useMessages();
   const reading = claudeWeeklyReading(account);
   const { weekly } = account;
   const verdict = reading ? claudeVerdictText(reading) : null;
@@ -132,8 +134,12 @@ function ClaudeAccountBlock(props: {
           </View>
           {Number.isFinite(resetsAt) ? (
             <Text className="text-xs text-foreground-muted">
-              Resets {formatGoalZoneInstant(resetsAt, now)}
-              {resetsAt > now ? ` · in ${formatDuration(resetsAt - now)}` : ""}
+              {resetsAt > now
+                ? gt("Resets {time} · in {duration}", {
+                    time: formatGoalZoneInstant(resetsAt, now),
+                    duration: formatDuration(resetsAt - now, m),
+                  })
+                : gt("Resets {time}", { time: formatGoalZoneInstant(resetsAt, now) })}
             </Text>
           ) : null}
           {forecastWarning ? (
@@ -141,7 +147,9 @@ function ClaudeAccountBlock(props: {
           ) : null}
         </>
       ) : (
-        <Text className="text-xs text-foreground-muted">No weekly reading yet</Text>
+        <Text className="text-xs text-foreground-muted">
+          <T>No weekly reading yet</T>
+        </Text>
       )}
       <View className="flex-row flex-wrap items-baseline justify-between gap-x-3">
         <Text className="text-xs tabular-nums text-foreground-muted">
@@ -185,7 +193,8 @@ export function ClaudeUsageContent(props: { readonly environmentId: EnvironmentI
   });
   const presentations = presentation ? new Map([[environmentId, presentation]]) : new Map();
   const others = limitAccountsBesideClaude(collectLimitAccounts(presentations));
-  const notices = collectLimitNotices(presentations);
+  const m = useMessages();
+  const notices = collectLimitNotices(presentations, m);
   return (
     <View className="gap-6">
       {accounts.map((account) => (
@@ -237,6 +246,7 @@ export function ClaudeUsageContent(props: { readonly environmentId: EnvironmentI
 }
 
 export function ClaudeUsageSheet({ route }: StaticScreenProps<{ environmentId: EnvironmentId }>) {
+  const gt = useGT();
   const { layout } = useAdaptiveWorkspaceLayout();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -269,7 +279,7 @@ export function ClaudeUsageSheet({ route }: StaticScreenProps<{ environmentId: E
               tintColorClassName="accent-foreground"
               hideBackButton
               hideShadow={false}
-              title="Usage limits"
+              title={gt("Usage limits")}
               titleColorClassName="accent-foreground"
               titleFontSize={18}
               titleFontWeight="800"
@@ -283,7 +293,7 @@ export function ClaudeUsageSheet({ route }: StaticScreenProps<{ environmentId: E
   return (
     <View collapsable={false} className="flex-1 bg-sheet">
       <NativeStackScreenOptions options={{ sheetCornerRadius: 28 }} />
-      <AppBar sheet title="Usage limits" onBack={() => navigation.goBack()} />
+      <AppBar sheet title={gt("Usage limits")} onBack={() => navigation.goBack()} />
       <ScreenContent insetHorizontal={layout.usesSplitView}>{content}</ScreenContent>
     </View>
   );

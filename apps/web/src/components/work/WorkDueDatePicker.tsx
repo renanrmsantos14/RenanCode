@@ -1,3 +1,4 @@
+import { T, useGT } from "gt-react";
 import { useState } from "react";
 
 import { Button } from "~/components/ui/button";
@@ -20,19 +21,20 @@ export function WorkDueDatePicker(props: {
   onChange: (value: string | null) => void;
   disabled?: boolean;
 }) {
+  const gt = useGT();
   const [open, setOpen] = useState(false);
   const selected = props.value === null ? null : fromIsoDate(props.value);
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         disabled={props.disabled}
-        render={<Button variant="ghost" size="sm" aria-label="Prazo" />}
+        render={<Button variant="ghost" size="sm" aria-label={gt("Due date")} />}
       >
         <span className={props.overdue ? "text-destructive" : "text-muted-foreground"}>
-          {props.value === null ? "Sem prazo" : formatShortDate(props.value)}
+          {props.value === null ? gt("No due date") : formatShortDate(props.value)}
         </span>
       </PopoverTrigger>
-      <PopoverPopup align="start" aria-label="Escolher prazo">
+      <PopoverPopup align="start" aria-label={gt("Choose due date")}>
         <Calendar
           mode="single"
           {...(selected === null ? {} : { selected, defaultMonth: selected })}
@@ -51,7 +53,7 @@ export function WorkDueDatePicker(props: {
               props.onChange(null);
             }}
           >
-            Limpar
+            <T>Clear</T>
           </Button>
         )}
       </PopoverPopup>

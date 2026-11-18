@@ -1,6 +1,7 @@
 import { mcpServerRequestDisplay } from "@t3tools/client-runtime/mcp-server-request";
 import { isAtomCommandInterrupted } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId, OrchestrationV2ProjectedTurnItem } from "@t3tools/contracts";
+import { T, useGT, useMessages, Var } from "gt-react-native";
 import { useRef, useState } from "react";
 import { View, type ColorValue } from "react-native";
 
@@ -17,6 +18,8 @@ export function McpServerRequestCard(props: {
   readonly iconColor: ColorValue;
 }) {
   const { item, visibility } = props.projectedItem;
+  const gt = useGT();
+  const m = useMessages();
   const answer = useAtomCommand(threadEnvironment.answerMcpServerRequest, {
     label: "answer MCP server request",
   });
@@ -26,7 +29,7 @@ export function McpServerRequestCard(props: {
   const inFlight = useRef(false);
   if (item.type !== "mcp_server_request") return null;
 
-  const display = mcpServerRequestDisplay(item, visibility);
+  const display = mcpServerRequestDisplay(item, visibility, m);
   if (display.kind !== "pending") {
     return (
       <View className="mb-3 min-h-9 flex-row items-center gap-2 px-1">
@@ -67,7 +70,11 @@ export function McpServerRequestCard(props: {
   return (
     <View className="mb-3 gap-3 rounded-[20px] border border-border bg-card-alt p-4">
       <View className="gap-1">
-        <Text className="font-t3-bold text-base text-foreground">Turn on {item.server}?</Text>
+        <Text className="font-t3-bold text-base text-foreground">
+          <T>
+            Turn on <Var>{item.server}</Var>?
+          </T>
+        </Text>
         {item.reason.trim() ? (
           <Text className="font-sans text-sm leading-5 text-foreground-muted">{item.reason}</Text>
         ) : null}
@@ -78,13 +85,13 @@ export function McpServerRequestCard(props: {
           accessibilityLiveRegion="polite"
           className="font-sans text-sm text-danger-foreground"
         >
-          Could not send your answer. Try again.
+          <T>Could not send your answer. Try again.</T>
         </Text>
       ) : null}
       <View className="flex-row gap-2">
         <View className="flex-1">
           <Button
-            label="Not now"
+            label={gt("Not now")}
             tone="secondary"
             fullWidth
             disabled={answering}
@@ -93,7 +100,7 @@ export function McpServerRequestCard(props: {
         </View>
         <View className="flex-1">
           <Button
-            label="Turn on"
+            label={gt("Turn on")}
             tone="primary"
             fullWidth
             disabled={answering}

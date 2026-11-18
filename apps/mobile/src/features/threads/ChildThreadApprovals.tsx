@@ -1,6 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import { AuthOrchestrationOperateScope, type ScopedThreadRef } from "@t3tools/contracts";
 import type { ChildThreadApproval } from "@t3tools/client-runtime/state/thread-requests";
+import { T, useGT, Var } from "gt-react-native";
 import { useState } from "react";
 import { useEnvironmentScope } from "../../state/session";
 import { ScrollView, View } from "react-native";
@@ -18,13 +19,16 @@ function ChildApproval({
   entry: ChildThreadApproval;
   parentRef: ScopedThreadRef | null;
 }) {
+  const gt = useGT();
   const canRespond = useEnvironmentScope(entry.thread.environmentId, AuthOrchestrationOperateScope);
   const respond = useAtomCommand(threadEnvironment.respondToApproval, { reportFailure: false });
   const [responding, setResponding] = useState(false);
   return (
     <View className="mx-3.5 my-2 gap-2">
       <AppText className="font-t3-bold text-sm text-foreground">
-        Approval from {entry.title}
+        <T>
+          Approval from <Var>{entry.title}</Var>
+        </T>
       </AppText>
       <PendingApprovalCard
         canOperateThread={canRespond}
@@ -41,7 +45,7 @@ function ChildApproval({
             result,
             entry.thread,
             requestId,
-            "Failed to submit approval decision.",
+            gt("Failed to submit approval decision."),
             parentRef ?? entry.thread,
           );
           setResponding(false);

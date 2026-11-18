@@ -5,6 +5,7 @@ import {
   htmlVariantsFrameHeight,
   type HtmlVariantReference,
 } from "@t3tools/shared/htmlRender";
+import { T, useGT, Var } from "gt-react";
 import { type ReactNode, use, useRef, useState } from "react";
 
 import { observeResize } from "~/lib/observeResize";
@@ -25,6 +26,7 @@ export function HtmlVariantsGrid(props: {
   ) => ReactNode;
   readonly onFollow?: ((text: string) => boolean) | undefined;
 }) {
+  const gt = useGT();
   const [width, setWidth] = useState(HTML_RENDER_COLUMN_WIDTH);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const observeBox = (box: HTMLDivElement) => {
@@ -44,7 +46,7 @@ export function HtmlVariantsGrid(props: {
           {props.variants.map((variant, index) => (
             <Button
               key={variant.attachmentId}
-              aria-label={`Show ${variant.label}`}
+              aria-label={gt("Show {variant}", { variant: variant.label })}
               size="xs"
               variant="outline"
               onClick={() =>
@@ -89,7 +91,9 @@ export function HtmlVariantsGrid(props: {
                   variant="outline"
                   onClick={() => props.onFollow?.(htmlVariantFollowUpText(index, variant.label))}
                 >
-                  Use {htmlVariantLetter(index)}
+                  <T>
+                    Use <Var>{htmlVariantLetter(index)}</Var>
+                  </T>
                 </Button>
               ) : null}
             </div>

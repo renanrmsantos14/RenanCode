@@ -1,4 +1,5 @@
 import type { ComponentProps } from "react";
+import { useGT } from "gt-react";
 import { useState } from "react";
 
 import { Input } from "~/components/ui/input";
@@ -11,6 +12,7 @@ export function WorkWaitingReasonPrompt(props: {
   onSubmit: (reason: string) => void;
   onCancel: () => void;
 }) {
+  const gt = useGT();
   const [reason, setReason] = useState(props.initial);
   return (
     <Popover
@@ -29,8 +31,8 @@ export function WorkWaitingReasonPrompt(props: {
           }}
         >
           <Input
-            aria-label="Esperando o quê"
-            placeholder="Esperando o quê…"
+            aria-label={gt("Waiting on what")}
+            placeholder={gt("Waiting on what…")}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             autoFocus

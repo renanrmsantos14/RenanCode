@@ -1,6 +1,9 @@
 import type { AgentAwarenessPhase, AgentAwarenessState } from "@t3tools/shared/agentAwareness";
+import { msg } from "gt-react-native";
 
+import { m, type MessageResolver } from "../../i18n/messages";
 import type { AgentActivityProps, AgentActivityRowProps } from "../../widgets/AgentActivity";
+import { agentActivityText } from "../../widgets/agentActivityWidgetTimeline";
 
 export interface AgentAlertSnapshot {
   readonly phases: ReadonlyMap<string, AgentAwarenessPhase>;
@@ -23,13 +26,13 @@ const ATTENTION_PHASES: ReadonlySet<AgentAwarenessPhase> = new Set([
 const MAX_WIDGET_ROWS = 4;
 
 const STATUS_BY_PHASE: Record<AgentAwarenessPhase, string> = {
-  starting: "Connecting",
-  running: "Working",
-  waiting_for_approval: "Approval",
-  waiting_for_input: "Input",
-  stale: "Waiting",
-  completed: "Done",
-  failed: "Failed",
+  starting: msg("Connecting", { $context: "agent work status" }),
+  running: msg("Working", { $context: "agent work status" }),
+  waiting_for_approval: msg("Approval", { $context: "agent waits for an approval" }),
+  waiting_for_input: msg("Input", { $context: "agent waits for user input" }),
+  stale: msg("Waiting", { $context: "agent work status" }),
+  completed: msg("Done", { $context: "agent work status" }),
+  failed: msg("Failed", { $context: "agent work status" }),
 };
 
 export function agentPhaseKey(state: Pick<AgentAwarenessState, "environmentId" | "threadId">) {
@@ -75,6 +78,7 @@ export function localAgentAlertTransitions(
 
 export function localAgentActivityProps(
   states: ReadonlyArray<AgentAwarenessState>,
+  resolve: MessageResolver = m,
 ): AgentActivityProps {
   const rows: AgentActivityRowProps[] = [...states]
     .sort((a, b) => rowRank(a.phase) - rowRank(b.phase) || b.updatedAt.localeCompare(a.updatedAt))
@@ -86,7 +90,7 @@ export function localAgentActivityProps(
       threadTitle: state.threadTitle,
       modelTitle: state.modelTitle,
       phase: state.phase,
-      status: STATUS_BY_PHASE[state.phase],
+      status: resolve(STATUS_BY_PHASE[state.phase]),
       updatedAt: state.updatedAt,
       deepLink: state.deepLink,
     }));
@@ -94,8 +98,17 @@ export function localAgentActivityProps(
     (state) => ACTIVE_PHASES.has(state.phase) || ATTENTION_PHASES.has(state.phase),
   ).length;
   return {
+    text: agentActivityText(0, resolve),
     title: "RenanCode",
-    subtitle: activeCount > 0 ? `${activeCount} active` : "No active agents",
+    subtitle:
+      activeCount > 0
+        ? resolve(
+            msg("{count, plural, one {{count} active} other {{count} active}}", {
+              count: activeCount,
+              $context: "number of agents working",
+            }),
+          )
+        : resolve(msg("No active agents")),
     activeCount,
     updatedAt: states.reduce(
       (latest, state) => (state.updatedAt > latest ? state.updatedAt : latest),

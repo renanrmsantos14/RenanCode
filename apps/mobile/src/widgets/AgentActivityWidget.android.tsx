@@ -47,7 +47,11 @@ export function AgentActivityWidget(
         </Text>
         {activities.length === 0 ? (
           <Text color={muted} maxLines={1} style={{ fontSize: 11 }}>
-            {props.title ? "No agent activity" : "Open RenanCode to connect"}
+            {props.title
+              ? // oxlint-disable-next-line t3code/no-untranslated-copy -- widget fallback until the app publishes translated text
+                (props.text?.noAgentActivity ?? "No agent activity")
+              : // oxlint-disable-next-line t3code/no-untranslated-copy -- shown before the app has published anything to translate
+                "Open RenanCode to connect"}
           </Text>
         ) : null}
         {activities.map((row) => {

@@ -1,3 +1,4 @@
+import { useGT } from "gt-react-native";
 import { useState } from "react";
 import { Pressable } from "react-native";
 
@@ -11,6 +12,7 @@ export function MaskedAccountLabel(props: {
   readonly className: string;
   readonly prefix?: string;
 }) {
+  const gt = useGT();
   const [revealed, setRevealed] = useState(false);
   const prefix = props.prefix ?? "";
   if (!props.value.includes("@")) {
@@ -25,7 +27,7 @@ export function MaskedAccountLabel(props: {
     <Pressable
       className="shrink active:opacity-60"
       accessibilityRole="button"
-      accessibilityLabel={revealed ? "Hide account label" : "Reveal account label"}
+      accessibilityLabel={revealed ? gt("Hide account label") : gt("Reveal account label")}
       onPress={() => setRevealed((current) => !current)}
     >
       <Text className={props.className} numberOfLines={1}>

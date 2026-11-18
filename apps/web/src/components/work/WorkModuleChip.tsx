@@ -3,6 +3,7 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { buildWorkModuleForest, type WorkModuleNode } from "@t3tools/client-runtime/workModuleTree";
 import type { EnvironmentId, ProjectId, ThreadId, WorkModuleId } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
+import { T, useGT } from "gt-react";
 import { useState } from "react";
 
 import { useComposerDraftStore } from "~/composerDraftStore";
@@ -25,6 +26,7 @@ export function WorkModuleChip(props: {
   draftModuleId: WorkModuleId | undefined;
   isServerThread: boolean;
 }) {
+  const gt = useGT();
   const { environmentId, threadId } = props;
   const snapshot = AsyncResult.getOrElse(
     useAtomValue(workModuleEnvironment.live({ environmentId, input: {} })),
@@ -54,8 +56,8 @@ export function WorkModuleChip(props: {
   const current = nodes.find((node) => node.module.id === currentId);
   const label =
     current === undefined
-      ? "Módulo: nenhum"
-      : `Módulo: ${modulePath(current).slice(-2).join(" › ")}`;
+      ? gt("Module: none")
+      : gt("Module: {path}", { path: modulePath(current).slice(-2).join(" › ") });
   const trimmedQuery = query.trim();
   const matches = nodes.filter((node) =>
     modulePath(node).join(" › ").toLowerCase().includes(trimmedQuery.toLowerCase()),
@@ -100,11 +102,13 @@ export function WorkModuleChip(props: {
           {label}
         </Badge>
       </PopoverTrigger>
-      <PopoverPopup align="start" width="sm" padding="compact" aria-label="Escolher módulo">
+      <PopoverPopup align="start" width="sm" padding="compact" aria-label={gt("Choose module")}>
         <div className="flex flex-col gap-2">
           {link?.suggested === true ? (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-muted-foreground">Sugerido por um agente</span>
+              <span className="text-xs text-muted-foreground">
+                <T>Suggested by an agent</T>
+              </span>
               <Button
                 size="xs"
                 variant="outline"
@@ -113,17 +117,17 @@ export function WorkModuleChip(props: {
                   void confirmSuggestion({ environmentId, input: { threadId } });
                 }}
               >
-                Confirmar
+                <T>Confirm</T>
               </Button>
               <Button size="xs" variant="ghost" onClick={() => choose(null)}>
-                Descartar
+                <T>Dismiss</T>
               </Button>
             </div>
           ) : null}
           <Input
             size="sm"
-            aria-label="Buscar módulo"
-            placeholder="Buscar módulo…"
+            aria-label={gt("Search modules")}
+            placeholder={gt("Search modules…")}
             maxLength={200}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -155,7 +159,9 @@ export function WorkModuleChip(props: {
             disabled={trimmedQuery === ""}
             onClick={() => void create()}
           >
-            {trimmedQuery === "" ? "Criar módulo…" : `Criar módulo “${trimmedQuery}”`}
+            {trimmedQuery === ""
+              ? gt("Create module…")
+              : gt("Create module “{title}”", { title: trimmedQuery })}
           </Button>
           {currentId === undefined ? null : (
             <Button
@@ -164,7 +170,7 @@ export function WorkModuleChip(props: {
               className="justify-start"
               onClick={() => choose(null)}
             >
-              Remover vínculo
+              <T>Unlink</T>
             </Button>
           )}
         </div>

@@ -1,5 +1,6 @@
 import { mcpServerNote, splitMcpServers } from "@t3tools/client-runtime/mcp-server-request";
 import { mcpServerIsOn, type OrchestrationV2ProviderMcpServer } from "@t3tools/contracts";
+import { T, useGT, useMessages, Var } from "gt-react";
 import { PlugIcon, StarIcon } from "lucide-react";
 
 import { cn } from "~/lib/utils";
@@ -26,6 +27,8 @@ export function McpServersMenu(props: {
   onServerPinnedChange: (server: string, pinned: boolean) => void;
 }) {
   const menuProps = useComposerMenuProps();
+  const gt = useGT();
+  const m = useMessages();
   const isOn = (server: OrchestrationV2ProviderMcpServer) =>
     mcpServerIsOn(server, props.enabledServers);
   const onCount = props.servers.filter(isOn).length;
@@ -33,9 +36,11 @@ export function McpServersMenu(props: {
 
   const row = (server: OrchestrationV2ProviderMcpServer) => {
     const on = isOn(server);
-    const note = mcpServerNote(server, on);
+    const note = mcpServerNote(server, on, m);
     const pinned = props.pinnedServers.includes(server.name);
-    const pinLabel = pinned ? `Unpin ${server.name}` : `Pin ${server.name}`;
+    const pinLabel = pinned
+      ? gt("Unpin {server}", { server: server.name })
+      : gt("Pin {server}", { server: server.name });
     return (
       <MenuCheckboxItem
         key={server.name}
@@ -85,7 +90,7 @@ export function McpServersMenu(props: {
             size="icon-sm"
             variant="ghost-muted"
             className="size-7"
-            aria-label={`MCP servers, ${onCount} on`}
+            aria-label={gt("MCP servers, {count} on", { count: onCount })}
           >
             <PlugIcon aria-hidden="true" className={onCount > 0 ? "text-foreground" : undefined} />
           </Button>
@@ -93,11 +98,17 @@ export function McpServersMenu(props: {
       />
       <MenuPopup {...menuProps} side="top" align="end">
         <MenuGroup>
-          <MenuGroupLabel>MCP servers</MenuGroupLabel>
+          <MenuGroupLabel>
+            <T>MCP servers</T>
+          </MenuGroupLabel>
           {shown.map(row)}
           {more.length > 0 ? (
             <MenuSub>
-              <MenuSubTrigger>More servers ({more.length})</MenuSubTrigger>
+              <MenuSubTrigger>
+                <T>
+                  More servers (<Var>{more.length}</Var>)
+                </T>
+              </MenuSubTrigger>
               <MenuSubPopup>{more.map(row)}</MenuSubPopup>
             </MenuSub>
           ) : null}

@@ -1,4 +1,5 @@
 import { WORK_MODULE_STATUSES, type WorkModuleStatus } from "@t3tools/contracts";
+import { useGT, useMessages } from "gt-react";
 import { useRef, useState } from "react";
 
 import { Badge } from "~/components/ui/badge";
@@ -19,7 +20,9 @@ export function WorkStatusMenu(props: WorkStatusControlProps) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [reasonRequested, setReasonRequested] = useState(false);
   const [askingReason, setAskingReason] = useState(false);
-  const label = WORK_STATUS_LABEL[props.status];
+  const gt = useGT();
+  const m = useMessages();
+  const label = m(WORK_STATUS_LABEL[props.status]);
   return (
     <>
       {/* Opens the reason popover after the menu closes, so its focus return cannot dismiss it. */}
@@ -33,7 +36,7 @@ export function WorkStatusMenu(props: WorkStatusControlProps) {
         <MenuTrigger
           ref={triggerRef}
           disabled={props.disabled}
-          aria-label={`Status: ${label}`}
+          aria-label={gt("Status: {label}", { label })}
           render={<button type="button" />}
         >
           <Badge variant={WORK_STATUS_BADGE[props.status]} size="sm">
@@ -50,7 +53,7 @@ export function WorkStatusMenu(props: WorkStatusControlProps) {
                   : props.onChange({ status, waitingReason: null })
               }
             >
-              {WORK_STATUS_LABEL[status]}
+              {m(WORK_STATUS_LABEL[status])}
             </MenuItem>
           ))}
         </MenuPopup>
@@ -69,14 +72,16 @@ export function WorkStatusMenu(props: WorkStatusControlProps) {
   );
 }
 
-/** All four statuses side by side; picking "Esperando" (again) asks for the reason. */
+/** All four statuses side by side; picking "Waiting" (again) asks for the reason. */
 export function WorkStatusPicker(props: WorkStatusControlProps) {
   const waitingRef = useRef<HTMLButtonElement | null>(null);
   const [askingReason, setAskingReason] = useState(false);
+  const gt = useGT();
+  const m = useMessages();
   return (
     <>
       <ToggleGroup
-        aria-label="Status"
+        aria-label={gt("Status")}
         value={[props.status]}
         disabled={props.disabled}
         onValueChange={(next) => {
@@ -92,7 +97,7 @@ export function WorkStatusPicker(props: WorkStatusControlProps) {
             value={status}
             {...(status === "waiting" ? { ref: waitingRef } : {})}
           >
-            {WORK_STATUS_LABEL[status]}
+            {m(WORK_STATUS_LABEL[status])}
           </ToggleGroupItem>
         ))}
       </ToggleGroup>

@@ -14,6 +14,8 @@ import type {
 } from "@t3tools/contracts";
 import { DownloadIcon, FolderIcon } from "lucide-react";
 import { memo, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { msg, useGT } from "gt-react";
+import { m } from "~/i18n/messages";
 
 import { useAssetUrlRefresh } from "../../assets/assetUrls";
 import { saveAssetFile } from "../../assets/saveAssetFile";
@@ -90,6 +92,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
   downloadPath,
   resolveDragPath,
 }: MarkdownFileLinkProps) {
+  const gt = useGT();
   const downloadResource: AssetResource | null =
     threadRef && downloadPath
       ? {
@@ -123,8 +126,8 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Unable to open file",
-            description: error instanceof Error ? error.message : "An error occurred.",
+            title: gt("Unable to open file"),
+            description: error instanceof Error ? error.message : gt("An error occurred."),
           }),
         );
       } catch (cause) {
@@ -135,8 +138,8 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Unable to open file",
-            description: cause instanceof Error ? cause.message : "An error occurred.",
+            title: gt("Unable to open file"),
+            description: cause instanceof Error ? cause.message : gt("An error occurred."),
           }),
         );
       }
@@ -173,8 +176,8 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Unable to open file in browser",
-            description: error instanceof Error ? error.message : "An error occurred.",
+            title: gt("Unable to open file in browser"),
+            description: error instanceof Error ? error.message : gt("An error occurred."),
           }),
         );
       } catch (cause) {
@@ -185,8 +188,8 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Unable to open file in browser",
-            description: cause instanceof Error ? cause.message : "An error occurred.",
+            title: gt("Unable to open file in browser"),
+            description: cause instanceof Error ? cause.message : gt("An error occurred."),
           }),
         );
       }
@@ -211,8 +214,8 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Unable to reveal file",
-            description: error instanceof Error ? error.message : "An error occurred.",
+            title: gt("Unable to reveal file"),
+            description: error instanceof Error ? error.message : gt("An error occurred."),
           }),
         );
       } catch (cause) {
@@ -223,8 +226,8 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Unable to reveal file",
-            description: cause instanceof Error ? cause.message : "An error occurred.",
+            title: gt("Unable to reveal file"),
+            description: cause instanceof Error ? cause.message : gt("An error occurred."),
           }),
         );
       }
@@ -232,12 +235,16 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
   };
 
   const handleCopy = (resolveValue: () => Promise<string>, title: string) => {
+    const failureTitle =
+      title === "Relative path"
+        ? gt("Failed to copy relative path")
+        : gt("Failed to copy full path");
     if (typeof window === "undefined" || !navigator.clipboard?.writeText) {
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: `Failed to copy ${title.toLowerCase()}`,
-          description: "Clipboard API unavailable.",
+          title: failureTitle,
+          description: gt("Clipboard API unavailable."),
         }),
       );
       return;
@@ -263,8 +270,8 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: `Failed to copy ${title.toLowerCase()}`,
-          description: error instanceof Error ? error.message : "An error occurred.",
+          title: failureTitle,
+          description: error instanceof Error ? error.message : gt("An error occurred."),
         }),
       );
     });
@@ -281,16 +288,18 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
       const copyItems = markdownFileCopyMenuItems({ targetPath, workspaceRelativePath });
       const clicked = await api.contextMenu.show(
         [
-          ...(onOpenMedia ? ([{ id: "preview-media", label: "Preview media" }] as const) : []),
+          ...(onOpenMedia ? ([{ id: "preview-media", label: gt("Preview media") }] as const) : []),
           ...(onOpen ? ([{ id: "open", label: openInEditorMenuLabel }] as const) : []),
           ...(onOpenInBrowser
-            ? ([{ id: "open-in-browser", label: "Open in integrated browser" }] as const)
+            ? ([{ id: "open-in-browser", label: gt("Open in integrated browser") }] as const)
             : []),
           ...(onReveal && revealLabel ? ([{ id: "reveal", label: revealLabel }] as const) : []),
-          ...(canDownload ? ([{ id: "download", label: "Download" }] as const) : []),
+          ...(canDownload
+            ? ([{ id: "download", label: gt("Download", { $context: "verb" }) }] as const)
+            : []),
           ...copyItems.map(({ id, label }) => ({ id, label })),
           ...(readContents
-            ? ([{ id: "copy-contents", label: "Copy file contents" }] as const)
+            ? ([{ id: "copy-contents", label: gt("Copy file contents") }] as const)
             : []),
         ] as const,
         position,
@@ -413,7 +422,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
               kind={chipKind}
               dir="ltr"
               render={<button type="button" />}
-              aria-label={`File options for ${label}`}
+              aria-label={gt("File options for {label}", { label })}
               aria-haspopup="menu"
               className={cn(MARKDOWN_FILE_LINK_CLASS_NAME, "select-text")}
               data-markdown-copy={copyMarkdown}
@@ -450,7 +459,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
         <Button
           size="icon-xs"
           variant="ghost-muted"
-          aria-label={`Download ${label}`}
+          aria-label={gt("Download {label}", { label })}
           onClick={(event) => {
             event.stopPropagation();
             handleDownload();
@@ -496,13 +505,13 @@ function areMarkdownFileLinkPropsEqual(
 async function downloadCitedFile(prepare: () => Promise<string | null>, name: string) {
   try {
     const url = await prepare();
-    if (url === null) throw new Error("Reconnect to the environment and try again.");
+    if (url === null) throw new Error(m(msg("Reconnect to the environment and try again.")));
     await saveAssetFile({ name, url });
   } catch (cause) {
     toastManager.add({
       type: "error",
-      title: "Could not download file",
-      description: cause instanceof Error ? cause.message : "Please try again.",
+      title: m(msg("Could not download file")),
+      description: cause instanceof Error ? cause.message : m(msg("Please try again.")),
     });
   }
 }

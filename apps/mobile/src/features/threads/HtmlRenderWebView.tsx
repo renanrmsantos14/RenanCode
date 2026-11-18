@@ -13,6 +13,7 @@ import {
   type HtmlRenderTheme,
   type HtmlVariantReference,
 } from "@t3tools/shared/htmlRender";
+import { T, useGT, Var } from "gt-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
   Platform,
@@ -199,6 +200,7 @@ export function ThreadHtmlRender(props: {
   readonly height?: number;
   readonly iconColor: ColorValue;
 }) {
+  const gt = useGT();
   const navigation = useNavigation();
   const { attachmentId, title } = props.render;
   const height = props.height ?? htmlRenderFrameHeight(props.render, props.frameWidth);
@@ -237,7 +239,7 @@ export function ThreadHtmlRender(props: {
         {uri !== null && !failed ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Open ${title}`}
+            accessibilityLabel={gt("Open {title}", { title })}
             hitSlop={8}
             className="h-7 w-7 items-center justify-center rounded-full border border-border/60 bg-card/80"
             onPress={() =>
@@ -273,7 +275,7 @@ export function ThreadHtmlRender(props: {
         ) : failed || asset._tag === "Failure" ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Reload ${title}`}
+            accessibilityLabel={gt("Reload {title}", { title })}
             className="flex-1 items-center justify-center"
             onPress={() => {
               retried.current = false;
@@ -281,7 +283,9 @@ export function ThreadHtmlRender(props: {
               if (uri === null) void refresh().then((next) => next !== null && setUri(next));
             }}
           >
-            <Text className="text-sm text-foreground-muted">Page unavailable</Text>
+            <Text className="text-sm text-foreground-muted">
+              <T>Page unavailable</T>
+            </Text>
           </Pressable>
         ) : (
           <View className="flex-1 items-center justify-center">
@@ -301,6 +305,7 @@ export function ThreadHtmlVariants(props: {
   readonly iconColor: ColorValue;
   readonly onFollow?: (text: string) => void;
 }) {
+  const gt = useGT();
   const scroll = useRef<ScrollViewInstance>(null);
   const [active, setActive] = useState(0);
   const height = htmlVariantsFrameHeight(props.variants, props.frameWidth);
@@ -325,7 +330,7 @@ export function ThreadHtmlVariants(props: {
               key={variant.attachmentId}
               accessibilityRole="button"
               accessibilityState={{ selected: index === active }}
-              accessibilityLabel={`Show variant ${htmlVariantLetter(index)}`}
+              accessibilityLabel={gt("Show variant {letter}", { letter: htmlVariantLetter(index) })}
               hitSlop={4}
               className={`min-w-0 shrink rounded-full border px-2.5 py-1 ${
                 index === active ? "border-foreground/40 bg-card" : "border-border/60"
@@ -348,7 +353,11 @@ export function ThreadHtmlVariants(props: {
             className="rounded-full bg-foreground px-3 py-1"
             onPress={() => props.onFollow?.(htmlVariantFollowUpText(active, current.label))}
           >
-            <Text className="text-xs font-medium text-background">{`Use ${htmlVariantLetter(active)}`}</Text>
+            <Text className="text-xs font-medium text-background">
+              <T>
+                Use <Var>{htmlVariantLetter(active)}</Var>
+              </T>
+            </Text>
           </Pressable>
         ) : null}
       </View>

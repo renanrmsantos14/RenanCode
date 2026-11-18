@@ -7,6 +7,7 @@ import {
   formatAgo,
   selectClaudeUsageAccounts,
 } from "@t3tools/shared/usageLimits";
+import { useGT } from "gt-react-native";
 import { Pressable, useWindowDimensions, View } from "react-native";
 
 import { SymbolView } from "../../components/ui/AppSymbol";
@@ -31,6 +32,7 @@ export function ClaudeUsageIndicator(props: {
   readonly environmentId: EnvironmentId;
   readonly onPress: () => void;
 }) {
+  const gt = useGT();
   const providers = useAtomValue(serverEnvironment.providersValueAtom(props.environmentId));
   const now = useNowMinuteMs();
   const { width } = useWindowDimensions();
@@ -41,8 +43,8 @@ export function ClaudeUsageIndicator(props: {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Claude usage: ${summary}`}
-      accessibilityHint="Opens usage limits"
+      accessibilityLabel={gt("Claude usage: {summary}", { summary })}
+      accessibilityHint={gt("Opens usage limits")}
       hitSlop={{ top: 8, bottom: 8 }}
       onPress={props.onPress}
       className="mb-1 min-w-0 flex-row items-center gap-1.5 self-start px-3 py-1 active:opacity-60"
