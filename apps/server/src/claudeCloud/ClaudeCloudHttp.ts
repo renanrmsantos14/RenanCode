@@ -1,8 +1,10 @@
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Sse from "effect/encoding/Sse";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
@@ -10,6 +12,8 @@ import * as HttpClientResponse from "effect/http/HttpClientResponse";
 // Internal claude.ai/code endpoints, read from the Claude Code CLI (2.1.318). Undocumented.
 export const API_ROOT = "https://api.anthropic.com";
 export const API_BASE = `${API_ROOT}/v1/code/sessions`;
+// The stream sends a keepalive comment well within this; silence means a dead connection.
+const STREAM_SILENCE_LIMIT = Duration.seconds(90);
 
 /** One claude.ai login: a Claude home directory and the CLI's account metadata file. */
 export interface ClaudeAccountRef {
@@ -111,7 +115,35 @@ export const makeClaudeCloudHttp = Effect.gen(function* () {
       Effect.mapError(toCloudError(operation)),
     );
 
-  return { getJson, post, postJson, toCloudError };
+  /** A session's SSE event names, live from after `afterSequence` (sent as `Last-Event-ID`). */
+  const eventNames = (account: ClaudeAccountRef, sessionId: string, afterSequence: number) =>
+    Stream.unwrap(
+      authHeaders(account).pipe(
+        Effect.flatMap((headers) =>
+          HttpClientRequest.get(`${API_BASE}/${encodeURIComponent(sessionId)}/events/stream`).pipe(
+            HttpClientRequest.setHeaders({
+              ...headers,
+              accept: "text/event-stream",
+              "last-event-id": String(afterSequence),
+            }),
+            httpClient.execute,
+          ),
+        ),
+        Effect.map((response) =>
+          response.stream.pipe(
+            Stream.timeoutOrElse({
+              duration: STREAM_SILENCE_LIMIT,
+              orElse: () => Stream.fail(new Error("Claude cloud event stream went silent")),
+            }),
+            Stream.decodeText,
+            Stream.pipeThroughChannel(Sse.decode()),
+            Stream.map((event) => event.event),
+          ),
+        ),
+      ),
+    ).pipe(Stream.mapError(toCloudError("event-stream")));
+
+  return { eventNames, getJson, post, postJson, toCloudError };
 });
 
 /** Posts one event the way the Claude CLI does: `{events: [{payload}]}`. */
