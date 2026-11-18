@@ -13,6 +13,7 @@ import {
   type AuthEnvironmentScope,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
+  MCP_PEER_LINK_RENEWAL_GRANT,
   MCP_PEER_LINK_SOFTWARE_ID,
   mcpClientScopes,
   parseMcpApprovalCode,
@@ -23,6 +24,7 @@ import { encodeOAuthScope } from "@t3tools/shared/oauthScope";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Digest from "effect/crypto/Digest";
+import type * as DateTime from "effect/DateTime";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -521,10 +523,78 @@ const make = Effect.gen(function* () {
       iss: authorization.issuer,
     });
 
+  const managedPolicy = serverSettings.managedPolicy;
+  const maxRuntimeMode = managedPolicy?.limits?.maxRuntimeMode;
+
+  const fail = (error: AuthMcpTokenError["error"], description: string) =>
+    new AuthMcpTokenError({ error, error_description: description });
+
+  /** A linked environment's token renews itself, or confirms it saved the renewal. */
+  const renewPeerLink = Effect.fn("McpOAuth.renewPeerLink")(function* ({
+    request,
+    urls,
+    token,
+  }: {
+    readonly request: HttpServerRequest.HttpServerRequest;
+    readonly urls: McpOAuthUrls;
+    readonly token: AuthMcpTokenRequest;
+  }) {
+    if (!sameResource(urls, token.resource)) {
+      return yield* fail("invalid_request", `This server only issues tokens for ${urls.resource}.`);
+    }
+    if (!(yield* linksEnabled)) {
+      return yield* fail("invalid_grant", "Linked environments is off on this machine.");
+    }
+    const refused = (
+      cause:
+        | EnvironmentAuth.ServerAuthCredentialError
+        | EnvironmentAuth.ServerAuthPeerLinkRenewalError
+        | EnvironmentAuth.ServerAuthInternalError,
+    ) =>
+      EnvironmentAuth.isServerAuthInternalError(cause)
+        ? Effect.logError("Could not renew a peer link.", { cause }).pipe(
+            Effect.andThen(Effect.fail(fail("invalid_grant", "The link could not be renewed."))),
+          )
+        : Effect.fail(
+            fail(
+              "invalid_grant",
+              cause._tag === "ServerAuthPeerLinkRenewalError"
+                ? cause.message
+                : "The link's token is invalid or expired.",
+            ),
+          );
+    const now = yield* Clock.currentTimeMillis;
+    const expiresIn = (expiresAt: DateTime.DateTime) =>
+      Math.max(0, Math.floor((expiresAt.epochMilliseconds - now) / 1000));
+    const previousToken =
+      token.previous_token === undefined ? undefined : Redacted.value(token.previous_token);
+    if (previousToken !== undefined) {
+      const expiresAt = yield* environmentAuth
+        .confirmMcpPeerLinkRenewal({ request, previousToken })
+        .pipe(Effect.catch(refused));
+      return {
+        access_token: EnvironmentAuth.parseBearerToken(request) ?? "",
+        token_type: "Bearer" as const,
+        expires_in: expiresIn(expiresAt),
+        scope: "",
+      };
+    }
+    const renewed = yield* environmentAuth
+      .renewMcpPeerLink({ request, maxRuntimeMode })
+      .pipe(Effect.catch(refused));
+    return {
+      access_token: renewed.token,
+      token_type: "Bearer" as const,
+      expires_in: expiresIn(renewed.expiresAt),
+      scope: encodeOAuthScope(mcpClientScopes(renewed.access)),
+    };
+  });
+
   const exchangeCode: McpOAuth["Service"]["exchangeCode"] = Effect.fn("McpOAuth.exchangeCode")(
     function* ({ request, urls, token }) {
-      const fail = (error: AuthMcpTokenError["error"], description: string) =>
-        new AuthMcpTokenError({ error, error_description: description });
+      if (token.grant_type === MCP_PEER_LINK_RENEWAL_GRANT) {
+        return yield* renewPeerLink({ request, urls, token });
+      }
       if (token.grant_type !== "authorization_code") {
         return yield* fail("unsupported_grant_type", "Only authorization_code is supported.");
       }
@@ -585,8 +655,6 @@ const make = Effect.gen(function* () {
     },
   );
 
-  const managedPolicy = serverSettings.managedPolicy;
-  const maxRuntimeMode = managedPolicy?.limits?.maxRuntimeMode;
   return McpOAuth.of({
     runtimeModeCeiling:
       managedPolicy === undefined || maxRuntimeMode === undefined
@@ -627,7 +695,7 @@ export const layerMcpClientAuthenticator = Layer.effect(
                   requestNamespace: `client:${client.sessionId}`,
                   thread: undefined,
                   client: {
-                    sessionId: client.sessionId,
+                    sessionId: client.linkId,
                     label: client.label,
                     access: client.access,
                     linked: client.peerLink,

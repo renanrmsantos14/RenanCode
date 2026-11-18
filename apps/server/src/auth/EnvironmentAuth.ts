@@ -22,7 +22,10 @@ import {
   type AuthWebSocketTicketUse,
   DpopFailureReason,
   type DpopFailureReason as DpopFailureReasonType,
+  isRuntimeModeAbove,
   mcpClientScopes,
+  PEER_LINK_MAX_LIFETIME_DAYS,
+  type RuntimeMode,
 } from "@t3tools/contracts";
 import { isLocalLoopbackHost } from "@t3tools/shared/hostClassification";
 import { encodeOAuthScope } from "@t3tools/shared/oauthScope";
@@ -91,6 +94,8 @@ export interface McpClientSession {
   readonly access: AuthMcpClientAccess;
   /** Another T3 Code environment's link, whose work here stays within it. */
   readonly peerLink: boolean;
+  /** Stays the same across a peer link's renewals, as its sessions do not. */
+  readonly linkId: string;
 }
 
 export interface AuthenticatedSession {
@@ -471,6 +476,19 @@ export class ServerAuthMcpApprovalCodeError extends Schema.TaggedError<ServerAut
   }
 }
 
+export class ServerAuthPeerLinkRenewalError extends Schema.TaggedError<ServerAuthPeerLinkRenewalError>()(
+  "ServerAuthPeerLinkRenewalError",
+  { reason: Schema.Literals(["not_a_peer_link", "lifetime_reached", "not_a_replacement"]) },
+) {
+  override get message(): string {
+    return this.reason === "lifetime_reached"
+      ? `This link reached its ${PEER_LINK_MAX_LIFETIME_DAYS} day limit. Link again with a new pairing code.`
+      : this.reason === "not_a_replacement"
+        ? "That token is not the one this link replaced."
+        : "Only a linked environment's token renews.";
+  }
+}
+
 export class ServerAuthForbiddenOperationError extends Schema.TaggedError<ServerAuthForbiddenOperationError>()(
   "ServerAuthForbiddenOperationError",
   {},
@@ -616,6 +634,10 @@ export class EnvironmentAuth extends Context.Service<
       readonly access: AuthMcpClientAccess;
       readonly peerLink: boolean;
       readonly client: AuthClientMetadata;
+      /** A renewal's pairing time and shortened life; a first sign-in has neither. */
+      readonly originatedAt?: DateTime.DateTime;
+      readonly linkId?: string;
+      readonly ttl?: Duration.Duration;
     }) => Effect.Effect<
       {
         readonly sessionId: AuthSessionId;
@@ -623,6 +645,34 @@ export class EnvironmentAuth extends Context.Service<
         readonly expiresAt: DateTime.DateTime;
       },
       ServerAuthInternalError
+    >;
+    /**
+     * A new session for the peer link presented in `Authorization`: the same access, never above
+     * `maxRuntimeMode`, living at most `PEER_LINK_MAX_LIFETIME_DAYS` after the first pairing. The
+     * presented session stays valid until `confirmMcpPeerLinkRenewal`.
+     */
+    readonly renewMcpPeerLink: (input: {
+      readonly request: HttpServerRequest.HttpServerRequest;
+      readonly maxRuntimeMode: RuntimeMode | undefined;
+    }) => Effect.Effect<
+      {
+        readonly sessionId: AuthSessionId;
+        readonly token: string;
+        readonly expiresAt: DateTime.DateTime;
+        readonly access: AuthMcpClientAccess;
+      },
+      ServerAuthCredentialError | ServerAuthPeerLinkRenewalError | ServerAuthInternalError
+    >;
+    /**
+     * The link saved the renewed token it presents in `Authorization`, so the session
+     * `previousToken` names, from the same pairing, is revoked. Returns the new session's expiry.
+     */
+    readonly confirmMcpPeerLinkRenewal: (input: {
+      readonly request: HttpServerRequest.HttpServerRequest;
+      readonly previousToken: string;
+    }) => Effect.Effect<
+      DateTime.DateTime,
+      ServerAuthCredentialError | ServerAuthPeerLinkRenewalError | ServerAuthInternalError
     >;
     /**
      * Spends a code covering all granted scopes and returns the level it approves. A level-bound
@@ -1542,6 +1592,7 @@ export const make = Effect.gen(function* () {
                 ? (session.runtimeModeCeiling ?? "approval-required")
                 : "read-only",
               peerLink: session.peerLink === true,
+              linkId: session.linkId ?? session.sessionId,
             } satisfies McpClientSession)
           : Effect.fail(
               new ServerAuthInvalidCredentialError({
@@ -1559,9 +1610,11 @@ export const make = Effect.gen(function* () {
         subject: MCP_CLIENT_SUBJECT,
         method: "bearer-access-token",
         scopes: mcpClientScopes(input.access),
-        ttl: MCP_CLIENT_SESSION_TTL,
+        ttl: input.ttl ?? MCP_CLIENT_SESSION_TTL,
         ...(input.access === "read-only" ? {} : { runtimeModeCeiling: input.access }),
         peerLink: input.peerLink,
+        ...(input.originatedAt ? { originatedAt: input.originatedAt } : {}),
+        ...(input.linkId ? { linkId: input.linkId } : {}),
         client: { ...input.client, label: input.label, deviceType: "bot" },
       })
       .pipe(
@@ -1573,6 +1626,68 @@ export const make = Effect.gen(function* () {
         Effect.mapError((cause) => new ServerAuthSessionTokenIssueError({ cause })),
         Effect.withSpan("EnvironmentAuth.issueMcpClientSession"),
       );
+
+  const verifyPeerLinkToken = (token: string) =>
+    sessions.verify(token).pipe(
+      mapSessionVerificationErrors,
+      Effect.filterOrFail(
+        (session) =>
+          session.subject === MCP_CLIENT_SUBJECT &&
+          session.method === "bearer-access-token" &&
+          session.peerLink === true,
+        () => new ServerAuthPeerLinkRenewalError({ reason: "not_a_peer_link" }),
+      ),
+    );
+
+  const renewMcpPeerLink: EnvironmentAuth["Service"]["renewMcpPeerLink"] = Effect.fn(
+    "EnvironmentAuth.renewMcpPeerLink",
+  )(function* ({ request, maxRuntimeMode }) {
+    const token = parseBearerToken(request);
+    if (token === null) return yield* new ServerAuthMissingCredentialError({});
+    const current = yield* verifyPeerLinkToken(token);
+    const now = yield* DateTime.now;
+    const originatedAt = current.originatedAt ?? now;
+    const lastDay = DateTime.add(originatedAt, { days: PEER_LINK_MAX_LIFETIME_DAYS });
+    if (DateTime.isLessThanOrEqualTo(lastDay, now)) {
+      return yield* new ServerAuthPeerLinkRenewalError({ reason: "lifetime_reached" });
+    }
+    const granted: AuthMcpClientAccess = current.scopes.includes(AuthOrchestrationOperateScope)
+      ? (current.runtimeModeCeiling ?? "approval-required")
+      : "read-only";
+    // A policy tightened since the pairing lowers the link; nothing ever raises it.
+    const access =
+      granted !== "read-only" && isRuntimeModeAbove(granted, maxRuntimeMode)
+        ? (maxRuntimeMode ?? granted)
+        : granted;
+    const issued = yield* issueMcpClientSession({
+      label: current.client.label ?? "MCP client",
+      access,
+      peerLink: true,
+      client: current.client,
+      originatedAt,
+      linkId: current.linkId ?? current.sessionId,
+      ttl: Duration.min(MCP_CLIENT_SESSION_TTL, DateTime.distance(now, lastDay)),
+    });
+    return { ...issued, access };
+  });
+
+  const confirmMcpPeerLinkRenewal: EnvironmentAuth["Service"]["confirmMcpPeerLinkRenewal"] =
+    Effect.fn("EnvironmentAuth.confirmMcpPeerLinkRenewal")(function* ({ request, previousToken }) {
+      const token = parseBearerToken(request);
+      if (token === null) return yield* new ServerAuthMissingCredentialError({});
+      const renewed = yield* verifyPeerLinkToken(token);
+      const previous = yield* verifyPeerLinkToken(previousToken);
+      if (
+        previous.sessionId === renewed.sessionId ||
+        (previous.linkId ?? previous.sessionId) !== (renewed.linkId ?? renewed.sessionId)
+      ) {
+        return yield* new ServerAuthPeerLinkRenewalError({ reason: "not_a_replacement" });
+      }
+      yield* sessions
+        .revoke(previous.sessionId)
+        .pipe(Effect.mapError((cause) => new ServerAuthSessionRevocationError({ cause })));
+      return renewed.expiresAt ?? (yield* DateTime.now);
+    });
 
   const consumeMcpApprovalCode: EnvironmentAuth["Service"]["consumeMcpApprovalCode"] = (
     code,
@@ -1634,6 +1749,8 @@ export const make = Effect.gen(function* () {
     issueStartupPairingUrl,
     authenticateMcpClient,
     issueMcpClientSession,
+    renewMcpPeerLink,
+    confirmMcpPeerLinkRenewal,
     consumeMcpApprovalCode,
   });
 });

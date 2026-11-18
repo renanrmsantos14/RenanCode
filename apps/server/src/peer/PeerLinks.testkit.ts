@@ -54,6 +54,7 @@ export const descriptorOf = (
     repositoryIdentity: true,
     mcpModeLimitHeader: true,
     linkFence: true,
+    linkRenewal: true,
     ...capabilities,
   },
 });

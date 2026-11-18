@@ -60,6 +60,10 @@ export interface VerifiedSession {
   readonly runtimeModeCeiling?: RuntimeMode;
   /** An MCP client that is another T3 Code environment's peer link. */
   readonly peerLink?: true;
+  /** When the pairing this session descends from was made; renewals carry it forward. */
+  readonly originatedAt?: DateTime.DateTime;
+  /** The first session of the pairing a renewal descends from. */
+  readonly linkId?: string;
 }
 
 export interface VerifiedWebSocketTicket extends VerifiedSession {
@@ -395,6 +399,9 @@ export class SessionStore extends Context.Service<
       readonly proofKeyThumbprint?: string;
       readonly runtimeModeCeiling?: RuntimeMode;
       readonly peerLink?: boolean;
+      /** A renewal's original pairing time, so the chain's total life can be capped. */
+      readonly originatedAt?: DateTime.DateTime;
+      readonly linkId?: string;
       readonly replaceActiveForSubjectAndMethod?: boolean;
       readonly replaceSessionId?: AuthSessionId;
     }) => Effect.Effect<IssuedSession, SessionCredentialInternalError>;
@@ -459,6 +466,10 @@ const SessionClaims = Schema.Struct({
   rtc: Schema.optionalKey(RuntimeMode),
   /** Signed, so a client cannot shed its peer link's limits. */
   plk: Schema.optionalKey(Schema.Literal(1)),
+  /** Signed, so a renewal cannot move the pairing time it is capped from. */
+  org: Schema.optionalKey(Schema.Number),
+  /** Signed: names the pairing's first session, which work a link started stays fenced to. */
+  lid: Schema.optionalKey(Schema.String),
   iat: Schema.Number,
   exp: Schema.Number,
 });
@@ -682,6 +693,8 @@ const make = Effect.gen(function* () {
         ...(input?.proofKeyThumbprint ? { jkt: input.proofKeyThumbprint } : {}),
         ...(input?.runtimeModeCeiling ? { rtc: input.runtimeModeCeiling } : {}),
         ...(input?.peerLink === true ? { plk: 1 as const } : {}),
+        ...(input?.originatedAt ? { org: input.originatedAt.epochMilliseconds } : {}),
+        ...(input?.linkId ? { lid: input.linkId } : {}),
         iat: issuedAt.epochMilliseconds,
         exp: expiresAt.epochMilliseconds,
       };
@@ -865,6 +878,8 @@ const make = Effect.gen(function* () {
         ...(claims.jkt ? { proofKeyThumbprint: claims.jkt } : {}),
         ...(claims.rtc ? { runtimeModeCeiling: claims.rtc } : {}),
         ...(claims.plk === 1 ? { peerLink: true as const } : {}),
+        originatedAt: DateTime.makeUnsafe(claims.org ?? claims.iat),
+        ...(claims.lid ? { linkId: claims.lid } : {}),
       } satisfies VerifiedSession;
     },
   );

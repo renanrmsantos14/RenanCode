@@ -36,6 +36,7 @@ import * as ServerSettings from "../serverSettings.ts";
 import {
   descriptorOf,
   layerLinkingEnvironment,
+  linkTo,
   servePeer,
   type ServedPeer,
 } from "./PeerLinks.testkit.ts";
@@ -916,3 +917,169 @@ it("reads Node's TLS verification code from anywhere in a cause chain", () => {
   expect(PeerLinks.certificateErrorCode({ cause: { code: "ECONNREFUSED" } })).toBeUndefined();
   expect(PeerLinks.certificateErrorCode(new Error("timed out"))).toBeUndefined();
 });
+
+const DAY = 86_400_000;
+const storedLink = (a: Effect.Success<ReturnType<typeof makeA>>) =>
+  a.links.get(box.environmentId).pipe(Effect.map(Option.getOrThrow));
+const sessionIds = (b: ServedPeer) =>
+  linkedSessions(b).pipe(Effect.map((sessions) => sessions.map((session) => session.sessionId)));
+
+it.effect(
+  "renews a link in its last week with the same access, and the peer retires the old session after",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const b = yield* serveB(box);
+        const a = yield* makeA(laptop);
+        const linked = yield* linkTo(a.links, b, "approval-required");
+        const [first] = yield* sessionIds(b);
+
+        // Eight days left is not the last week.
+        yield* TestClock.adjust(Duration.days(22));
+        expect(yield* probe(a)).toEqual({
+          caller: "RenanCode · Laptop",
+          modes: "approval-required/default",
+        });
+        expect((yield* storedLink(a)).expiresAt.epochMilliseconds).toBe(
+          linked.expiresAt.epochMilliseconds,
+        );
+        expect(yield* sessionIds(b)).toEqual([first]);
+
+        // Six days left is.
+        yield* TestClock.adjust(Duration.days(2));
+        expect(yield* probe(a)).toEqual({
+          caller: "RenanCode · Laptop",
+          modes: "approval-required/default",
+        });
+        expect((yield* storedLink(a)).expiresAt.epochMilliseconds).toBe(
+          linked.expiresAt.epochMilliseconds + 24 * DAY,
+        );
+        const after = yield* sessionIds(b);
+        expect(after).toHaveLength(1);
+        expect(after).not.toContain(first);
+        expect((yield* a.links.list).map((link) => link.status)).toEqual(["reachable"]);
+      }),
+    ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+);
+
+it.effect("a peer that refuses the renewal keeps the current token and says why", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const b = yield* serveB(box);
+      const a = yield* makeA(laptop);
+      const linked = yield* linkTo(a.links, b);
+      const [session] = yield* linkedSessions(b);
+      yield* b.auth.revokeSession(session!.sessionId);
+
+      yield* TestClock.adjust(Duration.days(24));
+      expect((yield* a.links.list).map((link) => link.status)).toEqual(["reachable"]);
+      const stored = yield* storedLink(a);
+      expect(stored.expiresAt.epochMilliseconds).toBe(linked.expiresAt.epochMilliseconds);
+      expect(stored.lastError).toContain("refused to renew");
+    }),
+  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+);
+
+it.effect("a peer asleep is not asked to renew, and renews the link once it wakes", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const b = yield* serveB(box);
+      const a = yield* makeA(laptop);
+      const linked = yield* linkTo(a.links, b);
+      yield* TestClock.adjust(Duration.days(24));
+
+      yield* Ref.set(b.asleep, true);
+      const listing = yield* a.links.list.pipe(Effect.forkScoped);
+      yield* Queue.take(b.unanswered);
+      yield* TestClock.adjust(Duration.seconds(3));
+      expect((yield* Fiber.join(listing)).map((link) => link.status)).toEqual(["unreachable"]);
+      const asleep = yield* storedLink(a);
+      expect(asleep.expiresAt.epochMilliseconds).toBe(linked.expiresAt.epochMilliseconds);
+      expect(asleep.lastError).toBeNull();
+
+      yield* Ref.set(b.asleep, false);
+      expect((yield* a.links.list).map((link) => link.status)).toEqual(["reachable"]);
+      expect((yield* storedLink(a)).expiresAt.epochMilliseconds).toBeGreaterThan(
+        linked.expiresAt.epochMilliseconds,
+      );
+    }),
+  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+);
+
+it.effect("a peer without link renewal keeps today's behavior, with no error", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const b = yield* serveB(descriptorOf("environment-box", "Box", { linkRenewal: false }));
+      const a = yield* makeA(laptop);
+      const linked = yield* linkTo(a.links, b);
+      const before = yield* sessionIds(b);
+      yield* TestClock.adjust(Duration.days(24));
+      expect(yield* probe(a)).toEqual({ caller: "RenanCode · Laptop", modes: "auto/default" });
+      const stored = yield* storedLink(a);
+      expect(stored.expiresAt.epochMilliseconds).toBe(linked.expiresAt.epochMilliseconds);
+      expect(stored.lastError).toBeNull();
+      expect(yield* sessionIds(b)).toEqual(before);
+
+      // The same link renews as soon as the peer says it can.
+      yield* Ref.set(b.descriptor, box);
+      yield* probe(a);
+      expect((yield* storedLink(a)).expiresAt.epochMilliseconds).toBeGreaterThan(
+        linked.expiresAt.epochMilliseconds,
+      );
+    }),
+  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+);
+
+it.effect("renews until 180 days after the pairing, ends its token there, and stops asking", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const b = yield* serveB(box);
+      const a = yield* makeA(laptop);
+      const linked = yield* linkTo(a.links, b);
+      const paired = linked.linkedAt.epochMilliseconds;
+
+      for (let step = 0; step < 7; step++) {
+        yield* TestClock.adjust(Duration.days(24));
+        yield* probe(a);
+      }
+      // Day 168: the last renewal is cut to the 180-day mark, not 30 days on.
+      expect((yield* storedLink(a)).expiresAt.epochMilliseconds).toBe(paired + 180 * DAY);
+      const last = yield* sessionIds(b);
+
+      yield* TestClock.adjust(Duration.days(6));
+      yield* probe(a);
+      expect((yield* storedLink(a)).expiresAt.epochMilliseconds).toBe(paired + 180 * DAY);
+      expect(yield* sessionIds(b)).toEqual(last);
+
+      yield* TestClock.adjust(Duration.days(7));
+      expect((yield* a.links.list).map((link) => link.status)).toEqual(["expired"]);
+    }),
+  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+);
+
+it.effect("keeps the old session until the renewed token is saved", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const b = yield* serveB(box);
+      const a = yield* makeA(laptop);
+      const linked = yield* linkTo(a.links, b);
+      const [first] = yield* sessionIds(b);
+      yield* a.sql`
+        CREATE TRIGGER refuse_renewal BEFORE UPDATE ON peer_environment_links
+        BEGIN SELECT RAISE(ABORT, 'database or disk is full'); END
+      `;
+
+      yield* TestClock.adjust(Duration.days(24));
+      expect(yield* probe(a)).toEqual({ caller: "RenanCode · Laptop", modes: "auto/default" });
+      expect((yield* storedLink(a)).expiresAt.epochMilliseconds).toBe(
+        linked.expiresAt.epochMilliseconds,
+      );
+      expect(yield* sessionIds(b)).toContain(first);
+
+      // Once it can be saved, the next call renews and the peer retires the old one.
+      yield* a.sql`DROP TRIGGER refuse_renewal`;
+      yield* probe(a);
+      expect(yield* sessionIds(b)).not.toContain(first);
+    }),
+  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+);

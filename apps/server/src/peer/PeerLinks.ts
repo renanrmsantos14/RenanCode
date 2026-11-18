@@ -5,7 +5,10 @@ import {
   EnvironmentHttpApi,
   EnvironmentId,
   type ExecutionEnvironmentCapabilities,
+  MCP_PEER_LINK_RENEWAL_GRANT,
   MCP_PEER_LINK_SOFTWARE_ID,
+  PEER_LINK_MAX_LIFETIME_DAYS,
+  type ExecutionEnvironmentDescriptor,
   type PeerLink,
   type PeerLinkCreateInput,
   PeerLinkError,
@@ -28,10 +31,12 @@ import * as Redacted from "effect/Redacted";
 import * as Result from "effect/Result";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientError from "effect/http/HttpClientError";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpApi from "effect/http-api/HttpApi";
 import * as HttpApiClient from "effect/http-api/HttpApiClient";
 import { isLocalLoopbackHost, isTailnetHost } from "@t3tools/shared/hostClassification";
@@ -214,6 +219,33 @@ export const LoopbackHost = Context.Reference<(host: string) => boolean>(
   "t3/peer/PeerLinks/LoopbackHost",
   { defaultValue: () => isLocalLoopbackHost },
 );
+
+const DAY_MS = Duration.toMillis(Duration.days(1));
+/** A peer's token lives this long, which a renewal's lead time is measured against. */
+const TOKEN_VALIDITY_MS = 30 * DAY_MS;
+/** A link renews when less than this, or a third of the token's validity, remains. */
+const RENEWAL_LEAD_MS = 7 * DAY_MS;
+/** A final token ends within this of the lifetime cap; clock skew and latency fit in it. */
+const LIFETIME_CAP_TOLERANCE_MS = Duration.toMillis(Duration.minutes(1));
+
+const isTokenError = Schema.is(AuthMcpTokenError);
+
+/**
+ * Whether a link's token is within its renewal window and the link can still
+ * live longer. The first token's validity is `expiresAt - linkedAt`; every
+ * renewal after it is a full token.
+ */
+const renewalDue = (link: Pick<PeerLink, "linkedAt" | "expiresAt">, now: DateTime.DateTime) => {
+  const linkedAt = link.linkedAt.epochMilliseconds;
+  const expiresAt = link.expiresAt.epochMilliseconds;
+  const validity = Math.min(expiresAt - linkedAt, TOKEN_VALIDITY_MS);
+  const lead = Math.min(RENEWAL_LEAD_MS, validity / 3);
+  return (
+    expiresAt > now.epochMilliseconds &&
+    expiresAt - now.epochMilliseconds < lead &&
+    expiresAt + LIFETIME_CAP_TOLERANCE_MS < linkedAt + PEER_LINK_MAX_LIFETIME_DAYS * DAY_MS
+  );
+};
 
 /** Whether a peer holds a linked agent to its limits and keeps its work within its link. */
 const linkLimitsHold = (peer: { readonly capabilities: ExecutionEnvironmentCapabilities }) =>
@@ -586,6 +618,121 @@ const make = Effect.gen(function* () {
           WHERE environment_id = ${link.environmentId}
         `.pipe(Effect.ignoreCause({ log: true }), Effect.as({ ...link, label }));
 
+  // One renewal at a time per link, so a slow peer holds up only its own.
+  const renewalLocks = new Map<string, Semaphore.Semaphore>();
+  const renewalLockOf = (environmentId: string) => {
+    const existing = renewalLocks.get(environmentId);
+    if (existing) return existing;
+    const created = Semaphore.makeUnsafe(1);
+    renewalLocks.set(environmentId, created);
+    return created;
+  };
+
+  /** The peer's API, sending `token` as its bearer. */
+  const clientWithBearer = (origin: string, token: string) =>
+    HttpApiClient.make(PeerHttpApi, { baseUrl: origin }).pipe(
+      Effect.provideService(
+        HttpClient.HttpClient,
+        peerHttpClient.pipe(HttpClient.mapRequest(HttpClientRequest.bearerToken(token))),
+      ),
+    );
+
+  /** Asks the peer for a renewed token, or to retire the one it replaced. */
+  const requestRenewal = (origin: string, bearer: string, previousToken: string | undefined) =>
+    clientWithBearer(origin, bearer).pipe(
+      Effect.flatMap((client) =>
+        client.mcpOAuth.token({
+          payload: {
+            grant_type: MCP_PEER_LINK_RENEWAL_GRANT,
+            resource: `${origin}/mcp`,
+            ...(previousToken === undefined
+              ? {}
+              : { previous_token: Redacted.make(previousToken) }),
+          },
+        }),
+      ),
+      Effect.timeout(probeTimeout(origin)),
+    );
+
+  /**
+   * Swaps in a renewed token when the link's is near its end, where its peer
+   * answered at `origin`. Never fails: a refusal is recorded and an offline
+   * peer ignored, and either way the current token keeps working. The peer
+   * revokes the old session only after the new token is saved here.
+   */
+  const renewIfDue = Effect.fn("PeerLinks.renewIfDue")(function* (
+    link: PeerLink,
+    origin: string,
+    peer: Pick<ExecutionEnvironmentDescriptor, "capabilities">,
+  ) {
+    type Renewed = { readonly token: string; readonly expiresAt: DateTime.Utc };
+    const none = Option.none<Renewed>();
+    if (peer.capabilities.linkRenewal !== true || !renewalDue(link, yield* DateTime.now)) {
+      return none;
+    }
+    return yield* renewalLockOf(link.environmentId).withPermits(1)(
+      Effect.gen(function* () {
+        // Another call may have renewed while this one waited.
+        const row = yield* readRow(link.environmentId);
+        if (Option.isNone(row)) return none;
+        const latest = yield* toLink(row.value);
+        if (!renewalDue(latest, yield* DateTime.now)) return none;
+        const stored = yield* secrets.get(row.value.secret_name).pipe(Effect.catch(failStorage));
+        if (Option.isNone(stored)) return none;
+        const current = new TextDecoder().decode(stored.value);
+        const requested = yield* requestRenewal(origin, current, undefined).pipe(Effect.result);
+        if (Result.isFailure(requested)) {
+          if (isTokenError(requested.failure)) {
+            yield* sql`
+              UPDATE peer_environment_links
+              SET last_error = ${`${link.label} refused to renew the link: ${requested.failure.message}`}
+              WHERE environment_id = ${link.environmentId}
+            `.pipe(Effect.ignoreCause({ log: true }));
+          }
+          return none;
+        }
+        const issued = requested.success;
+        const now = yield* DateTime.now;
+        const expiresAt = DateTime.add(now, { seconds: issued.expires_in });
+        const secretName = yield* newSecretName;
+        // The row switches tokens only if it still names the one this renewed.
+        const swapped = yield* Effect.gen(function* () {
+          yield* secrets
+            .set(secretName, new TextEncoder().encode(issued.access_token))
+            .pipe(Effect.catch(failStorage));
+          const updated = yield* sql<{ environment_id: string }>`
+            UPDATE peer_environment_links
+            SET secret_name = ${secretName}, expires_at = ${DateTime.formatIso(expiresAt)},
+              last_reached_at = ${DateTime.formatIso(now)}, last_error = NULL
+            WHERE environment_id = ${link.environmentId} AND secret_name = ${row.value.secret_name}
+            RETURNING environment_id
+          `.pipe(Effect.catch(failStorage));
+          return updated.length > 0;
+        }).pipe(
+          Effect.onError(() => secrets.remove(secretName).pipe(Effect.ignore)),
+          Effect.catch((error) =>
+            Effect.logWarning("Could not save a renewed peer link token", error).pipe(
+              Effect.as(false),
+            ),
+          ),
+        );
+        if (!swapped) {
+          yield* secrets.remove(secretName).pipe(Effect.ignore);
+          return none;
+        }
+        yield* secrets.remove(row.value.secret_name).pipe(Effect.ignore);
+        yield* requestRenewal(origin, issued.access_token, current).pipe(
+          Effect.ignoreCause({ log: true }),
+        );
+        return Option.some<Renewed>({ token: issued.access_token, expiresAt });
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.logWarning("Could not renew a peer link", error).pipe(Effect.as(none)),
+        ),
+      ),
+    );
+  });
+
   const statusOf = Effect.fn("PeerLinks.statusOf")(function* (
     link: PeerLink,
     now: DateTime.Utc,
@@ -595,11 +742,17 @@ const make = Effect.gen(function* () {
     if (link.urls.length === 0) return { ...link, status: "unreachable" };
     const answered = yield* Effect.raceAll(
       link.urls.map((url) =>
-        answersAs(url, link.environmentId).pipe(Effect.flatMap(Effect.fromOption)),
+        answersAs(url, link.environmentId).pipe(
+          Effect.flatMap(Effect.fromOption),
+          Effect.map((peer) => ({ url, peer })),
+        ),
       ),
     ).pipe(Effect.timeoutOption(LIST_PROBE_TIMEOUT), Effect.orElseSucceed(Option.none));
     if (Option.isNone(answered)) return { ...link, status: "unreachable" };
-    return { ...(yield* withLabel(link, answered.value.label)), status: "reachable" };
+    const { url, peer } = answered.value;
+    const renewed = yield* renewIfDue(link, url, peer);
+    const current = Option.isSome(renewed) ? { ...link, expiresAt: renewed.value.expiresAt } : link;
+    return { ...(yield* withLabel(current, peer.label)), status: "reachable" };
   });
 
   const list: PeerLinks["Service"]["list"] = Effect.gen(function* () {
@@ -686,10 +839,16 @@ const make = Effect.gen(function* () {
           message: `${link.label} runs a RenanCode version that cannot keep a linked agent's limits. Update it, then link again.`,
         });
       }
+      const renewed = yield* renewIfDue(link, url, peer);
       return {
-        link: yield* withLabel(link, peer.label),
+        link: yield* withLabel(
+          Option.isSome(renewed) ? { ...link, expiresAt: renewed.value.expiresAt } : link,
+          peer.label,
+        ),
         url,
-        token: new TextDecoder().decode(stored.value),
+        token: Option.isSome(renewed)
+          ? renewed.value.token
+          : new TextDecoder().decode(stored.value),
       };
     },
   );

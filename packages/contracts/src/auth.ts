@@ -559,6 +559,17 @@ export type AuthMcpAuthorizationServerMetadata = typeof AuthMcpAuthorizationServ
  */
 export const MCP_PEER_LINK_SOFTWARE_ID = "t3code-peer-link";
 
+/**
+ * Token grant a peer link uses to renew itself: the current token goes in
+ * `Authorization`, and the answer is a new session with the same limits.
+ * With `previous_token` too, the request instead confirms the renewal was
+ * saved, and revokes that earlier session.
+ */
+export const MCP_PEER_LINK_RENEWAL_GRANT = "peer_link_renewal";
+
+/** A link renews itself until this many days after it was first paired. */
+export const PEER_LINK_MAX_LIFETIME_DAYS = 180;
+
 export const AuthMcpClientRegistration = Schema.Struct({
   client_name: Schema.optionalKey(Schema.String),
   software_id: Schema.optionalKey(Schema.String),
@@ -656,6 +667,8 @@ export const AuthMcpTokenRequest = Schema.Struct({
   client_id: Schema.optionalKey(Schema.String),
   code_verifier: Schema.optionalKey(Schema.RedactedFromValue(Schema.String)),
   resource: Schema.optionalKey(Schema.String),
+  /** Only with `peer_link_renewal`: the token the presented one replaces. */
+  previous_token: Schema.optionalKey(Schema.RedactedFromValue(Schema.String)),
 }).pipe(HttpApiSchema.asFormUrlEncoded());
 export type AuthMcpTokenRequest = typeof AuthMcpTokenRequest.Type;
 
