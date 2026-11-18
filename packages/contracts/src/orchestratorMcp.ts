@@ -96,6 +96,12 @@ export const OrchestratorMcpTargetOptions = Schema.Union([
 export type OrchestratorMcpTargetOptions = typeof OrchestratorMcpTargetOptions.Type;
 
 export const OrchestratorMcpTarget = Schema.Struct({
+  teamMember: Schema.optional(
+    TrimmedNonEmptyString.annotate({
+      description:
+        "Member name from `orchestrator_capabilities` team. Sets provider, model and options; another instance of the same model stands in when the member's cannot run. Other fields override.",
+    }),
+  ),
   providerInstanceId: Schema.optional(
     ProviderInstanceId.annotate({
       description: "Provider instance id from `orchestrator_capabilities`.",
@@ -683,6 +689,23 @@ export const OrchestratorMcpEnvironmentLinksResult = Schema.Struct({
 export type OrchestratorMcpEnvironmentLinksResult =
   typeof OrchestratorMcpEnvironmentLinksResult.Type;
 
+export const OrchestratorMcpTeamCapability = Schema.Struct({
+  name: Schema.String,
+  guidance: Schema.optional(Schema.String),
+  members: Schema.Array(
+    Schema.Struct({
+      name: Schema.String,
+      role: Schema.optional(OrchestratorMcpTaskRole),
+      providerInstanceId: ProviderInstanceId,
+      model: Schema.String,
+      /** Instance that would run it now; differs from `providerInstanceId` on failover, null when none can. */
+      runsOn: Schema.NullOr(ProviderInstanceId),
+      constraints: Schema.Array(Schema.String),
+    }),
+  ),
+});
+export type OrchestratorMcpTeamCapability = typeof OrchestratorMcpTeamCapability.Type;
+
 export const OrchestratorMcpCapabilitiesResult = Schema.Struct({
   parentThreadId: Schema.NullOr(ThreadId),
   inheritedProviderInstanceId: Schema.NullOr(ProviderInstanceId),
@@ -691,6 +714,8 @@ export const OrchestratorMcpCapabilitiesResult = Schema.Struct({
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
   providers: Schema.Array(OrchestratorMcpProviderCapability),
+  /** The team this thread leads, when one is active. */
+  team: Schema.optional(OrchestratorMcpTeamCapability),
   features: Schema.Struct({
     appOwnedSubagents: Schema.Boolean,
     asyncPolling: Schema.Boolean,

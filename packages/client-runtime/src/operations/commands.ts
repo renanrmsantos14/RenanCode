@@ -24,6 +24,7 @@ import {
   type RuntimeMode,
   type RuntimeRequestId,
   type ThreadId,
+  type ProviderTeamId,
   type TurnItemId,
   type ThreadEnvMode,
   type UploadChatAttachment,
@@ -161,6 +162,10 @@ export interface SetThreadInteractionModeInput extends ThreadCommandInput {
 export interface SetThreadMcpServerInput extends ThreadCommandInput {
   readonly server: string;
   readonly enabled: boolean;
+}
+
+export interface SetThreadTeamInput extends ThreadCommandInput {
+  readonly teamId: ProviderTeamId | null;
 }
 
 export interface AnswerThreadMcpServerRequestInput extends ThreadCommandInput {
@@ -776,6 +781,17 @@ export const setThreadMcpServer = Effect.fn("EnvironmentCommands.setThreadMcpSer
     threadId: input.threadId,
     server: input.server,
     enabled: input.enabled,
+  });
+});
+
+export const setThreadTeam = Effect.fn("EnvironmentCommands.setThreadTeam")(function* (
+  input: SetThreadTeamInput,
+) {
+  return yield* dispatch({
+    type: "thread.team.set",
+    commandId: yield* allocateCommandId(input),
+    threadId: input.threadId,
+    teamId: input.teamId,
   });
 });
 

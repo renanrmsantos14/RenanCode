@@ -42,6 +42,7 @@ import * as McpSessionRegistry from "../mcp/McpSessionRegistry.ts";
 import * as McpAppModelContext from "../mcpApps/McpAppModelContext.ts";
 import * as PreviewAgentActivity from "../preview/PreviewAgentActivity.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import { teamBriefing } from "../mcp/providerTeamTarget.ts";
 import * as CheckpointService from "./CheckpointService.ts";
 import * as EventSink from "./EventSink.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
@@ -2215,6 +2216,21 @@ export const layer: Layer.Layer<
           key: `mcp_app_${entry.itemId.replace(/[^\w.-]/g, "_")}`,
           text: entry.text,
         }));
+        const teamId = input.appThread.teamId;
+        const team =
+          teamId == null
+            ? undefined
+            : yield* serverSettings.getSettings.pipe(
+                Effect.map((settings) => settings.providerTeams[teamId]),
+                Effect.catch((cause) =>
+                  Effect.logWarning("Failed to read the thread's team.", { cause }).pipe(
+                    Effect.as(undefined),
+                  ),
+                ),
+              );
+        if (team !== undefined && team.members.length > 0) {
+          appContext.push({ key: "t3_team", text: teamBriefing(team) });
+        }
         const turnInput = {
           appThread: input.appThread,
           threadId: input.run.threadId,

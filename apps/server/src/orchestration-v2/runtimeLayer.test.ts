@@ -27,6 +27,7 @@ import {
   type OrchestrationV2ShellSnapshot,
   type OrchestrationV2RuntimeRequest,
   ProjectId,
+  ProviderTeamId,
   type PullRequestCheck,
   type PullRequestDetail,
   type PullRequestComment,
@@ -3799,6 +3800,21 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
         (yield* orchestrator.getThreadProjection(threadId)).thread.enabledMcpServers,
         ["claude.ai Spotify"],
       );
+      for (const [step, teamId] of [
+        ["set", ProviderTeamId.make("squad")],
+        ["clear", null],
+      ] as const) {
+        yield* orchestrator.dispatch({
+          type: "thread.team.set",
+          commandId: CommandId.make(`runtime-layer-lifecycle-team-${step}`),
+          threadId,
+          teamId,
+        });
+        assert.strictEqual(
+          (yield* orchestrator.getThreadProjection(threadId)).thread.teamId,
+          teamId,
+        );
+      }
       yield* orchestrator.dispatch({
         type: "thread.model-selection.set",
         commandId: CommandId.make("runtime-layer-lifecycle-model"),
