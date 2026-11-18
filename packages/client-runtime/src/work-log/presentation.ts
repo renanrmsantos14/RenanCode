@@ -8,6 +8,7 @@ import {
   type ToolActivityIcon,
   type OrchestrationV2TurnItem,
   type ThreadId,
+  type TurnItemId,
 } from "@t3tools/contracts";
 import type { ToolCallVisibility } from "@t3tools/contracts/settings";
 import {
@@ -447,26 +448,71 @@ export function workEntryViewedImagePath(entry: WorkLogPresentationEntry): strin
     : null;
 }
 
+export interface ViewedImageRef {
+  readonly path: string;
+  /** Set when the turn item's own output holds the image, which is also readable on cloud hosts. */
+  readonly itemId?: TurnItemId;
+}
+
+/** The entry's viewed image, with the item id when its output holds the bytes. */
+export function workEntryViewedImage(entry: WorkLogPresentationEntry): ViewedImageRef | null {
+  const path = workEntryViewedImagePath(entry);
+  if (path === null) return null;
+  const item = entry.structuredPayload;
+  return item?.type === "dynamic_tool" && item.outputHasImage === true
+    ? { path, itemId: item.id }
+    : { path };
+}
+
 /** Distinct images the agent opened across a tool group, in viewing order. */
+export function workEntriesViewedImages(
+  entries: ReadonlyArray<WorkLogPresentationEntry>,
+): ViewedImageRef[] {
+  const images = new Map<string, ViewedImageRef>();
+  for (const entry of entries) {
+    const image = workEntryViewedImage(entry);
+    if (image === null) continue;
+    const known = images.get(image.path);
+    if (known === undefined || (known.itemId === undefined && image.itemId !== undefined)) {
+      images.set(image.path, image);
+    }
+  }
+  return [...images.values()];
+}
+
 export function workEntriesViewedImagePaths(
   entries: ReadonlyArray<WorkLogPresentationEntry>,
 ): string[] {
-  return [...new Set(entries.flatMap((entry) => workEntryViewedImagePath(entry) ?? []))];
+  return workEntriesViewedImages(entries).map((image) => image.path);
 }
 
 export interface ViewedImageAsset {
-  readonly resource: Extract<AssetResource, { readonly _tag: "media-file" }>;
+  readonly resource: Extract<AssetResource, { readonly _tag: "media-file" | "tool-output-image" }>;
   readonly alt: string;
   readonly srcFragment: string;
 }
 
+/** An item id means the bytes come from the item's output instead of a file on the host. */
 export function resolveViewedImageAsset(
   source: string,
   input: {
     readonly threadId: ThreadId;
     readonly workspaceRoot?: string | null | undefined;
+    readonly itemId?: TurnItemId | undefined;
   },
 ): ViewedImageAsset | null {
+  if (input.itemId !== undefined) {
+    return {
+      resource: {
+        _tag: "tool-output-image",
+        threadId: input.threadId,
+        itemId: input.itemId,
+        index: 0,
+      },
+      alt: source.split(/[\\/]/).pop() || source,
+      srcFragment: "",
+    };
+  }
   const imageSource = classifyMarkdownImageSource(source, input.workspaceRoot ?? ".");
   if (imageSource._tag !== "WorkspaceFile") return null;
   const resolvedFilePath =

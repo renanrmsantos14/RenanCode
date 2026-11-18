@@ -2030,6 +2030,8 @@ export const OrchestrationV2TurnItem = Schema.Union([
     output: Schema.optional(Schema.Unknown),
     /** Set on the wire when output was withheld; fetch it with getTurnItem. */
     outputOmitted: Schema.optional(Schema.Boolean),
+    /** Set on the wire when the withheld output holds a servable image (tool-output-image asset 0). */
+    outputHasImage: Schema.optional(Schema.Boolean),
   }),
 ]);
 export type OrchestrationV2TurnItem = typeof OrchestrationV2TurnItem.Type;
@@ -2926,6 +2928,8 @@ export const OrchestrationV2TurnItemJson = Schema.Union([
     output: Schema.optional(Schema.Unknown),
     /** Set on the wire when output was withheld; fetch it with getTurnItem. */
     outputOmitted: Schema.optional(Schema.Boolean),
+    /** Set on the wire when the withheld output holds a servable image (tool-output-image asset 0). */
+    outputHasImage: Schema.optional(Schema.Boolean),
   }),
 ]);
 export type OrchestrationV2TurnItemJson = typeof OrchestrationV2TurnItemJson.Type;

@@ -7,7 +7,7 @@ import { type ToolActivityIcon } from "@t3tools/contracts";
 import {
   liveThoughtLine,
   resolveViewedImageAsset,
-  workEntriesViewedImagePaths,
+  workEntriesViewedImages,
 } from "@t3tools/client-runtime/work-log/presentation";
 import { resolveWorkGroupScrollAnchor } from "@t3tools/client-runtime/work-log/scroll-anchor";
 import { useAssetUrls } from "~/assets/assetUrls";
@@ -150,10 +150,11 @@ function useWorkGroupViewedImages(
   const gt = useGT();
   const fallbackName = gt("image", { $context: "fallback name of an image without alt text" });
   const viewed = threadRef
-    ? workEntriesViewedImagePaths(groupedEntries).flatMap((path) => {
+    ? workEntriesViewedImages(groupedEntries).flatMap(({ path, itemId }) => {
         const asset = resolveViewedImageAsset(path, {
           threadId: threadRef.threadId,
           workspaceRoot,
+          itemId,
         });
         return asset ? [{ path, asset }] : [];
       })
