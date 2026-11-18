@@ -430,7 +430,7 @@ function computeToolGroupAction(entry: WorkLogPresentationEntry): ToolGroupActio
   return workLogEntryIsToolLike(entry) ? "other" : "update";
 }
 
-export function workEntryViewedImagePath(entry: WorkLogPresentationEntry): string | null {
+function workEntryViewedImagePath(entry: WorkLogPresentationEntry): string | null {
   const viewedImagePath = entry.viewedImagePath?.trim();
   if (
     viewedImagePath !== undefined &&

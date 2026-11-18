@@ -19,7 +19,6 @@ import {
   resolveWorkEntryToolPresentation,
   toolGroupAction,
   workEntryViewedImage,
-  workEntryViewedImagePath,
 } from "@t3tools/client-runtime/work-log/presentation";
 import { t3ToolResultIndicatesFailure } from "@t3tools/client-runtime/t3ToolSummary";
 import {
@@ -415,8 +414,8 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
     workEntry.questionAnswer && hasQuestionAnswer(workEntry.questionAnswer)
       ? getQuestionAnswerPreview(workEntry.questionAnswer)
       : null;
-  const viewedImagePath = workEntryViewedImagePath(workEntry);
-  const viewedImageItemId = workEntryViewedImage(workEntry)?.itemId;
+  const viewedImageRef = workEntryViewedImage(workEntry);
+  const viewedImagePath = viewedImageRef?.path ?? null;
   const payload = workEntry.structuredPayload;
   const skill =
     payload?.type === "dynamic_tool"
@@ -433,7 +432,7 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
       ? resolveViewedImageAsset(viewedImagePath, {
           threadId: threadRef.threadId,
           workspaceRoot,
-          itemId: viewedImageItemId,
+          itemId: viewedImageRef?.itemId,
         })
       : null;
   const groupViewedImages = groupView?.viewedImages;
