@@ -40,7 +40,7 @@ import {
   ComboboxItem,
   ComboboxListVirtualized,
 } from "../ui/combobox";
-import { ModelEsque, getClaudeTierName, sortClaudeModelsByTier } from "./providerIconUtils";
+import { ModelEsque } from "./providerIconUtils";
 import { isCommandPaletteOpen } from "../../commandPaletteBus";
 import { registerModelPickerContent } from "../../modelPickerVisibility";
 import { primaryServerKeybindingsAtom } from "../../state/server";
@@ -102,7 +102,7 @@ export function resolveModelPickerSelectedModel(input: {
   return input.options.find((option) => option.slug === input.model);
 }
 
-export function shouldIncludeModelPickerOption(input: {
+function shouldIncludeModelPickerOption(input: {
   readonly entry: ProviderInstanceEntry;
   readonly option: ModelEsque;
   readonly activeInstanceId: ProviderInstanceId;
@@ -554,9 +554,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       if (!entry) {
         continue;
       }
-      const orderedModels =
-        entry.driverKind === "claudeAgent" ? sortClaudeModelsByTier(models) : models;
-      for (const model of orderedModels) {
+      for (const model of models) {
         const key = modelPickerModelKey(instanceId, model.slug);
         if (
           seenKeys.has(key) ||
@@ -572,10 +570,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
         seenKeys.add(key);
         out.push({
           slug: model.slug,
-          name:
-            entry.driverKind === "claudeAgent" && !model.isLegacy
-              ? getClaudeTierName(model.name)
-              : model.name,
+          name: model.name,
           ...(model.shortName ? { shortName: model.shortName } : {}),
           ...(model.subProvider ? { subProvider: model.subProvider } : {}),
           ...(model.badge ? { badge: model.badge } : {}),

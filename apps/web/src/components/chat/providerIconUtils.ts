@@ -42,21 +42,3 @@ export function getTriggerDisplayModelName(
   const shortName = resolveModelShortName(model, driverKind);
   return getDisplayModelName({ ...model, shortName }, { preferShortName: true });
 }
-
-const CLAUDE_TIERS = ["fable", "opus", "sonnet", "haiku"] as const;
-
-function claudeTierOf(name: string): number {
-  const index = CLAUDE_TIERS.findIndex((tier) => name.toLowerCase().includes(tier));
-  return index === -1 ? CLAUDE_TIERS.length : index;
-}
-
-/** Claude picker order: strongest tier first (Fable, Opus, Sonnet, Haiku); stable within a tier. */
-export function sortClaudeModelsByTier<T extends { name: string }>(models: ReadonlyArray<T>): T[] {
-  return models.toSorted((a, b) => claudeTierOf(a.name) - claudeTierOf(b.name));
-}
-
-/** "Claude Sonnet 5.5" -> "Sonnet": the picker only lists the latest version of each tier. */
-export function getClaudeTierName(name: string): string {
-  const tier = CLAUDE_TIERS[claudeTierOf(name)];
-  return tier ? tier.charAt(0).toUpperCase() + tier.slice(1) : name;
-}

@@ -22,7 +22,6 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { cn } from "~/lib/utils";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { ModelPickerContent, resolveModelPickerSelectedModel } from "./ModelPickerContent";
-import { ModelPickerStrips } from "./ModelPickerStrips";
 import { retainedModelWhileProviderLocked } from "./ProviderModelPicker.logic";
 import { ChatGptSharingControl } from "./ChatGptSharingControl";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
@@ -86,10 +85,7 @@ function lockBackgroundScroll(popup: HTMLElement | null) {
 }
 
 /** What a docked effort column needs from its picker: the model it serves. */
-export const DockedPickerContext = createContext<{ modelLabel: string; strip: boolean }>({
-  modelLabel: "",
-  strip: false,
-});
+export const DockedPickerContext = createContext<{ modelLabel: string }>({ modelLabel: "" });
 
 export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   environmentId: EnvironmentId | null;
@@ -158,13 +154,6 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   const isCoarsePointer = useMediaQuery({ pointer: "coarse" });
   const size = props.size ?? "sm";
   const docked = props.effortColumn !== undefined;
-  const [searching, setSearching] = useState(false);
-  // Single-pick composers open on the strips; multi-select keeps the list.
-  const stripped = docked && props.selectedModels === undefined && !searching;
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- the search input mounts only after the strips give way to the list, so focus waits for that commit.
-  useEffect(() => {
-    if (searching) searchInputRef.current?.focus();
-  }, [searching]);
 
   const activeEntry =
     props.instanceEntries.find((entry) => entry.instanceId === props.activeInstanceId) ?? null;
@@ -193,7 +182,6 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
     activeEntry !== null && shouldShowInstanceBadge(activeEntry, props.instanceEntries);
 
   const setIsMenuOpen = (open: boolean) => {
-    if (!open) setSearching(false);
     props.onOpenChange?.(open);
     if (props.open === undefined) {
       setUncontrolledIsMenuOpen(open);
@@ -451,7 +439,6 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
         </span>
       </PopoverTrigger>
       <PopoverPopup
-        key={stripped ? "strips" : "list"}
         {...(props.isComposerOwned ? composerFloatingLayerProps : {})}
         ref={(popup) => {
           popupRef.current = popup;
@@ -461,16 +448,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
             unlock?.();
           };
         }}
-        initialFocus={
-          stripped
-            ? () =>
-                popupRef.current?.querySelector<HTMLElement>(
-                  '[role="radio"][aria-checked="true"]',
-                ) ?? true
-            : isCoarsePointer
-              ? popupRef
-              : searchInputRef
-        }
+        initialFocus={isCoarsePointer ? popupRef : searchInputRef}
         align={props.popupAlign ?? "start"}
         // Docked, the popup opens above the composer and slides over it when that space is short,
         // so a short window gets its full height (Floating UI sizes to the viewport) instead of a sliver.
@@ -481,42 +459,8 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
         padding="none"
         touchBackdrop
       >
-        {props.effortColumn && stripped ? (
-          <DockedPickerContext value={{ modelLabel: triggerTitle, strip: true }}>
-            <div className="flex max-h-(--available-height) w-screen max-w-104 flex-col overflow-y-auto">
-              <ModelPickerStrips
-                environmentId={props.environmentId}
-                activeInstanceId={activeInstanceId}
-                model={props.model}
-                title={triggerTitle}
-                summary={props.triggerDetail ?? null}
-                shortcutLabel={shortcutLabel}
-                instanceEntries={props.instanceEntries}
-                lockedMatches={(entry) =>
-                  props.lockedProvider === null ||
-                  (entry.driverKind === props.lockedProvider &&
-                    (!props.lockedContinuationGroupKey ||
-                      entry.continuationGroupKey === props.lockedContinuationGroupKey))
-                }
-                modelOptionsByInstance={props.modelOptionsByInstance}
-                getModelDisabledReason={(instanceId, model) =>
-                  props.disabled
-                    ? "Model picker is disabled"
-                    : (props.getModelDisabledReason?.(instanceId, model) ?? null)
-                }
-                onSelect={handleInstanceModelChange}
-                onSearch={() => setSearching(true)}
-                effort={
-                  <div data-model-picker-effort className="flex flex-col">
-                    {props.effortColumn}
-                  </div>
-                }
-              />
-              {props.footer}
-            </div>
-          </DockedPickerContext>
-        ) : props.effortColumn ? (
-          <DockedPickerContext value={{ modelLabel: triggerTitle, strip: false }}>
+        {props.effortColumn ? (
+          <DockedPickerContext value={{ modelLabel: triggerTitle }}>
             <div className="flex max-h-(--available-height) flex-col">
               {/* One fixed height, so a model with more options never resizes the popup. Short
                   windows shrink it and keep the footer. */}
