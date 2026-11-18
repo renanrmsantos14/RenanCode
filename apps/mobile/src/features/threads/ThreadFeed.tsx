@@ -108,6 +108,7 @@ import {
 import {
   contextCompactionTokenCounts,
   resolveViewedImageAsset,
+  type ViewedImageRef,
 } from "@t3tools/client-runtime/work-log/presentation";
 import {
   renderCodexInlineDirectivesAsMarkdown,
@@ -1911,7 +1912,7 @@ function renderFeedEntry(
     readonly onPlaybackStart: () => void;
     readonly markdownLinkHandlers: MarkdownLinkHandlers;
     readonly renderMarkdownImage: MarkdownImageRenderer;
-    readonly renderViewedImage: MarkdownImageRenderer;
+    readonly renderViewedImage: (image: ViewedImageRef) => ReactNode;
     readonly renderReasoning: (text: string) => ReactNode;
     readonly iconSubtleColor: string | import("react-native").ColorValue;
     readonly replyActionSize: { readonly button: number; readonly icon: number };
@@ -2069,9 +2070,9 @@ function renderFeedEntry(
     const thumbnailWidth = Math.floor((props.contentWidth - VIEWED_IMAGE_GAP) / 2);
     return (
       <View className="flex-row flex-wrap pb-2" style={{ gap: VIEWED_IMAGE_GAP }}>
-        {entry.paths.map((path) => (
-          <View key={path} style={{ width: thumbnailWidth }}>
-            {props.renderViewedImage({ href: path, alt: null, title: null })}
+        {entry.images.map((image) => (
+          <View key={image.path} style={{ width: thumbnailWidth }}>
+            {props.renderViewedImage(image)}
           </View>
         ))}
       </View>
@@ -3622,13 +3623,14 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       />
     );
   };
-  const renderViewedImage: MarkdownImageRenderer = (image) => {
-    const viewedImage = resolveViewedImageAsset(image.href, {
+  const renderViewedImage = (image: ViewedImageRef) => {
+    const viewedImage = resolveViewedImageAsset(image.path, {
       threadId: props.threadId,
       workspaceRoot: props.workspaceRoot,
+      itemId: image.itemId,
     });
     const media = viewedImage
-      ? resolveMarkdownMediaPreview(image.href, {
+      ? resolveMarkdownMediaPreview(image.path, {
           environmentId: props.environmentId,
           threadId: props.threadId,
           workspaceRoot: props.workspaceRoot,

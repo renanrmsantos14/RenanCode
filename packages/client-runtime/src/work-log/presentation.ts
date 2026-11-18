@@ -480,12 +480,6 @@ export function workEntriesViewedImages(
   return [...images.values()];
 }
 
-export function workEntriesViewedImagePaths(
-  entries: ReadonlyArray<WorkLogPresentationEntry>,
-): string[] {
-  return workEntriesViewedImages(entries).map((image) => image.path);
-}
-
 export interface ViewedImageAsset {
   readonly resource: Extract<AssetResource, { readonly _tag: "media-file" | "tool-output-image" }>;
   readonly alt: string;

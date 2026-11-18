@@ -89,10 +89,10 @@ import {
   resolveWorkEntryToolPresentation,
   toolGroupAction,
   type ToolGroupSummaryKind,
-  workEntryViewedImagePath,
+  workEntryViewedImage,
+  type ViewedImageRef,
 } from "@t3tools/client-runtime/work-log/presentation";
 import { notificationChildThreadId } from "@t3tools/client-runtime/state/thread-execution";
-import type { MarkdownImageRenderer } from "../../native/SelectableMarkdownText";
 import type { FilePreviewSource } from "../../components/ui/FilePreviewModal";
 import { FilePreviewGallery } from "../../components/ui/FilePreviewGallery";
 import { ThreadMarkdownImage } from "./ThreadMarkdownImage";
@@ -475,7 +475,7 @@ interface ThreadWorkLogProps {
   readonly onCopyRow: (rowId: string, value: string) => void;
   /** `groupId` is the group a lone call stands in for; it opens and closes with the row. */
   readonly onToggleRow: (rowId: string, anchorKey: string, groupId?: string) => void;
-  readonly renderImage: MarkdownImageRenderer;
+  readonly renderImage: (image: ViewedImageRef) => ReactNode;
   readonly renderReasoning: (text: string) => ReactNode;
   readonly onPressPreview: (source: FilePreviewSource) => void;
 }
@@ -1008,7 +1008,7 @@ const ThreadWorkLogRow = function ThreadWorkLogRow(
         : row.getFullDetail()
       : null;
   const outputImages = expanded && fetchedItem ? turnItemOutputImages(fetchedItem) : [];
-  const viewedImagePath = workEntryViewedImagePath(row.workEntry);
+  const viewedImage = workEntryViewedImage(row.workEntry);
   const fetchedOutput =
     !expanded || streamsOutput
       ? null
@@ -1016,7 +1016,7 @@ const ThreadWorkLogRow = function ThreadWorkLogRow(
         ? turnItemOutputText(shownItem)
         : fetchedItem
           ? (turnItemOutputText(fetchedItem) ??
-            (outputImages.length > 0 || viewedImagePath ? null : gt("No output.")))
+            (outputImages.length > 0 || viewedImage ? null : gt("No output.")))
           : fetchedDetail.error
             ? gt("Couldn't load output: {error}", { error: fetchedDetail.error })
             : row.fetchesDetail
@@ -1183,7 +1183,7 @@ const ThreadWorkLogRow = function ThreadWorkLogRow(
         fullDetail ||
         call ||
         fetchedOutput ||
-        viewedImagePath ||
+        viewedImage ||
         outputImages.length > 0 ||
         row.workEntry.questionAnswer) ? (
         <Animated.View
@@ -1198,11 +1198,7 @@ const ThreadWorkLogRow = function ThreadWorkLogRow(
               answer={row.workEntry.questionAnswer}
             />
           ) : null}
-          {viewedImagePath ? (
-            <View className="pb-1.5">
-              {props.renderImage({ href: viewedImagePath, alt: null, title: null })}
-            </View>
-          ) : null}
+          {viewedImage ? <View className="pb-1.5">{props.renderImage(viewedImage)}</View> : null}
           <FilePreviewGallery
             value={outputImages.map((resource) => ({
               kind: "image",
