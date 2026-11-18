@@ -399,7 +399,13 @@ an address you trust: the code is sent there.
 - The link shows up in that machine's **Settings → Sharing & access** like any
   outside agent. Revoke it there to end it. **Forget** on this machine only
   removes it here.
-- Links last 30 days. Link again with a new pairing code to renew one.
+- A link renews itself when it is used or listed during its last week, with
+  the same access, as long as the other machine is reachable and runs a version
+  that supports it. A link nobody uses in that week still expires after 30
+  days. A link ends 180 days after it was first paired, even if renewed; link
+  again with a new pairing code then. If the other machine refuses a renewal,
+  the link keeps working until it expires and **Linked environments** shows
+  the reason.
 
 An agent can also send a file (up to 50 MB) from this machine to a linked
 machine's Downloads folder. A link below full access cannot do this, and it

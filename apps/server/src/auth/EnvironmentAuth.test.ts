@@ -4,12 +4,15 @@ import {
   authScopeResponse,
   AuthStandardClientScopes,
   connectDeviceVerificationCode,
+  PEER_LINK_MAX_LIFETIME_DAYS,
 } from "@t3tools/contracts";
 import { expect, it } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
+import * as TestClock from "effect/testing/TestClock";
 
 import * as ServerConfig from "../config.ts";
 import { makeDpopKey } from "./dpop.testkit.ts";
@@ -968,6 +971,142 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer))(
       }).pipe(
         Effect.provide(layerEnvironmentAuth({ desktopBootstrapToken: "desktop-bootstrap-token" })),
       ),
+    );
+
+    const peerLinkClient = { ...requestMetadata, deviceType: "bot" as const };
+    const issuePeerLink = (serverAuth: EnvironmentAuth.EnvironmentAuth["Service"]) =>
+      serverAuth.issueMcpClientSession({
+        label: "RenanCode · Laptop",
+        access: "auto",
+        peerLink: true,
+        client: peerLinkClient,
+      });
+
+    it.effect(
+      "renews a peer link with its access, and revokes the old session only once confirmed",
+      () =>
+        Effect.gen(function* () {
+          const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+          const sessions = yield* SessionStore.SessionStore;
+          const first = yield* issuePeerLink(serverAuth);
+          yield* TestClock.adjust(Duration.days(24));
+
+          const renewed = yield* serverAuth.renewMcpPeerLink({
+            request: makeBearerRequest(first.token),
+            maxRuntimeMode: undefined,
+          });
+          expect(renewed.access).toBe("auto");
+          expect(renewed.sessionId).not.toBe(first.sessionId);
+          expect(DateTime.distance(yield* DateTime.now, renewed.expiresAt)).toEqual(
+            Duration.days(30),
+          );
+          // The link has not saved it yet, so the old token still works.
+          yield* sessions.verify(first.token);
+
+          yield* serverAuth.confirmMcpPeerLinkRenewal({
+            request: makeBearerRequest(renewed.token),
+            previousToken: first.token,
+          });
+          expect(yield* Effect.flip(sessions.verify(first.token))).toBeDefined();
+          expect((yield* sessions.verify(renewed.token)).runtimeModeCeiling).toBe("auto");
+          // Work the link started stays fenced to it, which names the pairing's first session.
+          const client = yield* serverAuth.authenticateMcpClient(makeBearerRequest(renewed.token));
+          expect(client).toMatchObject({ sessionId: renewed.sessionId, linkId: first.sessionId });
+        }).pipe(Effect.provide(layerEnvironmentAuth())),
+    );
+
+    it.effect("a renewal never raises the runtime ceiling, and a tighter policy lowers it", () =>
+      Effect.gen(function* () {
+        const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+        const first = yield* issuePeerLink(serverAuth);
+
+        const lowered = yield* serverAuth.renewMcpPeerLink({
+          request: makeBearerRequest(first.token),
+          maxRuntimeMode: "approval-required",
+        });
+        expect(lowered.access).toBe("approval-required");
+
+        // Renewed again under a looser policy, it stays where it was lowered to.
+        const again = yield* serverAuth.renewMcpPeerLink({
+          request: makeBearerRequest(lowered.token),
+          maxRuntimeMode: "full-access",
+        });
+        expect(again.access).toBe("approval-required");
+      }).pipe(Effect.provide(layerEnvironmentAuth())),
+    );
+
+    it.effect("a renewal never outlives 180 days from the first pairing, then is refused", () =>
+      Effect.gen(function* () {
+        const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+        const sessions = yield* SessionStore.SessionStore;
+        const paired = yield* DateTime.now;
+        let current = yield* issuePeerLink(serverAuth);
+        // Renewing every 24 days, as a link does a week before its token ends.
+        for (let renewals = 0; renewals < 7; renewals++) {
+          yield* TestClock.adjust(Duration.days(24));
+          current = yield* serverAuth
+            .renewMcpPeerLink({
+              request: makeBearerRequest(current.token),
+              maxRuntimeMode: undefined,
+            })
+            .pipe(Effect.map((renewed) => ({ ...renewed })));
+        }
+        expect(current.expiresAt.epochMilliseconds).toBe(
+          DateTime.add(paired, { days: PEER_LINK_MAX_LIFETIME_DAYS }).epochMilliseconds,
+        );
+
+        // A session past its cap, as one the clock outran, cannot be renewed.
+        const past = yield* serverAuth.issueMcpClientSession({
+          label: "RenanCode · Laptop",
+          access: "auto",
+          peerLink: true,
+          client: peerLinkClient,
+          originatedAt: DateTime.subtract(yield* DateTime.now, { days: 181 }),
+        });
+        yield* sessions.verify(past.token);
+        const refused = yield* Effect.flip(
+          serverAuth.renewMcpPeerLink({
+            request: makeBearerRequest(past.token),
+            maxRuntimeMode: undefined,
+          }),
+        );
+        expect(refused).toMatchObject({
+          _tag: "ServerAuthPeerLinkRenewalError",
+          reason: "lifetime_reached",
+        });
+      }).pipe(Effect.provide(layerEnvironmentAuth())),
+    );
+
+    it.effect(
+      "only a peer link renews, and only a renewal can retire the session it replaces",
+      () =>
+        Effect.gen(function* () {
+          const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+          const agent = yield* serverAuth.issueMcpClientSession({
+            label: "Claude Code",
+            access: "auto",
+            peerLink: false,
+            client: peerLinkClient,
+          });
+          const notALink = yield* Effect.flip(
+            serverAuth.renewMcpPeerLink({
+              request: makeBearerRequest(agent.token),
+              maxRuntimeMode: undefined,
+            }),
+          );
+          expect(notALink).toMatchObject({ reason: "not_a_peer_link" });
+
+          const first = yield* issuePeerLink(serverAuth);
+          yield* TestClock.adjust(Duration.seconds(1));
+          const unrelated = yield* issuePeerLink(serverAuth);
+          const notReplacing = yield* Effect.flip(
+            serverAuth.confirmMcpPeerLinkRenewal({
+              request: makeBearerRequest(unrelated.token),
+              previousToken: first.token,
+            }),
+          );
+          expect(notReplacing).toMatchObject({ reason: "not_a_replacement" });
+        }).pipe(Effect.provide(layerEnvironmentAuth())),
     );
   },
 );
