@@ -1,4 +1,8 @@
-/** Reconcile closes removed/replaced scopes before creating replacements: at most one live instance per id. */
+/**
+ * Reconcile retires removed/replaced instances before creating replacements, so at most one instance
+ * per id serves new turns. A removed instance closes at once; a replaced one stays open only until the
+ * turns already running on it end.
+ */
 import type {
   ProviderInstanceConfigMap,
   ProviderInstanceId,

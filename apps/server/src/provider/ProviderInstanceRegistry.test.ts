@@ -34,7 +34,9 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as PubSub from "effect/PubSub";
+import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import { HttpClient, HttpClientResponse } from "effect/http";
 
@@ -1122,4 +1124,298 @@ describe("ProviderInstanceRegistry secret environment", () => {
       expect(yield* registry.listUnavailable).toEqual([]);
     });
   });
+});
+
+// A saved config replaces the instance for new turns; turns already running finish on the old one.
+describe("ProviderInstanceRegistry turns in flight", () => {
+  const driverKind = ProviderDriverKind.make("fake");
+  const instanceId = ProviderInstanceId.make("fake_main");
+  const secret: SecretReference = {
+    provider: SecretProviderId.make("personal"),
+    reference: "op://Private/OpenAI/credential",
+  };
+  const entryNamed = (
+    displayName: string,
+    environment: NonNullable<ProviderInstanceConfigMap[ProviderInstanceId]["environment"]> = [],
+  ) => ({ driver: driverKind, displayName, config: {}, environment }) as const;
+  const providerThread = { id: "thread-1" };
+
+  function setup() {
+    const vault = new Map<string, string>([[secret.reference, "sk-1"]]);
+    // Secrets are read after startup; hold the read so a test can subscribe before it lands.
+    const secretGate = Deferred.makeUnsafe<void>();
+    const closedLabels: Array<string> = [];
+    const closed = new Map<string, Deferred.Deferred<void>>();
+    const queues = new Map<string, Queue.Queue<unknown>>();
+    const startFailures = new Set<string>();
+    const generations = new Map<string, number>();
+    const sessionsClosed: Array<number> = [];
+    const sessionClosed = new Map<number, Deferred.Deferred<void>>();
+    let sessionsOpened = 0;
+    const sessionClosedOf = (n: number) => {
+      const existing = sessionClosed.get(n);
+      if (existing !== undefined) return existing;
+      const created = Deferred.makeUnsafe<void>();
+      sessionClosed.set(n, created);
+      return created;
+    };
+    const closedOf = (label: string) => {
+      const existing = closed.get(label);
+      if (existing !== undefined) return existing;
+      const created = Deferred.makeUnsafe<void>();
+      closed.set(label, created);
+      return created;
+    };
+    const driver: AnyProviderDriver = {
+      driverKind,
+      metadata: { displayName: "Fake" },
+      configSchema: Schema.Unknown,
+      defaultConfig: () => ({}),
+      create: (input) =>
+        Effect.gen(function* () {
+          // A rebuild keeps the display name; the suffix tells generations apart.
+          const generation = (generations.get(input.displayName ?? "") ?? 0) + 1;
+          generations.set(input.displayName ?? "", generation);
+          const label = `${input.displayName ?? ""}${generation === 1 ? "" : `~${generation}`}`;
+          yield* Effect.addFinalizer(() =>
+            Effect.sync(() => closedLabels.push(label)).pipe(
+              Effect.andThen(Deferred.succeed(closedOf(label), undefined)),
+            ),
+          );
+          const queue = yield* Queue.unbounded<unknown>();
+          queues.set(label, queue);
+          return {
+            instanceId: input.instanceId,
+            enabled: input.enabled,
+            displayName: label,
+            orchestrationAdapter: {
+              openSession: () =>
+                Effect.gen(function* () {
+                  const n = ++sessionsOpened;
+                  yield* Effect.addFinalizer(() =>
+                    Effect.sync(() => sessionsClosed.push(n)).pipe(
+                      Effect.andThen(Deferred.succeed(sessionClosedOf(n), undefined)),
+                    ),
+                  );
+                  return {
+                    events: Stream.fromQueue(queue),
+                    startTurn: () =>
+                      startFailures.has(label) ? Effect.fail("start failed") : Effect.void,
+                  };
+                }),
+            },
+          } as unknown as ProviderInstance;
+        }),
+    };
+    const resolver = Layer.succeed(SecretResolver.SecretResolver, {
+      label: (provider) => Effect.succeed(provider),
+      read: (references) =>
+        Deferred.await(secretGate).pipe(
+          Effect.as(references.map((reference) => vault.get(reference.reference))),
+        ),
+      invalidate: () => Effect.void,
+    });
+    const make = (config: ProviderInstanceConfigMap, reads = false) =>
+      makeProviderInstanceRegistry({ drivers: [driver], configMap: config }).pipe(
+        Effect.provide(resolver),
+        Effect.tap(() => (reads ? Effect.void : Deferred.succeed(secretGate, undefined))),
+      );
+    // Opens a session on the instance the registry hands out now.
+    const openSession = Effect.fn("test.openSession")(function* (
+      registry: Effect.Success<ReturnType<typeof make>>["registry"],
+    ) {
+      const instance = yield* registry.getInstance(instanceId);
+      const sessionScope = yield* Scope.make();
+      const runtime = yield* instance!.orchestrationAdapter
+        .openSession({} as never)
+        .pipe(Effect.provideService(Scope.Scope, sessionScope));
+      // The tracker taps each event before this consumer sees it, so seeing the terminal means it ran.
+      const terminalSeen = Deferred.makeUnsafe<void>();
+      yield* runtime.events.pipe(
+        Stream.runForEach((event) =>
+          (event as { type?: string }).type === "turn.terminal"
+            ? Deferred.succeed(terminalSeen, undefined)
+            : Effect.void,
+        ),
+        Effect.forkIn(sessionScope),
+      );
+      return {
+        label: (instance as unknown as { displayName: string }).displayName,
+        sessionNumber: sessionsOpened,
+        sessionScope,
+        terminalSeen,
+        runtime,
+      };
+    });
+    // Starts turn 1 on a fresh session.
+    const startTurn = Effect.fn("test.startTurn")(function* (
+      registry: Effect.Success<ReturnType<typeof make>>["registry"],
+    ) {
+      const session = yield* openSession(registry);
+      const started = yield* session.runtime
+        .startTurn({ providerThread, runOrdinal: 1 } as never)
+        .pipe(Effect.exit);
+      return { ...session, started };
+    });
+    const finishTurn = (turn: { label: string; terminalSeen: Deferred.Deferred<void> }) =>
+      Queue.offer(queues.get(turn.label)!, {
+        type: "turn.terminal",
+        providerThreadId: providerThread.id,
+        runOrdinal: 1,
+      }).pipe(Effect.andThen(Deferred.await(turn.terminalSeen)));
+    return {
+      vault,
+      secretGate,
+      closedLabels,
+      closedOf,
+      sessionsClosed,
+      sessionClosedOf,
+      startFailures,
+      make,
+      openSession,
+      startTurn,
+      finishTurn,
+    };
+  }
+
+  it.effect(
+    "keeps the old instance alive until its turn ends, while new turns use the new one",
+    () => {
+      const fixture = setup();
+      return Effect.gen(function* () {
+        const { registry, mutator } = yield* fixture.make({ [instanceId]: entryNamed("First") });
+        const turn = yield* fixture.startTurn(registry);
+
+        yield* mutator.reconcile({ [instanceId]: entryNamed("Second") });
+        expect((yield* registry.getInstance(instanceId))?.displayName).toBe("Second");
+        expect(fixture.closedLabels).toEqual([]);
+
+        yield* fixture.finishTurn(turn);
+        yield* Deferred.await(fixture.closedOf("First"));
+        expect(fixture.closedLabels).toEqual(["First"]);
+        yield* Scope.close(turn.sessionScope, Exit.void);
+      });
+    },
+  );
+
+  it.effect("replaces an idle instance immediately", () => {
+    const fixture = setup();
+    return Effect.gen(function* () {
+      const { registry, mutator } = yield* fixture.make({ [instanceId]: entryNamed("First") });
+      const turn = yield* fixture.startTurn(registry);
+      yield* fixture.finishTurn(turn);
+
+      yield* mutator.reconcile({ [instanceId]: entryNamed("Second") });
+      expect(fixture.closedLabels).toEqual(["First"]);
+      yield* Scope.close(turn.sessionScope, Exit.void);
+    });
+  });
+
+  it.effect("closes a removed instance immediately even with a turn running", () => {
+    const fixture = setup();
+    return Effect.gen(function* () {
+      const { registry, mutator } = yield* fixture.make({ [instanceId]: entryNamed("First") });
+      const turn = yield* fixture.startTurn(registry);
+
+      yield* mutator.reconcile({});
+      expect(fixture.closedLabels).toEqual(["First"]);
+      expect(yield* registry.getInstance(instanceId)).toBeUndefined();
+      yield* Scope.close(turn.sessionScope, Exit.void);
+    });
+  });
+
+  it.effect("closes superseded instances as soon as they idle, keeping only the last live", () => {
+    const fixture = setup();
+    return Effect.gen(function* () {
+      const { registry, mutator } = yield* fixture.make({ [instanceId]: entryNamed("First") });
+      const turn = yield* fixture.startTurn(registry);
+
+      yield* mutator.reconcile({ [instanceId]: entryNamed("Second") });
+      yield* mutator.reconcile({ [instanceId]: entryNamed("Third") });
+      expect((yield* registry.getInstance(instanceId))?.displayName).toBe("Third");
+      // Second never ran a turn, so only First waits.
+      expect(fixture.closedLabels).toEqual(["Second"]);
+
+      yield* fixture.finishTurn(turn);
+      yield* Deferred.await(fixture.closedOf("First"));
+      expect(fixture.closedLabels).toEqual(["Second", "First"]);
+      yield* Scope.close(turn.sessionScope, Exit.void);
+    });
+  });
+
+  it.effect("applies a rotated secret to new turns without ending the running one", () => {
+    const fixture = setup();
+    return Effect.gen(function* () {
+      const environment = [{ name: "KEY", value: secret, sensitive: true }];
+      const { registry, mutator } = yield* fixture.make(
+        { [instanceId]: entryNamed("First", environment) },
+        true,
+      );
+      const changes = yield* registry.subscribeChanges;
+      yield* Deferred.succeed(fixture.secretGate, undefined);
+      yield* PubSub.take(changes);
+      const turn = yield* fixture.startTurn(registry);
+
+      fixture.vault.set(secret.reference, "sk-2");
+      yield* mutator.reloadSecrets(instanceId);
+      expect((yield* registry.getInstance(instanceId))?.displayName).toBe("First~2");
+      expect(fixture.closedLabels).toEqual([]);
+
+      yield* fixture.finishTurn(turn);
+      yield* Deferred.await(fixture.closedOf("First"));
+      yield* Scope.close(turn.sessionScope, Exit.void);
+    });
+  });
+
+  it.effect("closes the old instance when the session holding its turn is stopped", () => {
+    const fixture = setup();
+    return Effect.gen(function* () {
+      const { registry, mutator } = yield* fixture.make({ [instanceId]: entryNamed("First") });
+      const turn = yield* fixture.startTurn(registry);
+
+      yield* mutator.reconcile({ [instanceId]: entryNamed("Second") });
+      expect(fixture.closedLabels).toEqual([]);
+
+      yield* Scope.close(turn.sessionScope, Exit.void);
+      yield* Deferred.await(fixture.closedOf("First"));
+      expect(fixture.closedLabels).toEqual(["First"]);
+    });
+  });
+
+  it.effect("does not hold the old instance for a turn that failed to start", () => {
+    const fixture = setup();
+    return Effect.gen(function* () {
+      const { registry, mutator } = yield* fixture.make({ [instanceId]: entryNamed("First") });
+      fixture.startFailures.add("First");
+      const turn = yield* fixture.startTurn(registry);
+      expect(Exit.isFailure(turn.started)).toBe(true);
+
+      yield* mutator.reconcile({ [instanceId]: entryNamed("Second") });
+      expect(fixture.closedLabels).toEqual(["First"]);
+      yield* Scope.close(turn.sessionScope, Exit.void);
+    });
+  });
+
+  it.effect(
+    "ends idle sessions of a replaced instance at once and busy ones with their turn",
+    () => {
+      const fixture = setup();
+      return Effect.gen(function* () {
+        const { registry, mutator } = yield* fixture.make({ [instanceId]: entryNamed("First") });
+        const busy = yield* fixture.startTurn(registry);
+        const idle = yield* fixture.openSession(registry);
+
+        yield* mutator.reconcile({ [instanceId]: entryNamed("Second") });
+        expect(fixture.sessionsClosed).toEqual([idle.sessionNumber]);
+        expect(fixture.closedLabels).toEqual([]);
+
+        yield* fixture.finishTurn(busy);
+        yield* Deferred.await(fixture.sessionClosedOf(busy.sessionNumber));
+        yield* Deferred.await(fixture.closedOf("First"));
+        expect(fixture.sessionsClosed).toEqual([idle.sessionNumber, busy.sessionNumber]);
+        yield* Scope.close(busy.sessionScope, Exit.void);
+        yield* Scope.close(idle.sessionScope, Exit.void);
+      });
+    },
+  );
 });
