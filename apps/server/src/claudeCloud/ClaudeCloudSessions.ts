@@ -28,10 +28,13 @@ import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as FiberMap from "effect/FiberMap";
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import * as HttpClientError from "effect/http/HttpClientError";
 import * as Path from "effect/Path";
 
@@ -68,6 +71,11 @@ const IDLE_INTERVAL = Duration.seconds(60);
 // Past this the task runs locally; the client classifies while the user types to stay ahead of it.
 const PLACEMENT_TIMEOUT = Duration.seconds(15);
 const BUSY_INTERVAL = Duration.seconds(5);
+// Sessions with an event this recent keep a live event stream open; older ones rely on polling.
+const WATCH_WINDOW_MS = 30 * 60 * 1000;
+// Batches an event burst (a tool call and its result) into one sync.
+const WAKE_DEBOUNCE = Duration.millis(400);
+const STREAM_RECONNECT_DELAY = Duration.seconds(5);
 const SESSION_PAGE_LIMIT = 50;
 const EVENT_PAGE_LIMIT = 200;
 const EVENT_ID_PREFIX = "claude-cloud";
@@ -197,6 +205,14 @@ function cloudSessionIdOf(threadId: string): string | null {
 
 function isCloudSessionBusy(session: CloudSession): boolean {
   return session.worker_status === "running";
+}
+
+/** Busy or recently active sessions get a live event stream; the rest are only polled. */
+export function shouldStreamCloudSession(session: CloudSession, now: number): boolean {
+  return (
+    isCloudSessionBusy(session) ||
+    now - Date.parse(session.last_event_at ?? session.created_at) < WATCH_WINDOW_MS
+  );
 }
 
 interface PlacementStatus {
@@ -454,6 +470,20 @@ export function cloudToolItemSequence(itemId: string): number | null {
   return Number.isFinite(sequence) ? sequence : null;
 }
 
+/** New calls past the synced point, and known running ones whose status changed (their event id carries it). */
+export function cloudToolCallNeedsWrite(
+  call: CloudToolCall,
+  knownStatus: string | undefined,
+  sync: { afterSequence: number; lastRunEndedAt: number; sessionRunning: boolean },
+): boolean {
+  if (knownStatus === undefined) {
+    return (
+      Number(call.sequence) > sync.afterSequence && Date.parse(call.startedAt) > sync.lastRunEndedAt
+    );
+  }
+  return knownStatus === "running" && (call.result !== null || !sync.sessionRunning);
+}
+
 function toolEvents(
   threadId: ThreadId,
   call: CloudToolCall,
@@ -520,10 +550,13 @@ const make = Effect.gen(function* () {
   const orchestrator = yield* Orchestrator.OrchestratorV2;
   const eventSink = yield* EventSink.EventSinkV2;
   const path = yield* Path.Path;
-  const { getJson, post, postJson, toCloudError } = yield* makeClaudeCloudHttp;
+  const { eventNames, getJson, post, postJson, toCloudError } = yield* makeClaudeCloudHttp;
 
   // Last event sequence written per session; rebuilt from the projection after a restart.
   const syncedSequence = new Map<string, number>();
+  // The thread's updatedAt also moves for T3-side events, so it cannot tell whether the cloud changed.
+  // last_event_at itself lags while a turn runs, so it only vouches for idle sessions.
+  const syncedEventAt = new Map<string, string>();
   const projectBySession = new Map<string, ProjectId>();
 
   // Each enabled Claude provider instance is its own claude.ai login (its own home directory).
@@ -643,14 +676,14 @@ const make = Effect.gen(function* () {
     const title = cloudThreadTitle(session);
     const unchanged =
       known !== undefined &&
+      !sessionRunning &&
       Option.isSome(existing) &&
       existing.value.thread.title === title &&
       (cloudSessionBranch(session) ?? existing.value.thread.branch) ===
         existing.value.thread.branch &&
       (existing.value.thread.cloudWorkStartedAt != null) === sessionRunning &&
       pendingToolSequence === Infinity &&
-      DateTime.formatIso(existing.value.thread.updatedAt) ===
-        DateTime.formatIso(DateTime.makeUnsafe(session.last_event_at ?? session.created_at));
+      syncedEventAt.get(session.id) === (session.last_event_at ?? session.created_at);
     if (unchanged) return;
 
     // The CLI's teleport reads the branch from a single session; the list may leave it out.
@@ -681,10 +714,11 @@ const make = Effect.gen(function* () {
     );
     const toolCalls = cloudToolCalls(events).filter((call) => {
       const id = `${EVENT_ID_PREFIX}:turn-item:${threadId}${CLOUD_TOOL_ITEM_MARKER}${call.toolUseId}:${call.sequence}`;
-      const item = knownItems.get(id);
-      return item === undefined
-        ? Number(call.sequence) > afterSequence && Date.parse(call.startedAt) > lastRunEndedAt
-        : item.status === "running";
+      return cloudToolCallNeedsWrite(call, knownItems.get(id)?.status, {
+        afterSequence,
+        lastRunEndedAt,
+        sessionRunning,
+      });
     });
     const entries = [
       ...messages.map((message) => ({ sequence: Number(message.sequence), message })),
@@ -704,6 +738,7 @@ const make = Effect.gen(function* () {
       (existing.value.thread.cloudWorkStartedAt != null) === sessionRunning
     ) {
       syncedSequence.set(session.id, lastSequence);
+      syncedEventAt.set(session.id, session.last_event_at ?? session.created_at);
       return;
     }
     const ordinalBase = Option.isSome(existing) ? existing.value.turnItems.length : 0;
@@ -787,6 +822,7 @@ const make = Effect.gen(function* () {
       ],
     });
     syncedSequence.set(session.id, lastSequence);
+    syncedEventAt.set(session.id, session.last_event_at ?? session.created_at);
   });
 
   // Archived on claude.ai: archive the T3 thread too. The archive effect then gets a 409, a no-op.
@@ -803,11 +839,13 @@ const make = Effect.gen(function* () {
     });
   });
 
-  const syncOnce = Effect.fn("ClaudeCloudSessions.syncOnce")(function* () {
+  const syncOnce = Effect.fn("ClaudeCloudSessions.syncOnce")(function* (
+    watched: Map<string, CloudAccount>,
+  ) {
     let busy = false;
     // One failing login (expired token, revoked app) must not stop the other accounts.
     for (const account of yield* listAccounts) {
-      busy ||= yield* syncAccount(account).pipe(
+      busy ||= yield* syncAccount(account, watched).pipe(
         Effect.catch((cause) =>
           Effect.logWarning("Claude cloud session sync failed", {
             instanceId: account.instanceId,
@@ -821,7 +859,9 @@ const make = Effect.gen(function* () {
 
   const syncAccount = Effect.fn("ClaudeCloudSessions.syncAccount")(function* (
     account: CloudAccount,
+    watched: Map<string, CloudAccount>,
   ) {
+    const now = DateTime.toEpochMillis(yield* DateTime.now);
     const page = yield* getJson(
       account,
       `${API_BASE}?limit=${SESSION_PAGE_LIMIT}`,
@@ -853,6 +893,7 @@ const make = Effect.gen(function* () {
       if (projectId === undefined) continue;
       projectBySession.set(session.id, projectId);
       busy ||= isCloudSessionBusy(session);
+      if (shouldStreamCloudSession(session, now)) watched.set(session.id, account);
       yield* syncSession(account, session, projectId).pipe(
         Effect.catch((cause) =>
           Effect.logWarning("Could not sync a Claude cloud session", {
@@ -865,10 +906,47 @@ const make = Effect.gen(function* () {
     return busy;
   });
 
-  const tick = settings.getSettings.pipe(
-    Effect.flatMap((current) =>
-      current.claudeCloudSessionsEnabled ? syncOnce() : Effect.succeed(false),
-    ),
+  // Any new event in a watched session wakes the poller instead of waiting out its interval.
+  const wake = yield* Queue.sliding<void>(1);
+  const watches = yield* FiberMap.make<string>();
+
+  const watchSession = (account: CloudAccount, sessionId: string) =>
+    Effect.suspend(() =>
+      eventNames(account, sessionId, syncedSequence.get(sessionId) ?? 0).pipe(
+        // Persisted events only; ephemeral ones are progress noise the sync would not show.
+        Stream.filter((name) => name === "client_event"),
+        Stream.runForEach(() => Queue.offer(wake, undefined)),
+      ),
+    ).pipe(
+      Effect.catch((cause) =>
+        Effect.logDebug("Claude cloud event stream ended", { sessionId, cause }),
+      ),
+      Effect.andThen(Effect.sleep(STREAM_RECONNECT_DELAY)),
+      Effect.forever,
+    );
+
+  const reconcileWatches = Effect.fn("ClaudeCloudSessions.reconcileWatches")(function* (
+    watched: ReadonlyMap<string, CloudAccount>,
+  ) {
+    // Copied first: removing interrupts the fiber and deletes it from the map being read.
+    for (const sessionId of Array.from(watches, ([key]) => key)) {
+      if (!watched.has(sessionId)) yield* FiberMap.remove(watches, sessionId);
+    }
+    for (const [sessionId, account] of watched) {
+      yield* FiberMap.run(watches, sessionId, watchSession(account, sessionId), {
+        onlyIfMissing: true,
+      });
+    }
+  });
+
+  const tick = Effect.gen(function* () {
+    const watched = new Map<string, CloudAccount>();
+    const busy = (yield* settings.getSettings).claudeCloudSessionsEnabled
+      ? yield* syncOnce(watched)
+      : false;
+    yield* reconcileWatches(watched);
+    return busy;
+  }).pipe(
     Effect.catch((cause) =>
       Effect.logWarning("Claude cloud session sync failed", { cause }).pipe(Effect.as(false)),
     ),
@@ -876,7 +954,16 @@ const make = Effect.gen(function* () {
 
   yield* forkParked(
     tick.pipe(
-      Effect.flatMap((busy) => Effect.sleep(busy ? BUSY_INTERVAL : IDLE_INTERVAL)),
+      Effect.flatMap((busy) =>
+        Queue.take(wake).pipe(
+          Effect.timeoutOrElse({
+            duration: busy ? BUSY_INTERVAL : IDLE_INTERVAL,
+            orElse: () => Effect.void,
+          }),
+        ),
+      ),
+      Effect.andThen(Effect.sleep(WAKE_DEBOUNCE)),
+      Effect.andThen(Queue.clear(wake)),
       Effect.forever,
     ),
   );

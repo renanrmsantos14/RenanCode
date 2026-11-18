@@ -7,11 +7,13 @@ import {
   cloudMessages,
   cloudSessionBranch,
   cloudSessionRepository,
+  cloudToolCallNeedsWrite,
   cloudToolCalls,
   cloudToolItemSequence,
   isMirroredCloudSession,
   localOnlyReason,
   projectForRepository,
+  shouldStreamCloudSession,
   type CloudSession,
 } from "./ClaudeCloudSessions.ts";
 
@@ -68,6 +70,18 @@ describe("Claude cloud session mirroring", () => {
     expect(isMirroredCloudSession(session())).toBe(true);
     expect(isMirroredCloudSession(session({ environment_kind: "bridge" }))).toBe(false);
     expect(isMirroredCloudSession(session({ status: "archived" }))).toBe(true);
+  });
+
+  it("streams events only for busy or recently active sessions", () => {
+    const now = Date.parse("2026-11-05T12:00:00Z");
+    expect(shouldStreamCloudSession(session({ last_event_at: "2026-11-05T11:45:00Z" }), now)).toBe(
+      true,
+    );
+    expect(shouldStreamCloudSession(session({ last_event_at: "2026-11-05T11:00:00Z" }), now)).toBe(
+      false,
+    );
+    expect(shouldStreamCloudSession(session({ worker_status: "running" }), now)).toBe(true);
+    expect(shouldStreamCloudSession(session(), now)).toBe(false);
   });
 
   it("reads the branch the cloud really used, tolerating sessions without one", () => {
@@ -187,6 +201,23 @@ describe("Claude cloud session mirroring", () => {
         { sequence: "4", id: "t2", done: null, completedAt: undefined },
         { sequence: "5", id: "t3", done: false, completedAt: "2026-11-05T10:00:00Z" },
       ]);
+    });
+
+    it("rewrites a known running call only once its status changes", () => {
+      const [answered, pending] = cloudToolCalls([
+        event(2, toolUse("t1", "Bash", { command: "ls" })),
+        event(3, toolResult("t1", "a.ts")),
+        event(4, toolUse("t2", "Read", { file_path: "/repo/a.ts" })),
+      ]);
+      const sync = { afterSequence: 3, lastRunEndedAt: 0, sessionRunning: true };
+      expect(cloudToolCallNeedsWrite(pending!, undefined, sync)).toBe(true);
+      expect(cloudToolCallNeedsWrite(answered!, undefined, sync)).toBe(false);
+      expect(cloudToolCallNeedsWrite(pending!, "running", sync)).toBe(false);
+      expect(cloudToolCallNeedsWrite(answered!, "running", sync)).toBe(true);
+      expect(cloudToolCallNeedsWrite(pending!, "running", { ...sync, sessionRunning: false })).toBe(
+        true,
+      );
+      expect(cloudToolCallNeedsWrite(answered!, "completed", sync)).toBe(false);
     });
 
     it("leaves out subagents, background-task tools and sidechain traffic", () => {
