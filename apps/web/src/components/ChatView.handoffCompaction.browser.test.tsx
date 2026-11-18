@@ -100,8 +100,7 @@ it("sends a Codex follow-up on a cold Claude thread without compacting first", a
   const compactAndSend = page.getByRole("button", { name: "Compact and send" });
 
   await page.getByRole("button", { name: "Claude Opus 4.6", exact: true }).click();
-  // The model strips open the full, searchable list from "Buscar modelo".
-  await page.getByRole("button", { name: "Buscar modelo" }).click();
+  // The picker lists only the active provider's models until you search.
   await userEvent.type(page.getByPlaceholder("Search models..."), "GPT-5.4");
   await page.getByRole("option", { name: "GPT-5.4", exact: false }).click();
   await expect.element(page.getByRole("button", { name: "GPT-5.4", exact: true })).toBeVisible();
