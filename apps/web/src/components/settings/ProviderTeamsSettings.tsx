@@ -158,7 +158,15 @@ function ProviderTeamDialog({
   const [name, setName] = useState(initial?.name ?? "");
   const [guidance, setGuidance] = useState(initial?.guidance ?? "");
   const [members, setMembers] = useState<ReadonlyArray<ProviderTeamMember>>(initial?.members ?? []);
-  const defaultSelection = settings.defaultModelSelection ?? members[0]?.modelSelection ?? null;
+  const firstModel = instanceEntries.find(
+    (entry) => entry.enabled && entry.isAvailable && entry.models.length > 0,
+  );
+  const defaultSelection =
+    settings.defaultModelSelection ??
+    members.at(-1)?.modelSelection ??
+    (firstModel === undefined
+      ? null
+      : { instanceId: firstModel.instanceId, model: firstModel.models[0]!.slug });
   const draft: ProviderTeam = {
     name: name.trim(),
     members: members.map((member) => ({ ...member, name: member.name.trim() })),
@@ -225,7 +233,7 @@ function ProviderTeamDialog({
                     }}
                   >
                     <SelectTrigger size="sm" className="w-36" aria-label={gt("Role")}>
-                      <SelectValue />
+                      <SelectValue>{(value: ProviderTeamRole) => roleLabel(gt, value)}</SelectValue>
                     </SelectTrigger>
                     <SelectPopup align="end" alignItemWithTrigger={false}>
                       {ROLES.map((role) => (
