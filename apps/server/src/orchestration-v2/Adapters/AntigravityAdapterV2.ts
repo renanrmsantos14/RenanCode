@@ -139,6 +139,14 @@ const ANTIGRAVITY_COMMAND_WAIT_INSTRUCTIONS = `
 When you need a command's result before you go on (tests, a build, a commit or push), set \`WaitMsBeforeAsync\` on \`run_command\` to cover how long it usually takes, so it finishes inside this turn. A command that outlives it moves to the background; the user still sees its result and your follow-up when it completes. Do not call \`t3_background_wait\`.
 `;
 
+// Gemini otherwise runs dozens of tools in silence and only speaks in its final answer.
+const ANTIGRAVITY_PROGRESS_INSTRUCTIONS = `
+
+### Keep the user posted
+
+The user watches this turn live and sees your messages, not your thinking. Before your first tool call, say in one sentence what you will do. While you work, write a one- or two-sentence update when you find something important, change your plan, or finish a step and start the next, so the user never goes more than a few tool calls without hearing from you. Keep updates short; your final answer still carries the full result.
+`;
+
 export function makeAntigravityAcpAdapterFlavor(
   options: AntigravityAdapterV2Options & AntigravityFlavorServices,
 ): AcpAdapterV2Flavor {
@@ -154,7 +162,7 @@ export function makeAntigravityAcpAdapterFlavor(
           options.makeRuntime({
             ...input,
             clientFileReads: true,
-            sessionSystemPromptAppend: `${PULL_REQUEST_LINKING_INSTRUCTIONS}${ANTIGRAVITY_COMMAND_WAIT_INSTRUCTIONS}`,
+            sessionSystemPromptAppend: `${PULL_REQUEST_LINKING_INSTRUCTIONS}${ANTIGRAVITY_COMMAND_WAIT_INSTRUCTIONS}${ANTIGRAVITY_PROGRESS_INSTRUCTIONS}`,
             additionalDirectories: [options.host.paths.attachmentsDir],
           }),
         )
