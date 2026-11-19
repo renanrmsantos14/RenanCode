@@ -283,7 +283,10 @@ import { suggestAppAccessForRemote } from "./sourceControlAppAccessToast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { ComposerHandleContext, useComposerHandleContext } from "../composerHandleContext";
 import type { ChatComposerHandle } from "./chat/ChatComposer";
-import { pickableProjectGroups } from "@t3tools/client-runtime/state/project-grouping";
+import {
+  isPickableProjectMember,
+  pickableProjectGroups,
+} from "@t3tools/client-runtime/state/project-grouping";
 import { buildSidebarProjectPickerEntries } from "../sidebarProjectGrouping";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import { readPullRequestListPreferences } from "~/components/pullRequest/pullRequestListPreferences";
@@ -524,9 +527,9 @@ function OpenCommandPaletteDialog(props: {
   const activeThreadHasContinuation =
     useAtomValue(
       continuationOfAtom(
-        activeThread === null
-          ? ""
-          : continuationKey(scopeThreadRef(activeThread.environmentId, activeThread.id)),
+        activeThread
+          ? continuationKey(scopeThreadRef(activeThread.environmentId, activeThread.id))
+          : "",
       ),
     ) !== null;
   const activeThreadReferenceCopyTarget =
@@ -910,15 +913,16 @@ function OpenCommandPaletteDialog(props: {
         pin: projectPin,
         runProject: async (project) => {
           const group = projectGroupByTargetKey.get(`${project.environmentId}:${project.id}`);
-          const contextualRefBelongsToGroup =
+          const contextualProjectIsEligible =
             contextualProjectRef !== null &&
-            group?.memberProjectRefs.some(
-              (projectRef) =>
-                projectRef.environmentId === contextualProjectRef.environmentId &&
-                projectRef.projectId === contextualProjectRef.projectId,
+            group?.memberProjects.some(
+              (member) =>
+                member.environmentId === contextualProjectRef.environmentId &&
+                member.id === contextualProjectRef.projectId &&
+                isPickableProjectMember(member),
             );
           await handleNewThread(
-            contextualRefBelongsToGroup
+            contextualProjectIsEligible
               ? contextualProjectRef
               : scopeProjectRef(project.environmentId, project.id),
           );
@@ -1551,7 +1555,7 @@ function OpenCommandPaletteDialog(props: {
     });
   }
 
-  if (activeThread !== null && canContinueActiveThreadElsewhere) {
+  if (activeThread && canContinueActiveThreadElsewhere) {
     const threadRef = scopeThreadRef(activeThread.environmentId, activeThread.id);
     actionItems.push({
       kind: "action",
