@@ -527,9 +527,9 @@ function OpenCommandPaletteDialog(props: {
   const activeThreadHasContinuation =
     useAtomValue(
       continuationOfAtom(
-        activeThread === null
-          ? ""
-          : continuationKey(scopeThreadRef(activeThread.environmentId, activeThread.id)),
+        activeThread
+          ? continuationKey(scopeThreadRef(activeThread.environmentId, activeThread.id))
+          : "",
       ),
     ) !== null;
   const activeThreadReferenceCopyTarget =
@@ -1555,7 +1555,7 @@ function OpenCommandPaletteDialog(props: {
     });
   }
 
-  if (activeThread !== null && canContinueActiveThreadElsewhere) {
+  if (activeThread && canContinueActiveThreadElsewhere) {
     const threadRef = scopeThreadRef(activeThread.environmentId, activeThread.id);
     actionItems.push({
       kind: "action",

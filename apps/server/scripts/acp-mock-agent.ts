@@ -2191,11 +2191,8 @@ const program = Effect.gen(function* () {
               }
               const payload = event.payload;
               return Effect.sync(() => {
-                NodeFS.appendFileSync(
-                  requestLogPath,
-                  payload.endsWith("\n") ? payload : `${payload}\n`,
-                  "utf8",
-                );
+                // Raw stdin chunks can split one message; the ndjson stream carries its own newlines.
+                NodeFS.appendFileSync(requestLogPath, payload, "utf8");
               });
             },
           }
