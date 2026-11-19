@@ -14,8 +14,7 @@ expired work again when you turn it back on.
 
 1. Right-click the thread in the sidebar and choose **Share with guest**. It is also in the thread
    menu and the command palette. In the mobile app, long-press the thread in the list or use the
-   thread's header, then choose whether the guest needs your approval; the link opens in the share
-   sheet.
+   thread's header menu.
 2. Copy the link and send it to one person. It works in one browser and expires after 24 hours.
    Opening it again in that browser takes them back to the thread. Turn off **Require my approval**
    before creating the link to let their messages go straight to the agent.
@@ -24,7 +23,8 @@ expired work again when you turn it back on.
    show with the message, and **Send** includes them.
 
 Choose **Stop sharing** to end the link at once. Archiving the thread, creating a new link, or
-unlinking the machine from T3 Connect also ends it. You can send or dismiss guest messages from the mobile app.
+unlinking the machine from T3 Connect also ends it. The mobile app can send, dismiss, and stop
+sharing too.
 
 ## What the guest sees
 

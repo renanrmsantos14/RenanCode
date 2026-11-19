@@ -1,3 +1,4 @@
+import { useNavigation } from "@react-navigation/native";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import { useGT, useMessages } from "gt-react-native";
 
@@ -14,7 +15,7 @@ import {
   useThreadGitMenuDefinition,
   type ThreadGitControlsProps,
 } from "./ThreadGitControls";
-import { useShareWithGuest } from "./ThreadGuestShareBar";
+import { useCanShareWithGuest } from "./useCanShareWithGuest";
 
 export function ThreadHeader(props: {
   readonly title: string;
@@ -36,7 +37,9 @@ export function ThreadHeader(props: {
   const gitMenu = useThreadGitMenuDefinition(props.gitControls);
   const terminalMenu = threadTerminalMenu(props.gitControls, m);
   const filesVisible = props.inspectorMode === "files" && panes.auxiliaryPaneVisible;
-  const shareWithGuest = useShareWithGuest(props.threadRef ?? null);
+  const navigation = useNavigation();
+  const threadRef = props.threadRef ?? null;
+  const canShareWithGuest = useCanShareWithGuest(threadRef?.environmentId ?? null);
   const actions: AppBarAction[] = [
     ...(props.hasThreadCwd
       ? [
@@ -50,14 +53,14 @@ export function ThreadHeader(props: {
           } satisfies AppBarAction,
         ]
       : []),
-    ...(shareWithGuest
+    ...(threadRef !== null && canShareWithGuest
       ? [
           {
             accessibilityLabel: gt("Share with guest"),
             icon: "person.badge.plus",
             separateBackground: false,
             overflowOnly: true,
-            onPress: shareWithGuest,
+            onPress: () => navigation.navigate("ThreadGuestShare", threadRef),
           } satisfies AppBarAction,
         ]
       : []),

@@ -8,8 +8,6 @@ import {
 import {
   AuthOrchestrationOperateScope,
   type ChatAttachment,
-  type EnvironmentId,
-  managedCapabilityDenial,
   type ScopedThreadRef,
   type ThreadGuestMessage,
   type ThreadGuestShare,
@@ -17,14 +15,12 @@ import {
 import { Atom } from "effect/reactivity";
 import { msg, useGT } from "gt-react-native";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { Platform, Share, View } from "react-native";
+import { View } from "react-native";
 
 import { Button } from "../../components/ui/Button";
 import { AppText as Text } from "../../components/ui/AppText";
 import { SymbolView } from "../../components/ui/AppSymbol";
 import * as Dialog from "../../components/ui/Dialog";
-import { copyTextWithHaptic } from "../../lib/copyTextWithHaptic";
-import { serverEnvironment } from "../../state/server";
 import { m } from "../../i18n/messages";
 import { useEnvironmentScope } from "../../state/session";
 import { environmentThreadDetails, threadEnvironment } from "../../state/threads";
@@ -32,19 +28,6 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { GUEST_PENDING_BUBBLE_CLASS_NAME, GuestMessageName } from "./guestMessageStyle";
 
 const NO_GUEST_SHARE_ATOM = Atom.make<ThreadGuestShare | null>(null);
-const NO_PERMISSION_ATOM = Atom.make(false);
-
-// A boolean, so thread list rows re-render only when availability flips, not on every config push.
-const canShareWithGuestAtom = Atom.family((environmentId: EnvironmentId) =>
-  Atom.make((get) => {
-    const config = get(serverEnvironment.configValueAtom(environmentId));
-    return (
-      get(serverEnvironment.createGuestShare.permissionAtom(environmentId)) &&
-      config?.settings.guestSharingEnabled === true &&
-      managedCapabilityDenial(config.managedPolicy, "connect") === undefined
-    );
-  }),
-);
 
 function guestShareAtom(ref: ScopedThreadRef) {
   let previous: ThreadGuestShare | null = null;
@@ -73,66 +56,9 @@ function alertOnFailure(failureTitle: string, result: AtomCommandResult<unknown,
 }
 
 /**
- * "Share with guest" for a thread's menus, or null where this environment does not offer it (same
- * rule as web: the grant, the Guest links beta, and a policy that allows T3 Connect).
- */
-export function useShareWithGuest(threadRef: ScopedThreadRef | null): (() => void) | null {
-  const gt = useGT();
-  const canShare = useAtomValue(
-    threadRef === null ? NO_PERMISSION_ATOM : canShareWithGuestAtom(threadRef.environmentId),
-  );
-  const createGuestShare = useAtomCommand(serverEnvironment.createGuestShare, {
-    label: "create guest link",
-    reportFailure: false,
-  });
-  if (threadRef === null || !canShare) return null;
-
-  const create = async (autoSend: boolean) => {
-    const result = await createGuestShare({
-      environmentId: threadRef.environmentId,
-      input: { threadId: threadRef.threadId, autoSend },
-    });
-    if (result._tag !== "Success") {
-      alertOnFailure(gt("Could not create guest link"), result);
-      return;
-    }
-    const { url } = result.value;
-    // Android ignores `url`; iOS turns a `message` URL into plain text instead of a link.
-    const content = Platform.OS === "ios" ? { url } : { message: url };
-    try {
-      const shared = await Share.share(content);
-      // The link is shown only once; a dismissed sheet (iOS reports it) would otherwise lose it.
-      if (shared.action === Share.dismissedAction) {
-        Dialog.alert(gt("Guest link"), url, [
-          { text: gt("Done", { $context: "button that closes the dialog" }), style: "cancel" },
-          {
-            text: gt("Copy", { $context: "verb, button" }),
-            onPress: () => copyTextWithHaptic(url),
-          },
-        ]);
-      }
-    } catch (cause) {
-      console.error("Failed to share guest link.", cause);
-    }
-  };
-  return () =>
-    Dialog.alert(
-      gt("Share with guest"),
-      gt(
-        "The guest watches this thread live in a browser, including command output. With approval, each message they send waits for you to send or dismiss it. The link works once and expires in 24 hours. A new link ends any current one.",
-      ),
-      [
-        { text: gt("Cancel"), style: "cancel" },
-        { text: gt("Send directly"), onPress: () => void create(true) },
-        { text: gt("Require approval"), onPress: () => void create(false) },
-      ],
-    );
-}
-
-/**
  * Owner controls for a guest link, above the composer: who the link is for and a way to stop
- * sharing. Links are created from the thread's menus (`useShareWithGuest`). Waiting messages
- * show in the feed, see `ThreadGuestPendingMessage`.
+ * sharing. Links are created from the thread's menu, see `ThreadGuestShareSheet`. Waiting
+ * messages show in the feed, see `ThreadGuestPendingMessage`.
  */
 export function ThreadGuestShareBar(props: {
   readonly threadRef: ScopedThreadRef | null;
