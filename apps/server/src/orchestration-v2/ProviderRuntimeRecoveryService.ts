@@ -778,6 +778,13 @@ export const make = Effect.gen(function* () {
             !isAppOwnedDelegationItem(candidate) &&
             // Link and MCP server cards wait on the user, not the run, and answer by message.
             !ProjectionStore.waitsOnUserAfterRun(candidate) &&
+            // The orchestrator queues a steer the provider never reported reading.
+            !(
+              candidate.type === "user_message" &&
+              candidate.status === "pending" &&
+              (candidate.inputIntent === "steer" ||
+                candidate.inputIntent === "promoted_queued_to_steer")
+            ) &&
             (candidate.status === "pending" ||
               candidate.status === "running" ||
               candidate.status === "waiting"),
