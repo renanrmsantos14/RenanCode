@@ -282,7 +282,8 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.test != 'false' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # The fork's ubuntu-24.04 runner has half the CPUs of upstream's, so the suite needs longer.
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -372,12 +373,13 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.test_web != 'false' }}
     runs-on: ubuntu-24.04
-    # One ubuntu-24.04 runner took over 10 minutes for the whole suite.
+    # One ubuntu-24.04 runner took over 10 minutes for the whole suite, and with two shards
+    # the long-lived Chromium page closed near the end of a shard, so the fork uses three.
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -420,7 +422,7 @@ jobs:
 
       - name: Test
         working-directory: apps/web
-        run: vp test run --passWithNoTests --project unit --project browser --shard=${{ matrix.shard }}/2
+        run: vp test run --passWithNoTests --project unit --project browser --shard=${{ matrix.shard }}/${{ strategy.job-total }}
 
   # apps/server sets `fileParallelism: false`, so its test files run strictly
   # one at a time. Sharding spreads them over separate runners instead of

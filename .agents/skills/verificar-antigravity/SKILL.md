@@ -7,7 +7,8 @@ description: "Verifica o adapter do Antigravity (agy): turno de continuação pa
 
 ## Cobre
 
-- `enablePostSettleContinuation: true` no flavor: `tool_call_update` e `agent_message_chunk` que chegam depois do `end_turn` abrem um turno de continuação (`continuationRequests.offer`) em vez de se perderem.
+- Comando comum (`run_command` sem `IsDaemon`) que passa do `WaitMsBeforeAsync` segura o turno aberto até terminar (`toolOutlivesPrompt`, do upstream); Stop encerra o comando.
+- `enablePostSettleContinuation: true` no flavor: `tool_call_update` e `agent_message_chunk` que chegam depois do turno encerrado (daemon, timer) abrem um turno de continuação (`continuationRequests.offer`) em vez de se perderem.
 - `sessionSystemPromptAppend`:
   - `ANTIGRAVITY_COMMAND_WAIT_INSTRUCTIONS` orienta o uso de `WaitMsBeforeAsync` e proíbe `t3_background_wait`, que é só de Claude/OpenCode.
   - `ANTIGRAVITY_PROGRESS_INSTRUCTIONS` pede uma frase antes da 1ª ferramenta e atualizações curtas durante o trabalho. Sem ela, o Gemini roda dezenas de ferramentas calado.
@@ -27,12 +28,12 @@ description: "Verifica o adapter do Antigravity (agy): turno de continuação pa
    - Use um projeto de teste com bug de várias etapas. Conte os segmentos de `agent_message_chunk` antes da última `tool_call`.
    - Referência de 18/11/2026: com o texto antigo, 0 atualizações em 3 de 3 amostras; com o novo, 4 a 5 atualizações em 3 de 3. No controle (pergunta de 1 ferramenta), no máximo 2 textos.
 4. App real. Custa cota; use só se a mudança depender do agy real.
-   - Pedir "rode `sleep 20 && echo pronto` e me diga o resultado". Esperado: o turno termina e, cerca de 20 s depois, um turno novo mostra a saída e a resposta, sem mensagem do usuário.
+   - Pedir "rode `sleep 20 && echo pronto` e me diga o resultado". Esperado: a thread segue em Working com Stop disponível e, cerca de 20 s depois, o mesmo turno mostra a saída e a resposta.
    - Pedir uma tarefa de várias etapas. Esperado: mensagens curtas de progresso entre as ferramentas.
 
 ## Limites
 
-- Sem `extractBackgroundTaskId` para o agy: a linha do `run_command` aparece "completed" sem saída no fim do 1º turno; o resultado real chega no turno de continuação.
+- Sem `extractBackgroundTaskId` para o agy: num daemon, a linha do `run_command` aparece "completed" sem saída no fim do 1º turno; o resultado real chega no turno de continuação.
 - As instruções de sessão só chegam quando o agy aceita `_meta.antigravity.systemPrompt.append`.
 - `git push` parado em "Username for github.com" não é problema do adapter. O `DBUS_SESSION_BUS_ADDRESS` falso da instância impede o `gh` de ler o chaveiro. A correção é pôr `GH_TOKEN` (Sensitive) no `environment` da instância.
 - Mudar as configurações de uma instância (inclusive `environment`) recarrega a instância e mata os agy dela, interrompendo tarefas em andamento. Evite com tarefas rodando.

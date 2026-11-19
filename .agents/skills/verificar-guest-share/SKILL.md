@@ -1,6 +1,6 @@
 ---
 name: verificar-guest-share
-description: "Verifica links de convidado (Share with guest): criar link com ou sem aprovação, mensagem do convidado esperando Send/Dismiss ou indo direto ao agente, status do link na web e no mobile. Use após mudar apps/server/src/guest/**, apps/server/src/orchestration-v2/GuestShareDecider.ts, packages/contracts/src/guestShare.ts, apps/web/src/components/chat/GuestShareControls.tsx, apps/web/src/components/guest/** ou apps/mobile/src/features/threads/ThreadGuestShareBar.tsx."
+description: "Verifica links de convidado (Share with guest): criar link com ou sem aprovação, mensagem do convidado esperando Send/Dismiss ou indo direto ao agente, status do link na web e no mobile. Use após mudar apps/server/src/guest/**, apps/server/src/orchestration-v2/GuestShareDecider.ts, packages/contracts/src/guestShare.ts, apps/web/src/components/chat/GuestShareControls.tsx, apps/web/src/components/guest/** apps/mobile/src/features/threads/ThreadGuestShareBar.tsx ou ThreadGuestShareSheet.tsx."
 ---
 
 # Verificar links de convidado
@@ -25,15 +25,15 @@ description: "Verifica links de convidado (Share with guest): criar link com ou 
 
 ## Roteiro manual (mobile)
 
-Mesmo servidor do roteiro web, com Guest links ligado. A opção só aparece com a permissão `createGuestShare`, Guest links ligado e Connect liberado pela política (mesma regra do `canShareWithGuestAtom` da web). Não aparece em rascunho.
+Mesmo servidor do roteiro web, com Guest links ligado. A opção só aparece com a permissão `createGuestShare`, Guest links ligado e Connect liberado pela política (`useCanShareWithGuest`, mesma regra da web). Não aparece em rascunho.
 
-1. Criar o link de dois jeitos: toque longo na thread da lista > **Share with guest**, ou thread aberta > menu do header (Android: overflow; iOS: botão na toolbar).
-2. Esperado: alerta "Share with guest" com **Cancel**, **Send directly** e **Require approval**.
-3. Escolher um modo. Esperado: abre o compartilhar do sistema com o link (iOS como `url`, Android como `message`), e o status acima do composer segue o passo 4 da web.
+1. Abrir a folha **Share with guest** de três jeitos: toque longo na thread da lista, thread aberta > menu do header (Android: overflow; iOS: botão na toolbar), ou command palette.
+2. Esperado: chave **Require my approval** ligada por padrão, com o texto mudando ao desligar.
+3. Criar o link. Esperado: o link aparece com **Copy** e **Share** (iOS como `url`, Android como `message`), e o status acima do composer segue o passo 4 da web.
 
 ## Casos de borda
 
 - Provider desabilitado com auto-send: o envio falha, a mensagem fica pendente e o servidor registra "Guest message auto-send failed".
 - Link expirado: o mobile mostra "Guest link expired" sem o sufixo "sends directly".
-- iOS: fechar o compartilhar sem enviar abre o alerta "Guest link" com o link e **Copy** (o link só aparece uma vez). O Android não informa o cancelamento.
+- Fechar o compartilhar do sistema sem enviar mantém o link na folha, com **Copy** (o link só aparece uma vez).
 - Não há como alternar o modo num link ativo: pare de compartilhar e crie outro.
