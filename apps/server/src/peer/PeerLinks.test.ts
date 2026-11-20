@@ -6,6 +6,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { type ExecutionEnvironmentDescriptor, OrchestratorMcpFailure } from "@t3tools/contracts";
 import { expect, it } from "@effect/vitest";
 import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -576,6 +577,17 @@ it.effect("reads one stored link without asking the peer", () =>
       expect(Option.map(stored, (link) => link.label)).toEqual(Option.some("Box"));
       expect(Option.isNone(yield* a.links.get(laptop.environmentId))).toBe(true);
       expect(yield* Ref.get(b.probes)).toBe(0);
+
+      // An older answer that lands after a newer one never moves the expiry back.
+      const expiresAt = Option.getOrThrow(stored).expiresAt;
+      const later = DateTime.add(expiresAt, { days: 20 });
+      yield* a.links.recordExpiry(box.environmentId, later);
+      yield* a.links.recordExpiry(box.environmentId, DateTime.add(expiresAt, { days: 10 }));
+      expect(
+        Option.map(yield* a.links.get(box.environmentId), (link) =>
+          DateTime.formatIso(link.expiresAt),
+        ),
+      ).toEqual(Option.some(DateTime.formatIso(later)));
     }),
   ).pipe(Effect.provide(NodeHttpServer.layerTest)),
 );
@@ -806,6 +818,7 @@ it.effect("linking a picked machine that answers nowhere names it and links noth
         })
         .pipe(Effect.flip);
       expect(failed.reason).toBe("unreachable");
+      expect(failed.answeredAs).toBe("Impostor");
       expect(failed.message).toBe(
         `This environment could not reach Box: ${new URL(impostor.url).origin} answered as another environment, Impostor. http://192.168.1.20:3773 is plain http, which would send the link's credentials unencrypted. Use its https address, or its Tailscale address.`,
       );
@@ -934,12 +947,9 @@ it.effect(
         const linked = yield* linkTo(a.links, b, "approval-required");
         const [first] = yield* sessionIds(b);
 
-        // Eight days left is not the last week.
+        // Eight days left is not the last week. Listing does not use the link, so it stays put.
         yield* TestClock.adjust(Duration.days(22));
-        expect(yield* probe(a)).toEqual({
-          caller: "RenanCode · Laptop",
-          modes: "approval-required/default",
-        });
+        expect((yield* a.links.list).map((link) => link.status)).toEqual(["reachable"]);
         expect((yield* storedLink(a)).expiresAt.epochMilliseconds).toBe(
           linked.expiresAt.epochMilliseconds,
         );
@@ -1014,7 +1024,7 @@ it.effect("a peer without link renewal keeps today's behavior, with no error", (
       const linked = yield* linkTo(a.links, b);
       const before = yield* sessionIds(b);
       yield* TestClock.adjust(Duration.days(24));
-      expect(yield* probe(a)).toEqual({ caller: "RenanCode · Laptop", modes: "auto/default" });
+      expect((yield* a.links.list).map((link) => link.status)).toEqual(["reachable"]);
       const stored = yield* storedLink(a);
       expect(stored.expiresAt.epochMilliseconds).toBe(linked.expiresAt.epochMilliseconds);
       expect(stored.lastError).toBeNull();
