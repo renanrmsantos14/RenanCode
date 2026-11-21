@@ -42,7 +42,6 @@ function setup(input: { readonly prompt: string; readonly suggestion: string | n
         readSelectionRange: () => ({ start: input.prompt.length, end: input.prompt.length }),
       } as never,
     },
-    composerMenuOpenRef: { current: false },
     composerMenuItemsRef: { current: [] },
     activeComposerMenuItemRef: { current: null },
     setComposerDraftPrompt,
