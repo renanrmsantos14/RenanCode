@@ -157,6 +157,8 @@ export const layer: Layer.Layer<
       };
       // Each scope is checked on its own, so a retried capture fills only what is missing.
       const captureRoot = Effect.gen(function* () {
+        // Materializing a baseline waits on the folder's lock before the capture does.
+        const capturesBeforeLock = yield* checkpoints.capturesSoFar(scope.cwd);
         const threadStartCheckpoint =
           baselineOrdinalWithinScope === 0 || isPreserved(0) ? null : yield* materializeBaseline(0);
         const baselineCheckpoint = isPreserved(baselineOrdinalWithinScope)
@@ -170,6 +172,7 @@ export const layer: Layer.Layer<
           appRunOrdinal: run.ordinal,
           capturedAt,
           forceMissing: skipFilesystem,
+          capturesBeforeLock,
           ...excluded(scope),
         });
         return { threadStartCheckpoint, baselineCheckpoint, checkpoint };
