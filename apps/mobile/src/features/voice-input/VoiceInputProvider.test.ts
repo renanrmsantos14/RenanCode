@@ -25,6 +25,11 @@ vi.mock("expo-audio", () => ({
 }));
 vi.mock("../../native/voiceRecorder", () => ({ createVoiceRecorder: vi.fn() }));
 vi.mock("../../native/voiceTranscription", () => ({ getLocalVoiceTranscriber: async () => null }));
+// Server transcription is Android-only here, and its client pulls in the whole environment runtime.
+vi.mock("./serverVoiceTranscriber", () => ({
+  SERVER_VOICE_TRANSCRIPTION: false,
+  getServerVoiceTranscriber: () => null,
+}));
 vi.mock("../../state/preferences", async () => {
   const { AsyncResult, Atom } = await import("effect/reactivity");
   return { mobilePreferencesAtom: Atom.make(AsyncResult.initial()) };
