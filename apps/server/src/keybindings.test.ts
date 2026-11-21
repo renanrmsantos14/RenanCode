@@ -15,6 +15,14 @@ import * as Keybindings from "./keybindings.ts";
 import * as SharedKeybindings from "@t3tools/shared/keybindings";
 import { KeybindingsConfigError, MAX_KEYBINDINGS_COUNT } from "@t3tools/contracts";
 
+// Fills the custom config so the binding limit drops every default before `rule`.
+const fillersHidingDefaultsBefore = (rule: { readonly key: string; readonly command: string }) =>
+  MAX_KEYBINDINGS_COUNT -
+  SharedKeybindings.DEFAULT_KEYBINDINGS.length +
+  SharedKeybindings.DEFAULT_KEYBINDINGS.findIndex(
+    (binding) => binding.key === rule.key && binding.command === rule.command,
+  );
+
 const KeybindingsConfigJson = Schema.fromJsonString(KeybindingsConfig);
 const encodeKeybindingsConfigJson = Schema.encodeEffect(KeybindingsConfigJson);
 const decodeKeybindingsConfigJson = Schema.decodeUnknownEffect(KeybindingsConfigJson);
@@ -525,10 +533,13 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       const keybindings = yield* Keybindings.Keybindings;
       yield* writeKeybindingsConfig(
         keybindingsConfigPath,
-        Array.from({ length: 210 }, (_, index) => ({
-          key: "mod+alt+f1",
-          command: `script.filler-${index}.run` as const,
-        })),
+        Array.from(
+          { length: fillersHidingDefaultsBefore({ key: "mod+shift+o", command: "chat.new" }) },
+          (_, index) => ({
+            key: "mod+alt+f1",
+            command: `script.filler-${index}.run` as const,
+          }),
+        ),
       );
 
       const target = { key: "mod+shift+o", command: "chat.new", when: "!terminalFocus" } as const;
@@ -558,10 +569,13 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
         const keybindings = yield* Keybindings.Keybindings;
         yield* writeKeybindingsConfig(
           keybindingsConfigPath,
-          Array.from({ length: 209 }, (_, index) => ({
-            key: "mod+alt+f1",
-            command: `script.filler-${index}.run` as const,
-          })),
+          Array.from(
+            { length: fillersHidingDefaultsBefore({ key: "mod+n", command: "chat.new" }) },
+            (_, index) => ({
+              key: "mod+alt+f1",
+              command: `script.filler-${index}.run` as const,
+            }),
+          ),
         );
 
         const target = { key: "mod+n", command: "chat.new", when: "!terminalFocus" } as const;
