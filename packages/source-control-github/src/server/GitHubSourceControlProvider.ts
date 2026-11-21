@@ -649,13 +649,12 @@ export const make = Effect.gen(function* () {
     readonly repository?: string | undefined;
     readonly allowReserve: boolean;
   }) {
+    const base = yield* resolveRepository(input);
     const locator =
-      (input.repository === undefined
-        ? null
-        : parseGitHubRepositorySelector(
-            input.repository,
-            (input.host ?? environment.GH_HOST ?? "github.com").toLowerCase(),
-          )) ?? (yield* resolveRepository(input));
+      input.repository === undefined
+        ? base
+        : parseGitHubRepositorySelector(input.repository, base.host);
+    if (locator === null) return yield* failure(`${input.repository} is not a GitHub repository.`);
     const limit = Math.min(Math.max(Math.trunc(input.limit), 1), 100);
     const ownerMatch = /^([^:/\s]+):(.+)$/u.exec(input.headSelector.trim());
     const headRefName = ownerMatch?.[2] ?? input.headSelector.trim();
