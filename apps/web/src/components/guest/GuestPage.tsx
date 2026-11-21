@@ -1,5 +1,4 @@
 import {
-  EnvironmentId,
   GUEST_MESSAGE_MAX_LENGTH,
   GUEST_HISTORY_ROUTE,
   GUEST_NAME_MAX_LENGTH,
@@ -15,17 +14,10 @@ import {
   type ThreadGuestMessage,
   type ThreadGuestMessageStatus,
 } from "@t3tools/contracts";
-import type { LegendListRef } from "@legendapp/list/react";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
 import {
-  deriveRunlessWorkStartedAt,
-  deriveThreadActivityRun,
-  deriveThreadStructureRuntime,
-} from "@t3tools/client-runtime/state/thread-execution";
-import {
-  createQuestionHistoryProjector,
   derivePendingThreadRequests,
   seedUserInputDraftAnswers,
 } from "@t3tools/client-runtime/state/thread-requests";
@@ -50,18 +42,12 @@ import { msg, T, useGT, useMessages } from "gt-react";
 
 import { m } from "~/i18n/messages";
 
-import { useIncrementalTimelineEntries } from "~/hooks/useIncrementalTimelineEntries";
 import { useNowMinute } from "~/hooks/useNowMinute";
 import { useStableCallback } from "~/hooks/useStableCallback";
 import { useTheme } from "~/hooks/useTheme";
 import { playNotificationSound, unlockNotificationAudio } from "~/threadNotifications";
 import { cn } from "~/lib/utils";
-import {
-  deriveActiveWorkStartedAt,
-  derivePendingUserInputs,
-  derivePhase,
-  type PendingUserInput,
-} from "~/session-logic";
+import { derivePendingUserInputs, type PendingUserInput } from "~/session-logic";
 import { ComposerBanner } from "../chat/ComposerBanner";
 import { ComposerControl, ComposerControlIcon } from "../chat/ComposerControl";
 import { ComposerPendingUserInputPanel } from "../chat/ComposerPendingUserInputPanel";
@@ -70,12 +56,11 @@ import { GuestMessageAttachments } from "../chat/GuestMessageAttachments";
 import { HostImageUrlContext } from "../chat/hostImageUrl";
 import { PierreEntryIcon } from "../chat/PierreEntryIcon";
 import { GuestMessageName, guestBubbleClassName } from "../chat/guestMessageStyle";
-import { MessagesTimeline, type MessagesTimelineHistoryControls } from "../chat/MessagesTimeline";
+import type { MessagesTimelineHistoryControls } from "../chat/MessagesTimeline";
+import { ReadOnlyThreadTimeline } from "../chat/ReadOnlyThreadTimeline";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { getDisplayModelName, getTriggerDisplayModelName } from "../chat/providerIconUtils";
-import { ScrollToEndButton } from "../chat/TimelineOverlays";
 import type { TimelineRow } from "../chat/timelineRowContext";
-import { useTimelineFollow } from "../chat/useTimelineFollow";
 import { GuestHtmlRender } from "./GuestHtmlRender";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -217,6 +202,7 @@ const STATUS_LABEL: Record<ThreadGuestMessageStatus, string> = {
 
 /** Same column as the owner's timeline, so both views wrap text at the same width. */
 const LANE = "chat-content-lane px-4";
+const ignore = () => {};
 
 type GuestAccess = "checking" | "session" | "name" | "none";
 
@@ -428,17 +414,7 @@ function NameForm({
   );
 }
 
-// The timeline needs an environment id to key its rows. Nothing behind it loads on this page;
-// see isGuestPage.
-const GUEST_ENVIRONMENT_ID = EnvironmentId.make("guest");
-const NO_TURN_DIFFS: ReadonlyArray<never> = [];
-const NO_OPTIMISTIC_MESSAGES: ReadonlyArray<never> = [];
-const ignore = () => {};
-
-/**
- * The owner's timeline, read-only: every action that would reach the owner's machine (fork,
- * revert, diffs, files, other threads, shell) is left out, so its control does not render.
- */
+/** The owner's timeline, read-only, with the guest's own messages and composer below it. */
 function GuestThread({
   view: { shareId, title, expiresAt, messages, model, canAnswer },
   projection,
@@ -450,52 +426,14 @@ function GuestThread({
   readonly awaitingRowIds: GuestStreamState["awaitingRowIds"];
   readonly historyControls: MessagesTimelineHistoryControls | undefined;
 }) {
-  // No ":" so the timeline finds no environment thread behind the key.
-  const threadKey = `guest-${shareId}`;
-  const listRef = useRef<LegendListRef | null>(null);
-  const { resolvedTheme } = useTheme();
-  // The rest is what ChatView derives from the same projection.
-  const [projectQuestionHistory] = useState(() => createQuestionHistoryProjector());
-  const items = projectQuestionHistory(projection);
   // Files load through the guest route.
   const [attachmentUrls] = useState(() => createGuestAttachmentUrls(shareId));
   // Expanded rows read detail and command output through the guest routes.
   const [turnItemSource] = useState(() => guestTurnItemSource(shareId));
-  const attachmentUrlById = attachmentUrls(items);
-  const entries = useIncrementalTimelineEntries(threadKey, {
-    visibleTurnItems: items,
-    optimisticMessages: NO_OPTIMISTIC_MESSAGES,
-    attachmentUrlById,
-    attempts: projection.attempts,
-    nodes: projection.nodes,
-    plans: projection.plans,
-  });
   const openFile = useStableCallback((file: { readonly id: string }) =>
     openInNewTab(guestAttachmentUrl(shareId, file.id)),
   );
   const hostImageUrl = useStableCallback((path: string) => guestMediaUrl(shareId, path));
-  const activityRun = deriveThreadActivityRun(projection);
-  const runtime = deriveThreadStructureRuntime(projection);
-  const runlessWorkStartedAt = deriveRunlessWorkStartedAt(projection);
-  const isWorking = derivePhase(runtime) === "running" || runlessWorkStartedAt !== null;
-  const workStartedAt =
-    deriveActiveWorkStartedAt(activityRun, runtime, null) ?? runlessWorkStartedAt;
-  const runningRunId = runtime?.activeRunId ?? null;
-  const follow = useTimelineFollow({
-    legendListRef: listRef,
-    composerTimelineInset: 0,
-    routeThreadKey: threadKey,
-    activeThreadKey: threadKey,
-    // Not a server thread: new turns follow the end instead of anchoring near the top.
-    isServerThread: false,
-    serverProjection: null,
-    threadStatus: "live",
-    activeActivityRun: activityRun,
-    activeRunningTurnId: runningRunId,
-    timelineEntries: entries,
-    timelineAnchorMessageId: null,
-    setTimelineAnchor: ignore,
-  });
   const renderHtmlRender = useStableCallback(
     (row: Extract<TimelineRow, { kind: "html-render" }>) => (
       <GuestHtmlRender itemId={row.id} reference={row.htmlRender} shareId={shareId} />
@@ -512,7 +450,6 @@ function GuestThread({
       />
     ),
   );
-  const unplaced = unplacedGuestMessages(messages, items, awaitingRowIds);
   const question = useGuestQuestion(shareId, canAnswer ? projection : null);
   useGuestQuestionAlert(title, question.pending?.requestId ?? null);
   return (
@@ -522,96 +459,67 @@ function GuestThread({
         {canAnswer ? <GuestNotificationsButton /> : null}
         <ExpiryLabel expiresAt={expiresAt} />
       </header>
-      <div className="relative min-h-0 flex-1">
-        <HostImageUrlContext value={hostImageUrl}>
-          <MessagesTimeline
-            listRef={listRef}
-            timelineEntries={entries}
-            isWorking={isWorking}
-            activeTurnStartedAt={workStartedAt}
-            latestRun={activityRun}
-            runningRunId={runningRunId}
-            turnDiffSummaries={NO_TURN_DIFFS}
-            runs={projection.runs}
-            routeThreadKey={threadKey}
-            onOpenThread={ignore}
-            supportsConversationRollback={false}
-            onRevertToTurnCount={ignore}
-            isRevertingCheckpoint={false}
-            onImageExpand={openExpandedImage}
-            onFileOpen={openFile}
-            onFileDownload={openFile}
-            renderHtmlRender={renderHtmlRender}
-            renderHtmlVariant={renderHtmlVariant}
-            turnItemSource={turnItemSource}
-            historyControls={historyControls}
-            activeThreadEnvironmentId={GUEST_ENVIRONMENT_ID}
-            markdownCwd={undefined}
-            resolvedTheme={resolvedTheme}
-            timestampFormat="locale"
-            workspaceRoot={undefined}
-            anchorMessageId={null}
-            onAnchorReady={ignore}
-            onAnchorSizeChanged={ignore}
-            contentInsetEndAdjustment={0}
-            emptyPlaceholderInset={0}
-            liveFollowEnabled={follow.timelineLiveFollowEnabled}
-            onIsAtEndChange={follow.onIsAtEndChangeStable}
-            onViewportAttach={follow.attachTimelineViewport}
-            onFooterGrow={follow.onTimelineFooterGrowStable}
-            footer={
-              unplaced.length === 0 ? null : (
-                <ol className="chat-content-lane flex flex-col gap-4 pb-4">
-                  {unplaced.map((message) => (
-                    <li key={message.id}>
-                      <UnplacedGuestMessage shareId={shareId} message={message} />
-                    </li>
-                  ))}
-                </ol>
-              )
-            }
-          />
-        </HostImageUrlContext>
-        {follow.showScrollToBottom ? (
-          <ScrollToEndButton
-            summary={null}
-            bottom={4}
-            onScrollToEnd={() => follow.scrollToEnd(true)}
-          />
-        ) : null}
-      </div>
-      <div className={cn(LANE, "shrink-0 pb-4")}>
-        {question.pending === null ? null : (
-          <div className="mb-2">
-            <ComposerBanner.Root variant="info" detached>
-              <ComposerPendingUserInputPanel
-                pendingUserInputs={[question.pending]}
-                cwd={undefined}
-                threadRef={undefined}
-                respondingRequestIds={question.responding ? [question.pending.requestId] : []}
-                answers={question.answers}
-                questionIndex={question.index}
-                onToggleOption={question.toggleOption}
-                onAdvance={() => question.advance()}
-                onDismiss={ignore}
+      <HostImageUrlContext value={hostImageUrl}>
+        <ReadOnlyThreadTimeline
+          // No ":" so the timeline finds no environment thread behind the key.
+          threadKey={`guest-${shareId}`}
+          projection={projection}
+          historyControls={historyControls}
+          turnItemSource={turnItemSource}
+          attachmentUrls={attachmentUrls}
+          onImageExpand={openExpandedImage}
+          onFileOpen={openFile}
+          renderHtmlRender={renderHtmlRender}
+          renderHtmlVariant={renderHtmlVariant}
+          renderFooter={(items) => {
+            const unplaced = unplacedGuestMessages(messages, items, awaitingRowIds);
+            return unplaced.length === 0 ? null : (
+              <ol className="chat-content-lane flex flex-col gap-4 pb-4">
+                {unplaced.map((message) => (
+                  <li key={message.id}>
+                    <UnplacedGuestMessage shareId={shareId} message={message} />
+                  </li>
+                ))}
+              </ol>
+            );
+          }}
+        >
+          {({ scrollToEnd }) => (
+            <div className={cn(LANE, "shrink-0 pb-4")}>
+              {question.pending === null ? null : (
+                <div className="mb-2">
+                  <ComposerBanner.Root variant="info" detached>
+                    <ComposerPendingUserInputPanel
+                      pendingUserInputs={[question.pending]}
+                      cwd={undefined}
+                      threadRef={undefined}
+                      respondingRequestIds={question.responding ? [question.pending.requestId] : []}
+                      answers={question.answers}
+                      questionIndex={question.index}
+                      onToggleOption={question.toggleOption}
+                      onAdvance={() => question.advance()}
+                      onDismiss={ignore}
+                    />
+                  </ComposerBanner.Root>
+                  {question.error === null ? null : (
+                    <p role="alert" className="mt-1 px-4 text-xs text-destructive">
+                      {question.error}
+                    </p>
+                  )}
+                </div>
+              )}
+              <GuestComposer
+                shareId={shareId}
+                model={model}
+                canAnswer={canAnswer}
+                answering={question.pending !== null}
+                onAnswer={question.answerWithText}
+                onSent={scrollToEnd}
               />
-            </ComposerBanner.Root>
-            {question.error === null ? null : (
-              <p role="alert" className="mt-1 px-4 text-xs text-destructive">
-                {question.error}
-              </p>
-            )}
-          </div>
-        )}
-        <GuestComposer
-          shareId={shareId}
-          model={model}
-          canAnswer={canAnswer}
-          answering={question.pending !== null}
-          onAnswer={question.answerWithText}
-          onSent={() => follow.scrollToEnd(true)}
-        />
-      </div>
+            </div>
+          )}
+        </ReadOnlyThreadTimeline>
+      </HostImageUrlContext>
     </>
   );
 }

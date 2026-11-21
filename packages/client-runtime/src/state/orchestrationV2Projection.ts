@@ -335,20 +335,21 @@ export function applyOrchestrationV2ProjectionEvent(
       };
     case "run.created":
     case "run.updated": {
-      const recorded = base.runs.find((run) => run.id === event.payload.id)?.nextActionSuggestion;
-      const next = {
-        ...base,
-        runs: upsertEntity(
-          base.runs,
-          recorded === undefined
-            ? event.payload
-            : { ...event.payload, nextActionSuggestion: recorded },
-        ),
+      // Lifecycle updates carry the run as it was when the turn started. What the run returned
+      // and its next-action suggestion are written by their own events; keep them.
+      const known = base.runs.find((run) => run.id === event.payload.id);
+      const run = {
+        ...event.payload,
+        ...(event.payload.output === undefined && known?.output !== undefined
+          ? { output: known.output }
+          : {}),
+        ...(known?.nextActionSuggestion !== undefined
+          ? { nextActionSuggestion: known.nextActionSuggestion }
+          : {}),
       };
+      const next = { ...base, runs: upsertEntity(base.runs, run) };
       const visible = { ...next, visibleTurnItems: activeVisibleTurnItems(next) };
-      const wasQueued = base.runs.some(
-        (run) => run.id === event.payload.id && run.status === "queued",
-      );
+      const wasQueued = known?.status === "queued";
       return wasQueued && event.payload.status !== "queued"
         ? { ...visible, visibleTurnItems: restoreQueuedUserItems(visible, event.payload.id) }
         : visible;
@@ -372,6 +373,13 @@ export function applyOrchestrationV2ProjectionEvent(
                 restartCancelledBackgroundWork: event.payload.restartCancelledBackgroundWork,
               }
             : run,
+        ),
+      };
+    case "run.output-submitted":
+      return {
+        ...base,
+        runs: base.runs.map((run) =>
+          run.id === event.payload.runId ? { ...run, output: event.payload.output } : run,
         ),
       };
     case "run-attempt.created":

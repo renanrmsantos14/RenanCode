@@ -838,6 +838,7 @@ function makeReplayQueryRunner(
               mode,
             });
           }),
+        // A result looks for servers that need a sign-in; the replay reports none.
         mcpServerStatus: Effect.succeed([]),
         toggleMcpServer: () => Effect.void,
         // Recorded sessions already hold their title, and no replay asserts rename frames.
@@ -852,6 +853,9 @@ function makeReplayQueryRunner(
           }).pipe(Effect.as(true)),
         // Recorded CLIs predate MCP Apps capabilities, so replays never reach these.
         readMcpResource: () => Effect.die("unexpected MCP resource read in replay"),
+        mcpAuthenticate: () => Effect.die("unexpected MCP sign-in in replay"),
+        mcpSubmitOAuthCallbackUrl: () => Effect.die("unexpected MCP sign-in in replay"),
+        reconnectMcpServer: () => Effect.die("unexpected MCP reconnect in replay"),
         callMcpTool: () => Effect.die("unexpected MCP tool call in replay"),
         listPermissionRules: Effect.die("unexpected permission rules read in replay"),
         interrupt: replayEffect(() => {
