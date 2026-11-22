@@ -3208,7 +3208,7 @@ export default function ChatView(props: ChatViewProps) {
   });
   // The cold-cache dialog already offers compaction; keep the inline offer out of its way.
   const inlineCompactionTokens = coldCache.warning === null ? resumeCompactionTokens : null;
-  const { onSend } = useComposerSend({
+  const { onSend, captureDetachedSend } = useComposerSend({
     confirmColdCache: coldCache.confirmColdCache,
     environmentId,
     routeThreadKey,
@@ -4084,6 +4084,7 @@ export default function ChatView(props: ChatViewProps) {
                                 onCompactContext={onComposerCompactContextStable}
                                 cacheControl={coldCache.control}
                                 onSend={onComposerSendStable}
+                                captureDetachedSend={captureDetachedSend}
                                 onResume={onComposerResumeStable}
                                 onInterrupt={onInterruptStable}
                                 onSteerQueuedMessage={steerQueuedMessageStable}
