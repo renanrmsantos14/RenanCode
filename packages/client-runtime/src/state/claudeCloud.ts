@@ -31,6 +31,8 @@ export function dedupeClaudeCloudThreads<
 >(
   threads: readonly T[],
   preferred: EnvironmentId | ReadonlySet<EnvironmentId> | null,
+  // Set where only a preferred copy can be used at all, so it wins over the copy that owns the run.
+  options?: { readonly preferredFirst?: boolean },
 ): readonly T[] {
   const isPreferred = (environmentId: EnvironmentId) =>
     typeof preferred === "string"
@@ -39,7 +41,7 @@ export function dedupeClaudeCloudThreads<
   const rank = (thread: T) =>
     (thread.activeRunId != null ? 4 : 0) +
     (thread.latestRunId != null ? 2 : 0) +
-    (isPreferred(thread.environmentId) ? 1 : 0);
+    (isPreferred(thread.environmentId) ? (options?.preferredFirst ? 8 : 1) : 0);
   const chosen = new Map<string, T>();
   let hasDuplicate = false;
   for (const thread of threads) {

@@ -1,3 +1,4 @@
+import { dedupeClaudeCloudThreads } from "@t3tools/client-runtime/state/claudeCloud";
 import type { ArchivedSnapshotEntry } from "@t3tools/client-runtime/state/threads";
 import {
   scopeProject,
@@ -40,26 +41,29 @@ export function buildArchivedThreadGroups(input: {
   const query = input.searchQuery.trim().toLocaleLowerCase();
   const foldedQuery = foldSearchQuery(input.searchQuery);
   const groups: ArchivedThreadGroup[] = [];
+  const snapshots = input.snapshots.filter(
+    (entry) => input.environmentId === null || input.environmentId === entry.environmentId,
+  );
+  // Archiving a cloud session archives every environment's copy of it; one is listed.
+  const threadsByProjectKey = Arr.groupBy(
+    dedupeClaudeCloudThreads(
+      snapshots.flatMap((entry) =>
+        entry.snapshot.threads
+          .filter((thread) => thread.archivedAt !== null)
+          .map((thread) => scopeThreadShell(entry.environmentId, thread)),
+      ),
+      null,
+    ),
+    (thread) => scopedProjectKey(thread.environmentId, thread.projectId),
+  );
 
-  for (const entry of input.snapshots) {
-    if (input.environmentId !== null && input.environmentId !== entry.environmentId) {
-      continue;
-    }
-
+  for (const entry of snapshots) {
     const environmentLabel = input.environmentLabels[entry.environmentId] ?? null;
-    const threadsByProjectId = new Map<string, EnvironmentThreadShell[]>();
-    for (const thread of entry.snapshot.threads) {
-      if (thread.archivedAt === null) {
-        continue;
-      }
-      const threads = threadsByProjectId.get(thread.projectId) ?? [];
-      threads.push(scopeThreadShell(entry.environmentId, thread));
-      threadsByProjectId.set(thread.projectId, threads);
-    }
 
     for (const rawProject of entry.snapshot.projects) {
       const project = scopeProject(entry.environmentId, rawProject);
-      const projectThreads = threadsByProjectId.get(project.id) ?? [];
+      const projectThreads =
+        threadsByProjectKey[scopedProjectKey(project.environmentId, project.id)] ?? [];
       const groupMatches =
         query.length === 0 ||
         matchesQuery(project.title, query) ||

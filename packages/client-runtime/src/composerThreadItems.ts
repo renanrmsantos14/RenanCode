@@ -7,6 +7,7 @@ import {
 } from "@t3tools/contracts";
 import { foldSearchQuery, rankSearchItems, scoreThreadSearch } from "@t3tools/shared/paletteSearch";
 
+import { dedupeClaudeCloudThreads } from "./state/claudeCloud.ts";
 import type { EnvironmentThreadShell } from "./state/models.ts";
 import { threadSearchSubject, type ThreadSearchShell } from "./state/threadSearch.ts";
 import { mFallback, msg } from "gt-i18n";
@@ -52,13 +53,18 @@ export function matchComposerThreadItems(
     shell.environmentId === input.environmentId &&
     shell.lineage.parentThreadId === input.excludeThreadId &&
     shell.latestUserMessageAt !== null;
-  const candidates = input.shells.filter(
-    (shell) =>
-      (shell.environmentId === input.environmentId ||
-        input.linkedEnvironments.has(shell.environmentId)) &&
-      shell.id !== input.excludeThreadId &&
-      shell.archivedAt === null &&
-      (isListedThreadLineage(shell.lineage) || isOwnSideChat(shell)),
+  const candidates = dedupeClaudeCloudThreads(
+    input.shells.filter(
+      (shell) =>
+        (shell.environmentId === input.environmentId ||
+          input.linkedEnvironments.has(shell.environmentId)) &&
+        shell.id !== input.excludeThreadId &&
+        shell.archivedAt === null &&
+        (isListedThreadLineage(shell.lineage) || isOwnSideChat(shell)),
+    ),
+    input.environmentId,
+    // A mention of the local copy resolves without reaching the linked machine.
+    { preferredFirst: true },
   );
   return rankSearchItems(candidates, (shell, options) =>
     scoreThreadSearch(query, threadSearchSubject(shell, null), input.now, {

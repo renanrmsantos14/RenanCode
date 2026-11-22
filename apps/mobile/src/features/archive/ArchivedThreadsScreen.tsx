@@ -9,6 +9,7 @@ import {
   AuthOrchestrationOperateScope,
   type EnvironmentId,
   type EnvironmentMachineKind,
+  isClaudeCloudThreadId,
   resolveEnvironmentMachineKind,
 } from "@t3tools/contracts";
 import { useNavigation } from "@react-navigation/native";
@@ -192,9 +193,10 @@ function ArchivedThreadRow(props: {
     props.thread.environmentId,
     AuthOrchestrationOperateScope,
   );
-  const subtitle = [props.environmentLabel, props.thread.branch].filter((part): part is string =>
-    Boolean(part),
-  );
+  const subtitle = [
+    isClaudeCloudThreadId(props.thread.id) ? gt("Cloud") : props.environmentLabel,
+    props.thread.branch,
+  ].filter((part): part is string => Boolean(part));
   const rowContent = (
     <View
       className={`flex-row items-center gap-3 bg-grouped-card px-4 py-3 ${props.isLast ? "" : "border-b border-separator"}`}
