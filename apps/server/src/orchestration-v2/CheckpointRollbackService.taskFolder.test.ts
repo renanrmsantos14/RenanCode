@@ -158,6 +158,7 @@ const layerFor = (state: State, options: Options) => {
           IdAllocator.layer,
           layerProjections,
           ServerSettings.layerTest(),
+          ThreadCommandExecutor.layer,
         ),
       ),
     ),

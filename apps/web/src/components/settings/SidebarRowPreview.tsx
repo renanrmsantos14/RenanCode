@@ -155,7 +155,6 @@ export function SidebarRowPreview() {
                 currentEnvironmentId={source.environmentId}
                 environmentLabel={null}
                 environmentMachine={machineById.get(source.environmentId) ?? "server"}
-                scratchMachineLabel={null}
                 project={null}
                 projectDisplayName={null}
                 providerEntryByInstanceId={
