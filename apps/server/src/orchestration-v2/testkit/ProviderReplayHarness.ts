@@ -511,6 +511,7 @@ export function layerWithRegistry<Error>(
         IdAllocator.layer,
         layerServerSettings,
         layerStores,
+        ThreadCommandExecutor.layer,
       ),
     ),
   );
