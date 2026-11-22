@@ -1417,6 +1417,7 @@ const exitWhileIdle = (options: {
                     renameSession: () => Effect.void,
                     backgroundTasks: () => Effect.succeed(false),
                     mcpServerStatus: Effect.succeed([]),
+                    toggleMcpServer: () => Effect.void,
                     readMcpResource: () => Effect.die("unexpected MCP resource read"),
                     callMcpTool: () => Effect.die("unexpected MCP tool call"),
                     mcpAuthenticate: () => Effect.die("unexpected MCP sign-in"),
