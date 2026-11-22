@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { Platform, View } from "react-native";
-import { useResolveClassNames } from "uniwind";
 
 import { cn } from "../../lib/cn";
 import { SymbolView } from "./AppSymbol";
@@ -18,7 +17,6 @@ export function ListChoiceRow(props: {
   readonly disabled?: boolean;
   readonly onPress: () => void;
 }) {
-  const rippleStyle = useResolveClassNames("bg-subtle-strong");
   return (
     <RowPressable
       accessibilityRole="radio"
@@ -27,8 +25,6 @@ export function ListChoiceRow(props: {
       accessibilityState={{ checked: props.selected, disabled: Boolean(props.disabled) }}
       disabled={props.disabled}
       onPress={props.onPress}
-      android_ripple={{ color: rippleStyle.backgroundColor }}
-      unstable_pressDelay={Platform.OS === "android" ? 50 : undefined}
       // Like UIKit and Material lists, only the checkmark or radio marks the selected row.
       className={cn("bg-grouped-card", props.separated && "border-t border-border-subtle")}
     >

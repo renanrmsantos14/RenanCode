@@ -579,7 +579,7 @@ function ThreadRouteContent(
     .filter(Boolean)
     .join(" · ");
   const gitStatus = useEnvironmentQuery(
-    selectedThread !== null && selectedThreadCwd !== null
+    secondaryReadsReady && selectedThread !== null && selectedThreadCwd !== null
       ? vcsEnvironment.status({
           environmentId: selectedThread.environmentId,
           input: { cwd: selectedThreadCwd },
@@ -990,6 +990,14 @@ function ThreadRouteContent(
       serverOwned: false,
     };
   })();
+  const connectionRetrying =
+    routeConnectionState === "connecting" || routeConnectionState === "reconnecting";
+  // Connection failures survive retries and app suspension.
+  const retryConnectionError = useDelayedStatus(
+    `${environmentId}:${connectionRetrying && routeConnectionError !== null}`,
+    connectionRetrying ? routeConnectionError : null,
+    RECONNECT_ERROR_DELAY_MS,
+  );
   // Queued creation displays its prompt before server creation; temporary not-found is expected.
   const contentPresentation =
     creationState !== null
@@ -999,16 +1007,9 @@ function ThreadRouteContent(
           detailError: Option.getOrNull(selectedThreadDetailState.error),
           detailDeleted: selectedThreadDetailState.status === "deleted",
           connectionState: routeConnectionState,
+          connectionStalled: retryConnectionError !== null,
           resolve: m,
         });
-  const connectionRetrying =
-    routeConnectionState === "connecting" || routeConnectionState === "reconnecting";
-  // Connection failures survive retries and app suspension.
-  const retryConnectionError = useDelayedStatus(
-    `${environmentId}:${connectionRetrying && routeConnectionError !== null}`,
-    connectionRetrying ? routeConnectionError : null,
-    RECONNECT_ERROR_DELAY_MS,
-  );
   const connectionStatusLabel = connectionRetryLabel(
     {
       connectionError: retryConnectionError,
