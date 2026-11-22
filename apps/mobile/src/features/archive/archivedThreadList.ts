@@ -7,7 +7,7 @@ import {
   type EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/shell";
 import { threadSearchSubject } from "@t3tools/client-runtime/state/thread-search";
-import type { EnvironmentId } from "@t3tools/contracts";
+import { isClaudeCloudThreadId, type EnvironmentId } from "@t3tools/contracts";
 import { foldSearchQuery, rankSearchItems, scoreThreadSearch } from "@t3tools/shared/paletteSearch";
 import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
@@ -20,6 +20,19 @@ export interface ArchivedThreadGroup {
   readonly key: string;
   readonly project: EnvironmentProject;
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
+}
+
+/** A cloud session's archived copy on every environment; unarchiving or deleting one leaves the rest. */
+export function archivedThreadCopies(
+  snapshots: ReadonlyArray<ArchivedSnapshotEntry>,
+  thread: EnvironmentThreadShell,
+): ReadonlyArray<EnvironmentThreadShell> {
+  if (!isClaudeCloudThreadId(thread.id)) return [thread];
+  return snapshots.flatMap((entry) =>
+    entry.snapshot.threads
+      .filter((copy) => copy.id === thread.id && copy.archivedAt !== null)
+      .map((copy) => scopeThreadShell(entry.environmentId, copy)),
+  );
 }
 
 function archiveTimestamp(thread: EnvironmentThreadShell): number {

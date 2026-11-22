@@ -848,6 +848,7 @@ export function useThreadListActions(): {
 
 export function useArchivedThreadListActions(
   onCompleted: (thread: EnvironmentThreadShell) => void,
+  copiesOf: (thread: EnvironmentThreadShell) => ReadonlyArray<EnvironmentThreadShell>,
 ): {
   readonly unarchiveThread: (thread: EnvironmentThreadShell) => void;
   readonly confirmDeleteThread: (thread: EnvironmentThreadShell) => void;
@@ -856,11 +857,15 @@ export function useArchivedThreadListActions(
     onCompleted(thread);
   };
   const executeAction = useThreadActionExecutor(handleCompleted);
+  const executeOnCopies = async (action: ThreadListAction, thread: EnvironmentThreadShell) => {
+    const results = await Promise.all(copiesOf(thread).map((copy) => executeAction(action, copy)));
+    return results.every(Boolean);
+  };
   const unarchiveThread = (thread: EnvironmentThreadShell) => {
-    void executeAction("unarchive", thread);
+    void executeOnCopies("unarchive", thread);
   };
   const confirmDeleteThread = (thread: EnvironmentThreadShell) =>
-    confirmThreadDeletion(executeAction, thread);
+    confirmThreadDeletion(executeOnCopies, thread);
 
   return { unarchiveThread, confirmDeleteThread };
 }

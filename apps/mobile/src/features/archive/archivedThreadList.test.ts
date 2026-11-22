@@ -4,7 +4,7 @@ import * as DateTime from "effect/DateTime";
 import { expect, it } from "vite-plus/test";
 
 import { makeRawThreadShell } from "../../test-fixtures";
-import { buildArchivedThreadGroups } from "./archivedThreadList";
+import { archivedThreadCopies, buildArchivedThreadGroups } from "./archivedThreadList";
 
 const projectId = ProjectId.make("project-test");
 const cloudThreadId = ThreadId.make("claude-cloud:session");
@@ -55,4 +55,18 @@ it("lists an archived cloud session once across environments, and on each one fi
     "env-notebook:claude-cloud:session",
     "env-notebook:local-env-notebook",
   ]);
+
+  const [cloudSession, localThread] = buildArchivedThreadGroups({
+    snapshots,
+    environmentLabels: {},
+    environmentId: EnvironmentId.make("env-notebook"),
+    searchQuery: "",
+    sortOrder: "newest",
+  })
+    .flatMap((group) => group.threads)
+    .toSorted((left, right) => left.id.localeCompare(right.id));
+  expect(
+    archivedThreadCopies(snapshots, cloudSession!).map((thread) => thread.environmentId),
+  ).toEqual(["env-desktop", "env-notebook"]);
+  expect(archivedThreadCopies(snapshots, localThread!)).toEqual([localThread]);
 });

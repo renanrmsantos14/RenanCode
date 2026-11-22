@@ -13,7 +13,8 @@ Cada ambiente logado na mesma conta Claude espelha a mesma sessão com o mesmo i
 - Mobile: `steadyNavigationThreadShellsAtom` (apps/mobile/src/state/threads.ts) alimenta Home, sidebar e a tela de reordenar; `buildThreadListV2Items` deixa sessão cloud passar pelo filtro de ambiente; `ThreadListV2Row` mostra ícone de nuvem e "Cloud".
 - Mobile, outras listas: paleta de comandos (`CommandPalette.tsx`, cópia de ambiente conectado), arquivadas (`buildArchivedThreadGroups`) e a linha selecionada da sidebar no tablet (`useSidebarRowThreadKey` + `listedCloudSessionEnvironmentAtom`).
 - Web e mobile: menções de thread no composer (`matchComposerThreadItems`), preferindo a cópia do ambiente do composer.
-- Web: `Sidebar.tsx` chama o dedupe com o ambiente primário; `SidebarThreadRow` mostra o ícone de nuvem.
+- Mobile, arquivadas: desarquivar ou excluir uma sessão cloud age na cópia arquivada de cada ambiente (`archivedThreadCopies` + `useArchivedThreadListActions`).
+- Web: `Sidebar.tsx` chama o dedupe com o ambiente primário; `SidebarThreadRow` mostra o ícone de nuvem. A paleta de comandos (`useCommandPaletteThreadItems`) usa a mesma escolha, mostra "Cloud" e deixa a sessão aberta fora de "Recentes".
 
 ## Testes
 
@@ -32,5 +33,5 @@ export PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$PWD/node_modules/.bin:$PATH
 
 ## Lacunas conhecidas
 
-- Arquivadas do mobile: desarquivar ou excluir age só na cópia listada; a linha volta como a cópia da outra máquina até repetir a ação em cada uma.
-- Web: a paleta de comandos lê as listas por ambiente e ainda pode repetir a sessão.
+- Arquivadas do mobile: se o ambiente de alguma cópia estiver fora do ar, a ação falha nela (alerta) e a linha volta como essa cópia.
+- Paleta (web e mobile): escolher a sessão cloud já aberta pode trocar para a cópia listada de outro ambiente.
