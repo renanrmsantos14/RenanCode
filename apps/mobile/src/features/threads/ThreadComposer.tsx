@@ -23,6 +23,7 @@ import { StackActions, useFocusEffect, useNavigation } from "@react-navigation/n
 import { msg, T, useGT, useMessages } from "gt-react-native";
 import type { ReactNode } from "react";
 import { useEffect, useEffectEvent, useRef, useState, type RefObject } from "react";
+import * as Haptics from "expo-haptics";
 import { Keyboard, Platform, Pressable, View } from "react-native";
 import { composerImageGallery } from "../../lib/composerImageGallery";
 import { filePreviewGallery } from "../../lib/filePreviewGallery";
@@ -320,8 +321,8 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
   const handleResumeQueue = async () => {
     if (resumingQueue || onResumeQueue === null) return;
     setResumingQueue(true);
-    await onResumeQueue();
-    setResumingQueue(false);
+    // The React Compiler does not compile try/finally.
+    await onResumeQueue().finally(() => setResumingQueue(false));
   };
 
   const operateDenied = useEnvironmentScopeDenied(
@@ -548,6 +549,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     const threadKey = scopedThreadKey(props.environmentId, props.selectedThread.id);
     if (inFlightThreadIdsRef.current.has(threadKey)) return;
     inFlightThreadIdsRef.current.add(threadKey);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     await inputRef.current?.flushPendingInput();
     const draftAtSend = getComposerDraftSnapshot(composerDraftKey);
     const stillSendable = () => {

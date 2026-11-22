@@ -8,6 +8,7 @@ import { AppText as Text } from "../../components/ui/AppText";
 import { useAndroidControlSizing } from "../../components/ui/useAndroidControlSizing";
 import { useDeadlinePassed } from "../../lib/clock";
 import { useWorkspaceState } from "../../state/workspace";
+import { useRetryEnvironment } from "../connection/useRetryEnvironment";
 import {
   workspaceConnectionStatusPresentation,
   type WorkspaceConnectionStatusPresentation,
@@ -19,6 +20,8 @@ const FADE_IN_MS = 250;
 type ConnectionStatus = WorkspaceConnectionStatusPresentation & {
   /** Only while the status first appears. A header that shows it later shows it at once. */
   readonly fadeIn: boolean;
+  /** Skips the backoff wait, which can reach minutes, for every environment that failed to connect. */
+  readonly retry: () => void;
 };
 
 const ConnectionStatusContext = createContext<ConnectionStatus | null>(null);
@@ -46,12 +49,19 @@ export function WorkspaceConnectionStatusProvider(props: { readonly children: Re
     since === null ? null : since + STATUS_SHOW_DELAY_MS + FADE_IN_MS,
   );
 
+  const retryEnvironment = useRetryEnvironment();
+  const retry = () => {
+    for (const environment of state.connectingEnvironments) {
+      // A retry restarts an attempt in flight, so a first attempt is left to finish.
+      if (environment.connectionError !== null) void retryEnvironment(environment.environmentId);
+    }
+  };
   const label = presentation?.label;
   const showsProgress = presentation?.showsProgress ?? false;
   const status =
     label === undefined || since === null || !fadeStarted
       ? null
-      : { label, showsProgress, fadeIn: !fadeEnded };
+      : { label, showsProgress, fadeIn: !fadeEnded, retry };
   return <ConnectionStatusContext value={status}>{props.children}</ConnectionStatusContext>;
 }
 
@@ -125,7 +135,10 @@ export function WorkspaceConnectionTitle(props: {
         accessibilityRole="button"
         disabled={props.onPress === undefined}
         hitSlop={8}
-        onPress={props.onPress}
+        onPress={() => {
+          status.retry();
+          props.onPress?.();
+        }}
         className="flex-row items-center gap-2"
         style={[
           { flexShrink: 1, marginLeft: props.statusOffset ?? 0 },

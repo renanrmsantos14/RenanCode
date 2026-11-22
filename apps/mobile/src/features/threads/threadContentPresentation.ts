@@ -11,6 +11,8 @@ export type ThreadContentPresentation =
       readonly kind: "unavailable";
       readonly title: string;
       readonly detail: string;
+      /** Only a reconnect can load this thread. */
+      readonly reconnectable?: true;
     };
 
 export function projectThreadContentPresentation(input: {
@@ -18,6 +20,8 @@ export function projectThreadContentPresentation(input: {
   readonly detailError: string | null;
   readonly detailDeleted: boolean;
   readonly connectionState: EnvironmentConnectionPhase;
+  /** A retry already failed, so the next one can be minutes away. */
+  readonly connectionStalled?: boolean;
   readonly resolve?: MessageResolver;
 }): ThreadContentPresentation {
   const resolve = input.resolve ?? m;
@@ -40,8 +44,8 @@ export function projectThreadContentPresentation(input: {
   }
   if (
     input.connectionState === "connected" ||
-    input.connectionState === "connecting" ||
-    input.connectionState === "reconnecting"
+    ((input.connectionState === "connecting" || input.connectionState === "reconnecting") &&
+      !input.connectionStalled)
   ) {
     return { kind: "loading" };
   }
@@ -49,6 +53,7 @@ export function projectThreadContentPresentation(input: {
     kind: "unavailable",
     title: resolve(msg("Messages not cached")),
     detail: resolve(msg("Reconnect this environment to load the conversation.")),
+    reconnectable: true,
   };
 }
 

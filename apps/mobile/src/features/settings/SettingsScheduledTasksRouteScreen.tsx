@@ -48,6 +48,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { AppState, Platform, Pressable, TextInput as RNTextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import { Button } from "../../components/ui/Button";
 import { AppText as Text } from "../../components/ui/AppText";
 import { SymbolView } from "../../components/ui/AppSymbol";
@@ -1668,9 +1669,12 @@ function EnvironmentTasks({
       {tasks.error ? (
         <Text className="p-4 text-base text-danger-foreground">{tasks.error}</Text>
       ) : !tasks.data ? (
-        <Text className="p-4 text-base text-foreground-muted">
-          <T>Loading tasks…</T>
-        </Text>
+        <View className="items-center py-16">
+          <AppActivityIndicator colorClassName="accent-icon" />
+          <Text className="mt-3 text-sm text-foreground-muted">
+            <T>Loading tasks…</T>
+          </Text>
+        </View>
       ) : visibleTasks?.length === 0 ? (
         <Text className="p-4 text-base text-foreground-muted">
           {projectIds === null ? gt("No scheduled tasks yet.") : gt("No tasks in this project.")}

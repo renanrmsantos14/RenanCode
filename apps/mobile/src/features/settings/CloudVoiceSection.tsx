@@ -423,7 +423,7 @@ function CloudChoices({ environment, active, onClose }: Props & { onClose: () =>
                     ? gt("Could not load models · Retry")
                     : gt("Loading transcription models…")
                 }
-                disabled={!AsyncResult.isFailure(models)}
+                loading={!AsyncResult.isFailure(models)}
                 onPress={reloadModels}
               />
             </ListSection>

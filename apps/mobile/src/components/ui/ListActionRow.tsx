@@ -1,6 +1,3 @@
-import { Platform } from "react-native";
-import { useResolveClassNames } from "uniwind";
-
 import { AppActivityIndicator } from "./AppActivityIndicator";
 import { ListRowLayout, type ListRowContentProps } from "./ListRowLayout";
 import { RowPressable } from "./RowPressable";
@@ -12,7 +9,6 @@ export function ListActionRow(
     readonly onPress: () => void;
   },
 ) {
-  const rippleStyle = useResolveClassNames("bg-subtle-strong");
   const disabled = Boolean(props.disabled || props.loading);
   return (
     <RowPressable
@@ -22,8 +18,6 @@ export function ListActionRow(
       accessibilityState={{ disabled, busy: Boolean(props.loading) }}
       disabled={disabled}
       onPress={props.onPress}
-      android_ripple={{ color: rippleStyle.backgroundColor }}
-      unstable_pressDelay={Platform.OS === "android" ? 50 : undefined}
       className="bg-grouped-card"
     >
       <ListRowLayout
