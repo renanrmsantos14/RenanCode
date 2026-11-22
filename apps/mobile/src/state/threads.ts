@@ -74,6 +74,15 @@ export const steadyNavigationThreadShellsAtom = Atom.make((get) =>
     new Set(get(connectedEnvironmentIdsAtom)),
   ),
 ).pipe(Atom.withLabel("steady-navigation-thread-shells-deduped"));
+/** Which environment's copy of a cloud session is listed; streaming ticks leave it unchanged. */
+export const listedCloudSessionEnvironmentAtom = Atom.family((threadId: ThreadId | null) =>
+  Atom.make((get) =>
+    threadId === null
+      ? null
+      : (get(steadyNavigationThreadShellsAtom).find((thread) => thread.id === threadId)
+          ?.environmentId ?? null),
+  ),
+);
 export const childThreadApprovalsAtom = createChildThreadApprovalsAtom({
   childThreadInputsAtom: environmentThreadShells.childThreadInputsAtom,
   pendingRequestsAtom: environmentThreadDetails.pendingRequestsAtom,

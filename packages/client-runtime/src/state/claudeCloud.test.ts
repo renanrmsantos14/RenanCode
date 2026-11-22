@@ -40,5 +40,8 @@ describe("dedupeClaudeCloudThreads", () => {
     expect(dedupeClaudeCloudThreads([mirror, withLatest], local)).toEqual([withLatest]);
     expect(dedupeClaudeCloudThreads([mirror, withLatest, withActive], local)).toEqual([withActive]);
     expect(dedupeClaudeCloudThreads([withActive, mirror], local)).toEqual([withActive]);
+    expect(
+      dedupeClaudeCloudThreads([withActive, mirror], new Set([local]), { preferredFirst: true }),
+    ).toEqual([mirror]);
   });
 });

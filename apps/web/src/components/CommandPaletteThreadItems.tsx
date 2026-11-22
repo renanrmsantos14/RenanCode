@@ -1,4 +1,5 @@
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { dedupeClaudeCloudThreads } from "@t3tools/client-runtime/state/claudeCloud";
 import { findForMessageMatch, openThreadFindOnQuery } from "./chat/threadFindStore";
 import {
   claimThreadOpen,
@@ -12,7 +13,7 @@ import {
   pickedQuery,
   rankMessageMatches,
 } from "@t3tools/shared/paletteSearch";
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { isClaudeCloudThreadId, type EnvironmentId, type ThreadId } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { useNavigate } from "@tanstack/react-router";
 import { MessageSquareIcon } from "lucide-react";
@@ -98,11 +99,21 @@ export function useCommandPaletteThreadItems(input: {
   readonly activeThread: { readonly environmentId: EnvironmentId; readonly id: ThreadId } | null;
   readonly threadSearchQuery: string;
 }) {
-  const { activeThread, threadSearchQuery } = input;
+  const { threadSearchQuery } = input;
   const messages = useMessages();
   const gt = useGT();
   const navigate = useNavigate();
-  const threads = useVisibleThreadShells();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  // The sidebar's choice: a cloud session is one row for every environment's copy of it.
+  const threads = dedupeClaudeCloudThreads(
+    useVisibleThreadShells().filter((thread) => thread.archivedAt === null),
+    primaryEnvironmentId,
+  );
+  const openCloudSession =
+    input.activeThread && isClaudeCloudThreadId(input.activeThread.id)
+      ? threads.find((thread) => thread.id === input.activeThread?.id)
+      : undefined;
+  const activeThread = openCloudSession ?? input.activeThread;
   const delegatedUnderParent = useDelegatedUnderParent();
   const { projectEnvironmentLocationById } = useEnvironmentLookups();
   const providerEntryByEnvironmentAndInstanceId = useProviderEntryByEnvironmentAndInstanceId();
@@ -120,7 +131,9 @@ export function useCommandPaletteThreadItems(input: {
       ...(environments.length > 1
         ? {
             environmentLabelOf: (thread: (typeof threads)[number]) =>
-              projectEnvironmentLocationById.get(thread.environmentId)?.label ?? null,
+              isClaudeCloudThreadId(thread.id)
+                ? gt("Cloud")
+                : (projectEnvironmentLocationById.get(thread.environmentId)?.label ?? null),
           }
         : {}),
       ...(activeThread ? { activeThread } : {}),
@@ -149,8 +162,10 @@ export function useCommandPaletteThreadItems(input: {
             project={projectByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? null}
             projectTitle={projectTitle ?? null}
             environmentLabel={
-              projectEnvironmentLocationById.get(thread.environmentId)?.label ??
-              gt("Remote", { $context: "machine location" })
+              isClaudeCloudThreadId(thread.id)
+                ? gt("Cloud")
+                : (projectEnvironmentLocationById.get(thread.environmentId)?.label ??
+                  gt("Remote", { $context: "machine location" }))
             }
             branch={thread.branch}
             worktreePath={thread.worktreePath}
@@ -255,6 +270,9 @@ export function useCommandPaletteThreadItems(input: {
   return {
     threadItems,
     threadMessageItems,
+    openThreadValue: activeThread
+      ? `thread:${activeThread.environmentId}:${activeThread.id}`
+      : null,
     now,
     isSearchPending: messageSearch.isPending,
     isSearchFailed: messageSearch.failed,

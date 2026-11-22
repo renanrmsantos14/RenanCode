@@ -9,16 +9,19 @@ Cada ambiente logado na mesma conta Claude espelha a mesma sessão com o mesmo i
 
 ## Cobre
 
-- `dedupeClaudeCloudThreads` (packages/client-runtime/src/state/claudeCloud.ts): fica a cópia com run ativo, depois a com run, depois a de ambiente preferido (web: o primário; mobile: os conectados).
+- `dedupeClaudeCloudThreads` (packages/client-runtime/src/state/claudeCloud.ts): fica a cópia com run ativo, depois a com run, depois a de ambiente preferido (web: o primário; mobile: os conectados). Com `preferredFirst`, o ambiente preferido vem antes do run (paleta do mobile e menções do composer).
 - Mobile: `steadyNavigationThreadShellsAtom` (apps/mobile/src/state/threads.ts) alimenta Home, sidebar e a tela de reordenar; `buildThreadListV2Items` deixa sessão cloud passar pelo filtro de ambiente; `ThreadListV2Row` mostra ícone de nuvem e "Cloud".
-- Web: `Sidebar.tsx` chama o dedupe com o ambiente primário; `SidebarThreadRow` mostra o ícone de nuvem.
+- Mobile, outras listas: paleta de comandos (`CommandPalette.tsx`, cópia de ambiente conectado), arquivadas (`buildArchivedThreadGroups`) e a linha selecionada da sidebar no tablet (`useSidebarRowThreadKey` + `listedCloudSessionEnvironmentAtom`).
+- Web e mobile: menções de thread no composer (`matchComposerThreadItems`), preferindo a cópia do ambiente do composer.
+- Mobile, arquivadas: desarquivar ou excluir uma sessão cloud age na cópia arquivada de cada ambiente (`archivedThreadCopies` + `useArchivedThreadListActions`).
+- Web: `Sidebar.tsx` chama o dedupe com o ambiente primário; `SidebarThreadRow` mostra o ícone de nuvem. A paleta de comandos (`useCommandPaletteThreadItems`) usa a mesma escolha, mostra "Cloud" e deixa a sessão aberta fora de "Recentes".
 
 ## Testes
 
 ```bash
 export PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$PWD/node_modules/.bin:$PATH
-(cd packages/client-runtime && vp test run src/state/claudeCloud.test.ts)
-(cd apps/mobile && vp test run src/features/threads/threadListV2.test.ts)
+(cd packages/client-runtime && vp test run src/state/claudeCloud.test.ts src/composerThreadItems.test.ts)
+(cd apps/mobile && vp test run src/features/threads/threadListV2.test.ts src/features/archive/archivedThreadList.test.ts)
 ```
 
 ## No app (precisa de 2+ máquinas na mesma conta Claude)
@@ -30,5 +33,5 @@ export PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$PWD/node_modules/.bin:$PATH
 
 ## Lacunas conhecidas
 
-- Paleta de comandos, seletor de tarefas agendadas e arquivadas do mobile leem as listas por ambiente e ainda podem repetir a sessão.
-- Tablet: a linha pode ficar sem destaque de selecionada quando a thread aberta é a cópia de outro ambiente.
+- Arquivadas do mobile: se o ambiente de alguma cópia estiver fora do ar, a ação falha nela (alerta) e a linha volta como essa cópia.
+- Paleta (web e mobile): escolher a sessão cloud já aberta pode trocar para a cópia listada de outro ambiente.
