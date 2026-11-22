@@ -29,7 +29,19 @@ describe("thread content presentation", () => {
       kind: "unavailable",
       title: "Messages not cached",
       detail: "Reconnect this environment to load the conversation.",
+      reconnectable: true,
     });
+    const retrying = { hasDetail: false, detailError: null, detailDeleted: false } as const;
+    expect(
+      projectThreadContentPresentation({ ...retrying, connectionState: "reconnecting" }).kind,
+    ).toBe("loading");
+    expect(
+      projectThreadContentPresentation({
+        ...retrying,
+        connectionState: "reconnecting",
+        connectionStalled: true,
+      }).kind,
+    ).toBe("unavailable");
   });
 
   it("shows a sync failure over cached messages instead of syncing forever", () => {
