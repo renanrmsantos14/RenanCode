@@ -33,7 +33,12 @@ import {
   sortPinnedThreadsByOrderKey,
   sortSettledThreads,
 } from "@t3tools/client-runtime/state/thread-sort";
-import { isListedThreadLineage, type EnvironmentId, type ProjectId } from "@t3tools/contracts";
+import {
+  isClaudeCloudThreadId,
+  isListedThreadLineage,
+  type EnvironmentId,
+  type ProjectId,
+} from "@t3tools/contracts";
 import type { SnoozePresetSetting } from "@t3tools/contracts/settings";
 import type { MenuAction } from "@react-native-menu/menu";
 
@@ -768,7 +773,10 @@ export function buildThreadListV2Items(input: {
     (thread) =>
       thread.archivedAt === null &&
       isListedThreadLineage(thread.lineage) &&
-      (input.environmentId === null || thread.environmentId === input.environmentId) &&
+      // A cloud session is listed once, from one of the environments that mirror it.
+      (input.environmentId === null ||
+        thread.environmentId === input.environmentId ||
+        isClaudeCloudThreadId(thread.id)) &&
       (projectKeys === null || projectKeys.has(`${thread.environmentId}:${thread.projectId}`)),
   );
   // The same matches as the command palette, typo fallback included. Only

@@ -27,6 +27,7 @@ import {
 } from "@t3tools/client-runtime/state/models";
 import {
   AuthOrchestrationOperateScope,
+  isClaudeCloudThreadId,
   type EnvironmentId,
   type EnvironmentMachineKind,
 } from "@t3tools/contracts";
@@ -888,6 +889,10 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     onSetThreadTesting,
     onMoveThread,
   } = props;
+  // Every linked environment mirrors a cloud session, so its row names the cloud, not a machine.
+  const isCloudSession = isClaudeCloudThreadId(thread.id);
+  const environmentLabel = isCloudSession ? gt("Cloud") : props.environmentLabel;
+  const environmentMachine = isCloudSession ? "cloud" : props.environmentMachine;
   const snoozedRow = props.snoozed === true;
   const pinnedRow = props.pinned === true;
   const dormant = useSwipeRowDormant(props.activationKey);
@@ -1600,11 +1605,11 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
           >
             {thread.runtime.lastError}
           </Text>
-        ) : props.environmentLabel ? (
+        ) : environmentLabel ? (
           <View className="min-w-0 flex-1 flex-row items-center gap-1">
-            {props.environmentMachine ? (
+            {environmentMachine ? (
               <EnvironmentMachineSymbol
-                kind={props.environmentMachine}
+                kind={environmentMachine}
                 size={machineIconSize}
                 tintColorClassName={
                   selected
@@ -1622,7 +1627,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
               )}
               numberOfLines={1}
             >
-              {props.environmentLabel}
+              {environmentLabel}
             </Text>
           </View>
         ) : (
