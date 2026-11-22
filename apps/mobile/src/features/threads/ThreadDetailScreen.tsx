@@ -1498,6 +1498,7 @@ function ThreadDetailBody(
                       : handleEditPendingMessage
                   }
                   contentPresentation={props.contentPresentation}
+                  onReconnectEnvironment={props.onReconnectEnvironment}
                   threadTitle={props.selectedThread.title}
                   latestRun={props.activityRun}
                   activeWorkStartedAt={props.activeWorkStartedAt}

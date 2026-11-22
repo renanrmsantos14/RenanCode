@@ -1,3 +1,4 @@
+import { dedupeClaudeCloudThreads } from "@t3tools/client-runtime/state/claudeCloud";
 import { createChildThreadApprovalsAtom } from "@t3tools/client-runtime/state/thread-requests";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -22,6 +23,7 @@ import {
   pendingThreadCreationOutcomesAtom,
   selectThreadCreationDetail,
 } from "./pending-thread-creation";
+import { connectedEnvironmentIdsAtom } from "./presentation";
 import { serverEnvironment } from "./server";
 import { environmentShell } from "./shell";
 import { threadOutboxManager } from "./thread-outbox";
@@ -60,11 +62,27 @@ const steadyShells = createSteadyShellAtoms({
  * changes once when environments connect, not once per environment.
  */
 export const steadyShellsHoldingAtom = steadyShells.holdingAtom;
-export const steadyNavigationThreadShellsAtom = createEnvironmentThreadShellAtoms({
+const steadyNavigationThreadShellsPerEnvironmentAtom = createEnvironmentThreadShellAtoms({
   catalogValueAtom: environmentCatalog.catalogValueAtom,
   snapshotAtom: steadyShells.snapshotAtom,
   hiddenThreadTagsAtom: serverEnvironment.hiddenThreadTagsAtom,
 }).navigationThreadShellsAtom;
+// A copy on a disconnected environment cannot be sent to, so a connected one wins a tie.
+export const steadyNavigationThreadShellsAtom = Atom.make((get) =>
+  dedupeClaudeCloudThreads(
+    get(steadyNavigationThreadShellsPerEnvironmentAtom),
+    new Set(get(connectedEnvironmentIdsAtom)),
+  ),
+).pipe(Atom.withLabel("steady-navigation-thread-shells-deduped"));
+/** Which environment's copy of a cloud session is listed; streaming ticks leave it unchanged. */
+export const listedCloudSessionEnvironmentAtom = Atom.family((threadId: ThreadId | null) =>
+  Atom.make((get) =>
+    threadId === null
+      ? null
+      : (get(steadyNavigationThreadShellsAtom).find((thread) => thread.id === threadId)
+          ?.environmentId ?? null),
+  ),
+);
 export const childThreadApprovalsAtom = createChildThreadApprovalsAtom({
   childThreadInputsAtom: environmentThreadShells.childThreadInputsAtom,
   pendingRequestsAtom: environmentThreadDetails.pendingRequestsAtom,

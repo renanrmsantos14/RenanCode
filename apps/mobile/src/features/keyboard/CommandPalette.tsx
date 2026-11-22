@@ -9,8 +9,9 @@ import {
   type EnvironmentThreadSearchMatch,
   type ShownOrder,
 } from "@t3tools/client-runtime/state/thread-search";
+import { dedupeClaudeCloudThreads } from "@t3tools/client-runtime/state/claudeCloud";
 import { isShownUnderParent } from "@t3tools/client-runtime/state/threads";
-import { THREAD_JUMP_KEYBINDING_COMMANDS } from "@t3tools/contracts";
+import { isClaudeCloudThreadId, THREAD_JUMP_KEYBINDING_COMMANDS } from "@t3tools/contracts";
 import {
   foldSearchQuery,
   PALETTE_MESSAGE_LIMIT,
@@ -233,7 +234,7 @@ export function CommandPalette(props: {
   const selectDetail = useSelectWorkspaceDetail();
   const runCommand = props.onCommand;
   const projects = useProjects();
-  const threads = useVisibleThreadShells();
+  const visibleThreads = useVisibleThreadShells();
   const delegatedUnderParent = useDelegatedUnderParent();
   const activeThreadRef = parseActiveThreadPath(props.pathname);
   const activeThread = useThreadShell(activeThreadRef);
@@ -259,6 +260,16 @@ export function CommandPalette(props: {
         .filter((environment) => environment.connectionState === "connected")
         .map((environment) => environment.environmentId),
     [environments],
+  );
+  // A connected copy of a cloud session is the one search answers for and a pick can open.
+  const threads = useMemo(
+    () =>
+      dedupeClaudeCloudThreads(
+        visibleThreads.filter((thread) => thread.archivedAt === null),
+        new Set(searchEnvironmentIds),
+        { preferredFirst: true },
+      ),
+    [visibleThreads, searchEnvironmentIds],
   );
   // The palette matches environment names when there are several; older rows must match the same.
   const environmentLabels =
@@ -453,7 +464,6 @@ export function CommandPalette(props: {
     const threadItems: CommandPaletteItem[] = threads
       .filter(
         (thread) =>
-          thread.archivedAt === null &&
           !isShownUnderParent(
             { environmentId: thread.environmentId, threadId: thread.id },
             thread.lineage,
@@ -462,8 +472,10 @@ export function CommandPalette(props: {
       )
       .map((thread) => {
         const project = projectByKey.get(scopedProjectKey(thread.environmentId, thread.projectId));
-        const environment =
-          savedConnectionsById[thread.environmentId]?.environmentLabel ?? thread.environmentId;
+        const isCloudSession = isClaudeCloudThreadId(thread.id);
+        const environment = isCloudSession
+          ? gt("Cloud")
+          : (savedConnectionsById[thread.environmentId]?.environmentLabel ?? thread.environmentId);
         return {
           key: scopedThreadKey(thread.environmentId, thread.id),
           kind: "thread",
@@ -476,7 +488,8 @@ export function CommandPalette(props: {
             environments.length > 1 ? environment : null,
           ),
           // Last among threads: picking the thread already open does nothing.
-          ...(thread.environmentId === activeThread?.environmentId && thread.id === activeThread.id
+          ...(thread.id === activeThread?.id &&
+          (isCloudSession || thread.environmentId === activeThread.environmentId)
             ? { secondary: true }
             : {}),
           run: () =>
@@ -541,11 +554,8 @@ export function CommandPalette(props: {
   const results = useMemo(() => {
     const ranked = filterCommandPaletteItems(items, query, messageMatchKeys, now);
     // Recent threads leave out the open one, which would always lead them.
-    const activeKey = activeThread
-      ? scopedThreadKey(activeThread.environmentId, activeThread.id)
-      : null;
-    return query.trim() ? ranked : ranked.filter((item) => item.key !== activeKey);
-  }, [activeThread, items, messageMatchKeys, now, query]);
+    return query.trim() ? ranked : ranked.filter((item) => !item.secondary);
+  }, [items, messageMatchKeys, now, query]);
   const runResult = (item: CommandPaletteResult) => {
     const thread =
       item.kind === "thread" && query.trim() && !query.startsWith(">")

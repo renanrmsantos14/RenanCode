@@ -978,17 +978,15 @@ function OpenCommandPaletteDialog(props: {
   const {
     threadItems: allThreadItems,
     threadMessageItems,
+    openThreadValue,
     now: searchNow,
     isSearchPending: isThreadSearchPending,
     isSearchFailed: isThreadSearchFailed,
   } = useCommandPaletteThreadItems({ activeThread: activeThread ?? null, threadSearchQuery });
   // Recent means used recently: written in or opened, whichever is later. The
   // open thread would always lead that list, so it is left out.
-  const activeThreadValue = activeThread
-    ? `thread:${activeThread.environmentId}:${activeThread.id}`
-    : null;
   const recentThreadItems = allThreadItems
-    .filter((item) => item.value !== activeThreadValue)
+    .filter((item) => item.value !== openThreadValue)
     .toSorted(
       (left, right) =>
         (right.threadSearch ? threadRecentUse(right.threadSearch) : 0) -

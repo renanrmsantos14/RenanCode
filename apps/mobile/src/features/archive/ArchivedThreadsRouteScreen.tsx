@@ -10,7 +10,11 @@ import {
   ArchivedThreadsScreen,
   type ArchivedThreadsHeaderEnvironment,
 } from "./ArchivedThreadsScreen";
-import { buildArchivedThreadGroups, type ArchivedThreadSortOrder } from "./archivedThreadList";
+import {
+  archivedThreadCopies,
+  buildArchivedThreadGroups,
+  type ArchivedThreadSortOrder,
+} from "./archivedThreadList";
 import {
   refreshArchivedThreadsForEnvironment,
   useArchivedThreadSnapshots,
@@ -60,8 +64,10 @@ export function ArchivedThreadsRouteScreen() {
   const refreshChangedEnvironment = (thread: { readonly environmentId: EnvironmentId }) => {
     refreshArchivedThreadsForEnvironment(thread.environmentId);
   };
-  const { unarchiveThread, confirmDeleteThread } =
-    useArchivedThreadListActions(refreshChangedEnvironment);
+  const { unarchiveThread, confirmDeleteThread } = useArchivedThreadListActions(
+    refreshChangedEnvironment,
+    (thread) => archivedThreadCopies(snapshots, thread),
+  );
 
   useFocusEffect(
     useCallback(() => {

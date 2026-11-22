@@ -93,6 +93,7 @@ export function SettingsProviderRow(props: {
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
           onPress={props.onPress}
+          className="active:opacity-70"
           style={{ minWidth: 24, minHeight: 44, alignItems: "center", justifyContent: "center" }}
         >
           <SymbolView

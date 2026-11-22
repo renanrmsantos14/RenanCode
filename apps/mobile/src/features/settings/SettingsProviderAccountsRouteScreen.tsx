@@ -579,7 +579,7 @@ function ProviderAccountSummary({
       accessibilityLabel={[name, status, revealed ? email : null].filter(Boolean).join(", ")}
       accessibilityHint={revealed ? gt("Hides the account email") : gt("Reveals the account email")}
       onPress={() => setRevealed((value) => !value)}
-      className="min-w-0 shrink grow gap-0.5"
+      className="min-w-0 shrink grow gap-0.5 active:opacity-70"
     >
       {content}
     </Pressable>

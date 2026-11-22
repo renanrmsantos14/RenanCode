@@ -1,3 +1,4 @@
+import { dedupeClaudeCloudThreads } from "@t3tools/client-runtime/state/claudeCloud";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { msg, T, useGT, useMessages } from "gt-react";
 import { m } from "../i18n/messages";
@@ -215,7 +216,6 @@ import {
   useThreadJumpHintsVisible,
   type SidebarListItem,
   type SidebarSection,
-  dedupeClaudeCloudThreads,
 } from "./Sidebar.logic";
 import {
   createSidebarCollisionDetection,

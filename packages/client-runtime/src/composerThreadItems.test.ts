@@ -104,6 +104,23 @@ it("also offers threads on linked machines, naming the machine, but no other mac
       description: "Thread on Hetzner VPS",
     },
   ]);
+
+  // The linked machine's copy owns the run; the local one is still the one referenced.
+  const runOwner = {
+    ...shell("claude-cloud:session", "Cloud rollout", { environmentId: vps }),
+    latestRunId: "run",
+  };
+  const cloudSession = matchComposerThreadItems({
+    shells: [runOwner, shell("claude-cloud:session", "Cloud rollout")],
+    environmentId,
+    linkedEnvironments: new Map([[vps, "Hetzner VPS"]]),
+    excludeThreadId: null,
+    query: "rollout",
+    now: Date.parse("2026-10-23T00:00:00.000Z"),
+  });
+  expect(cloudSession.map(({ thread }) => thread)).toEqual([
+    { environmentId, threadId: "claude-cloud:session" },
+  ]);
 });
 
 describe("matchComposerEnvironmentItems", () => {

@@ -185,6 +185,7 @@ import Animated, { FadeIn, FadeInDown, type SharedValue } from "react-native-rea
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
 import { FONT_FAMILIES } from "../../lib/fontFamilies";
 import { scopedThreadKey } from "../../lib/scopedEntities";
+import { ThreadFeedSkeleton } from "./ThreadFeedSkeleton";
 import { traceThreadOpenStage } from "./threadOpenTrace";
 import { copyTextWithHaptic } from "../../lib/copyTextWithHaptic";
 import { downloadAndShareAttachment } from "../../lib/attachmentDownload";
@@ -393,6 +394,7 @@ export interface ThreadFeedProps {
   /** Thread states that close the feed: background work, then snooze or settle. */
   readonly statusLines?: ReadonlyArray<ThreadStatusLineModel>;
   readonly contentPresentation: ThreadContentPresentation;
+  readonly onReconnectEnvironment?: () => void;
   readonly latestRun: ThreadFeedLatestRun | null;
   readonly activeWorkStartedAt: string | null;
   readonly runlessWorkActive?: boolean;
@@ -3040,6 +3042,7 @@ function UserMessageMarkdownContent(props: UserMessageContentProps) {
 }
 
 function ThreadFeedPlaceholder(props: {
+  readonly action?: { readonly label: string; readonly onPress: () => void };
   readonly bottomInset: number;
   readonly detail: string;
   readonly horizontalPadding: number;
@@ -3063,6 +3066,11 @@ function ThreadFeedPlaceholder(props: {
         <Text className="text-center text-sm leading-normal text-foreground-secondary">
           {props.detail}
         </Text>
+        {props.action ? (
+          <View className="mt-2">
+            <Button label={props.action.label} tone="secondary" onPress={props.action.onPress} />
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -3112,6 +3120,7 @@ type DisclosureLayout = {
   playing: boolean;
 };
 const DISCLOSURE_DETAIL_DELAY_MS = 135;
+const LANDING_QUIET_MS = 150;
 const DISCLOSURE_DETAIL_FADE_MS = 70;
 const unsubscribeNothing = () => {};
 
@@ -3892,16 +3901,34 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   // LegendList reports ready, and shows its rows, while rows measured during its initial scroll can
   // still leave it hundreds of points short of the end; isAtEnd stays true through that.
   const settling = props.feed.length > 0 && landedListKey !== feedThreadKey;
+  // A thread shown empty has no scroll to hide, so its first row arrives without the skeleton.
+  const [emptyListKey, setEmptyListKey] = useState<string | null>(null);
+  const nextEmptyListKey =
+    props.feed.length === 0 && props.contentPresentation.kind === "ready"
+      ? feedThreadKey
+      : emptyListKey === feedThreadKey
+        ? emptyListKey
+        : null;
+  if (nextEmptyListKey !== emptyListKey) setEmptyListKey(nextEmptyListKey);
   const landingFallback = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const landingQuiet = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reportMetrics = (ready: boolean) => {
     const state = listRef.current?.getState();
     if (!state) return;
-    if (
-      settling &&
-      ready &&
-      (state.distanceFromEnd <= 2 || !state.isFollowingEnd || props.jumpToMessageId)
-    ) {
-      setLandedListKey(feedThreadKey);
+    if (settling && ready) {
+      if (landingQuiet.current !== null) clearTimeout(landingQuiet.current);
+      if (state.distanceFromEnd <= 2 || !state.isFollowingEnd || props.jumpToMessageId) {
+        setLandedListKey(feedThreadKey);
+      } else {
+        // Metrics stopped short of the end. A long render leaves the first wait already due, so
+        // the second gives that render's measurements time to arrive and restart this.
+        landingQuiet.current = setTimeout(() => {
+          landingQuiet.current = setTimeout(
+            () => setLandedListKey(feedThreadKey),
+            LANDING_QUIET_MS,
+          );
+        }, LANDING_QUIET_MS);
+      }
     }
     // Offset 0 before the first positioning, and the gaps while rows measure in, are not the
     // user leaving the end; only a scroll away stops end following.
@@ -3930,10 +3957,11 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       for (const stop of stops) stop();
     };
   }, [listRef, handleMetricsChange]);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- clears the landing fallback timer when the feed unmounts
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- clears the landing timers when the feed unmounts
   useEffect(
     () => () => {
       if (landingFallback.current !== null) clearTimeout(landingFallback.current);
+      if (landingQuiet.current !== null) clearTimeout(landingQuiet.current);
     },
     [],
   );
@@ -4411,6 +4439,9 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
         <ThreadFeedPlaceholder
           title={props.contentPresentation.title}
           detail={props.contentPresentation.detail}
+          {...(props.contentPresentation.reconnectable && props.onReconnectEnvironment
+            ? { action: { label: gt("Retry now"), onPress: props.onReconnectEnvironment } }
+            : {})}
           topInset={topContentInset}
           bottomInset={bottomContentInset}
           horizontalPadding={horizontalPadding}
@@ -4490,7 +4521,9 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
               traceThreadOpenStage("feed-ready", feedThreadKey);
               setLoadedListKey(feedThreadKey);
               reportMetrics(true);
-              // Never leave the feed hidden if end following stalls short of the end.
+              // Never leave the feed hidden if end following stalls short of the end. A fallback
+              // left from the thread opened before would hide this one again after it landed.
+              if (landingFallback.current !== null) clearTimeout(landingFallback.current);
               landingFallback.current = setTimeout(() => setLandedListKey(feedThreadKey), 1000);
             }}
             onLayout={handleMetricsChange}
@@ -4559,6 +4592,20 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
               horizontalPadding={horizontalPadding}
             />
           </View>
+        ) : null}
+        {(settling && emptyListKey !== feedThreadKey) ||
+        (props.contentPresentation.kind === "loading" &&
+          presentedFeed.length === 0 &&
+          !props.worktreeSetup) ? (
+          <ThreadFeedSkeleton
+            key={feedThreadKey}
+            backgroundColor={screenColor}
+            bottomInset={bottomContentInset}
+            paddingLeft={contentHorizontalPadding + contentLeftInset}
+            paddingRight={contentHorizontalPadding + contentRightInset}
+            reduceMotion={reduceMotion}
+            topInset={topContentInset}
+          />
         ) : null}
         <VideoPreviewModal source={expandedVideo} onRequestClose={closeVideoPreview} />
         {setupDetailsOpen && props.worktreeSetup ? (

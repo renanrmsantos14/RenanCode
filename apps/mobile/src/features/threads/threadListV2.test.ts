@@ -640,6 +640,20 @@ describe("buildThreadListV2Items", () => {
 
     expect(items.map((item) => item.thread.id)).toEqual(["local", "remote"]);
   });
+
+  it("lists a cloud session under every environment filter", () => {
+    const { items } = buildThreadListV2Items({
+      threads: [
+        makeThread({ id: ThreadId.make("local"), title: "Local" }),
+        makeThread({ id: ThreadId.make("claude-cloud:s1"), title: "Cloud" }),
+      ],
+      environmentId: EnvironmentId.make("environment-remote"),
+      searchQuery: "",
+      now: NOW,
+    });
+
+    expect(items.map((item) => item.thread.id)).toEqual(["claude-cloud:s1"]);
+  });
 });
 
 describe("buildThreadListV2Items settled paging", () => {
