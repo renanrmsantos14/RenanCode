@@ -162,6 +162,11 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
     useRightPanelStore.getState().open(activeThreadRef, "pull-requests");
   };
   const addPullRequestsSurfaceStable = useStableCallback(addPullRequestsSurface);
+  const addChecklistSurface = () => {
+    if (!activeThreadRef || !activeProject) return;
+    useRightPanelStore.getState().open(activeThreadRef, "checklist");
+  };
+  const addChecklistSurfaceStable = useStableCallback(addChecklistSurface);
   const addDeviceSurface = () => {
     if (!activeThreadRef) return;
     if (!deviceState.onboardingCompleted || deviceState.hostStatus === "disabled") {
@@ -347,6 +352,7 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
   return {
     shortcuts,
     activateRightPanelSurfaceStable,
+    addChecklistSurfaceStable,
     addDeviceSurfaceStable,
     addDiffSurfaceStable,
     addFilesSurfaceStable,

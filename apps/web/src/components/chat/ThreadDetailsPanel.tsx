@@ -30,6 +30,7 @@ import { ThreadRelationshipsPanel } from "./ThreadRelationshipsControl";
 import { ThreadRepositorySections } from "./ThreadRepositorySections";
 import { ThreadServersPanel } from "./ThreadServersPanel";
 import { ThreadDetailsContext } from "./ThreadDetailsContext";
+import { ProjectChecklistPanel } from "../checklist/ProjectChecklistPanel";
 import { ThreadDetailsItemsMenuItems } from "./ThreadDetailsItemsMenu";
 import { resolveThreadDetailsVisibility, THREAD_DETAILS_ITEMS } from "./threadDetailsItems";
 import { useClientSettings } from "../../hooks/useSettings";
@@ -325,6 +326,21 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
 
               {visible.context && props.contextWindow ? (
                 <ThreadDetailsContext usage={props.contextWindow} />
+              ) : null}
+
+              {density === "full" && !props.draftId && visible.checklist ? (
+                <ThreadDetailsSection
+                  headingId="thread-details-checklist-heading"
+                  title={gt("Checklist")}
+                  data-thread-checklist-panel
+                >
+                  <div className="-mx-2 max-h-[22rem] overflow-y-auto">
+                    <ProjectChecklistPanel
+                      environmentId={props.environmentId}
+                      projectId={props.projectId}
+                    />
+                  </div>
+                </ThreadDetailsSection>
               ) : null}
 
               {/* Shown only when no section above has content, so an emptied card can be refilled. */}

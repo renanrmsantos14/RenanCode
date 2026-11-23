@@ -44,6 +44,19 @@ describe("RPC authorization scopes", () => {
     expect(new Set(Object.keys(RPC_REQUIRED_SCOPES))).toEqual(new Set(WsRpcGroup.requests.keys()));
   });
 
+  it("lets readers watch a project checklist but only operators change it", () => {
+    expect(requiredScopeForRpcMethod(WS_METHODS.projectChecklistSubscribe)).toBe(
+      AuthOrchestrationReadScope,
+    );
+    for (const method of [
+      WS_METHODS.projectChecklistUpsert,
+      WS_METHODS.projectChecklistMove,
+      WS_METHODS.projectChecklistDelete,
+    ]) {
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationOperateScope);
+    }
+  });
+
   it("lets readers watch the work board but only operators change it", () => {
     expect(requiredScopeForRpcMethod(WS_METHODS.workModulesSubscribe)).toBe(
       AuthOrchestrationReadScope,

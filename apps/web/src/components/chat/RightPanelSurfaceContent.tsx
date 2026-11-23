@@ -27,6 +27,7 @@ import { pullRequestPanelContext } from "../pullRequest/pullRequestDetail.logic"
 import { PullRequestDetailPanel } from "../pullRequest/PullRequestDetailPanel";
 import { PullRequestDetailGhost } from "../pullRequest/PullRequestGhosts";
 import { PullRequestsUnavailableState } from "../pullRequest/PullRequestsUnavailableState";
+import { ProjectChecklistPanel } from "../checklist/ProjectChecklistPanel";
 import { ThreadPullRequestsPanel } from "../pullRequest/ThreadPullRequestsPanel";
 
 const PreviewPanel = lazy(() =>
@@ -232,6 +233,13 @@ export function RightPanelSurfaceContent(props: {
       );
     case "pull-requests":
       return <ThreadPullRequestsPanel threadRef={threadRef} />;
+    case "checklist":
+      return props.files.projectId === undefined ? null : (
+        <ProjectChecklistPanel
+          environmentId={props.environmentId}
+          projectId={props.files.projectId}
+        />
+      );
     case "thread":
       // Not lazy: revealing a suspended tiptap editor tears down its view and crashes the composer.
       return (

@@ -136,6 +136,7 @@ import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts"
 import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts";
 import * as DocumentText from "./provider/DocumentText.ts";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
+import * as ProjectChecklist from "./projectChecklist/ProjectChecklistService.ts";
 import * as WorkModules from "./workModules/WorkModuleService.ts";
 import * as Workflows from "./workflows/Workflows.ts";
 import * as WorkflowRuntime from "./workflows/WorkflowRuntime.ts";
@@ -1515,6 +1516,7 @@ export const layerWsRpc = (
       const providerSessionManager = yield* ProviderSessionManager.ProviderSessionManagerV2;
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
       const workModules = yield* WorkModules.WorkModuleService;
+      const projectChecklist = yield* ProjectChecklist.ProjectChecklistService;
       const workflows = yield* Workflows.Workflows;
       const workflowDefinitions = yield* WorkflowRuntime.WorkflowDefinitions;
       // The service's messages are built from its own attributes, so they are safe to send.
@@ -2444,6 +2446,12 @@ export const layerWsRpc = (
           Effect.annotateCurrentSpan({ "scheduled_task.id": input.id }).pipe(
             Effect.andThen(scheduledTasks.getWebhookDelivery(input)),
           ),
+        [WS_METHODS.projectChecklistSubscribe]: (input) =>
+          projectChecklist.subscribe(input.projectId),
+        [WS_METHODS.projectChecklistUpsert]: (input) => projectChecklist.upsert(input),
+        [WS_METHODS.projectChecklistMove]: (input) => projectChecklist.move(input),
+        [WS_METHODS.projectChecklistDelete]: (input) =>
+          projectChecklist.delete(input.id).pipe(Effect.map((deletedIds) => ({ deletedIds }))),
         [WS_METHODS.workModulesSubscribe]: (_input) => workModules.subscribe(),
         [WS_METHODS.workModulesUpsert]: (input) => workModules.upsert(input),
         [WS_METHODS.workModulesMove]: (input) => workModules.move(input),

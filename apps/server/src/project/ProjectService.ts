@@ -39,6 +39,7 @@ import {
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import * as ThreadCommandExecutor from "../orchestration-v2/ThreadCommandExecutor.ts";
 import { planThreadDeletion } from "../orchestration-v2/ThreadDeletion.ts";
+import * as ProjectChecklistService from "../projectChecklist/ProjectChecklistService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { deletedProjectOverridePatch } from "../provider/ProjectSettingsOverrideSweep.ts";
 import { makeIsManagedWorktreePath } from "../worktreesDirectory.ts";
@@ -202,6 +203,7 @@ export const make = Effect.gen(function* () {
   const legacyImporter = yield* LegacyV1ThreadImporter.LegacyV1ThreadImporter;
   const threadCommands = yield* ThreadCommandExecutor.ThreadCommandExecutor;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
+  const checklist = yield* ProjectChecklistService.ProjectChecklistService;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const isManagedWorktreePath = yield* makeIsManagedWorktreePath;
@@ -774,6 +776,16 @@ export const make = Effect.gen(function* () {
       yield* commit({ type: "project.delete", commandId: input.commandId, projectId });
       if (isFirstDelete) {
         yield* clearProjectSettingsOverrides(projectId);
+        yield* checklist
+          .deleteForProject(projectId)
+          .pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning(
+                `Failed to delete the checklist of deleted project ${projectId}.`,
+                cause,
+              ),
+            ),
+          );
       }
       yield* projectEnrichment.invalidate([existing.value.workspaceRoot]);
       return yield* readCommitted(projectId);

@@ -43,6 +43,7 @@ import * as ServerSettings from "../serverSettings.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 import * as ProjectEnrichmentService from "./ProjectEnrichmentService.ts";
 import * as ProjectFaviconResolver from "./ProjectFaviconResolver.ts";
+import * as ProjectChecklistService from "../projectChecklist/ProjectChecklistService.ts";
 import * as ProjectService from "./ProjectService.ts";
 import * as RepositoryIdentityResolver from "./RepositoryIdentityResolver.ts";
 import * as T3ProjectFileLoader from "./T3ProjectFileLoader.ts";
@@ -203,6 +204,7 @@ it.effect("resolves only the requested active project page in creation order", (
 );
 
 const layerProjectServiceDependencies = Layer.mergeAll(
+  ProjectChecklistService.layer,
   RuntimeLayer.layerEventSink,
   ProjectStore.layer,
   ProjectionStore.layer,

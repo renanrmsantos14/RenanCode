@@ -327,6 +327,14 @@
       "types": "./src/workModuleTree.ts",
       "default": "./src/workModuleTree.ts"
     },
+    "./state/projectChecklist": {
+      "types": "./src/state/projectChecklist.ts",
+      "default": "./src/state/projectChecklist.ts"
+    },
+    "./projectChecklist": {
+      "types": "./src/projectChecklist.ts",
+      "default": "./src/projectChecklist.ts"
+    },
     "./state/workModules": {
       "types": "./src/state/workModules.ts",
       "default": "./src/state/workModules.ts"

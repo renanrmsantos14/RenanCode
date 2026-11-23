@@ -136,6 +136,7 @@ import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolve
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as ReviewService from "./review/ReviewService.ts";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
+import * as ProjectChecklist from "./projectChecklist/ProjectChecklistService.ts";
 import * as WorkModules from "./workModules/WorkModuleService.ts";
 import * as Workflows from "./workflows/Workflows.ts";
 import * as WorkflowRuntime from "./workflows/WorkflowRuntime.ts";
@@ -893,6 +894,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(ReviewService.ReviewService)({}),
   Layer.mock(ScheduledTasks.ScheduledTaskService)({}),
   Layer.mock(WorkModules.WorkModuleService)({}),
+  Layer.mock(ProjectChecklist.ProjectChecklistService)({}),
   Workflows.layerDisabled,
   Layer.mock(WorkflowRuntime.WorkflowDefinitions)({}),
   Layer.mock(SecretRequests.SecretRequests)({}),
@@ -1855,6 +1857,9 @@ it.effect("a missing thread worktree gets its project's skills in the cwd snapsh
       Layer.effect(ProjectService.ProjectService, ProjectService.make).pipe(
         Layer.provide(
           Layer.mergeAll(
+            Layer.mock(ProjectChecklist.ProjectChecklistService)({
+              deleteForProject: () => Effect.void,
+            }),
             Layer.mock(ProjectionStore.ProjectionStoreV2)({
               readShellSnapshot: (options) =>
                 Effect.succeed(

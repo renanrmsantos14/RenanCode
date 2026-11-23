@@ -79,6 +79,7 @@ import {
   PaletteIcon,
   RotateCcwIcon,
   SettingsIcon,
+  ListChecksIcon,
   MonitorIcon,
   PinIcon,
   PinOffIcon,
@@ -1535,6 +1536,16 @@ function OpenCommandPaletteDialog(props: {
       icon: <PullRequestGlyph.link className={ITEM_ICON_CLASS} />,
       run: async () => {
         openLinkPullRequestDialog(threadRef);
+      },
+    });
+    actionItems.push({
+      kind: "action",
+      value: "action:open-thread-checklist",
+      searchTerms: ["checklist", "tasks", "modules", "todo", "project"],
+      title: gt("Open checklist"),
+      icon: <ListChecksIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        useRightPanelStore.getState().open(threadRef, "checklist");
       },
     });
     actionItems.push({
