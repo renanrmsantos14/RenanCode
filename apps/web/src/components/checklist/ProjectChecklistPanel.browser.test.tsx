@@ -34,18 +34,23 @@ const ITEMS = [
   item("i3", "Old invoice", "m1", "2026-10-05", 2),
 ];
 
-function Harness(props: { onUpdate: (input: object) => Promise<boolean> }) {
+function Harness(props: {
+  onUpdate: (input: object) => Promise<boolean>;
+  items?: ReadonlyArray<ProjectChecklistItem>;
+  onMove?: (id: string, index: number) => void;
+  onDelete?: (id: string) => void;
+}) {
   const [prefs, setPrefs] = useState<ChecklistPrefs>({ filter: { kind: "all" }, hideDone: false });
   return (
     <ProjectChecklistView
-      items={ITEMS}
+      items={props.items ?? ITEMS}
       canWrite
       today="2026-11-23"
       prefs={prefs}
       onPrefsChange={setPrefs}
       onUpdate={props.onUpdate}
-      onMove={vi.fn()}
-      onDelete={vi.fn()}
+      onMove={props.onMove ?? vi.fn()}
+      onDelete={props.onDelete ?? vi.fn()}
     />
   );
 }
@@ -71,5 +76,83 @@ describe("ProjectChecklistView", () => {
     await expect.element(page.getByText("Old invoice")).toBeVisible();
     expect(page.getByText("Old invoice").element().className).toContain("text-destructive");
     expect(page.getByText("Review copy").query()).toBeNull();
+  });
+
+  it("shows only items inside the range, plus overdue ones in red", async () => {
+    const items = [
+      ...ITEMS,
+      item("i5", "Inside range", "m1", "2026-11-28", 3),
+      item("i6", "Past range", "m1", "2026-12-15", 4),
+    ];
+    await using screen = await render(
+      <Harness items={items} onUpdate={vi.fn(() => Promise.resolve(true))} />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Range" }));
+    await userEvent.fill(screen.getByLabelText("From"), "2026-11-25");
+    await userEvent.fill(screen.getByLabelText("To"), "2026-11-30");
+
+    await expect.element(page.getByText("Inside range")).toBeVisible();
+    await expect.element(page.getByText("Old invoice")).toBeVisible();
+    expect(page.getByText("Old invoice").element().className).toContain("text-destructive");
+    expect(page.getByText("Publish landing").element().className).toContain("text-destructive");
+    expect(page.getByText("Past range").query()).toBeNull();
+    expect(page.getByText("Review copy").query()).toBeNull();
+  });
+
+  it("hides and restores completed items without losing them", async () => {
+    const items = [...ITEMS.slice(0, 2), item("i4", "Shipped", "m1", null, 1, true)];
+    await using screen = await render(
+      <Harness items={items} onUpdate={vi.fn(() => Promise.resolve(true))} />,
+    );
+    await expect.element(page.getByText("Shipped")).toBeVisible();
+    expect(page.getByText("Shipped").element().className).toContain("line-through");
+
+    await userEvent.click(screen.getByRole("button", { name: "Hide completed" }));
+    expect(page.getByText("Shipped").query()).toBeNull();
+    await expect.element(page.getByText("Publish landing")).toBeVisible();
+
+    await userEvent.click(screen.getByRole("button", { name: "Hide completed" }));
+    await expect.element(page.getByText("Shipped")).toBeVisible();
+  });
+
+  it("confirms before deleting a module, counting items hidden by the filter", async () => {
+    const onDelete = vi.fn();
+    await using screen = await render(
+      <Harness onDelete={onDelete} onUpdate={vi.fn(() => Promise.resolve(true))} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "This month" }));
+
+    await userEvent.hover(page.getByText("Site", { exact: true }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete Site" }));
+    expect(onDelete).not.toHaveBeenCalled();
+    await expect.element(page.getByText("Delete Site and 3 items?")).toBeVisible();
+
+    await userEvent.click(page.getByRole("button", { name: "Delete", exact: true }));
+    expect(onDelete).toHaveBeenCalledExactlyOnceWith("m1");
+  });
+
+  it("deletes an item or an empty module without asking", async () => {
+    const onDelete = vi.fn();
+    const items = [...ITEMS, item("m2", "Empty", null, null, 1)];
+    await using screen = await render(
+      <Harness items={items} onDelete={onDelete} onUpdate={vi.fn(() => Promise.resolve(true))} />,
+    );
+    await userEvent.hover(page.getByText("Empty", { exact: true }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete Empty" }));
+    expect(onDelete).toHaveBeenCalledExactlyOnceWith("m2");
+  });
+
+  it("reorders an item with the keyboard using the real sibling index", async () => {
+    const onMove = vi.fn();
+    await using screen = await render(
+      <Harness onMove={onMove} onUpdate={vi.fn(() => Promise.resolve(true))} />,
+    );
+    screen.getByRole("button", { name: "Reorder Publish landing" }).element().focus();
+    await userEvent.keyboard("{ }");
+    await userEvent.keyboard("{ArrowDown}");
+    await userEvent.keyboard("{ }");
+
+    await vi.waitFor(() => expect(onMove).toHaveBeenCalledWith("i1", 1));
   });
 });

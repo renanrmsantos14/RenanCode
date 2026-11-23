@@ -428,9 +428,15 @@ export function ProjectChecklistView(props: {
   };
 
   const dateFilterActive = filter.kind !== "all";
+  const totalChildren = new Map(tree.map((node) => [node.module.id, node.items.length] as const));
   const renderModule = (node: ChecklistModuleNode) => (
     <div key={node.module.id}>
-      <ChecklistRow context={context} item={node.module} childCount={node.items.length} isModule />
+      <ChecklistRow
+        context={context}
+        item={node.module}
+        childCount={totalChildren.get(node.module.id) ?? 0}
+        isModule
+      />
       <SortableGroup
         context={context}
         parentKey={node.module.id}

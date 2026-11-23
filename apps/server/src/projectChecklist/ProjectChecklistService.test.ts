@@ -229,3 +229,50 @@ it.effect("subscribers get their project's snapshot first, then only its changes
     }),
   ),
 );
+
+it.effect("reorders modules among modules and keeps their items attached", () =>
+  withService((service) =>
+    Effect.gen(function* () {
+      const a = yield* service.upsert({ projectId: app, title: "A" });
+      yield* service.upsert({ projectId: app, parentId: a.id, title: "a1" });
+      yield* service.upsert({ projectId: app, title: "B" });
+      const c = yield* service.upsert({ projectId: app, title: "C" });
+      yield* service.move({ id: c.id, index: 0 });
+      const { items } = yield* service.snapshot(app);
+      const modules = items
+        .filter((item) => item.parentId === null)
+        .toSorted((x, y) => x.position - y.position);
+      assert.deepStrictEqual(
+        modules.map((item) => item.title),
+        ["C", "A", "B"],
+      );
+      assert.deepStrictEqual(
+        modules.map((item) => item.position),
+        [0, 1, 2],
+      );
+      assert.strictEqual(items.find((item) => item.title === "a1")?.parentId, a.id);
+    }),
+  ),
+);
+
+it.effect("every subscriber of a project sees the same change", () =>
+  withService((service) =>
+    Effect.gen(function* () {
+      const watch = () =>
+        service.subscribe(app).pipe(
+          Stream.take(3),
+          Stream.map((snapshot) => snapshot.items.map((item) => `${item.title}:${item.done}`)),
+          Stream.runCollect,
+          Effect.forkChild,
+        );
+      const first = yield* watch();
+      const second = yield* watch();
+      yield* Effect.yieldNow;
+      const created = yield* service.upsert({ projectId: app, title: "shared" });
+      yield* service.upsert({ projectId: app, id: created.id, done: true });
+      const expected = [[], ["shared:false"], ["shared:true"]];
+      assert.deepStrictEqual(Array.from(yield* Fiber.join(first)), expected);
+      assert.deepStrictEqual(Array.from(yield* Fiber.join(second)), expected);
+    }),
+  ),
+);
