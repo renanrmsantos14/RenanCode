@@ -20,7 +20,7 @@ import { m } from "~/i18n/messages";
 import { useAssetUrlRefresh } from "../../assets/assetUrls";
 import { saveAssetFile } from "../../assets/saveAssetFile";
 import { useFileDrag } from "../../assets/useFileDrag";
-import { contextMenuSourceOf } from "../../contextMenuSource";
+import { contextMenuSourceOf, openContextMenuFromKeyboard } from "../../contextMenuSource";
 import { readLocalApi } from "../../localApi";
 import { cn } from "../../lib/utils";
 import { shouldOpenMarkdownFileLinkInEditor } from "../../markdown-links";
@@ -407,6 +407,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
         handleOpenInFilePreview();
       }}
       onContextMenu={handleContextMenu}
+      onKeyDown={openContextMenuFromKeyboard}
       {...dragProps}
     >
       <FileTagChipContent
@@ -431,6 +432,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
       data-markdown-copy={copyMarkdown}
       onClick={handleContextMenu}
       onContextMenu={handleContextMenu}
+      onKeyDown={openContextMenuFromKeyboard}
       {...dragProps}
     >
       <FileTagChipContent
