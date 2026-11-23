@@ -1,15 +1,15 @@
 import type { EnvironmentId } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
+import { normalizeProviderAccentColor } from "@t3tools/client-runtime/state/provider-instance-display";
 import {
   type ClaudeAccountUsage,
   claudeAccountText,
-  claudeAccountValue,
   claudeWeeklyReading,
   selectClaudeUsageAccounts,
 } from "@t3tools/shared/usageLimits";
 import { useGT } from "gt-react";
 import { GaugeIcon } from "lucide-react";
-import { Fragment, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { cn } from "../../lib/utils";
@@ -19,7 +19,10 @@ import { Button } from "../ui/button";
 import { Popover, PopoverCreateHandle, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { toastManager } from "../ui/toast";
 import { useResetCredit, ResetCreditDialog } from "../usage/UsageLimits";
-import { ClaudeUsageDetail, type ResetCreditTarget } from "./ClaudeUsageDetail";
+import { PROVIDER_PRESENTATION } from "../usage/usageProviders";
+import { ClaudeUsageDetail, type ResetCreditTarget, UsageBar } from "./ClaudeUsageDetail";
+import betinhosIcon from "./accountIcons/betinhos.png";
+import renancodeIcon from "./accountIcons/renancode.png";
 import { composerFloatingLayerProps } from "./composerEventScope";
 
 let nextTriggerId = 0;
@@ -43,6 +46,62 @@ export type ClaudeUsageDetailControl = ReturnType<typeof createClaudeUsageDetail
 
 function accountSummary(account: ClaudeAccountUsage, now: number): string {
   return claudeAccountText(account, (checkedAt) => formatRelativeTimeLabel(checkedAt, now));
+}
+
+/** "Claude Betinhos" → "B": the badge tells accounts apart; the full name stays in the title. */
+function accountInitial(label: string): string {
+  const name = label.replace(/^claude\s+/i, "").trim() || label;
+  return (name[0] ?? "C").toUpperCase();
+}
+
+/** This fork's two Claude accounts, matched by display name; any other account keeps its initial. */
+const ACCOUNT_ICONS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/betinhos/i, betinhosIcon],
+  [/renan/i, renancodeIcon],
+];
+
+function accountIcon(label: string): string | undefined {
+  return ACCOUNT_ICONS.find(([pattern]) => pattern.test(label))?.[1];
+}
+
+function AccountMeter({ account }: { readonly account: ClaudeAccountUsage }) {
+  const reading = claudeWeeklyReading(account);
+  const color =
+    normalizeProviderAccentColor(account.accentColor) ?? PROVIDER_PRESENTATION.claude.color;
+  const icon = accountIcon(account.label);
+  return (
+    <span className={cn("flex shrink-0 items-center gap-1", account.stale && "opacity-60")}>
+      {icon ? (
+        <img src={icon} alt="" aria-hidden="true" className="size-4 shrink-0 rounded-full" />
+      ) : (
+        <span
+          aria-hidden="true"
+          className="flex size-4 shrink-0 items-center justify-center rounded-full text-4xs font-semibold leading-none text-white"
+          style={{ backgroundColor: color }}
+        >
+          {accountInitial(account.label)}
+        </span>
+      )}
+      <span className="flex w-8 flex-col gap-0.75">
+        <span
+          className={cn(
+            "text-2xs leading-none",
+            reading?.over ? "text-warning-foreground" : "text-foreground",
+          )}
+        >
+          {reading ? `${reading.used}%` : "n/a"}
+        </span>
+        <UsageBar
+          used={reading?.used ?? 0}
+          goal={reading?.goal ?? null}
+          over={reading?.over ?? false}
+          color={color}
+          label=""
+          className="h-0.75"
+        />
+      </span>
+    </span>
+  );
 }
 
 /** Confirmation lives outside the popover: popovers stack above dialogs and unmount on close. */
@@ -76,7 +135,7 @@ function ResetCreditHost({
 }
 
 /**
- * Weekly use against today's goal for each Claude account, e.g. `Claude 36/60 · Renan 72/80`.
+ * Weekly use for each Claude account: a colored initial, the percent used and a bar with today's goal tick.
  * Reads the provider snapshot itself so a new snapshot re-renders this control, not the composer.
  */
 export function ClaudeUsageIndicator({
@@ -111,7 +170,7 @@ export function ClaudeUsageIndicator({
           <Button
             size="xs"
             variant="ghost-muted"
-            className="min-w-0 max-w-64 shrink"
+            className="min-w-0 max-w-64 shrink overflow-hidden"
             aria-label={gt("Claude usage: {summary}", { summary })}
             title={summary}
           />
@@ -120,25 +179,10 @@ export function ClaudeUsageIndicator({
         {compact ? (
           <GaugeIcon aria-hidden="true" className={cn(anyOver && "text-warning-foreground")} />
         ) : (
-          <span className="flex min-w-0 items-center gap-1.5 truncate tabular-nums">
-            {accounts.map((account, index) => {
-              const reading = claudeWeeklyReading(account);
-              return (
-                <Fragment key={account.instanceId}>
-                  {index > 0 ? <span aria-hidden="true">·</span> : null}
-                  <span
-                    className={cn(
-                      "truncate",
-                      reading?.over && "text-warning-foreground",
-                      account.stale && "opacity-60",
-                    )}
-                  >
-                    {/* Age stays in the title and popover so the footer controls keep their room. */}
-                    {`${account.label} ${claudeAccountValue(account)}`}
-                  </span>
-                </Fragment>
-              );
-            })}
+          <span aria-hidden="true" className="flex min-w-0 items-center gap-2.5 tabular-nums">
+            {accounts.map((account) => (
+              <AccountMeter key={account.instanceId} account={account} />
+            ))}
           </span>
         )}
       </PopoverTrigger>

@@ -66,24 +66,26 @@ function AccountName({ label }: { readonly label: string }) {
 }
 
 /** Fills from 0% as usage; the tick marks today's goal. */
-function UsageBar({
+export function UsageBar({
   used,
   goal,
   over,
   color,
   label,
+  className,
 }: {
   readonly used: number;
   readonly goal: number | null;
   readonly over: boolean;
   readonly color: string;
   readonly label: string;
+  readonly className?: string;
 }) {
   return (
     <span
       role="img"
       aria-label={label}
-      className="relative block h-1.5 rounded-full bg-muted-foreground/20"
+      className={cn("relative block h-1.5 rounded-full bg-muted-foreground/20", className)}
     >
       {used > 0 ? (
         <span
