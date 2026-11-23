@@ -173,6 +173,7 @@ function ChecklistRow(props: {
   item: ProjectChecklistItem;
   childCount: number;
   isModule: boolean;
+  children?: React.ReactNode;
 }) {
   const gt = useGT();
   const { context, item } = props;
@@ -192,94 +193,95 @@ function ChecklistRow(props: {
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
-      data-testid={props.isModule ? "checklist-module" : "checklist-item"}
-      data-overdue={overdue ? "true" : undefined}
-      className={cn(
-        "group flex items-start gap-1 rounded-md pe-0.5",
-        !props.isModule && "ps-4",
-        isDragging && "relative z-10 bg-background shadow-md",
-      )}
+      className={cn(isDragging && "relative z-10 rounded-md bg-background shadow-md")}
     >
-      {context.canWrite ? (
-        <button
-          type="button"
-          ref={setActivatorNodeRef}
-          {...attributes}
-          {...listeners}
-          aria-label={gt("Reorder {title}", { title: item.title })}
-          className="flex h-5 w-4 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/70 opacity-0 outline-none group-hover:opacity-100 hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:cursor-grabbing"
-        >
-          <GripVerticalIcon className="size-3.5" />
-        </button>
-      ) : null}
-      <Checkbox
-        checked={item.done}
-        disabled={!context.canWrite}
-        aria-label={gt("Mark {title} as done", { title: item.title })}
-        onCheckedChange={(checked) => void context.update({ id: item.id, done: checked })}
-      />
-      <div className="min-w-0 flex-1 self-center py-0.5">
-        {editing ? (
-          <TitleEditor
-            initialValue={item.title}
-            label={gt("Title")}
-            onCancel={() => setEditing(false)}
-            onCommit={async (title) => {
-              const ok = title === item.title || (await context.update({ id: item.id, title }));
-              if (ok) {
-                setEditing(false);
-                if (!props.isModule) context.startDraft(item.parentId);
-              }
-              return ok;
-            }}
-          />
-        ) : (
+      <div
+        data-testid={props.isModule ? "checklist-module" : "checklist-item"}
+        data-overdue={overdue ? "true" : undefined}
+        className={cn("group flex items-start gap-1 rounded-md pe-0.5", !props.isModule && "ps-4")}
+      >
+        {context.canWrite ? (
           <button
             type="button"
-            disabled={!context.canWrite}
-            className={cn(
-              "block w-full text-left text-sm leading-5 break-words disabled:cursor-default",
-              props.isModule && "font-medium",
-              item.done && "text-muted-foreground line-through",
-              overdue && "text-destructive",
-            )}
-            onClick={() => setEditing(true)}
+            ref={setActivatorNodeRef}
+            {...attributes}
+            {...listeners}
+            aria-label={gt("Reorder {title}", { title: item.title })}
+            className="flex h-5 w-4 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/70 opacity-0 outline-none group-hover:opacity-100 hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:cursor-grabbing"
           >
-            {item.title}
+            <GripVerticalIcon className="size-3.5" />
           </button>
-        )}
-      </div>
-      <div className={cn("flex shrink-0", item.dueDate === null && REVEAL_ON_HOVER)}>
-        <WorkDueDatePicker
-          size="xs"
-          value={item.dueDate}
-          overdue={overdue}
+        ) : null}
+        <Checkbox
+          checked={item.done}
           disabled={!context.canWrite}
-          onChange={(dueDate) => void context.update({ id: item.id, dueDate })}
+          aria-label={gt("Mark {title} as done", { title: item.title })}
+          onCheckedChange={(checked) => void context.update({ id: item.id, done: checked })}
         />
-      </div>
-      {context.canWrite ? (
-        <div className={cn("flex shrink-0", REVEAL_ON_HOVER)}>
-          {props.isModule ? (
+        <div className="min-w-0 flex-1 self-center py-0.5">
+          {editing ? (
+            <TitleEditor
+              initialValue={item.title}
+              label={gt("Title")}
+              onCancel={() => setEditing(false)}
+              onCommit={async (title) => {
+                const ok = title === item.title || (await context.update({ id: item.id, title }));
+                if (ok) {
+                  setEditing(false);
+                  if (!props.isModule) context.startDraft(item.parentId);
+                }
+                return ok;
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              disabled={!context.canWrite}
+              className={cn(
+                "block w-full text-left text-sm leading-5 break-words disabled:cursor-default",
+                props.isModule && "font-medium",
+                item.done && "text-muted-foreground line-through",
+                overdue && "text-destructive",
+              )}
+              onClick={() => setEditing(true)}
+            >
+              {item.title}
+            </button>
+          )}
+        </div>
+        <div className={cn("flex shrink-0", item.dueDate === null && REVEAL_ON_HOVER)}>
+          <WorkDueDatePicker
+            size="xs"
+            value={item.dueDate}
+            overdue={overdue}
+            disabled={!context.canWrite}
+            onChange={(dueDate) => void context.update({ id: item.id, dueDate })}
+          />
+        </div>
+        {context.canWrite ? (
+          <div className={cn("flex shrink-0", REVEAL_ON_HOVER)}>
+            {props.isModule ? (
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={gt("Add item to {title}", { title: item.title })}
+                onClick={() => context.startDraft(item.id)}
+              >
+                <PlusIcon />
+              </Button>
+            ) : null}
             <Button
               variant="ghost"
               size="icon-xs"
-              aria-label={gt("Add item to {title}", { title: item.title })}
-              onClick={() => context.startDraft(item.id)}
+              aria-label={gt("Delete {title}", { title: item.title })}
+              onClick={() => context.requestDelete(item, props.childCount)}
             >
-              <PlusIcon />
+              <Trash2Icon />
             </Button>
-          ) : null}
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label={gt("Delete {title}", { title: item.title })}
-            onClick={() => context.requestDelete(item, props.childCount)}
-          >
-            <Trash2Icon />
-          </Button>
-        </div>
-      ) : null}
+          </div>
+        ) : null}
+      </div>
+      {props.children}
     </div>
   );
 }
@@ -430,13 +432,13 @@ export function ProjectChecklistView(props: {
   const dateFilterActive = filter.kind !== "all";
   const totalChildren = new Map(tree.map((node) => [node.module.id, node.items.length] as const));
   const renderModule = (node: ChecklistModuleNode) => (
-    <div key={node.module.id}>
-      <ChecklistRow
-        context={context}
-        item={node.module}
-        childCount={totalChildren.get(node.module.id) ?? 0}
-        isModule
-      />
+    <ChecklistRow
+      key={node.module.id}
+      context={context}
+      item={node.module}
+      childCount={totalChildren.get(node.module.id) ?? 0}
+      isModule
+    >
       <SortableGroup
         context={context}
         parentKey={node.module.id}
@@ -455,7 +457,7 @@ export function ProjectChecklistView(props: {
       {draft?.parentId === node.module.id ? (
         <DraftRow context={context} parentId={node.module.id} onClose={() => setDraft(null)} />
       ) : null}
-    </div>
+    </ChecklistRow>
   );
 
   return (
@@ -496,7 +498,7 @@ export function ProjectChecklistView(props: {
           <EyeOffIcon />
         </Toggle>
         {filter.kind === "range" ? (
-          <div className="flex items-center gap-1.5">
+          <div className="order-last grid basis-full grid-cols-2 gap-1">
             <Input
               nativeInput
               size="sm"

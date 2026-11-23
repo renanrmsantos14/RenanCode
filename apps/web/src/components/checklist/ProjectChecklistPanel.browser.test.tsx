@@ -56,6 +56,27 @@ function Harness(props: {
 }
 
 describe("ProjectChecklistView", () => {
+  it("moves a module above the one before it with the keyboard", async () => {
+    const onMove = vi.fn();
+    const items = [
+      item("m1", "Site", null, null, 0),
+      item("i1", "Publish landing", "m1", null, 0),
+      item("i2", "Review copy", "m1", null, 1),
+      item("m2", "Ads", null, null, 1),
+    ];
+    await using screen = await render(
+      <Harness onUpdate={vi.fn(() => Promise.resolve(true))} items={items} onMove={onMove} />,
+    );
+
+    const handle = screen.getByRole("button", { name: "Reorder Ads" });
+    handle.element().focus();
+    await userEvent.keyboard(" ");
+    await userEvent.keyboard("{ArrowUp}");
+    await userEvent.keyboard(" ");
+
+    await vi.waitFor(() => expect(onMove).toHaveBeenCalledWith("m2", 0));
+  });
+
   it("asks the server to check an item without ticking it locally", async () => {
     const onUpdate = vi.fn(() => Promise.resolve(false));
     await using screen = await render(<Harness onUpdate={onUpdate} />);
