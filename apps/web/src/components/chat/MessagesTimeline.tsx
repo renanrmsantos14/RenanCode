@@ -262,6 +262,7 @@ interface MessagesTimelineProps {
   listRef: React.RefObject<LegendListRef | null>;
   timelineEntries: ReadonlyArray<TimelineEntry>;
   latestRun: TimelineLatestRun | null;
+  usageLimitRunId?: RunId | null;
   /** The run the screen reader announcer follows; see announcedRun. */
   announcedRun?: { readonly runId: RunId; readonly status: TimelineLatestRun["status"] } | null;
   /** See isDetailBehindShell. */
@@ -399,6 +400,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   activeFindMatch = null,
   findNavigationId = 0,
   latestRun,
+  usageLimitRunId = null,
   announcedRun = null,
   detailBehindShell = false,
   runningRunId = null,
@@ -769,6 +771,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
     timelineEntries,
     pendingApprovalRequestIds,
     latestRun,
+    usageLimitRunId,
     runningRunId,
     expandedRunIds: visibleExpandedRunIds,
     expandedAttemptIds: visibleExpandedAttemptIds,

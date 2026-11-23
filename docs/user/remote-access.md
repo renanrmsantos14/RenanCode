@@ -477,14 +477,17 @@ an address you trust: the code is sent there.
   machine's own threads, projects or settings, and they skip its project setup
   scripts.
 - The link shows up in that machine's **Settings → Sharing & access** like any
-  outside agent. Revoke it there to end it. **Forget** on this machine only
-  removes it here.
+  outside agent, and can be revoked there. **Forget** on this machine also ends
+  it there when that machine confirms it. If it can't, such as when it is
+  offline or on an older T3 Code, Forget says so; revoke it in that machine's
+  Sharing & access.
 - A link stays valid while agents use it, with the same access. One unused for
-  30 days expires. A link also renews itself when it is used or listed during
-  its last week, as long as the other machine is reachable and supports it. A link ends 180 days after it was first paired,
-  even if used or renewed; link again with a new pairing code then. If the
-  other machine refuses a renewal, the link keeps working until it expires and
-  **Linked environments** shows the reason.
+  30 days expires, as does one to a machine on an older T3 Code after 30
+  days. A link also renews itself when it is used or listed during its last
+  week, as long as the other machine is reachable and supports it. A link ends
+  180 days after it was first paired, even if used or renewed; link again with
+  a new pairing code then. If the other machine refuses a renewal, the link
+  keeps working until it expires and **Linked environments** shows the reason.
 
 An agent can also send a file (up to 50 MB) from this machine to a linked
 machine's Downloads folder. A link below full access cannot do this, and it
