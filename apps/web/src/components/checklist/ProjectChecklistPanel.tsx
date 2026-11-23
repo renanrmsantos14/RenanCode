@@ -454,7 +454,7 @@ export function ProjectChecklistView(props: {
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="project-checklist">
-      <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-1">
+      <div className="flex flex-wrap items-center gap-0.5 border-b border-border px-1.5 py-1">
         <ToggleGroup
           aria-label={gt("Filter")}
           value={[filter.kind]}
