@@ -489,6 +489,16 @@ import {
   WorkModuleThreadLink,
   WorkModuleUpsertInput,
 } from "./workModule.ts";
+import {
+  ProjectChecklistDeleteInput,
+  ProjectChecklistDeleteResult,
+  ProjectChecklistError,
+  ProjectChecklistItem,
+  ProjectChecklistMoveInput,
+  ProjectChecklistSnapshot,
+  ProjectChecklistSubscribeInput,
+  ProjectChecklistUpsertInput,
+} from "./projectChecklist.ts";
 import { SecretRequestAnswerInput, SecretRequestError } from "./secretRequest.ts";
 import { AgentFeedbackAnswerInput, AgentFeedbackRequestError } from "./agentFeedback.ts";
 import {
@@ -697,6 +707,11 @@ export const WS_METHODS = {
   guestShareCreate: "guestShare.create",
   scheduledTasksListWebhookDeliveries: "scheduledTasks.listWebhookDeliveries",
   scheduledTasksGetWebhookDelivery: "scheduledTasks.getWebhookDelivery",
+
+  projectChecklistSubscribe: "projectChecklist.subscribe",
+  projectChecklistUpsert: "projectChecklist.upsert",
+  projectChecklistMove: "projectChecklist.move",
+  projectChecklistDelete: "projectChecklist.delete",
 
   workModulesSubscribe: "workModules.subscribe",
   workModulesUpsert: "workModules.upsert",
@@ -2534,6 +2549,36 @@ const WsScheduledTasksGetWebhookDeliveryRpc = Rpc.make(
 
 const WorkModuleRpcError = Schema.Union([WorkModuleError, EnvironmentAuthorizationError]);
 
+const ProjectChecklistRpcError = Schema.Union([
+  ProjectChecklistError,
+  EnvironmentAuthorizationError,
+]);
+
+const WsProjectChecklistSubscribeRpc = Rpc.make(WS_METHODS.projectChecklistSubscribe, {
+  payload: ProjectChecklistSubscribeInput,
+  success: ProjectChecklistSnapshot,
+  error: ProjectChecklistRpcError,
+  stream: true,
+});
+
+const WsProjectChecklistUpsertRpc = Rpc.make(WS_METHODS.projectChecklistUpsert, {
+  payload: ProjectChecklistUpsertInput,
+  success: ProjectChecklistItem,
+  error: ProjectChecklistRpcError,
+});
+
+const WsProjectChecklistMoveRpc = Rpc.make(WS_METHODS.projectChecklistMove, {
+  payload: ProjectChecklistMoveInput,
+  success: ProjectChecklistItem,
+  error: ProjectChecklistRpcError,
+});
+
+const WsProjectChecklistDeleteRpc = Rpc.make(WS_METHODS.projectChecklistDelete, {
+  payload: ProjectChecklistDeleteInput,
+  success: ProjectChecklistDeleteResult,
+  error: ProjectChecklistRpcError,
+});
+
 const WsWorkModulesSubscribeRpc = Rpc.make(WS_METHODS.workModulesSubscribe, {
   payload: WorkModuleSubscribeInput,
   success: WorkModuleSnapshot,
@@ -2696,6 +2741,10 @@ export const WsRpcGroup = RpcGroup.make(
   WsAgentFeedbackAnswerRequestRpc,
   WsScheduledTasksListWebhookDeliveriesRpc,
   WsScheduledTasksGetWebhookDeliveryRpc,
+  WsProjectChecklistSubscribeRpc,
+  WsProjectChecklistUpsertRpc,
+  WsProjectChecklistMoveRpc,
+  WsProjectChecklistDeleteRpc,
   WsWorkModulesSubscribeRpc,
   WsWorkModulesUpsertRpc,
   WsWorkModulesMoveRpc,

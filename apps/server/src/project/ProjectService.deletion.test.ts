@@ -33,6 +33,8 @@ import * as ServerSettings from "../serverSettings.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 import * as ProjectEnrichmentService from "./ProjectEnrichmentService.ts";
 import * as ProjectFaviconResolver from "./ProjectFaviconResolver.ts";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as ProjectChecklistService from "../projectChecklist/ProjectChecklistService.ts";
 import * as ProjectService from "./ProjectService.ts";
 import * as RepositoryIdentityResolver from "./RepositoryIdentityResolver.ts";
 
@@ -40,6 +42,7 @@ const layerEventPersistence = EventSink.layer.pipe(
   Layer.provideMerge(Layer.merge(EventStore.layer, ProjectionStore.layer)),
 );
 const layerServices = Layer.mergeAll(
+  ProjectChecklistService.layer,
   LegacyV1ThreadImporter.layer.pipe(Layer.provideMerge(layerEventPersistence)),
   ProjectionReplay.layer.pipe(Layer.provide(layerEventPersistence)),
   ProjectStore.layer,
@@ -71,6 +74,7 @@ const layerServices = Layer.mergeAll(
 const layerDatabase = SqlitePersistence.layerMemory.pipe(
   Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "project-deletion-test-" })),
   Layer.provideMerge(NodeServices.layer),
+  Layer.provideMerge(NodeCrypto.layer),
 );
 const decodeEffectRequest = Schema.decodeUnknownEffect(
   Schema.fromJsonString(OrchestrationEffectRequestV2),

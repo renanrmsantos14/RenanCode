@@ -20,6 +20,7 @@ export function WorkDueDatePicker(props: {
   overdue: boolean;
   onChange: (value: string | null) => void;
   disabled?: boolean;
+  size?: "sm" | "xs";
 }) {
   const gt = useGT();
   const [open, setOpen] = useState(false);
@@ -28,7 +29,7 @@ export function WorkDueDatePicker(props: {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         disabled={props.disabled}
-        render={<Button variant="ghost" size="sm" aria-label={gt("Due date")} />}
+        render={<Button variant="ghost" size={props.size ?? "sm"} aria-label={gt("Due date")} />}
       >
         <span className={props.overdue ? "text-destructive" : "text-muted-foreground"}>
           {props.value === null ? gt("No due date") : formatShortDate(props.value)}

@@ -49,6 +49,7 @@ import {
   FileDiff,
   Files,
   Globe2,
+  ListChecks,
   MessagesSquare,
   Plus,
   TerminalSquare,
@@ -157,6 +158,8 @@ export interface RightPanelTabsProps {
   onAddPullRequest: () => void;
   onAddPullRequests: () => void;
   onAddDevice: () => void;
+  /** Absent where the thread has no project checklist to show. */
+  onAddChecklist?: (() => void) | undefined;
   /** Absent where side chats are not offered. */
   onAddSideChat?: (() => void) | undefined;
   browserAvailable: boolean;
@@ -195,6 +198,7 @@ const SURFACE_DISABLED_REASONS = {
   pullRequest: msg("This thread's branch has no pull request yet."),
   pullRequests: msg("This thread has no linked items."),
   device: msg("Devices are only available from a thread."),
+  checklist: msg("The checklist is only available when a project is open."),
   sideChat: msg("Side chats start after the first message."),
 } as const;
 
@@ -220,6 +224,7 @@ const SURFACE_UNAVAILABLE_HINTS = {
   pullRequest: msg("No pull request on this branch yet."),
   pullRequests: msg("No linked items available."),
   device: msg("Available from a thread."),
+  checklist: msg("Available when a project is open."),
   sideChat: msg("Available after the first message."),
 } as const;
 
@@ -343,6 +348,7 @@ function RightPanelEmptyState(props: {
   onAddPullRequest: () => void;
   onAddPullRequests: () => void;
   onAddDevice: () => void;
+  onAddChecklist?: (() => void) | undefined;
   /** Absent where side chats are not offered. */
   onAddSideChat?: (() => void) | undefined;
   browserAvailable: boolean;
@@ -417,6 +423,19 @@ function RightPanelEmptyState(props: {
       disabledReason: messages(SURFACE_UNAVAILABLE_HINTS.device),
       onClick: props.onAddDevice,
     },
+    ...(props.onAddChecklist
+      ? [
+          {
+            label: msg("Checklist"),
+            description: msg("Track this project's modules and tasks, with due dates."),
+            icon: ListChecks,
+            shortcut: "C",
+            available: true,
+            disabledReason: messages(SURFACE_UNAVAILABLE_HINTS.checklist),
+            onClick: props.onAddChecklist,
+          },
+        ]
+      : []),
     ...(props.onAddSideChat
       ? [
           {
@@ -617,6 +636,8 @@ function surfaceTitle(
       return `#${surface.number}`;
     case "pull-requests":
       return resolve(msg("Linked items"));
+    case "checklist":
+      return resolve(msg("Checklist"));
     case "issue":
       // A git host numbers its issues; a tracker with keys of its own, such as Linear, names them.
       return /^\d+$/.test(surface.key) ? `#${surface.key}` : surface.key;
@@ -718,6 +739,8 @@ function SurfaceIcon({
       );
     case "pull-requests":
       return <PullRequestGlyph.link className="size-3 shrink-0" />;
+    case "checklist":
+      return <ListChecks className="size-3 shrink-0" />;
     case "issue":
       return <IssueSurfaceIcon surface={surface} environmentId={environmentId} />;
     case "thread":
@@ -1259,6 +1282,18 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       disabledReason: messages(SURFACE_DISABLED_REASONS.device),
       onClick: props.onAddDevice,
     },
+    ...(props.onAddChecklist
+      ? [
+          {
+            label: msg("Checklist"),
+            icon: ListChecks,
+            shortcut: "C",
+            available: true,
+            disabledReason: messages(SURFACE_DISABLED_REASONS.checklist),
+            onClick: props.onAddChecklist,
+          },
+        ]
+      : []),
     ...(props.onAddSideChat
       ? [
           {
@@ -1692,6 +1727,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onAddPullRequest={props.onAddPullRequest}
             onAddPullRequests={props.onAddPullRequests}
             onAddDevice={props.onAddDevice}
+            onAddChecklist={props.onAddChecklist}
             onAddSideChat={props.onAddSideChat}
             browserAvailable={props.browserAvailable}
             terminalAvailable={props.terminalAvailable}

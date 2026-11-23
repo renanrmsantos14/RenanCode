@@ -70,6 +70,7 @@ import * as ThreadLaunchService from "./ThreadLaunchService.ts";
 import * as ThreadForkService from "./ThreadForkService.ts";
 import * as TurnItemPositionStore from "./TurnItemPositionStore.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
+import * as ProjectChecklistService from "../projectChecklist/ProjectChecklistService.ts";
 import * as WorkModuleService from "../workModules/WorkModuleService.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
 import * as FeedbackStore from "../feedback/FeedbackStore.ts";
@@ -121,6 +122,7 @@ const layerLegacyV1ThreadImporterProvided = LegacyV1ThreadImporter.layer.pipe(
 export const layerProjectService = ProjectService.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
+      ProjectChecklistService.layer,
       ProjectStore.layer,
       ProjectionStore.layer,
       layerEventSink,
@@ -485,6 +487,7 @@ export const layerProduction = Layer.mergeAll(
   layerThreadLaunchProvided,
   layerScheduledTaskProvided,
   layerWorkModuleProvided,
+  ProjectChecklistService.layer,
   layerWorkflowsProvided,
   layerScratchThreadPromotionProvided,
   layerCacheKeepWarmProvided,
