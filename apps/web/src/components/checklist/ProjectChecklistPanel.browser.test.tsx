@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
 import "~/index.css";
-import { render } from "../../../test/render";
+import { act, render } from "../../../test/render";
 import { type ChecklistPrefs, ProjectChecklistView } from "./ProjectChecklistPanel";
 
 const item = (
@@ -73,6 +73,45 @@ describe("ProjectChecklistView", () => {
     await userEvent.keyboard(" ");
     await userEvent.keyboard("{ArrowUp}");
     await userEvent.keyboard(" ");
+
+    await vi.waitFor(() => expect(onMove).toHaveBeenCalledWith("m2", 0));
+  });
+
+  it("moves a module above the one before it with the mouse", async () => {
+    const onMove = vi.fn();
+    const items = [
+      item("m1", "Site", null, null, 0),
+      item("i1", "Publish landing", "m1", null, 0),
+      item("i2", "Review copy", "m1", null, 1),
+      item("m2", "Ads", null, null, 1),
+    ];
+    await using screen = await render(
+      <Harness onUpdate={vi.fn(() => Promise.resolve(true))} items={items} onMove={onMove} />,
+    );
+
+    const handle = screen.getByRole("button", { name: "Reorder Ads" }).element();
+    const target = screen.getByRole("button", { name: "Reorder Site" }).element();
+    const from = handle.getBoundingClientRect();
+    const to = target.getBoundingClientRect();
+    const pointer = (type: string, y: number) =>
+      new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        pointerId: 1,
+        isPrimary: true,
+        button: 0,
+        buttons: type === "pointerup" ? 0 : 1,
+        clientX: from.x + 4,
+        clientY: y,
+      });
+    await act(() => {
+      handle.dispatchEvent(pointer("pointerdown", from.y + 4));
+      document.dispatchEvent(pointer("pointermove", from.y - 4));
+    });
+    for (let y = from.y - 12; y >= to.y - 4; y -= 8) {
+      await act(() => document.dispatchEvent(pointer("pointermove", y)));
+    }
+    await act(() => document.dispatchEvent(pointer("pointerup", to.y - 4)));
 
     await vi.waitFor(() => expect(onMove).toHaveBeenCalledWith("m2", 0));
   });

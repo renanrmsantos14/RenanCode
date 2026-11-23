@@ -24,9 +24,9 @@ description: "Verifica a aba Checklist do painel direito: módulos e itens por p
 1. Abrir uma thread de um projeto, "+" > Checklist (atalho C), ou a paleta > "Abrir checklist". Esperado: estado vazio com "Adicionar módulo".
 2. Criar um módulo, adicionar itens com Enter (cada Enter cria o próximo item). Título vazio não salva.
 3. Definir prazos: um em outubro (atrasado), um neste mês, um sem prazo. O atrasado aparece em vermelho.
-4. Filtros: "Mês atual" mostra o do mês e o atrasado, esconde o sem prazo. "Intervalo" com De/Até. Trocar de projeto e voltar mantém o filtro de cada um; recarregar mantém.
+4. Filtros: "Mês atual" mostra o do mês e o atrasado, esconde o sem prazo. "Intervalo" com De/Até numa linha própria, sem cortar nada no card estreito (~278px). Trocar de projeto e voltar mantém o filtro de cada um; recarregar mantém.
 5. Marcar o módulo: todos os itens ficam riscados. Desmarcar um item: o módulo desmarca. "Ocultar concluídos" esconde os riscados.
-6. Arrastar pela alça (ou teclado) reordena dentro do mesmo módulo e persiste após recarregar. Em filtro ativo, a ordem real é preservada.
+6. Arrastar pela alça (ou teclado) reordena dentro do mesmo módulo e persiste após recarregar. Módulos sobem e descem (o bloco inteiro é o nó arrastável; subir já quebrou). Em filtro ativo, a ordem real é preservada.
 7. Excluir módulo com itens pede confirmação; sem itens exclui direto. Excluir o projeto apaga o checklist.
 8. Com outro cliente conectado ao mesmo servidor, uma mudança aparece nos dois sem recarregar. Sem permissão de operar, a aba é só leitura.
 9. Derrubar o servidor e marcar um item: toast de erro padrão e o checkbox não fica marcado.
