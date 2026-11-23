@@ -56,6 +56,25 @@ function Harness(props: {
 }
 
 describe("ProjectChecklistView", () => {
+  it("keeps what is typed while the previous item is still saving", async () => {
+    let finish = (_ok: boolean) => {};
+    const onUpdate = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await using screen = await render(<Harness onUpdate={onUpdate} />);
+
+    (screen.getByRole("button", { name: "Add item to Site" }).element() as HTMLElement).click();
+    const input = screen.getByRole("textbox", { name: "New item title" });
+    await userEvent.type(input, "First{Enter}");
+    await userEvent.type(input, "Second");
+    finish(true);
+
+    await expect.element(input).toHaveValue("Second");
+  });
+
   it("moves a module above the one before it with the keyboard", async () => {
     const onMove = vi.fn();
     const items = [

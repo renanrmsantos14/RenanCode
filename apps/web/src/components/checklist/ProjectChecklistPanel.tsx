@@ -129,9 +129,10 @@ function TitleEditor(props: {
     }
     if (saving) return;
     setSaving(true);
+    if (props.clearOnCommit) setValue("");
     const ok = await props.onCommit(trimmed);
     setSaving(false);
-    if (ok && props.clearOnCommit) setValue("");
+    if (!ok && props.clearOnCommit) setValue((current) => (current === "" ? trimmed : current));
   };
   return (
     <Input
