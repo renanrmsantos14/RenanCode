@@ -753,6 +753,7 @@ const WindowsPackagedPayloadValidationReason = Schema.Literals([
   "wsl-runtime-missing",
   "wsl-runtime-invalid",
   "file-limit-exceeded",
+  "compile-cache-limit-exceeded",
 ]);
 
 export class WindowsPackagedPayloadValidationError extends Schema.TaggedError<WindowsPackagedPayloadValidationError>()(
@@ -768,7 +769,10 @@ export class WindowsPackagedPayloadValidationError extends Schema.TaggedError<Wi
 ) {
   override get message(): string {
     if (this.reason === "file-limit-exceeded") {
-      return `Windows packaged payload contains ${String(this.fileCount)} files; expected at most ${String(this.fileLimit)}.`;
+      return `Windows packaged payload contains ${String(this.fileCount)} files outside ${WINDOWS_SERVER_COMPILE_CACHE_DIR}; expected at most ${String(this.fileLimit)}.`;
+    }
+    if (this.reason === "compile-cache-limit-exceeded") {
+      return `Windows ${WINDOWS_SERVER_COMPILE_CACHE_DIR} contains ${String(this.fileCount)} files; expected at most ${String(this.fileLimit)}.`;
     }
     if (this.reason === "unpacked-native-missing") {
       return `Windows server sidecar is missing ${String(this.missingFiles?.length ?? 0)} unpacked native files.`;
@@ -1064,8 +1068,11 @@ export function resolveWindowsServerAsarIgnoreGlobs(arch: typeof BuildArch.Type)
   ];
 }
 
-// Native Windows builds ship server-compile-cache (one file per server chunk); Linux cross builds skip it.
-export const WINDOWS_PACKAGED_PAYLOAD_FILE_LIMIT = 100;
+// Native Windows builds ship server-compile-cache (one file per server chunk) and Linux cross builds
+// skip it, so the cache has its own budget and grows with the server without tripping the payload one.
+export const WINDOWS_PACKAGED_PAYLOAD_FILE_LIMIT = 90;
+export const WINDOWS_SERVER_COMPILE_CACHE_DIR = "server-compile-cache";
+export const WINDOWS_SERVER_COMPILE_CACHE_FILE_LIMIT = 100;
 export const WINDOWS_SERVER_RESOURCE_SOURCE_DIR = "apps/desktop/prod-resources/windows-server";
 export const WINDOWS_SERVER_EXTRA_RESOURCES = [
   {
@@ -3241,9 +3248,13 @@ function collectUnpackedAsarFiles(
   return output;
 }
 
-const countPayloadFiles = Effect.fn("desktopArtifact.countPayloadFiles")(function* (root: string) {
+const countPayloadFiles = Effect.fn("desktopArtifact.countPayloadFiles")(function* (
+  root: string,
+  skipDirectory?: string,
+) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+  if (!(yield* fs.exists(root))) return 0;
   const pendingDirectories = [root];
   let count = 0;
 
@@ -3255,7 +3266,7 @@ const countPayloadFiles = Effect.fn("desktopArtifact.countPayloadFiles")(functio
       const entryPath = path.join(directory, entry);
       const stat = yield* fs.stat(entryPath);
       if (stat.type === "Directory") {
-        pendingDirectories.push(entryPath);
+        if (entryPath !== skipDirectory) pendingDirectories.push(entryPath);
       } else if (stat.type === "File") {
         count += 1;
       }
@@ -3381,6 +3392,7 @@ export const validateWindowsPackagedPayload = Effect.fn(
   readonly appVersion: string;
   readonly expectWslRuntime?: boolean;
   readonly fileLimit?: number;
+  readonly compileCacheFileLimit?: number;
   readonly verbose?: boolean;
 }) {
   const fs = yield* FileSystem.FileSystem;
@@ -3572,13 +3584,25 @@ export const validateWindowsPackagedPayload = Effect.fn(
     }
   }
 
-  const fileCount = yield* countPayloadFiles(packagedAppDir);
+  const compileCacheDir = path.join(resourcesDir, WINDOWS_SERVER_COMPILE_CACHE_DIR);
+  const fileCount = yield* countPayloadFiles(packagedAppDir, compileCacheDir);
   if (fileCount > fileLimit) {
     return yield* new WindowsPackagedPayloadValidationError({
       reason: "file-limit-exceeded",
       packagedAppDir,
       fileCount,
       fileLimit,
+    });
+  }
+  const compileCacheFileCount = yield* countPayloadFiles(compileCacheDir);
+  const compileCacheFileLimit =
+    input.compileCacheFileLimit ?? WINDOWS_SERVER_COMPILE_CACHE_FILE_LIMIT;
+  if (compileCacheFileCount > compileCacheFileLimit) {
+    return yield* new WindowsPackagedPayloadValidationError({
+      reason: "compile-cache-limit-exceeded",
+      packagedAppDir,
+      fileCount: compileCacheFileCount,
+      fileLimit: compileCacheFileLimit,
     });
   }
 
@@ -3590,9 +3614,9 @@ export const validateWindowsPackagedPayload = Effect.fn(
   });
 
   yield* Effect.log(
-    `[desktop-artifact] Validated Windows payload (${String(fileCount)} files, ${String(unpackedFiles.length)} sidecar natives).`,
+    `[desktop-artifact] Validated Windows payload (${String(fileCount)} files, ${String(compileCacheFileCount)} compile cache files, ${String(unpackedFiles.length)} sidecar natives).`,
   );
-  return { packagedAppDir, fileCount, unpackedFiles } as const;
+  return { packagedAppDir, fileCount, compileCacheFileCount, unpackedFiles } as const;
 });
 
 export class MacPackagedAppMissingError extends Schema.TaggedError<MacPackagedAppMissingError>()(
