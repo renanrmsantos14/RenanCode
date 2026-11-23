@@ -9,7 +9,7 @@ description: "Verifica o medidor de limites de uso: indicador `Claude 39/60` no 
 
 - Leitura: `claudeUsagePoller.ts` faz uma chamada por `configDir` que traz limites e créditos (`cedar_ember=1`), a cada 60 s em foco e 5 min sem foco (`BackgroundPolicy.scopeDemand`), com `get_usage` de reserva. `retryAt` diz quando tenta de novo. `applyUsageReading` só republica o que mudou; `applyUsageReadFailure` guarda `lastError` sem trocar as janelas nem `checkedAt`.
 - Meta (`packages/shared/src/usageLimits.ts`): 20% por dia útil seg–sex desde o reset real, fuso America/Sao_Paulo, sem feriados, teto 100%.
-- Composer: uma entrada por conta Claude ativa, com qualquer modelo selecionado. Dado com mais de 3 min esmaece e mostra a idade.
+- Composer: uma entrada por conta Claude ativa, com qualquer modelo selecionado. Dado com mais de 3 min esmaece; a idade fica no tooltip e no detalhe. Com o composer abaixo de 620 px vira só o ícone.
 - Detalhe: veredito (`On pace` / `N% over goal`), barra `usado / meta`, reset, previsão só quando há risco, 5 h, Fable sem meta e oculto em 0%, hora do dado e os outros providers. Falha só aparece com dado acima de 3 min (`Updated 6m ago · retrying in 8m`).
 
 ## Roteiro
