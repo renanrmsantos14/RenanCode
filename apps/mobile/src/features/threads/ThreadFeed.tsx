@@ -10,7 +10,11 @@ import { ListSection } from "../../components/ui/ListSection";
 import { collectMobileAssistantTextSelectors } from "../../lib/assistantCitationSelection";
 import { Button } from "../../components/ui/Button";
 import * as Dialog from "../../components/ui/Dialog";
-import { ASSISTANT_CITATION_MAX_TEXT_LENGTH, type AssistantCitation } from "@t3tools/contracts";
+import {
+  ASSISTANT_CITATION_MAX_TEXT_LENGTH,
+  type AssistantCitation,
+  isClaudeCloudThreadId,
+} from "@t3tools/contracts";
 import { useOpenPullRequest } from "../../native/useOpenPullRequest";
 import { useWorkspaceSettledContentWidth } from "../layout/workspace-content-width";
 import { useVisibleSecondClock } from "./use-visible-second-clock";
@@ -3505,6 +3509,13 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       if (target) openThreadLink(target);
       return;
     }
+    // A cloud session's paths live on its VM; this device cannot open them.
+    if (
+      isClaudeCloudThreadId(String(props.threadId)) &&
+      resolveMarkdownLinkPresentation(href).kind === "file"
+    ) {
+      return;
+    }
     const media = resolveMarkdownMediaPreview(href, {
       environmentId: props.environmentId,
       threadId: props.threadId,
@@ -3799,6 +3810,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       threadId: props.threadId,
       workspaceRoot: props.workspaceRoot,
       itemId: image.itemId,
+      index: image.index,
     });
     const media = viewedImage
       ? resolveMarkdownMediaPreview(image.path, {

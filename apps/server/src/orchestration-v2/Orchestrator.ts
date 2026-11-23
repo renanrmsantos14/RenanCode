@@ -143,6 +143,7 @@ import {
   visibleConversationItems,
   visibleDeltaRunOrdinals,
 } from "./ContextHandoffService.ts";
+import { isProviderNativeImageAttachment } from "@t3tools/provider-core/server/attachmentPrompt";
 import { notificationTurnItem } from "@t3tools/provider-core/server/notification";
 import {
   cancelledBeforeStart,
@@ -7294,18 +7295,18 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         : undefined,
     );
     if (isClaudeCloudThreadId(command.threadId)) {
-      // The Claude adapter runs cloud turns through the session's login; it cannot upload files
-      // there or hand the session to another provider or account.
+      // The Claude adapter runs cloud turns through the session's login. Images travel inline in
+      // the message; other files would only be a local path the cloud VM cannot read.
       const switchesAccount =
         command.modelSelection !== undefined &&
         command.modelSelection.instanceId !== projection.thread.providerInstanceId;
-      if (command.attachments.length > 0 || switchesAccount) {
+      if (!command.attachments.every(isProviderNativeImageAttachment) || switchesAccount) {
         return yield* new OrchestratorDispatchError({
           commandId: command.commandId,
           commandType: command.type,
           cause: switchesAccount
             ? "A Claude cloud session stays on its Claude account. Pick a model from the same account."
-            : "Claude cloud sessions take text messages only.",
+            : "Claude cloud sessions take text and images (PNG, JPEG, GIF or WebP) only.",
         });
       }
     }

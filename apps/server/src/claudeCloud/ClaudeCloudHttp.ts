@@ -69,19 +69,35 @@ export const makeClaudeCloudHttp = Effect.gen(function* () {
     ),
   );
 
-  const getJson = <S extends Schema.Top>(
+  const get = <A, E, R>(
     account: ClaudeAccountRef,
     url: string,
-    schema: S,
+    body: (response: HttpClientResponse.HttpClientResponse) => Effect.Effect<A, E, R>,
     operation: string,
   ) =>
     authHeaders(account).pipe(
       Effect.flatMap((headers) =>
         HttpClientRequest.get(url).pipe(HttpClientRequest.setHeaders(headers), httpClient.execute),
       ),
-      Effect.flatMap(HttpClientResponse.schemaBodyJson(schema)),
+      Effect.flatMap(body),
       Effect.timeout(Duration.seconds(30)),
       Effect.mapError(toCloudError(operation)),
+    );
+
+  const getJson = <S extends Schema.Top>(
+    account: ClaudeAccountRef,
+    url: string,
+    schema: S,
+    operation: string,
+  ) => get(account, url, HttpClientResponse.schemaBodyJson(schema), operation);
+
+  /** A file the session sent the user (SendUserFile), by its claude.ai file uuid. */
+  const fileBytes = (account: ClaudeAccountRef, fileUuid: string) =>
+    get(
+      account,
+      `${API_ROOT}/api/oauth/files/${encodeURIComponent(fileUuid)}/content`,
+      (response) => response.arrayBuffer,
+      "file-content",
     );
 
   const postRaw = (account: ClaudeAccountRef, url: string, body: unknown) =>
@@ -143,7 +159,7 @@ export const makeClaudeCloudHttp = Effect.gen(function* () {
       ),
     ).pipe(Stream.mapError(toCloudError("event-stream")));
 
-  return { eventNames, getJson, post, postJson, toCloudError };
+  return { eventNames, fileBytes, getJson, post, postJson, toCloudError };
 });
 
 /** Posts one event the way the Claude CLI does: `{events: [{payload}]}`. */

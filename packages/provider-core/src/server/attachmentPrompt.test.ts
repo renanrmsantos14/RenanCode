@@ -7,7 +7,10 @@ import {
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 
-import { providerMessageTextWithAttachmentPaths } from "./attachmentPrompt.ts";
+import {
+  providerMessageTextWithAttachmentPaths,
+  withInlineAttachmentNotices,
+} from "./attachmentPrompt.ts";
 
 const document = ChatFileAttachment.make({
   id: ChatAttachmentId.make("file-document"),
@@ -56,6 +59,19 @@ describe("provider attachment prompts", () => {
           resolveAttachmentPath: () => null,
         }),
         "text extracted",
+      );
+    }),
+  );
+  it.effect("drops the local path of an inline image for a remote runtime", () =>
+    Effect.gen(function* () {
+      const text = yield* providerMessageTextWithAttachmentPaths({
+        text: "olha",
+        attachments: [image],
+        resolveAttachmentPath: () => "/home/u/.t3/attachments/a.png",
+      });
+      assert.strictEqual(
+        withInlineAttachmentNotices(text),
+        `olha\n\n[Attached image "${image.name}" is included in this message.]`,
       );
     }),
   );

@@ -9,6 +9,7 @@ import {
   type WorkLogPresentationEntry,
   workEntryIndicatesToolFailure,
   workEntryDisplayIndicatesToolFailure,
+  workEntriesViewedImages,
 } from "./presentation.js";
 
 function commandItem(
@@ -202,5 +203,31 @@ describe("resolveWorkEntryToolPresentation", () => {
         toolData: { server: "another-server", tool: "preview_click" },
       }),
     ).toBeNull();
+  });
+});
+
+describe("workEntriesViewedImages", () => {
+  it("shows the images a SendUserFile call sent, indexed by their place in its output", () => {
+    const structuredPayload = {
+      ...commandItem(),
+      id: TurnItemId.make("send"),
+      type: "dynamic_tool",
+      toolName: "SendUserFile",
+      input: { files: ["/tmp/prints/a.png", "/tmp/prints/b.jpg"] },
+      outputHasImage: true,
+    } as OrchestrationV2TurnItem;
+    const entry: WorkLogPresentationEntry = {
+      id: "w1",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      label: "SendUserFile",
+      tone: "tool",
+      itemType: "dynamic_tool",
+      toolLifecycleStatus: "completed",
+      structuredPayload,
+    };
+    expect(workEntriesViewedImages([entry])).toEqual([
+      { path: "/tmp/prints/a.png", itemId: "send", index: 0 },
+      { path: "/tmp/prints/b.jpg", itemId: "send", index: 1 },
+    ]);
   });
 });

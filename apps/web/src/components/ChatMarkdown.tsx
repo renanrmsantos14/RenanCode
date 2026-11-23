@@ -23,6 +23,7 @@ import { usePullRequestLinking } from "~/hooks/usePullRequestLinking";
 import {
   AuthFilesystemReadScope,
   AuthOrchestrationOperateScope,
+  isClaudeCloudThreadId,
   SOURCE_CONTROL_MEDIA_ASSET,
 } from "@t3tools/contracts";
 import { chatMarkdownImageSource } from "@t3tools/shared/markdownHast";
@@ -995,6 +996,15 @@ function useChatMarkdownState(
     copyMarkdown: string,
     mediaSource?: string,
   ) => {
+    // A cloud session's paths live on its VM; this machine cannot open, read or reveal them.
+    if (threadRef && isClaudeCloudThreadId(threadRef.threadId)) {
+      return (
+        <SharedTooltipTrigger
+          render={<code>{fileLinkMeta.filePath}</code>}
+          label={gt("This file is on the cloud session's machine")}
+        />
+      );
+    }
     const resolveHostPath = () =>
       resolveMarkdownFileHostPath({
         meta: fileLinkMeta,
