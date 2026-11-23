@@ -41,6 +41,7 @@ import {
   AuthProvidersManageScope,
   type AuthEnvironmentScope,
   type ScheduledTaskListResult,
+  WorkflowRequestError,
   AuthSessionId,
   ClientConnectionMethod,
   ClientDeviceType,
@@ -136,7 +137,10 @@ import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts"
 import * as DocumentText from "./provider/DocumentText.ts";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as WorkModules from "./workModules/WorkModuleService.ts";
+import * as Workflows from "./workflows/Workflows.ts";
+import * as WorkflowRuntime from "./workflows/WorkflowRuntime.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
+import * as FeedbackStore from "./feedback/FeedbackStore.ts";
 import * as GuestShareService from "./guest/GuestShareService.ts";
 import {
   bufferShellLiveStream,
@@ -1511,7 +1515,13 @@ export const layerWsRpc = (
       const providerSessionManager = yield* ProviderSessionManager.ProviderSessionManagerV2;
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
       const workModules = yield* WorkModules.WorkModuleService;
+      const workflows = yield* Workflows.Workflows;
+      const workflowDefinitions = yield* WorkflowRuntime.WorkflowDefinitions;
+      // The service's messages are built from its own attributes, so they are safe to send.
+      const toWorkflowRequestError = (error: Workflows.WorkflowError) =>
+        new WorkflowRequestError({ message: error.message });
       const secretRequests = yield* SecretRequests.SecretRequests;
+      const feedbackStore = yield* FeedbackStore.FeedbackStore;
       const guestShares = yield* GuestShareService.GuestShareService;
       const pullRequests = yield* PullRequestService.PullRequestService;
       const issues = yield* IssueService.IssueService;
@@ -2379,6 +2389,25 @@ export const layerWsRpc = (
           ),
         [ORCHESTRATION_V2_WS_METHODS.subscribePromptSuggestion]: (input) =>
           providerSessionManager.subscribePromptSuggestion(input.threadId),
+        [WS_METHODS.workflowsSubscribe]: (_input) => workflows.watch,
+        [WS_METHODS.workflowsCounts]: (_input) => workflows.counts,
+        [WS_METHODS.workflowsGet]: (input) =>
+          workflows.get(input.runId).pipe(Effect.mapError(toWorkflowRequestError)),
+        [WS_METHODS.workflowsAnswer]: (input) =>
+          workflows
+            .answer(input.runId, input.name, {
+              choice: input.choice,
+              ...(input.reason === undefined ? {} : { reason: input.reason }),
+            })
+            .pipe(Effect.mapError(toWorkflowRequestError)),
+        [WS_METHODS.workflowsResume]: (input) =>
+          workflows.resume(input.runId).pipe(Effect.mapError(toWorkflowRequestError)),
+        [WS_METHODS.workflowsCancel]: (input) =>
+          workflows.cancel(input.runId, input.reason).pipe(Effect.mapError(toWorkflowRequestError)),
+        [WS_METHODS.workflowsGetDefinition]: (_input) => workflowDefinitions.read,
+        [WS_METHODS.workflowsSaveDefinition]: (input) =>
+          workflowDefinitions.save(input.name, input.source),
+        [WS_METHODS.workflowsDeleteDefinition]: (input) => workflowDefinitions.remove(input.name),
         [WS_METHODS.scheduledTasksSubscribe]: (_input) =>
           scheduledTasks.subscribeList().pipe(Stream.map(withVisibleWebhookUrls)),
         [WS_METHODS.scheduledTasksUpsert]: (input) => scheduledTasks.upsert(input),
@@ -2406,6 +2435,7 @@ export const layerWsRpc = (
           Effect.annotateCurrentSpan({ "orchestration_v2.thread_id": input.threadId }).pipe(
             Effect.andThen(secretRequests.answer(input)),
           ),
+        [WS_METHODS.agentFeedbackAnswerRequest]: (input) => feedbackStore.answer(input),
         [WS_METHODS.scheduledTasksListWebhookDeliveries]: (input) =>
           Effect.annotateCurrentSpan({ "scheduled_task.id": input.id }).pipe(
             Effect.andThen(scheduledTasks.listWebhookDeliveries(input)),
@@ -2425,7 +2455,8 @@ export const layerWsRpc = (
           workModules.unlinkThreads([input.threadId]),
         [WS_METHODS.workModulesConfirmSuggestion]: (input) =>
           workModules.confirmSuggestion(input.threadId),
-        [WS_METHODS.serverProbe]: (_input) => Effect.succeed({}),
+        [WS_METHODS.serverProbe]: (_input) =>
+          Effect.map(DateTime.now, (now) => ({ serverTime: DateTime.formatIso(now) })),
         [WS_METHODS.serverGetConfig]: (_input) =>
           loadServerConfig({
             usageLimitsCommand: false,

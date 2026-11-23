@@ -14,7 +14,8 @@ export function isSidebarUtilityPage(pathname: string) {
     pathname.startsWith("/projects/") ||
     pathname === "/pull-requests" ||
     pathname === "/issues" ||
-    pathname === "/work"
+    pathname === "/work" ||
+    pathname === "/workflows"
   );
 }
 
