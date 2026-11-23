@@ -571,6 +571,18 @@ describe("ChatMarkdown workspace file opens", () => {
     expect(workspaceSearch).toHaveBeenCalledOnce();
   });
 
+  it("shows a cloud session's file as text instead of opening it here", async () => {
+    setup();
+    using openFile = vi.spyOn(useRightPanelStore.getState(), "openFile");
+    await using screen = await renderText("[prints](/tmp/prints/tela.png)", {
+      cwd: "/home/user/repo",
+      threadRef: { ...threadRef, threadId: ThreadId.make("claude-cloud:cse_1") },
+    });
+    expect(screen.container.querySelector("a")).toBeNull();
+    expect(screen.container.querySelector("code")?.textContent).toBe("/tmp/prints/tela.png");
+    expect(openFile).not.toHaveBeenCalled();
+  });
+
   it("opens a path from markdown rendered in another checkout under that checkout", async () => {
     setup();
     const scratchThread = { ...threadRef, threadId: ThreadId.make("scratch-thread") };

@@ -157,6 +157,14 @@ export function isProviderNativeImageAttachment(attachment: ChatAttachment): boo
   );
 }
 
+/** For a remote runtime: the saved paths are local to this machine, the bytes travel inline. */
+export function withInlineAttachmentNotices(text: string): string {
+  return text.replaceAll(
+    /\[Attached image "(.*?)" is saved at: [^\n]*?\]$/gm,
+    '[Attached image "$1" is included in this message.]',
+  );
+}
+
 export const providerMessageTextWithAttachmentPaths = Effect.fn(
   "providerMessageTextWithAttachmentPaths",
 )(function* (input: {

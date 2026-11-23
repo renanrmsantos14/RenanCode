@@ -151,11 +151,12 @@ function useWorkGroupViewedImages(
   const gt = useGT();
   const fallbackName = gt("image", { $context: "fallback name of an image without alt text" });
   const viewed = threadRef
-    ? workEntriesViewedImages(groupedEntries).flatMap(({ path, itemId }) => {
+    ? workEntriesViewedImages(groupedEntries).flatMap(({ path, itemId, index }) => {
         const asset = resolveViewedImageAsset(path, {
           threadId: threadRef.threadId,
           workspaceRoot,
           itemId,
+          index,
         });
         return asset ? [{ path, asset }] : [];
       })

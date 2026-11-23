@@ -489,6 +489,24 @@ export interface ViewedImageRef {
   readonly path: string;
   /** Set when the turn item's own output holds the image, which is also readable on cloud hosts. */
   readonly itemId?: TurnItemId;
+  /** Which of the output's images, when it holds several. */
+  readonly index?: number;
+}
+
+/** Images a Claude cloud agent sent with SendUserFile; the server put their bytes in the output. */
+function workEntrySentImages(entry: WorkLogPresentationEntry): ViewedImageRef[] {
+  const item = entry.structuredPayload;
+  if (
+    item?.type !== "dynamic_tool" ||
+    item.toolName !== "SendUserFile" ||
+    item.outputHasImage !== true
+  ) {
+    return [];
+  }
+  const files = (item.input as { readonly files?: unknown } | null)?.files;
+  // The server adds previews only when every sent file is an image, in the order sent.
+  if (!Array.isArray(files) || !files.every((file) => typeof file === "string")) return [];
+  return files.map((path, index) => ({ path, itemId: item.id, index }));
 }
 
 /** The entry's viewed image, with the item id when its output holds the bytes. */
@@ -507,11 +525,12 @@ export function workEntriesViewedImages(
 ): ViewedImageRef[] {
   const images = new Map<string, ViewedImageRef>();
   for (const entry of entries) {
-    const image = workEntryViewedImage(entry);
-    if (image === null) continue;
-    const known = images.get(image.path);
-    if (known === undefined || (known.itemId === undefined && image.itemId !== undefined)) {
-      images.set(image.path, image);
+    const viewed = workEntryViewedImage(entry);
+    for (const image of viewed === null ? workEntrySentImages(entry) : [viewed]) {
+      const known = images.get(image.path);
+      if (known === undefined || (known.itemId === undefined && image.itemId !== undefined)) {
+        images.set(image.path, image);
+      }
     }
   }
   return [...images.values()];
@@ -530,6 +549,7 @@ export function resolveViewedImageAsset(
     readonly threadId: ThreadId;
     readonly workspaceRoot?: string | null | undefined;
     readonly itemId?: TurnItemId | undefined;
+    readonly index?: number | undefined;
   },
 ): ViewedImageAsset | null {
   if (input.itemId !== undefined) {
@@ -538,7 +558,7 @@ export function resolveViewedImageAsset(
         _tag: "tool-output-image",
         threadId: input.threadId,
         itemId: input.itemId,
-        index: 0,
+        index: input.index ?? 0,
       },
       alt: source.split(/[\\/]/).pop() || source,
       srcFragment: "",

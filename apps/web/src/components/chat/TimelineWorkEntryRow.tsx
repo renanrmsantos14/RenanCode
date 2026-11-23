@@ -259,11 +259,12 @@ export function ViewedImagesTimelineRow({
   if (!threadRef) return null;
   return (
     <div className="flex flex-wrap items-start gap-2 px-0.5" data-image-gallery>
-      {row.images.map(({ path, itemId }) => {
+      {row.images.map(({ path, itemId, index }) => {
         const image = resolveViewedImageAsset(path, {
           threadId: threadRef.threadId,
           workspaceRoot,
           itemId,
+          index,
         });
         return image ? (
           <ChatMarkdownAssetImage

@@ -1,12 +1,20 @@
 import type { PermissionResult, SDKMessage, SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
-import { CLAUDE_CLOUD_THREAD_ID_PREFIX, isClaudeCloudThreadId } from "@t3tools/contracts";
+import {
+  CLAUDE_CLOUD_THREAD_ID_PREFIX,
+  isClaudeCloudThreadId,
+  isProviderSendTurnSupportedImageMimeType,
+  PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
+} from "@t3tools/contracts";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
 import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import { withInlineAttachmentNotices } from "@t3tools/provider-core/server/attachmentPrompt";
+import { MAX_TOOL_OUTPUT_IMAGES } from "@t3tools/shared/toolOutput";
 
 import {
   ClaudeAgentSdkQueryRunnerError,
@@ -57,6 +65,8 @@ interface CloudControlRequest {
   };
 }
 
+const ClaudeSettingsLanguage = Schema.Struct({ language: Schema.optional(Schema.String) });
+
 const runnerError = (method: string) => (cause: unknown) =>
   new ClaudeAgentSdkQueryRunnerError({ method, cause });
 
@@ -94,6 +104,78 @@ export function isCanUseToolRequest(payload: unknown): payload is CloudControlRe
   );
 }
 
+export interface SentFileImage {
+  readonly fileUuid: string;
+  readonly mediaType: string;
+}
+
+const SendUserFileResult = Schema.Struct({
+  attachments: Schema.Array(
+    Schema.Struct({
+      file_uuid: Schema.String,
+      isImage: Schema.optional(Schema.Boolean),
+      media_type: Schema.String,
+      size: Schema.optional(Schema.Number),
+    }),
+  ),
+});
+const decodeSendUserFileResult = Schema.decodeUnknownOption(SendUserFileResult);
+
+/**
+ * Images a SendUserFile result names; the cloud stores their bytes, not the tool result.
+ * None when one cannot be shown, since the timeline pairs each image with its path by position.
+ */
+export function sentFileImages(frame: SDKMessage): ReadonlyArray<SentFileImage> {
+  if (frame.type !== "user") return [];
+  const result = decodeSendUserFileResult(frame.tool_use_result);
+  if (result._tag === "None") return [];
+  const images = result.value.attachments;
+  const showable =
+    images.length <= MAX_TOOL_OUTPUT_IMAGES &&
+    images.every(
+      (image) =>
+        image.isImage === true &&
+        isProviderSendTurnSupportedImageMimeType(image.media_type) &&
+        (image.size ?? 0) <= PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
+    );
+  return showable
+    ? images.map((image) => ({ fileUuid: image.file_uuid, mediaType: image.media_type }))
+    : [];
+}
+
+/** Puts the sent images into the tool result, where the Read tool's images already show. */
+export function withSentFileImages(
+  frame: SDKMessage,
+  images: ReadonlyArray<SentFileImage & { readonly base64: string }>,
+): SDKMessage {
+  if (frame.type !== "user" || images.length === 0) return frame;
+  const content = frame.message.content;
+  if (typeof content === "string") return frame;
+  const blocks = images.map((image) => ({
+    type: "image" as const,
+    source: { type: "base64" as const, media_type: image.mediaType, data: image.base64 },
+  }));
+  return {
+    ...frame,
+    message: {
+      ...frame.message,
+      content: content.map((block) =>
+        block.type !== "tool_result"
+          ? block
+          : {
+              ...block,
+              content: [
+                ...(typeof block.content === "string"
+                  ? [{ type: "text" as const, text: block.content }]
+                  : (block.content ?? [])),
+                ...blocks,
+              ],
+            },
+      ),
+    },
+  } as SDKMessage;
+}
+
 /**
  * Runs Claude cloud threads through the regular Claude adapter: the cloud session stands in
  * for the local SDK process, so runs, tool items, approvals and Stop work as they do locally.
@@ -103,6 +185,14 @@ export const makeClaudeCloudQueryRunner = Effect.fn("makeClaudeCloudQueryRunner"
 ) {
   const http = yield* makeClaudeCloudHttp;
   const random = yield* SecureRandom.SecureRandom;
+  const fileSystem = yield* FileSystem.FileSystem;
+
+  // The cloud VM has none of this machine's Claude settings, so it cannot know the reply language.
+  const languageOf = fileSystem.readFileString(`${account.configDir}/settings.json`).pipe(
+    Effect.flatMap(Schema.decodeEffect(Schema.fromJsonString(ClaudeSettingsLanguage))),
+    Effect.map((settings) => settings.language?.trim() || undefined),
+    Effect.orElseSucceed(() => undefined),
+  );
 
   const latestSequence = (sessionId: string) =>
     http
@@ -142,6 +232,26 @@ export const makeClaudeCloudQueryRunner = Effect.fn("makeClaudeCloudQueryRunner"
     return events.reverse();
   });
 
+  // One failed download drops every preview (the tool result still names the files): the
+  // timeline pairs each image with its path by position.
+  const withDownloadedSentFiles = (frame: SDKMessage) =>
+    Effect.forEach(
+      sentFileImages(frame),
+      (image) =>
+        http.fileBytes(account, image.fileUuid).pipe(
+          Effect.filterOrFail((bytes) => bytes.byteLength <= PROVIDER_SEND_TURN_MAX_IMAGE_BYTES),
+          Effect.map((bytes) => ({ ...image, base64: Buffer.from(bytes).toString("base64") })),
+        ),
+      { concurrency: 4 },
+    ).pipe(
+      Effect.map((images) => withSentFileImages(frame, images)),
+      Effect.catch((cause) =>
+        Effect.logWarning("Could not download a Claude cloud sent file", { cause }).pipe(
+          Effect.as(frame),
+        ),
+      ),
+    );
+
   const postEvent = (sessionId: string, payload: unknown, operation: string) =>
     http.post(
       account,
@@ -156,6 +266,7 @@ export const makeClaudeCloudQueryRunner = Effect.fn("makeClaudeCloudQueryRunner"
         ? input.threadId.slice(CLAUDE_CLOUD_THREAD_ID_PREFIX.length)
         : input.threadId;
       const messages = yield* Queue.unbounded<SDKMessage, ClaudeAgentSdkQueryRunnerError>();
+      const language = yield* languageOf;
       const canUseTool = input.options.canUseTool;
       const nativeSessionId = input.options.resume ?? input.options.sessionId ?? sessionId;
 
@@ -206,7 +317,8 @@ export const makeClaudeCloudQueryRunner = Effect.fn("makeClaudeCloudQueryRunner"
           if (isCanUseToolRequest(event.payload)) {
             yield* Effect.forkDetach(answerPermission(event.payload));
           } else if (isClaudeSdkFrame(event.payload)) {
-            yield* Queue.offer(messages, withNativeSessionId(event.payload, nativeSessionId));
+            const frame = yield* withDownloadedSentFiles(event.payload);
+            yield* Queue.offer(messages, withNativeSessionId(frame, nativeSessionId));
           }
         }
       }).pipe(
@@ -221,7 +333,11 @@ export const makeClaudeCloudQueryRunner = Effect.fn("makeClaudeCloudQueryRunner"
       const session: ClaudeAgentSdkQuerySession = {
         messages: Stream.fromQueue(messages),
         offer: (message: SDKUserMessage, onQueued?: () => void) =>
-          postEvent(sessionId, { ...message, session_id: sessionId }, "send-message").pipe(
+          postEvent(
+            sessionId,
+            { ...forCloudVm(message, language), session_id: sessionId },
+            "send-message",
+          ).pipe(
             Effect.tap(() => Effect.sync(() => onQueued?.())),
             Effect.mapError(runnerError("offer")),
           ),
@@ -263,6 +379,33 @@ export const makeClaudeCloudQueryRunner = Effect.fn("makeClaudeCloudQueryRunner"
 
   return { open };
 });
+
+export function forCloudVm(message: SDKUserMessage, language?: string): SDKUserMessage {
+  const content = message.message.content;
+  // A slash command must stay the message's only text to run as a command.
+  const firstText =
+    typeof content === "string" ? content : content.find((block) => block.type === "text")?.text;
+  const isCommand = firstText !== undefined && /^\/[\w:-]+(\s|$)/.test(firstText);
+  const reminderLanguage = isCommand ? undefined : language;
+  if (typeof content === "string" && reminderLanguage === undefined) return message;
+  const blocks =
+    typeof content === "string"
+      ? [{ type: "text" as const, text: content }]
+      : content.map((block) =>
+          block.type === "text"
+            ? { ...block, text: withInlineAttachmentNotices(block.text) }
+            : block,
+        );
+  const reminder = `<system-reminder>Always respond in ${reminderLanguage}.</system-reminder>`;
+  return {
+    ...message,
+    message: {
+      ...message.message,
+      content:
+        reminderLanguage === undefined ? blocks : [...blocks, { type: "text", text: reminder }],
+    },
+  };
+}
 
 /** Sends cloud threads to the cloud runner and every other thread to the local SDK runner. */
 export function routeClaudeQueryRunner(
