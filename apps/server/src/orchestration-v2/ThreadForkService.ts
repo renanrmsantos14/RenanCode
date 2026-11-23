@@ -100,10 +100,11 @@ export const layer: Layer.Layer<ThreadForkServiceV2> = Layer.succeed(
         });
       }
       // The remote parent delegated the source thread, not its forks; likewise only the
-      // source continues the offline original.
+      // source continues the offline original. Nor is a fork a step of the run its source was one of.
       const {
         delegatedFrom: _delegatedFrom,
         continuedFrom: _continuedFrom,
+        workflowRun: _workflowRun,
         ...inherited
       } = input.sourceProjection.thread;
       const targetThread: OrchestrationV2AppThread = {
