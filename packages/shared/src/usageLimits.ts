@@ -13,6 +13,7 @@ import {
   type ServerProvider,
   type ServerProviderUsageLimits,
   type ServerProviderUsageWindow,
+  type SubagentModelPolicy,
   type UsageLimitSourceAccount,
   type UsageLimitSourceSnapshot,
   type UsageLimitSourceSnapshots,
@@ -76,6 +77,30 @@ export function exhaustedUsageWindow(
     default:
       return exhausted[0];
   }
+}
+
+/** The model a subagent policy picks for these usage windows; null leaves Claude's own choice.
+ * Model-scoped windows are ignored, and a window whose reset has passed no longer counts. */
+export function resolveSubagentModel(
+  policy: SubagentModelPolicy | null,
+  windows: readonly ServerProviderUsageWindow[],
+  now: number,
+) {
+  if (policy === null) return null;
+  const { usagePercent, usageModel } = policy;
+  const overThreshold =
+    usagePercent !== null &&
+    usageModel !== null &&
+    windows.some(
+      (window) =>
+        window.modelIds === undefined &&
+        window.providerIds === undefined &&
+        window.usedPercent >= usagePercent &&
+        (!window.resetsAt ||
+          !Number.isFinite(Date.parse(window.resetsAt)) ||
+          Date.parse(window.resetsAt) > now),
+    );
+  return overThreshold ? usageModel : policy.model;
 }
 
 export function resolveNewThreadModelSelection(input: {

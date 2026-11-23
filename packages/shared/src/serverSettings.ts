@@ -616,6 +616,7 @@ export function applyServerSettingsPatch(
     ...(patch.fallbackModelSelection !== undefined
       ? { fallbackModelSelection: patch.fallbackModelSelection }
       : {}),
+    ...(patch.subagentModel !== undefined ? { subagentModel: patch.subagentModel } : {}),
     ...(patch.speechPostProcessingModelSelection !== undefined
       ? { speechPostProcessingModelSelection: patch.speechPostProcessingModelSelection }
       : {}),

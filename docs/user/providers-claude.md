@@ -89,6 +89,18 @@ Claude Code holds the turn until that window reopens, so it can keep showing as
 working. Wait for the reset, or stop the turn and continue later. The warning's
 timestamp shows when the displayed wait started.
 
+## Subagent model
+
+**Settings → New threads → Subagent model** picks the model Claude's subagents use
+when the agent does not choose one; a project can set its own. A custom agent's
+own `model` still wins, and so does `CLAUDE_CODE_SUBAGENT_MODEL` in the instance's
+environment or in your Claude settings.
+
+**Subagents near the usage limit** switches subagents to another model once any
+Claude usage window passes the share you pick, and back after that window resets.
+The change applies from the thread's next turn, or later if background work is
+still running.
+
 ## Steering
 
 A steer waits until Claude finishes the tool calls it is running, then Claude reads it

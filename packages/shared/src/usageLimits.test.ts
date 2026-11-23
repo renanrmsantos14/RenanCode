@@ -42,6 +42,7 @@ import {
   paceRemainingPercent,
   usesChatGptSharing,
   resolveNewThreadModelSelection,
+  resolveSubagentModel,
 } from "./usageLimits.ts";
 import { collectLimitNotices } from "./usageLimitsCopy.ts";
 
@@ -226,6 +227,34 @@ describe("new thread model fallback", () => {
       ).toEqual(usesFallback ? fallback : defaultSelection);
     },
   );
+});
+
+describe("subagent model", () => {
+  const nowMs = Date.parse("2026-11-23T12:00:00.000Z");
+  const weekly = {
+    id: "seven_day",
+    kind: "weekly" as const,
+    label: "Weekly",
+    usedPercent: 85,
+    resetsAt: "2026-11-25T00:00:00.000Z",
+  };
+  const policy = { model: "opus" as const, usagePercent: 80, usageModel: "haiku" as const };
+
+  it("switches to the usage model above the threshold until the window resets", () => {
+    expect(resolveSubagentModel(policy, [weekly], nowMs)).toBe("haiku");
+    expect(resolveSubagentModel(policy, [{ ...weekly, usedPercent: 40 }], nowMs)).toBe("opus");
+    expect(
+      resolveSubagentModel(policy, [{ ...weekly, resetsAt: "2026-11-23T11:00:00.000Z" }], nowMs),
+    ).toBe("opus");
+  });
+
+  it("ignores model-scoped windows and leaves Claude alone without a policy", () => {
+    expect(resolveSubagentModel(policy, [{ ...weekly, modelIds: ["claude-fable-5"] }], nowMs)).toBe(
+      "opus",
+    );
+    expect(resolveSubagentModel({ ...policy, model: null }, [], nowMs)).toBeNull();
+    expect(resolveSubagentModel(null, [weekly], nowMs)).toBeNull();
+  });
 });
 
 describe("pace", () => {

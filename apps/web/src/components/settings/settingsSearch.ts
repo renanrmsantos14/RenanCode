@@ -340,6 +340,20 @@ export const SETTINGS_SEARCH_ITEMS = [
     environmentOnly: true,
   },
   {
+    id: "subagent-model",
+    title: msg("Subagent model"),
+    to: "/settings/threads",
+    scope: "project-defaults",
+    searchTerms: [msg("claude subagent agent task default model haiku sonnet opus fable")],
+  },
+  {
+    id: "subagent-usage-model",
+    title: msg("Subagents near the usage limit"),
+    to: "/settings/threads",
+    scope: "project-defaults",
+    searchTerms: [msg("claude subagent usage limit reset threshold cheaper model")],
+  },
+  {
     id: "default-permissions",
     title: msg("Permissions"),
     to: "/settings/threads",
