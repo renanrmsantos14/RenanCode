@@ -3,6 +3,7 @@ import { useAtomValue } from "@effect/atom-react";
 import {
   type ClaudeAccountUsage,
   claudeAccountText,
+  claudeAccountValue,
   claudeWeeklyReading,
   selectClaudeUsageAccounts,
 } from "@t3tools/shared/usageLimits";
@@ -110,9 +111,9 @@ export function ClaudeUsageIndicator({
           <Button
             size="xs"
             variant="ghost-muted"
-            className="min-w-0 shrink"
+            className="min-w-0 max-w-64 shrink"
             aria-label={gt("Claude usage: {summary}", { summary })}
-            title={compact ? summary : undefined}
+            title={summary}
           />
         }
       >
@@ -132,7 +133,8 @@ export function ClaudeUsageIndicator({
                       account.stale && "opacity-60",
                     )}
                   >
-                    {accountSummary(account, now)}
+                    {/* Age stays in the title and popover so the footer controls keep their room. */}
+                    {`${account.label} ${claudeAccountValue(account)}`}
                   </span>
                 </Fragment>
               );

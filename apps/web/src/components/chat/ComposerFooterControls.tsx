@@ -194,6 +194,7 @@ export const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryA
   children?: React.ReactNode;
   environmentId: EnvironmentId;
   usageDetail: ClaudeUsageDetailControl;
+  usageCompact: boolean;
   compact: boolean;
   canOperateThread: boolean;
   activeContextWindow: ContextWindowSnapshot | null;
@@ -239,7 +240,7 @@ export const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryA
     <>
       <ClaudeUsageIndicator
         environmentId={props.environmentId}
-        compact={props.compact}
+        compact={props.usageCompact}
         detail={props.usageDetail}
       />
       {props.activeContextWindow ? (

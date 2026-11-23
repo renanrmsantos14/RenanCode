@@ -4185,6 +4185,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   <ComposerFooterPrimaryActions
                     environmentId={environmentId}
                     usageDetail={usageDetail}
+                    usageCompact={isComposerFooterCompact || isComposerPrimaryActionsCompact}
                     // Stop state belongs to one thread; the composer stays mounted across threads.
                     key={`${environmentId}:${activeThreadId ?? "new"}`}
                     compact={isComposerPrimaryActionsCompact}
