@@ -212,6 +212,9 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
       {
         scopedLimitNames,
         onUsageLimits: (update) => snapshot.applyUsageLimits(update),
+        usageWindows: Effect.suspend(() => snapshot.getSnapshot).pipe(
+          Effect.map((current) => current.usageLimits?.windows ?? []),
+        ),
         onSessionInit: (cwd) => Queue.offer(workspaceRescans, cwd).pipe(Effect.asVoid),
         modelCatalog,
         routeModelCatalog: modelRoutes.route,

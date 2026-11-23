@@ -36,6 +36,7 @@ import {
   SettingsRow,
   SettingsSection,
 } from "./settingsLayout";
+import { SubagentModelSettings } from "./SubagentModelSettings";
 import { useScopedModelDisabledReason } from "./useScopedModelAvailability";
 import {
   useScopedSettings,
@@ -359,12 +360,14 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
         <>
           {modelRow}
           {fallbackRow}
+          <SubagentModelSettings />
           {workspaceRow}
         </>
       ) : category === "general" ? (
         <>
           {modelRow}
           {fallbackRow}
+          <SubagentModelSettings />
           <SettingsRow
             serverScoped
             settingKeys={["defaultRuntimeMode"]}

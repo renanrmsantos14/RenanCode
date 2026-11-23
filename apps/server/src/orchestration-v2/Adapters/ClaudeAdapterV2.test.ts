@@ -89,6 +89,7 @@ import * as PortScanner from "../../preview/PortScanner.ts";
 import { attachmentRelativePath } from "../../attachmentStore.ts";
 import { WorkflowAgentTranscriptReadObserver } from "../workflowAgentTranscript.ts";
 import * as ServerConfig from "../../config.ts";
+import * as ServerSettings from "../../serverSettings.ts";
 import * as McpProviderSession from "@t3tools/provider-core/server/mcpSession";
 import { T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH } from "@t3tools/provider-core/server/orchestrationInstructions";
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
@@ -2012,9 +2013,11 @@ describe("ClaudeAdapterV2 MCP elicitation acceptance", () => {
 const captureSdkExecutablePaths = Effect.fn("captureSdkExecutablePaths")(function* (
   binaryPath: string,
   environment: ResolvedProviderInstanceEnvironment = [],
+  hooks: Pick<ClaudeAdapterV2.ClaudeAdapterV2Options, "usageWindows"> = {},
 ) {
   const executablePaths: Array<string | undefined> = [];
   const taskToolEnvironment: Array<string | undefined> = [];
+  const subagentModels: Array<string | undefined> = [];
   const adapter = yield* ClaudeAdapterV2.createClaudeAdapterV2(
     {
       instanceId: ClaudeAdapterV2.CLAUDE_DEFAULT_INSTANCE_ID,
@@ -2023,7 +2026,7 @@ const captureSdkExecutablePaths = Effect.fn("captureSdkExecutablePaths")(functio
       enabled: true,
       config: { ...DEFAULT_CLAUDE_SETTINGS, binaryPath },
     },
-    {},
+    hooks,
   ).pipe(
     Effect.provide(
       ServerConfig.layerTest(process.cwd(), {
@@ -2036,6 +2039,7 @@ const captureSdkExecutablePaths = Effect.fn("captureSdkExecutablePaths")(functio
         Effect.sync(() => {
           executablePaths.push(input.options.pathToClaudeCodeExecutable);
           taskToolEnvironment.push(input.options.env?.CLAUDE_CODE_ENABLE_TODO_TOOLS);
+          subagentModels.push(input.options.env?.CLAUDE_CODE_SUBAGENT_MODEL);
           return {
             messages: Stream.never,
             offer: () => Effect.void,
@@ -2085,7 +2089,55 @@ const captureSdkExecutablePaths = Effect.fn("captureSdkExecutablePaths")(functio
       attachments: [],
     }),
   );
-  return { executablePaths, taskToolEnvironment };
+  return { executablePaths, taskToolEnvironment, subagentModels };
+});
+
+describe("ClaudeAdapterV2 subagent model", () => {
+  // Twenty points a business day: any live weekly window passes 100% of its budget at 100%.
+  const policy = { model: "opus" as const, dailyBudgetPercent: 20, usageModel: "haiku" as const };
+  const capture = (usedPercent: number, environment: ResolvedProviderInstanceEnvironment = []) =>
+    Effect.scoped(
+      captureSdkExecutablePaths("claude", environment, {
+        usageWindows: DateTime.now.pipe(
+          Effect.map((now) => [
+            {
+              id: "seven_day",
+              kind: "weekly" as const,
+              label: "Weekly",
+              usedPercent,
+              resetsAt: DateTime.formatIso(DateTime.add(now, { minutes: 1 })),
+            },
+          ]),
+        ),
+      }),
+    ).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          IdAllocator.layer,
+          McpProviderSessions.layer,
+          ProviderInstallationGate.layer,
+          NodeServices.layer,
+          NodeCrypto.layer,
+          ServerSettings.layerTest({ subagentModel: policy }),
+        ),
+      ),
+    );
+
+  it.effect("launches Claude with the usage model only above the threshold", () =>
+    Effect.gen(function* () {
+      assert.deepEqual((yield* capture(0)).subagentModels, ["opus"]);
+      assert.deepEqual((yield* capture(100)).subagentModels, ["haiku"]);
+    }),
+  );
+
+  it.effect("keeps an instance's own CLAUDE_CODE_SUBAGENT_MODEL", () =>
+    Effect.gen(function* () {
+      const { subagentModels } = yield* capture(100, [
+        { name: "CLAUDE_CODE_SUBAGENT_MODEL", value: "sonnet", sensitive: false },
+      ]);
+      assert.deepEqual(subagentModels, ["sonnet"]);
+    }),
+  );
 });
 
 describe("ClaudeAdapterV2 executable path", () => {

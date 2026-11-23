@@ -1293,9 +1293,25 @@ export const WorktreeCleanup = Schema.NullOr(
 );
 export type WorktreeCleanup = typeof WorktreeCleanup.Type;
 
+export const CLAUDE_SUBAGENT_MODEL_ALIASES = ["fable", "opus", "sonnet", "haiku"] as const;
+export const ClaudeSubagentModelAlias = Schema.Literals(CLAUDE_SUBAGENT_MODEL_ALIASES);
+export type ClaudeSubagentModelAlias = typeof ClaudeSubagentModelAlias.Type;
+
+/** Claude's default model for subagents that pick none. Each weekday of the weekly window budgets
+ * 20 points; once `dailyBudgetPercent` of today's points are used, `usageModel` applies. */
+export const SubagentModelPolicy = Schema.Struct({
+  model: Schema.NullOr(ClaudeSubagentModelAlias),
+  dailyBudgetPercent: Schema.NullOr(
+    Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 20 })),
+  ),
+  usageModel: Schema.NullOr(ClaudeSubagentModelAlias),
+});
+export type SubagentModelPolicy = typeof SubagentModelPolicy.Type;
+
 export const PROJECT_SCOPED_SERVER_SETTING_KEYS = [
   "worktreeCleanup",
   "defaultModelSelection",
+  "subagentModel",
   "defaultRuntimeMode",
   "defaultThreadEnvMode",
   "newWorktreesStartFromOrigin",
@@ -1334,6 +1350,7 @@ export type ProjectProviderInstanceOverride = typeof ProjectProviderInstanceOver
 export const ProjectSettingsOverrides = Schema.Struct({
   worktreeCleanup: Schema.optionalKey(WorktreeCleanup),
   defaultModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
+  subagentModel: Schema.optionalKey(Schema.NullOr(SubagentModelPolicy)),
   defaultRuntimeMode: Schema.optionalKey(RuntimeMode),
   defaultThreadEnvMode: Schema.optionalKey(ThreadEnvMode),
   newWorktreesStartFromOrigin: Schema.optionalKey(Schema.Boolean),
@@ -1385,6 +1402,7 @@ const NULLABLE_PROJECT_SETTINGS_OVERRIDES: ReadonlySet<ProjectScopedServerSettin
   }[ProjectScopedServerSettingKey]
 >([
   "defaultModelSelection",
+  "subagentModel",
   "sourceControlWriterModelSelection",
   "reviewGuideModelSelection",
   "pullRequestMergeMethod",
@@ -1564,6 +1582,10 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
   fallbackModelSelection: Schema.NullOr(ModelSelection).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
+  // Null leaves Claude Code's own subagent model choice alone.
+  subagentModel: Schema.NullOr(SubagentModelPolicy).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
   defaultRuntimeMode: RuntimeMode.pipe(
@@ -2044,6 +2066,7 @@ export const ServerSettingsPatch = Schema.Struct({
   defaultModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
   defaultRuntimeMode: Schema.optionalKey(RuntimeMode),
   fallbackModelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
+  subagentModel: Schema.optionalKey(Schema.NullOr(SubagentModelPolicy)),
   /** Replaces each project's override set; null removes it. Omitted providerInstances retains its stored value. */
   projectSettingsOverrides: Schema.optionalKey(
     Schema.Record(

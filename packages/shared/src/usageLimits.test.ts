@@ -42,6 +42,7 @@ import {
   paceRemainingPercent,
   usesChatGptSharing,
   resolveNewThreadModelSelection,
+  resolveSubagentModel,
 } from "./usageLimits.ts";
 import { collectLimitNotices } from "./usageLimitsCopy.ts";
 
@@ -226,6 +227,37 @@ describe("new thread model fallback", () => {
       ).toEqual(usesFallback ? fallback : defaultSelection);
     },
   );
+});
+
+describe("subagent model", () => {
+  // The cycle began Monday 2026-11-23 at midnight in São Paulo.
+  const weekly = {
+    id: "seven_day",
+    kind: "weekly" as const,
+    label: "Weekly",
+    usedPercent: 0,
+    resetsAt: "2026-11-30T03:00:00.000Z",
+  };
+  const wednesday = Date.parse("2026-11-25T15:00:00.000Z");
+  const monday = Date.parse("2026-11-23T15:00:00.000Z");
+  const policy = { model: "opus" as const, dailyBudgetPercent: 15, usageModel: "haiku" as const };
+  const at = (usedPercent: number, now: number) =>
+    resolveSubagentModel(policy, [{ ...weekly, usedPercent }], now);
+
+  it("switches once today's budget is spent past yesterday's goal", () => {
+    expect(at(54, wednesday)).toBe("opus");
+    expect(at(55, wednesday)).toBe("haiku");
+    expect(at(14, monday)).toBe("opus");
+    expect(at(15, monday)).toBe("haiku");
+  });
+
+  it("keeps the normal model without a live weekly window, and Claude's without a policy", () => {
+    const afterReset = Date.parse("2026-11-30T04:00:00.000Z");
+    expect(at(90, afterReset)).toBe("opus");
+    expect(resolveSubagentModel(policy, [{ ...weekly, id: "five_hour" }], wednesday)).toBe("opus");
+    expect(resolveSubagentModel({ ...policy, model: null }, [], wednesday)).toBeNull();
+    expect(resolveSubagentModel(null, [weekly], wednesday)).toBeNull();
+  });
 });
 
 describe("pace", () => {

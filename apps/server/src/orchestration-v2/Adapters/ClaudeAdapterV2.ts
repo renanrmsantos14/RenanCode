@@ -87,7 +87,9 @@ import * as ProviderProcesses from "../../process/providerProcesses.ts";
 import * as SpawnWorker from "../../process/SpawnWorker.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { applyClaudePromptEffortPrefix } from "@t3tools/shared/model";
+import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { compareSemverVersions } from "@t3tools/shared/semver";
+import { resolveSubagentModel } from "@t3tools/shared/usageLimits";
 import {
   CLAUDE_RESUME_COMPACTION_COMPACT_ANSWER,
   CLAUDE_RESUME_COMPACTION_NEVER_ANSWER,
@@ -131,11 +133,13 @@ import {
   ProviderMcpSignInError,
   type ProviderApprovalOption,
   ProviderDriverKind,
+  type ProjectId,
   type ProviderInstanceId,
   type ProviderRequestKind,
   type ProviderUserInputAnswers,
   type ProviderThreadId,
   type RunId,
+  type ServerProviderUsageWindow,
   type ThreadId,
   resolveIdleCompaction,
   isDelegatedAppThread,
@@ -3887,9 +3891,11 @@ export function claudeEffectiveQueryPolicyKey(
   },
   // Folders are fixed when a query starts, so a changed list needs a new one.
   workspace?: ProviderAdapter.ProviderAdapterV2RuntimePolicy["workspace"],
+  subagentModel: string | null = null,
 ): string {
   return JSON.stringify({
     workspace,
+    ...(subagentModel === null ? {} : { subagentModel }),
     runtimePolicy: claudeRuntimeQueryPolicyKey({
       ...queryPolicy,
       ...(mcpOverrides.allowedTools === undefined
@@ -5641,6 +5647,7 @@ interface ClaudeLiveQueryContext {
   readonly launchArgSettings: ClaudeSdkSettings | undefined;
   readonly query: ClaudeAgentSdkQuerySession;
   readonly queryPolicyKey: string;
+  readonly subagentModel: string | null;
   selection: CompiledClaudeModelSelection;
   readonly program: string | undefined;
   readonly startedWithApiModelId: string;
@@ -6074,6 +6081,8 @@ export interface ClaudeAdapterV2Options {
   readonly queryRunner: ClaudeAgentSdkQueryRunnerShape;
   readonly scopedLimitNames?: Ref.Ref<ClaudeScopedLimitNames>;
   readonly onUsageLimits?: ManagedServerProvider["applyUsageLimits"];
+  /** This instance's latest usage windows, which can switch the subagent model. */
+  readonly usageWindows?: Effect.Effect<ReadonlyArray<ServerProviderUsageWindow>>;
   /**
    * Called with the requested cwd on a process's first init message, after its synchronous
    * SessionStart hooks have run, so cwd-keyed workspace scans can be refreshed.
@@ -6170,6 +6179,25 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
     },
   );
   const routeModelCatalog = adapterOptions.routeModelCatalog ?? Effect.succeed;
+
+  // A CLAUDE_CODE_SUBAGENT_MODEL on the instance wins; Claude's settings files already beat
+  // the process env.
+  const resolveTurnSubagentModel = Effect.fn("ClaudeAdapterV2.resolveTurnSubagentModel")(function* (
+    projectId: ProjectId,
+  ) {
+    if (
+      adapterOptions.environment.CLAUDE_CODE_SUBAGENT_MODEL !== undefined ||
+      Option.isNone(serverSettings)
+    ) {
+      return null;
+    }
+    const settings = yield* serverSettings.value.getSettings.pipe(Effect.option);
+    if (Option.isNone(settings)) return null;
+    const policy = resolveProjectSettings(settings.value, projectId).settings.subagentModel;
+    if (policy === null) return null;
+    const windows = yield* adapterOptions.usageWindows ?? Effect.succeed([]);
+    return resolveSubagentModel(policy, windows, yield* Clock.currentTimeMillis);
+  });
 
   // Claude Code's own subagent TTL setting, in its precedence order. Unset or unreadable means
   // Anthropic's default applies.
@@ -13463,13 +13491,27 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               ? {}
               : { allowedTools: queryPolicy.allowedTools }),
           });
+          const resumeSessionAt = yield* getNativeConversationHeadId(turnInput.providerThread);
+          const existing = yield* Ref.get(queryContext);
+          const wantedSubagentModel = yield* resolveTurnSubagentModel(
+            turnInput.appThread.projectId,
+          );
+          // Claude reads the subagent model at launch, so a change reopens the process, but
+          // never just for this while background work would die with it.
+          const subagentModel =
+            existing !== null &&
+            existing.nativeThreadId === nativeThreadId &&
+            !existing.stopping &&
+            existing.subagentModel !== wantedSubagentModel &&
+            (yield* liveProcessRunsBackgroundWork(existing))
+              ? existing.subagentModel
+              : wantedSubagentModel;
           const queryPolicyKey = claudeEffectiveQueryPolicyKey(
             queryPolicy,
             mcpOverrides,
             turnInput.runtimePolicy.workspace,
+            subagentModel,
           );
-          const resumeSessionAt = yield* getNativeConversationHeadId(turnInput.providerThread);
-          const existing = yield* Ref.get(queryContext);
           // Continuations drain existing output without prompting; retain the live process regardless of selection.
           if (
             existing !== null &&
@@ -13627,7 +13669,9 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               ? {}
               : { sdkSettings: claudeSdkLaunchArgSettings(launchArgSettings) }),
             environment: claudeQueryEnvironment(
-              adapterOptions.environment,
+              subagentModel === null
+                ? adapterOptions.environment
+                : { ...adapterOptions.environment, CLAUDE_CODE_SUBAGENT_MODEL: subagentModel },
               turnInput.appThread,
               turnInput.appThread.lineage.relationshipToParent === "subagent"
                 ? yield* resolveSubagentPromptCacheTtl(turnInput.runtimePolicy.cwd)
@@ -13714,6 +13758,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             launchArgSettings,
             query: querySession,
             queryPolicyKey,
+            subagentModel,
             selection: compiledSelection,
             program,
             startedWithApiModelId: compiledSelection.apiModelId,
@@ -15472,7 +15517,12 @@ export const createClaudeAdapterV2 = Effect.fn("ClaudeAdapterV2Driver.create")(
     input: ProviderAdapterDriverCreateInput<ClaudeSettings>,
     hooks: Pick<
       ClaudeAdapterV2Options,
-      "scopedLimitNames" | "onUsageLimits" | "onSessionInit" | "modelCatalog" | "routeModelCatalog"
+      | "scopedLimitNames"
+      | "onUsageLimits"
+      | "usageWindows"
+      | "onSessionInit"
+      | "modelCatalog"
+      | "routeModelCatalog"
     > = {},
   ) {
     const { instanceId, environment, enabled, config } = input;
