@@ -79,28 +79,29 @@ export function exhaustedUsageWindow(
   }
 }
 
-/** The model a subagent policy picks for these usage windows; null leaves Claude's own choice.
- * Model-scoped windows are ignored, and a window whose reset has passed no longer counts. */
+/** The model a subagent policy picks for this usage; null leaves Claude's own choice.
+ * Today's budget runs from yesterday's weekly goal to today's (Wednesday: 40% to 60%), so a
+ * 15-point budget switches at 55%. A stale or missing weekly window keeps the normal model. */
 export function resolveSubagentModel(
   policy: SubagentModelPolicy | null,
   windows: readonly ServerProviderUsageWindow[],
   now: number,
 ) {
   if (policy === null) return null;
-  const { usagePercent, usageModel } = policy;
-  const overThreshold =
-    usagePercent !== null &&
-    usageModel !== null &&
-    windows.some(
-      (window) =>
-        window.modelIds === undefined &&
-        window.providerIds === undefined &&
-        window.usedPercent >= usagePercent &&
-        (!window.resetsAt ||
-          !Number.isFinite(Date.parse(window.resetsAt)) ||
-          Date.parse(window.resetsAt) > now),
-    );
-  return overThreshold ? usageModel : policy.model;
+  const { dailyBudgetPercent, usageModel } = policy;
+  const weekly = windows.find((window) => window.id === "seven_day");
+  if (
+    dailyBudgetPercent === null ||
+    usageModel === null ||
+    !weekly?.resetsAt ||
+    !(Date.parse(weekly.resetsAt) > now)
+  ) {
+    return policy.model;
+  }
+  const goal = goalPercent({ resetsAt: weekly.resetsAt, now });
+  if (goal === null) return policy.model;
+  const switchAt = Math.max(0, goal - USAGE_GOAL_PER_BUSINESS_DAY) + dailyBudgetPercent;
+  return weekly.usedPercent >= switchAt ? usageModel : policy.model;
 }
 
 export function resolveNewThreadModelSelection(input: {

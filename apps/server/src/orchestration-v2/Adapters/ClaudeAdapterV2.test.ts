@@ -2093,13 +2093,22 @@ const captureSdkExecutablePaths = Effect.fn("captureSdkExecutablePaths")(functio
 });
 
 describe("ClaudeAdapterV2 subagent model", () => {
-  const policy = { model: "opus" as const, usagePercent: 80, usageModel: "haiku" as const };
+  // Twenty points a business day: any live weekly window passes 100% of its budget at 100%.
+  const policy = { model: "opus" as const, dailyBudgetPercent: 20, usageModel: "haiku" as const };
   const capture = (usedPercent: number, environment: ResolvedProviderInstanceEnvironment = []) =>
     Effect.scoped(
       captureSdkExecutablePaths("claude", environment, {
-        usageWindows: Effect.succeed([
-          { id: "seven_day", kind: "weekly", label: "Weekly", usedPercent },
-        ]),
+        usageWindows: DateTime.now.pipe(
+          Effect.map((now) => [
+            {
+              id: "seven_day",
+              kind: "weekly" as const,
+              label: "Weekly",
+              usedPercent,
+              resetsAt: DateTime.formatIso(DateTime.add(now, { minutes: 1 })),
+            },
+          ]),
+        ),
       }),
     ).pipe(
       Effect.provide(
@@ -2116,14 +2125,14 @@ describe("ClaudeAdapterV2 subagent model", () => {
 
   it.effect("launches Claude with the usage model only above the threshold", () =>
     Effect.gen(function* () {
-      assert.deepEqual((yield* capture(40)).subagentModels, ["opus"]);
-      assert.deepEqual((yield* capture(85)).subagentModels, ["haiku"]);
+      assert.deepEqual((yield* capture(0)).subagentModels, ["opus"]);
+      assert.deepEqual((yield* capture(100)).subagentModels, ["haiku"]);
     }),
   );
 
   it.effect("keeps an instance's own CLAUDE_CODE_SUBAGENT_MODEL", () =>
     Effect.gen(function* () {
-      const { subagentModels } = yield* capture(85, [
+      const { subagentModels } = yield* capture(100, [
         { name: "CLAUDE_CODE_SUBAGENT_MODEL", value: "sonnet", sensitive: false },
       ]);
       assert.deepEqual(subagentModels, ["sonnet"]);

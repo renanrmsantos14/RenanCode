@@ -230,30 +230,33 @@ describe("new thread model fallback", () => {
 });
 
 describe("subagent model", () => {
-  const nowMs = Date.parse("2026-11-23T12:00:00.000Z");
+  // The cycle began Monday 2026-11-23 at midnight in São Paulo.
   const weekly = {
     id: "seven_day",
     kind: "weekly" as const,
     label: "Weekly",
-    usedPercent: 85,
-    resetsAt: "2026-11-25T00:00:00.000Z",
+    usedPercent: 0,
+    resetsAt: "2026-11-30T03:00:00.000Z",
   };
-  const policy = { model: "opus" as const, usagePercent: 80, usageModel: "haiku" as const };
+  const wednesday = Date.parse("2026-11-25T15:00:00.000Z");
+  const monday = Date.parse("2026-11-23T15:00:00.000Z");
+  const policy = { model: "opus" as const, dailyBudgetPercent: 15, usageModel: "haiku" as const };
+  const at = (usedPercent: number, now: number) =>
+    resolveSubagentModel(policy, [{ ...weekly, usedPercent }], now);
 
-  it("switches to the usage model above the threshold until the window resets", () => {
-    expect(resolveSubagentModel(policy, [weekly], nowMs)).toBe("haiku");
-    expect(resolveSubagentModel(policy, [{ ...weekly, usedPercent: 40 }], nowMs)).toBe("opus");
-    expect(
-      resolveSubagentModel(policy, [{ ...weekly, resetsAt: "2026-11-23T11:00:00.000Z" }], nowMs),
-    ).toBe("opus");
+  it("switches once today's budget is spent past yesterday's goal", () => {
+    expect(at(54, wednesday)).toBe("opus");
+    expect(at(55, wednesday)).toBe("haiku");
+    expect(at(14, monday)).toBe("opus");
+    expect(at(15, monday)).toBe("haiku");
   });
 
-  it("ignores model-scoped windows and leaves Claude alone without a policy", () => {
-    expect(resolveSubagentModel(policy, [{ ...weekly, modelIds: ["claude-fable-5"] }], nowMs)).toBe(
-      "opus",
-    );
-    expect(resolveSubagentModel({ ...policy, model: null }, [], nowMs)).toBeNull();
-    expect(resolveSubagentModel(null, [weekly], nowMs)).toBeNull();
+  it("keeps the normal model without a live weekly window, and Claude's without a policy", () => {
+    const afterReset = Date.parse("2026-11-30T04:00:00.000Z");
+    expect(at(90, afterReset)).toBe("opus");
+    expect(resolveSubagentModel(policy, [{ ...weekly, id: "five_hour" }], wednesday)).toBe("opus");
+    expect(resolveSubagentModel({ ...policy, model: null }, [], wednesday)).toBeNull();
+    expect(resolveSubagentModel(null, [weekly], wednesday)).toBeNull();
   });
 });
 

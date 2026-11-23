@@ -96,10 +96,12 @@ when the agent does not choose one; a project can set its own. A custom agent's
 own `model` still wins, and so does `CLAUDE_CODE_SUBAGENT_MODEL` in the instance's
 environment or in your Claude settings.
 
-**Subagents near the usage limit** switches subagents to another model once any
-Claude usage window passes the share you pick, and back after that window resets.
-The change applies from the thread's next turn, or later if background work is
-still running.
+**Subagents near the usage limit** follows the weekly goal from the usage meter:
+each weekday after the weekly reset adds 20%, so the goal reaches 100% on the fifth.
+Pick how much of today's 20% subagents may use on the normal model; past it they
+switch to the other model until the next day. With 15%, Wednesday (goal 60%)
+switches at 55%. The change applies from the thread's next turn, or later if
+background work is still running.
 
 ## Steering
 

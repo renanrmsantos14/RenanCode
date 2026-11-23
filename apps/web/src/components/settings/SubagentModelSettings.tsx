@@ -15,14 +15,18 @@ import {
   useUpdateScopedSettings,
 } from "./useScopedSettings";
 
-const USAGE_THRESHOLDS = [50, 70, 80, 90, 95] as const;
+const DAILY_BUDGETS = [5, 10, 15, 20] as const;
 const MODEL_LABELS: Record<ClaudeSubagentModelAlias, string> = {
   fable: "Fable",
   opus: "Opus",
   sonnet: "Sonnet",
   haiku: "Haiku",
 };
-const EMPTY_POLICY: SubagentModelPolicy = { model: null, usagePercent: null, usageModel: null };
+const EMPTY_POLICY: SubagentModelPolicy = {
+  model: null,
+  dailyBudgetPercent: null,
+  usageModel: null,
+};
 const INHERIT = "inherit";
 const OFF = "off";
 
@@ -44,7 +48,9 @@ export function SubagentModelSettings() {
   const save = (next: SubagentModelPolicy) =>
     updateSettings({
       subagentModel:
-        next.model === null && next.usagePercent === null && next.usageModel === null ? null : next,
+        next.model === null && next.dailyBudgetPercent === null && next.usageModel === null
+          ? null
+          : next,
     });
 
   const modelItems = CLAUDE_SUBAGENT_MODEL_ALIASES.map((alias) => (
@@ -109,32 +115,36 @@ export function SubagentModelSettings() {
         mixed={mixed}
         {...searchableSetting("subagent-usage-model")}
         description={gt(
-          "Switch subagents to another model once any Claude usage window passes this share, until it resets. Applies from the next turn.",
+          "Each weekday after the weekly reset adds 20% to the goal, reaching 100% by the fifth. Subagents switch to another model once this much of today's 20% is used (15% on Wednesday switches at 55%). Applies from the next turn.",
         )}
         control={
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
             <Select
               value={
-                mixed ? null : current.usagePercent === null ? OFF : String(current.usagePercent)
+                mixed
+                  ? null
+                  : current.dailyBudgetPercent === null
+                    ? OFF
+                    : String(current.dailyBudgetPercent)
               }
               onValueChange={(value) => {
-                if (value === OFF) save({ ...current, usagePercent: null, usageModel: null });
+                if (value === OFF) save({ ...current, dailyBudgetPercent: null, usageModel: null });
                 else if (value !== null)
                   save({
                     ...current,
-                    usagePercent: Number(value),
+                    dailyBudgetPercent: Number(value),
                     usageModel: current.usageModel ?? "haiku",
                   });
               }}
             >
-              <SelectTrigger size="sm" aria-label={gt("Usage threshold for subagents")}>
+              <SelectTrigger size="sm" aria-label={gt("Daily usage budget for subagents")}>
                 <SelectValue>
                   {(value: string | null) =>
                     value === OFF
                       ? gt("Off", { $context: "usage-based subagent model disabled" })
                       : value === null
                         ? mixedLabel
-                        : gt("Above {percent}%", { percent: value })
+                        : gt("After {percent}% of today", { percent: value })
                   }
                 </SelectValue>
               </SelectTrigger>
@@ -142,14 +152,14 @@ export function SubagentModelSettings() {
                 <SelectItem value={OFF}>
                   {gt("Off", { $context: "usage-based subagent model disabled" })}
                 </SelectItem>
-                {USAGE_THRESHOLDS.map((percent) => (
+                {DAILY_BUDGETS.map((percent) => (
                   <SelectItem key={percent} value={String(percent)}>
-                    {gt("Above {percent}%", { percent })}
+                    {gt("After {percent}% of today", { percent })}
                   </SelectItem>
                 ))}
               </SelectPopup>
             </Select>
-            {current.usagePercent !== null && !mixed ? (
+            {current.dailyBudgetPercent !== null && !mixed ? (
               <Select
                 value={current.usageModel ?? "haiku"}
                 onValueChange={(value) => {

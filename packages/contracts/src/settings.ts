@@ -1297,11 +1297,13 @@ export const CLAUDE_SUBAGENT_MODEL_ALIASES = ["fable", "opus", "sonnet", "haiku"
 export const ClaudeSubagentModelAlias = Schema.Literals(CLAUDE_SUBAGENT_MODEL_ALIASES);
 export type ClaudeSubagentModelAlias = typeof ClaudeSubagentModelAlias.Type;
 
-/** Claude's default model for subagents that pick none. Above `usagePercent` of any Claude
- * usage window, `usageModel` applies until that window resets. */
+/** Claude's default model for subagents that pick none. Each weekday of the weekly window budgets
+ * 20 points; once `dailyBudgetPercent` of today's points are used, `usageModel` applies. */
 export const SubagentModelPolicy = Schema.Struct({
   model: Schema.NullOr(ClaudeSubagentModelAlias),
-  usagePercent: Schema.NullOr(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 }))),
+  dailyBudgetPercent: Schema.NullOr(
+    Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 20 })),
+  ),
   usageModel: Schema.NullOr(ClaudeSubagentModelAlias),
 });
 export type SubagentModelPolicy = typeof SubagentModelPolicy.Type;
