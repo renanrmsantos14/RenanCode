@@ -1,6 +1,7 @@
 import type { MascotState } from "@t3tools/client-runtime/mascot";
 import type { ToolCallDiffTarget } from "../../diffPanelStore";
 import type { SideThreadOpenIntent } from "@t3tools/client-runtime/side-thread";
+import type { ThreadRunSummary } from "@t3tools/client-runtime/state/models";
 import type {
   ProviderApprovalDecision,
   ResponseContextRecord,
@@ -128,6 +129,7 @@ export interface TimelineRowActivityState {
   mascotState: MascotState;
   isPreparingWorktree: boolean;
   providerStartingLabel: string | null;
+  providerStarting: NonNullable<ThreadRunSummary["providerStarting"]> | null;
   latestRunId: RunId | null;
   backgroundWorktreeSetup: WorktreeSetupSnapshot | null;
   liveAnswerPreview: string | null;
