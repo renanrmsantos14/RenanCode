@@ -60,6 +60,7 @@ import {
   WindowsPackagedPayloadValidationError,
   stageCursorSdkPlatformPackages,
   WINDOWS_PACKAGED_PAYLOAD_FILE_LIMIT,
+  WINDOWS_SERVER_COMPILE_CACHE_DIR,
   WINDOWS_SERVER_ASAR_IGNORE_GLOBS,
   WINDOWS_SERVER_ASAR_RESOURCE,
   WSL_RUNTIME_ARCHIVE_EXTRA_RESOURCE,
@@ -1384,6 +1385,37 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         assert.instanceOf(error, WindowsPackagedPayloadValidationError);
         assert.equal(error.reason, "file-limit-exceeded");
         assert.isAbove(error.fileCount ?? 0, 2);
+      }),
+    ),
+  );
+
+  it.effect("budgets the server compile cache apart from the rest of the payload", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const fixture = yield* makeWindowsPayloadFixture({ copyUnpackedNatives: true });
+        const cacheDir = path.join(
+          fixture.packagedAppDir,
+          "resources",
+          WINDOWS_SERVER_COMPILE_CACHE_DIR,
+          "v26",
+        );
+        yield* fs.makeDirectory(cacheDir, { recursive: true });
+        for (const index of [1, 2, 3, 4, 5]) {
+          yield* fs.writeFileString(path.join(cacheDir, `chunk-${String(index)}`), "cache");
+        }
+        const error = yield* validateWindowsPackagedPayload({
+          stageDistDir: fixture.stageDistDir,
+          appExecutableName: fixture.appExecutableName,
+          targetArch: "x64",
+          appVersion: WINDOWS_PAYLOAD_FIXTURE_VERSION,
+          compileCacheFileLimit: 4,
+        }).pipe(Effect.flip);
+
+        assert.instanceOf(error, WindowsPackagedPayloadValidationError);
+        assert.equal(error.reason, "compile-cache-limit-exceeded");
+        assert.equal(error.fileCount, 5);
       }),
     ),
   );

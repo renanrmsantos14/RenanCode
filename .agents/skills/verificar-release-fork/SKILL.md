@@ -28,5 +28,5 @@ description: "Verifica o release do fork (instalador Windows x64 e AppImage Linu
 ## Casos de borda
 
 - Mudança em `native/resource-monitor/src/**`: cache erra, o Rust compila do zero (mais lento só nesse run) e o binário novo é salvo.
-- Payload Windows: o build nativo do fork inclui `resources/server-compile-cache` (um arquivo por chunk do servidor; cresceu de 14 para ~24 com o upstream #32987, por isso o limite foi para 100), que o upstream não tem por compilar em Linux. Um erro `Windows packaged payload contains N files` em `WINDOWS_PACKAGED_PAYLOAD_FILE_LIMIT` deve ser comparado com o instalador do upstream antes de mexer no limite.
+- Payload Windows: o build nativo do fork inclui `resources/server-compile-cache` (um arquivo por chunk do servidor), que o upstream não tem por compilar em Linux. Desde 23/11/2026 o cache tem teto próprio (`WINDOWS_SERVER_COMPILE_CACHE_FILE_LIMIT`, 100) e fica fora de `WINDOWS_PACKAGED_PAYLOAD_FILE_LIMIT` (90, o resto do pacote). O log `Validated Windows payload (N files, M compile cache files, ...)` mostra as duas contagens; compare com o instalador do upstream antes de subir qualquer um dos tetos.
 - Mudança só em `.github/actions/**` não dispara release (filtro `paths`); dispare manualmente se precisar provar.
