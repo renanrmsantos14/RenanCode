@@ -1,0 +1,208 @@
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
+import {
+  type DesignCanvasSnapshot,
+  DesignNodeId,
+  DesignSketchId,
+  EnvironmentId,
+  ProjectId,
+  ThreadId,
+} from "@t3tools/contracts";
+import { describe, expect, it, vi } from "vite-plus/test";
+import { cdp, page, userEvent } from "vite-plus/test/browser";
+
+import "~/index.css";
+import { act, render } from "../../../test/render";
+
+const mocks = vi.hoisted(() => ({
+  moveNodes: vi.fn(),
+  setViewport: vi.fn(),
+  removeNode: vi.fn(),
+}));
+
+vi.mock(import("~/state/design"), () => ({
+  designEnvironment: {
+    moveNodes: "moveNodes",
+    setViewport: "setViewport",
+    removeNode: "removeNode",
+  } as never,
+}));
+vi.mock(import("~/state/use-atom-command"), async (original) => ({
+  ...(await original()),
+  useAtomCommand: ((command: "moveNodes" | "setViewport" | "removeNode") =>
+    mocks[command]) as never,
+}));
+vi.mock(import("./sketchAssets"), () => ({
+  useSketchPageUrl: () => "about:blank",
+  useSketchThumbnailUrl: () => null,
+}));
+
+import { DesignCanvas } from "./DesignCanvas";
+import { useDesignFocusStore } from "./designFocusStore";
+
+const environmentId = EnvironmentId.make("environment");
+const threadRef = { environmentId, threadId: ThreadId.make("thread") };
+const sketchIds = ["sketch-a", "sketch-b"].map((id) => DesignSketchId.make(id));
+const nodeIds = ["node-a", "node-b"].map((id) => DesignNodeId.make(id));
+
+function snapshot(count: number): DesignCanvasSnapshot {
+  return {
+    threadId: threadRef.threadId,
+    viewport: { x: 0, y: 0, zoom: 1 },
+    nodes: sketchIds.slice(0, count).map((sketchId, index) => ({
+      id: nodeIds[index]!,
+      kind: "sketch" as const,
+      sketchId,
+      x: index * 460,
+      y: 40,
+      width: 400,
+      height: 500,
+      z: index,
+    })),
+    sketches: sketchIds.slice(0, count).map((id, index) => ({
+      id,
+      projectId: ProjectId.make("project"),
+      originThreadId: threadRef.threadId,
+      groupId: null,
+      basedOnSketchId: null,
+      title: `Home ${index === 0 ? "A" : "B"}`,
+      label: null,
+      htmlAttachmentId: `${id}.html`,
+      thumbnailAttachmentId: null,
+      width: 400,
+      height: 500,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    })) as never,
+  };
+}
+
+// The mocked commands and the focus store outlive a test, so each one starts by resetting them.
+function setup() {
+  for (const command of Object.values(mocks))
+    command.mockReset().mockResolvedValue({ _tag: "Success" });
+  useDesignFocusStore.setState({ pending: {} });
+  return { [Symbol.dispose]: () => useDesignFocusStore.setState({ pending: {} }) };
+}
+
+// d3-drag follows real mouse events, which an HTML5 drag-and-drop would not send.
+async function dragBy(element: HTMLElement, dx: number, dy: number) {
+  const rect = element.getBoundingClientRect();
+  const x = rect.left + 60;
+  const y = rect.top + 120;
+  const session = cdp();
+  const mouse = (
+    type: "mouseMoved" | "mousePressed" | "mouseReleased",
+    at: { x: number; y: number },
+    buttons: number,
+  ) =>
+    session.send("Input.dispatchMouseEvent", {
+      type,
+      ...at,
+      button: type === "mouseMoved" && buttons === 0 ? "none" : "left",
+      buttons,
+      clickCount: type === "mouseMoved" ? 0 : 1,
+    });
+  await mouse("mouseMoved", { x, y }, 0);
+  await mouse("mousePressed", { x, y }, 1);
+  for (const step of [0.25, 0.5, 0.75, 1]) {
+    await mouse("mouseMoved", { x: x + dx * step, y: y + dy * step }, 1);
+  }
+  await mouse("mouseReleased", { x: x + dx, y: y + dy }, 0);
+}
+
+function mount(canvas: DesignCanvasSnapshot, canWrite = true) {
+  const container = document.createElement("div");
+  container.style.cssText = "position:relative;width:1000px;height:700px";
+  return render(
+    <DesignCanvas
+      environmentId={environmentId}
+      threadRef={threadRef}
+      snapshot={canvas}
+      canWrite={canWrite}
+      maximized={false}
+      onToggleMaximized={() => {}}
+    />,
+    { container },
+  );
+}
+
+describe("DesignCanvas", () => {
+  it("shows the empty state and no nodes when nothing was designed yet", async () => {
+    using _setup = setup();
+    await using screen = await mount(snapshot(0));
+
+    await expect.element(screen.getByText(/No sketches yet/)).toBeVisible();
+    expect(screen.container.querySelectorAll(".react-flow__node")).toHaveLength(0);
+  });
+
+  it("renders a node per sketch with its title", async () => {
+    using _setup = setup();
+    await using screen = await mount(snapshot(2));
+
+    await expect.element(screen.getByRole("button", { name: "Open sketch Home A" })).toBeVisible();
+    await expect.element(screen.getByRole("button", { name: "Open sketch Home B" })).toBeVisible();
+    expect(screen.container.querySelectorAll(".react-flow__node")).toHaveLength(2);
+    expect(screen.getByText(/No sketches yet/).elements()).toHaveLength(0);
+  });
+
+  it("saves positions with moveNodes only when the drag ends", async () => {
+    using _setup = setup();
+    await using screen = await mount(snapshot(1));
+    const node = await vi.waitUntil(() =>
+      screen.container.querySelector<HTMLElement>(".react-flow__node"),
+    );
+
+    await act(() => dragBy(node, 200, 200));
+
+    await vi.waitFor(() => expect(mocks.moveNodes).toHaveBeenCalledOnce());
+    const call = mocks.moveNodes.mock.calls[0]?.[0] as {
+      input: { threadId: string; nodes: Array<{ nodeId: string; x: number; y: number }> };
+    };
+    expect(call.input.threadId).toBe(threadRef.threadId);
+    expect(call.input.nodes).toHaveLength(1);
+    expect(call.input.nodes[0]?.nodeId).toBe("node-a");
+    expect(call.input.nodes[0]?.x).toBeGreaterThan(100);
+    expect(call.input.nodes[0]?.y).toBeGreaterThan(100);
+  });
+
+  it("does not let a viewer without write access drag nodes", async () => {
+    using _setup = setup();
+    await using screen = await mount(snapshot(1), false);
+    const node = await vi.waitUntil(() =>
+      screen.container.querySelector<HTMLElement>(".react-flow__node"),
+    );
+
+    await act(() => dragBy(node, 200, 200));
+
+    expect(mocks.moveNodes).not.toHaveBeenCalled();
+    await expect.element(screen.getByRole("button", { name: "Remove from canvas" })).toBeDisabled();
+  });
+
+  it("selects the sketch a chat card asked for and consumes the request", async () => {
+    using _setup = setup();
+    useDesignFocusStore.getState().request(threadRef, "sketch-b");
+    await using screen = await mount(snapshot(2));
+
+    await vi.waitFor(() => {
+      const selected = screen.container.querySelectorAll(".react-flow__node.selected");
+      expect(selected).toHaveLength(1);
+      expect(selected[0]?.getAttribute("data-id")).toBe("node-b");
+    });
+    expect(useDesignFocusStore.getState().pending[scopedThreadKey(threadRef)]).toBeUndefined();
+  });
+
+  it("removes the selected node from the canvas", async () => {
+    using _setup = setup();
+    await using screen = await mount(snapshot(2));
+    const node = await vi.waitUntil(() =>
+      screen.container.querySelector<HTMLElement>('.react-flow__node[data-id="node-a"]'),
+    );
+
+    await userEvent.click(page.elementLocator(node), { position: { x: 80, y: 200 } });
+    await userEvent.click(screen.getByRole("button", { name: "Remove from canvas" }));
+
+    expect(mocks.removeNode).toHaveBeenCalledOnce();
+    expect(mocks.removeNode.mock.calls[0]?.[0]).toMatchObject({
+      input: { threadId: threadRef.threadId, nodeId: "node-a" },
+    });
+  });
+});

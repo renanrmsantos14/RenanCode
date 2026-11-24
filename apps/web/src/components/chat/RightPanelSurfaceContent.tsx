@@ -34,6 +34,7 @@ const PreviewPanel = lazy(() =>
   import("../preview/PreviewPanel").then((module) => ({ default: module.PreviewPanel })),
 );
 const DiffPanel = lazy(() => import("../DiffPanel"));
+const DesignSurface = lazy(() => import("../design/DesignSurface"));
 const DevicePanel = lazy(() =>
   import("../device/DevicePanel").then((module) => ({ default: module.DevicePanel })),
 );
@@ -239,6 +240,12 @@ export function RightPanelSurfaceContent(props: {
           environmentId={props.environmentId}
           projectId={props.files.projectId}
         />
+      );
+    case "design":
+      return (
+        <Suspense fallback={null}>
+          <DesignSurface environmentId={props.environmentId} threadRef={threadRef} />
+        </Suspense>
       );
     case "thread":
       // Not lazy: revealing a suspended tiptap editor tears down its view and crashes the composer.

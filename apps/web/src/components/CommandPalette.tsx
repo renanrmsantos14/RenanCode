@@ -79,6 +79,7 @@ import {
   PaletteIcon,
   RotateCcwIcon,
   SettingsIcon,
+  FrameIcon,
   ListChecksIcon,
   MonitorIcon,
   PinIcon,
@@ -181,6 +182,7 @@ import {
   useCommandPaletteMount,
   useCommandPaletteStore,
 } from "../commandPaletteStore";
+import { isElectron } from "../env";
 import {
   PULL_REQUESTS_PANEL_REF,
   selectActiveRightPanel,
@@ -1548,6 +1550,18 @@ function OpenCommandPaletteDialog(props: {
         useRightPanelStore.getState().open(threadRef, "checklist");
       },
     });
+    if (isElectron) {
+      actionItems.push({
+        kind: "action",
+        value: "action:open-thread-design",
+        searchTerms: ["design", "sketch", "canvas", "screens", "mockup", "html"],
+        title: gt("Open Design"),
+        icon: <FrameIcon className={ITEM_ICON_CLASS} />,
+        run: async () => {
+          useRightPanelStore.getState().open(threadRef, "design");
+        },
+      });
+    }
     actionItems.push({
       kind: "action",
       value: "action:open-thread-pull-requests",

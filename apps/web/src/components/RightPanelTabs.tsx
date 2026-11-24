@@ -50,6 +50,7 @@ import {
   FileDiff,
   Files,
   Globe2,
+  Frame,
   ListChecks,
   MessagesSquare,
   Plus,
@@ -161,6 +162,8 @@ export interface RightPanelTabsProps {
   onAddDevice: () => void;
   /** Absent where the thread has no project checklist to show. */
   onAddChecklist?: (() => void) | undefined;
+  /** Absent outside the desktop app, where Design is not offered. */
+  onAddDesign?: (() => void) | undefined;
   /** Absent where side chats are not offered. */
   onAddSideChat?: (() => void) | undefined;
   browserAvailable: boolean;
@@ -350,6 +353,8 @@ function RightPanelEmptyState(props: {
   onAddPullRequests: () => void;
   onAddDevice: () => void;
   onAddChecklist?: (() => void) | undefined;
+  /** Absent outside the desktop app, where Design is not offered. */
+  onAddDesign?: (() => void) | undefined;
   /** Absent where side chats are not offered. */
   onAddSideChat?: (() => void) | undefined;
   browserAvailable: boolean;
@@ -434,6 +439,19 @@ function RightPanelEmptyState(props: {
             available: true,
             disabledReason: messages(SURFACE_UNAVAILABLE_HINTS.checklist),
             onClick: props.onAddChecklist,
+          },
+        ]
+      : []),
+    ...(props.onAddDesign
+      ? [
+          {
+            label: msg("Design"),
+            description: msg("Lay out the screens the agent sketches on a canvas."),
+            icon: Frame,
+            shortcut: "E",
+            available: true,
+            disabledReason: "",
+            onClick: props.onAddDesign,
           },
         ]
       : []),
@@ -639,6 +657,8 @@ function surfaceTitle(
       return resolve(msg("Linked items"));
     case "checklist":
       return resolve(msg("Checklist"));
+    case "design":
+      return resolve(msg("Design"));
     case "issue":
       // A git host numbers its issues; a tracker with keys of its own, such as Linear, names them.
       return /^\d+$/.test(surface.key) ? `#${surface.key}` : surface.key;
@@ -742,6 +762,8 @@ function SurfaceIcon({
       return <PullRequestGlyph.link className="size-3 shrink-0" />;
     case "checklist":
       return <ListChecks className="size-3 shrink-0" />;
+    case "design":
+      return <Frame className="size-3 shrink-0" />;
     case "issue":
       return <IssueSurfaceIcon surface={surface} environmentId={environmentId} />;
     case "thread":
@@ -1295,6 +1317,18 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           },
         ]
       : []),
+    ...(props.onAddDesign
+      ? [
+          {
+            label: msg("Design"),
+            icon: Frame,
+            shortcut: "E",
+            available: true,
+            disabledReason: "",
+            onClick: props.onAddDesign,
+          },
+        ]
+      : []),
     ...(props.onAddSideChat
       ? [
           {
@@ -1733,6 +1767,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onAddPullRequests={props.onAddPullRequests}
             onAddDevice={props.onAddDevice}
             onAddChecklist={props.onAddChecklist}
+            onAddDesign={props.onAddDesign}
             onAddSideChat={props.onAddSideChat}
             browserAvailable={props.browserAvailable}
             terminalAvailable={props.terminalAvailable}

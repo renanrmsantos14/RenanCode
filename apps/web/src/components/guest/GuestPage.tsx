@@ -62,6 +62,7 @@ import { ReadOnlyThreadTimeline } from "../chat/ReadOnlyThreadTimeline";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { getDisplayModelName, getTriggerDisplayModelName } from "../chat/providerIconUtils";
 import type { TimelineRow } from "../chat/timelineRowContext";
+import { GuestDesignSketches } from "../design/GuestDesignSketches";
 import { GuestHtmlRender } from "./GuestHtmlRender";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -451,6 +452,11 @@ function GuestThread({
       />
     ),
   );
+  const renderDesignSketches = useStableCallback(
+    (row: Extract<TimelineRow, { kind: "design-sketches" }>) => (
+      <GuestDesignSketches shareId={shareId} itemId={row.id} sketches={row.designSketches} />
+    ),
+  );
   const question = useGuestQuestion(shareId, canAnswer ? projection : null);
   useGuestQuestionAlert(title, question.pending?.requestId ?? null);
   return (
@@ -476,6 +482,7 @@ function GuestThread({
           onFileOpen={openFile}
           renderHtmlRender={renderHtmlRender}
           renderHtmlVariant={renderHtmlVariant}
+          renderDesignSketches={renderDesignSketches}
           renderFooter={(items) => {
             const unplaced = unplacedGuestMessages(messages, items, awaitingRowIds);
             return unplaced.length === 0 ? null : (

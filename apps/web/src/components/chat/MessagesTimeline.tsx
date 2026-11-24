@@ -138,6 +138,7 @@ import {
   SentMessageTimelineRow,
   McpAppTimelineRow,
 } from "./TimelineAssistantRows";
+import { DesignSketchTimelineRow } from "../design/DesignSketchTimelineRow";
 import { HtmlVariantsTimelineRow } from "./HtmlVariantsTimelineRow";
 import { V2EventTimelineRow } from "./TimelineV2EventRow";
 import { startTimelinePositionRestore } from "./useTimelinePositionRestore";
@@ -288,6 +289,7 @@ interface MessagesTimelineProps {
   renderHtmlRender?: TimelineRowSharedState["renderHtmlRender"];
   onFollowHtmlVariant?: TimelineRowSharedState["onFollowHtmlVariant"];
   renderHtmlVariant?: TimelineRowSharedState["renderHtmlVariant"];
+  renderDesignSketches?: TimelineRowSharedState["renderDesignSketches"];
   turnItemSource?: TimelineRowSharedState["turnItemSource"];
   /**
    * The thread this one is a subagent or side chat of; `open` is absent when it cannot be
@@ -419,6 +421,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   renderHtmlRender,
   onFollowHtmlVariant,
   renderHtmlVariant,
+  renderDesignSketches,
   turnItemSource,
   parentThreadLink = null,
   continuedOnLink = null,
@@ -1190,6 +1193,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
     renderHtmlRender,
     onFollowHtmlVariant,
     renderHtmlVariant,
+    renderDesignSketches,
     turnItemSource,
     workflowOpening,
     onForkFromRun,
@@ -1765,6 +1769,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
                   row.kind === "attempt-fold" ||
                   row.kind === "html-render" ||
                   row.kind === "html-variants" ||
+                  row.kind === "design-sketches" ||
                   row.kind === "sent-message" ||
                   row.kind === "mcp-app" ||
                   row.kind === "viewed-images"
@@ -1817,6 +1822,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
       {row.kind === "proposed-plan" ? <ProposedPlanTimelineRow row={row} /> : null}
       {row.kind === "html-render" ? <HtmlRenderTimelineRow row={row} /> : null}
       {row.kind === "html-variants" ? <HtmlVariantsTimelineRow row={row} /> : null}
+      {row.kind === "design-sketches" ? <DesignSketchTimelineRow row={row} /> : null}
       {row.kind === "sent-message" ? <SentMessageTimelineRow row={row} /> : null}
       {row.kind === "viewed-images" ? <ViewedImagesTimelineRow row={row} /> : null}
       {row.kind === "mcp-app" ? <McpAppTimelineRow row={row} /> : null}

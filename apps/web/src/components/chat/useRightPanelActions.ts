@@ -24,6 +24,7 @@ import {
   type RightPanelSurface,
   useRightPanelStore,
 } from "../../rightPanelStore";
+import { isElectron } from "../../env";
 import { requestWorkspaceContentFocus, requestWorkspaceFocus } from "../../lib/workspaceFocus";
 import { setActivePreviewTab } from "../../previewStateStore";
 import { isBrowserSettingsReadError } from "../../browser/openFileInPreview";
@@ -167,6 +168,11 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
     useRightPanelStore.getState().open(activeThreadRef, "checklist");
   };
   const addChecklistSurfaceStable = useStableCallback(addChecklistSurface);
+  const addDesignSurface = () => {
+    if (!activeThreadRef || !isElectron) return;
+    useRightPanelStore.getState().open(activeThreadRef, "design");
+  };
+  const addDesignSurfaceStable = useStableCallback(addDesignSurface);
   const addDeviceSurface = () => {
     if (!activeThreadRef) return;
     if (!deviceState.onboardingCompleted || deviceState.hostStatus === "disabled") {
@@ -346,6 +352,7 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
     shortcuts,
     activateRightPanelSurfaceStable,
     addChecklistSurfaceStable,
+    addDesignSurfaceStable,
     addDeviceSurfaceStable,
     addDiffSurfaceStable,
     addFilesSurfaceStable,
