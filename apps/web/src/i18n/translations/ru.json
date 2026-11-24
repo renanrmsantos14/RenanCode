@@ -13189,5 +13189,8 @@
   "9684c1071cc5a436": "Previous image",
   "5858a4971b15faff": "Next image",
   "67a30c98d0ea438d": "Expand chat",
-  "3d54dd7aa4cd6da0": "Resize chat"
+  "3d54dd7aa4cd6da0": "Resize chat",
+  "4a18481bea4b4ad5": "Новое устройство вошло в {environmentLabel}",
+  "4144ab6aa487528a": "{device} подключилось через {product}. Это были не вы? Проверьте.",
+  "a10cfdb27152c757": "{count, plural, one {{count} устройство подключилось} few {{count} устройства подключились} many {{count} устройств подключились} other {{count} устройства подключились}} через {product}. Это были не вы? Проверьте."
 }

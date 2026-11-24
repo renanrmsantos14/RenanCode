@@ -13189,5 +13189,8 @@
   "9684c1071cc5a436": "Imagem anterior",
   "5858a4971b15faff": "Próxima imagem",
   "67a30c98d0ea438d": "Expandir chat",
-  "3d54dd7aa4cd6da0": "Redimensionar chat"
+  "3d54dd7aa4cd6da0": "Redimensionar chat",
+  "4a18481bea4b4ad5": "Novo dispositivo conectado a {environmentLabel}",
+  "4144ab6aa487528a": "{device} se conectou pelo {product}. Não foi você? Revise.",
+  "a10cfdb27152c757": "{count, plural, one {{count} dispositivo se conectou} other {{count} dispositivos se conectaram}} pelo {product}. Não foi você? Revise."
 }
