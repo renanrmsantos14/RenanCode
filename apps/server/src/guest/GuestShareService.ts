@@ -23,7 +23,11 @@ import {
   TurnItemId,
 } from "@t3tools/contracts";
 import { chatMarkdownImageSources } from "@t3tools/shared/markdownPipeline";
-import { htmlRenderFromToolItem, htmlVariantsFromToolItem } from "@t3tools/shared/toolOutput";
+import {
+  htmlRenderFromToolItem,
+  htmlVariantsFromToolItem,
+  sentMessageFromToolItem,
+} from "@t3tools/shared/toolOutput";
 import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
@@ -590,12 +594,19 @@ const make = Effect.gen(function* () {
   };
   const rememberSent = (shareId: GuestShareId, items: Iterable<OrchestrationV2TurnItem>) => {
     for (const item of items) {
-      if (item.type !== "assistant_message") continue;
+      // Clients render a completed `send_to_user` as the agent's own words, so its images count
+      // as a reply's.
+      const text =
+        item.type === "assistant_message"
+          ? item.text
+          : item.type === "dynamic_tool" && item.status === "completed"
+            ? sentMessageFromToolItem(item)
+            : undefined;
       const key = `${item.threadId}\u0000${item.id}`;
-      // Only replies with image syntax can show an image. One edited to drop its images stops
-      // allowing them.
-      if (item.text.includes("![") || /<img/i.test(item.text)) {
-        sentRecord(shareId).replies.set(key, { text: item.text });
+      // Only replies with image syntax can show an image. One edited to drop its images, or a
+      // sent message that stops showing, stops allowing them.
+      if (text !== undefined && (text.includes("![") || /<img/i.test(text))) {
+        sentRecord(shareId).replies.set(key, { text });
       } else {
         sentImageReplies.get(shareId)?.replies.delete(key);
       }
