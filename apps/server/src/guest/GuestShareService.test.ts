@@ -105,6 +105,7 @@ const layerCleanup = Layer.effect(
     return {
       cleanupScheduledTasks: () => Effect.void,
       cleanupWorkModuleLinks: () => Effect.void,
+      cleanupDesign: () => Effect.void,
       cleanupTerminals: () => Effect.void,
       cleanupPreviews: () => Effect.void,
       cleanupDevices: () => Effect.void,

@@ -222,6 +222,12 @@ export const planThreadDeletion = Effect.fn("ThreadDeletion.planThreadDeletion")
     request: { type: "work-modules.cleanup" },
   });
   effects.push({
+    id: `effect:${command.commandId}:design.cleanup`,
+    commandId: command.commandId,
+    threadId: command.threadId,
+    request: { type: "design.cleanup" },
+  });
+  effects.push({
     id: `effect:${command.commandId}:terminal.cleanup`,
     commandId: command.commandId,
     threadId: command.threadId,

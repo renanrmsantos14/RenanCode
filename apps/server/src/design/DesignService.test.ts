@@ -36,28 +36,29 @@ const shells: Record<string, OrchestrationV2ThreadShell> = {
 
 const PNG = Buffer.from("png-bytes").toString("base64");
 
+const makeHtmlRender = (options: { readonly chrome: boolean }) =>
+  Layer.mock(HtmlRender.HtmlRender)({
+    prepare: (html) => Effect.succeed(html),
+    preview: (input) =>
+      options.chrome
+        ? Effect.succeed({
+            png: PNG,
+            width: input.width ?? 1280,
+            contentHeight: 5200,
+            capturedHeight: 5200,
+            consoleMessages: [],
+          })
+        : Effect.fail(new HtmlRender.HtmlRenderFileError({ path: "no-chrome" })),
+  });
+
 const makeLayer = (options: { readonly chrome: boolean }) =>
   DesignService.layer.pipe(
     Layer.provide(
-      Layer.mergeAll(
-        Layer.mock(ThreadManagementService.ThreadManagementService)({
-          getThreadShell: (threadId) => Effect.succeed(shells[threadId] ?? null),
-        }),
-        Layer.mock(HtmlRender.HtmlRender)({
-          prepare: (html) => Effect.succeed(html),
-          preview: (input) =>
-            options.chrome
-              ? Effect.succeed({
-                  png: PNG,
-                  width: input.width ?? 1280,
-                  contentHeight: 5200,
-                  capturedHeight: 5200,
-                  consoleMessages: [],
-                })
-              : Effect.fail(new HtmlRender.HtmlRenderFileError({ path: "no-chrome" })),
-        }),
-      ),
+      Layer.mock(ThreadManagementService.ThreadManagementService)({
+        getThreadShell: (threadId) => Effect.succeed(shells[threadId] ?? null),
+      }),
     ),
+    Layer.provideMerge(makeHtmlRender(options)),
     Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-design-" })),
     Layer.provideMerge(SqlitePersistence.layerMemory),
     Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),

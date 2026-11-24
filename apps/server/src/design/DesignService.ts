@@ -32,6 +32,7 @@ import { createAttachmentId } from "../attachmentStore.ts";
 import * as ServerConfig from "../config.ts";
 import * as HtmlRender from "../htmlRender/HtmlRender.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
+import { deleteThreadCanvas } from "./deleteThreadCanvas.ts";
 
 /** Used when Chrome is missing and the agent gave no height, so the page could not be measured. */
 const FALLBACK_SKETCH_HEIGHT = 800;
@@ -51,6 +52,7 @@ export class DesignService extends Context.Service<
     readonly snapshot: (threadId: ThreadId) => Effect.Effect<DesignCanvasSnapshot, DesignError>;
     readonly subscribe: (threadId: ThreadId) => Stream.Stream<DesignCanvasSnapshot, DesignError>;
     /** Saves the pages as sketches and places them on the thread's canvas as one group. */
+    // HtmlRender is needed per call, not to build the service: its browser only exists in the HTTP layer.
     readonly createSketches: (input: {
       readonly threadId: ThreadId;
       readonly projectId: ProjectId;
@@ -59,7 +61,8 @@ export class DesignService extends Context.Service<
       readonly pages: ReadonlyArray<DesignSketchPage>;
     }) => Effect.Effect<
       ReadonlyArray<DesignSketchReference>,
-      DesignError | HtmlRender.HtmlRenderPrepareError
+      DesignError | HtmlRender.HtmlRenderPrepareError,
+      HtmlRender.HtmlRender
     >;
     readonly moveNodes: (input: {
       readonly threadId: ThreadId;
@@ -173,7 +176,6 @@ export const layer = Layer.effect(
     const sql = yield* SqlClient.SqlClient;
     const random = yield* SecureRandom.SecureRandom;
     const threads = yield* ThreadManagementService.ThreadManagementService;
-    const htmlRender = yield* HtmlRender.HtmlRender;
     const fileSystem = yield* FileSystem.FileSystem;
     const config = yield* ServerConfig.ServerConfig;
     // Items are tiny and each subscriber re-reads its own thread, so nothing is dropped.
@@ -252,6 +254,7 @@ export const layer = Layer.effect(
       readonly page: DesignSketchPage;
       readonly written: Array<string>;
     }) {
+      const htmlRender = yield* HtmlRender.HtmlRender;
       const preview = yield* htmlRender.preview({ html: input.page.html, width: input.page.width });
       const target = yield* newAttachment(input.projectId, "png");
       yield* fileSystem
@@ -269,6 +272,7 @@ export const layer = Layer.effect(
       readonly pages: ReadonlyArray<DesignSketchPage>;
     }) {
       if (input.pages.length === 0) return yield* fail("A sketch needs at least one page.");
+      const htmlRender = yield* HtmlRender.HtmlRender;
       const prepared = yield* Effect.forEach(input.pages, (page) => htmlRender.prepare(page.html));
       const basedOn =
         input.basedOn === undefined
@@ -516,14 +520,10 @@ export const layer = Layer.effect(
     });
 
     const cleanupThread = Effect.fn("DesignService.cleanupThread")(function* (threadId: ThreadId) {
-      yield* sql
-        .withTransaction(
-          Effect.gen(function* () {
-            yield* sql`DELETE FROM design_canvas_nodes WHERE thread_id = ${threadId}`;
-            yield* sql`DELETE FROM design_canvas_viewports WHERE thread_id = ${threadId}`;
-          }),
-        )
-        .pipe(Effect.mapError(storage));
+      yield* deleteThreadCanvas(threadId).pipe(
+        Effect.provideService(SqlClient.SqlClient, sql),
+        Effect.mapError(storage),
+      );
       yield* notify(threadId);
     });
 

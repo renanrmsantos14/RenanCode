@@ -140,6 +140,7 @@ import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as ReviewService from "./review/ReviewService.ts";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as ProjectChecklist from "./projectChecklist/ProjectChecklistService.ts";
+import * as DesignService from "./design/DesignService.ts";
 import * as WorkModules from "./workModules/WorkModuleService.ts";
 import * as Workflows from "./workflows/Workflows.ts";
 import * as WorkflowRuntime from "./workflows/WorkflowRuntime.ts";
@@ -897,6 +898,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(ReviewService.ReviewService)({}),
   Layer.mock(ScheduledTasks.ScheduledTaskService)({}),
   Layer.mock(WorkModules.WorkModuleService)({}),
+  Layer.mock(DesignService.DesignService)({}),
   Layer.mock(ProjectChecklist.ProjectChecklistService)({}),
   Workflows.layerDisabled,
   Layer.mock(WorkflowRuntime.WorkflowDefinitions)({}),
