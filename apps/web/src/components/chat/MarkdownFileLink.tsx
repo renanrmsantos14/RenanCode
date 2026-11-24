@@ -459,9 +459,12 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
 
   if (!canDownload) return chipWithTooltip;
   return (
-    <span className="group/file-link inline-flex max-w-full items-center gap-0.5">
+    // Chromium ends triple-click line selection at a flex wrapper or a rendered control, so the
+    // button mounts only on hover; the end padding keeps the line from shifting. Keyboard users
+    // download from the chip's context menu.
+    <span className="group/file-link relative whitespace-nowrap pe-6.5">
       {chipWithTooltip}
-      <span className="opacity-0 transition-opacity group-focus-within/file-link:opacity-100 group-hover/file-link:opacity-100">
+      <span className="absolute end-0 top-1/2 hidden -translate-y-1/2 group-hover/file-link:block">
         <Button
           size="icon-xs"
           variant="ghost-muted"
