@@ -73,6 +73,20 @@ describe("RPC authorization scopes", () => {
     }
   });
 
+  it("lets readers watch a thread's design canvas but only operators change it", () => {
+    expect(requiredScopeForRpcMethod(WS_METHODS.designSubscribeCanvas)).toBe(
+      AuthOrchestrationReadScope,
+    );
+    for (const method of [
+      WS_METHODS.designMoveNodes,
+      WS_METHODS.designSetViewport,
+      WS_METHODS.designRemoveNode,
+      WS_METHODS.designPlaceSketch,
+    ]) {
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationOperateScope);
+    }
+  });
+
   it("keeps webhook delivery logs, which hold request bodies, behind operate scope", () => {
     for (const method of [
       WS_METHODS.scheduledTasksListWebhookDeliveries,

@@ -72,6 +72,7 @@ export * from "./previewCapture.ts";
 export * from "./usage.ts";
 export * from "./scheduledTask.ts";
 export * from "./projectChecklist.ts";
+export * from "./design.ts";
 export * from "./workModule.ts";
 export * from "./milestones.ts";
 export * from "./workflow.ts";

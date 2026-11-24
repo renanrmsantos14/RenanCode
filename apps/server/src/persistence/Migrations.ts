@@ -121,6 +121,7 @@ import Migration0110 from "./Migrations/110_IssueTrackerAccounts.ts";
 import Migration0111 from "./Migrations/111_Workflows.ts";
 import Migration0112 from "./Migrations/112_ProjectChecklist.ts";
 import Migration0113 from "./Migrations/113_SupersededRunAttemptIndex.ts";
+import Migration0114 from "./Migrations/114_DesignCanvas.ts";
 
 const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
@@ -237,6 +238,7 @@ const migrationEntries = [
   [111, "Workflows", Migration0111],
   [112, "ProjectChecklist", Migration0112],
   [113, "SupersededRunAttemptIndex", Migration0113],
+  [114, "DesignCanvas", Migration0114],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
