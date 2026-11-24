@@ -267,9 +267,17 @@ const renderRoute = HttpRouter.add(
     const variant = parseVariant(yield* queryParam("variant"));
     if (variant === null) return yield* badRequest;
     const guestShares = yield* GuestShareService;
-    return yield* guestShares.render(yield* sessionToken, itemId, variant).pipe(
-      Effect.flatMap(({ path, title }) =>
-        assetFileResponse({ path, mimeType: "text/html", fileName: htmlRenderFileName(title) }),
+    const thumbnail = (yield* queryParam("thumbnail")) === "1";
+    return yield* guestShares.render(yield* sessionToken, itemId, variant, thumbnail).pipe(
+      Effect.flatMap(({ path, title, mimeType }) =>
+        assetFileResponse({
+          path,
+          mimeType,
+          fileName: htmlRenderFileName(title).replace(
+            /\.html$/,
+            mimeType === "image/png" ? ".png" : ".html",
+          ),
+        }),
       ),
       // Each load re-checks the share, so a closed, replaced, or expired link stops it at once.
       Effect.map((response) => HttpServerResponse.setHeaders(response, NO_STORE)),

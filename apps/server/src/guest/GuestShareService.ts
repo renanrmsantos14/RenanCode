@@ -24,6 +24,7 @@ import {
 } from "@t3tools/contracts";
 import { chatMarkdownImageSources } from "@t3tools/shared/markdownPipeline";
 import {
+  designSketchesFromToolItem,
   htmlRenderFromToolItem,
   htmlVariantsFromToolItem,
   sentMessageFromToolItem,
@@ -47,6 +48,7 @@ import {
   createAttachmentId,
   resolveAttachmentPath,
   resolveAttachmentPathById,
+  projectDesignSketchAttachmentId,
   threadHtmlRenderAttachmentIds,
 } from "../attachmentStore.ts";
 import * as ServerConfig from "../config.ts";
@@ -178,12 +180,23 @@ export class GuestShareService extends Context.Service<
     readonly stream: (
       session: string,
     ) => Effect.Effect<Stream.Stream<GuestStreamEvent>, GuestShareAccessError>;
-    /** The file of an HTML render, or of one variation of an html_variants item, and its title. */
+    /**
+     * The file of an HTML render, of one variation of an html_variants item, or of a Design sketch
+     * (its page, or its PNG thumbnail), and its title.
+     */
     readonly render: (
       session: string,
       itemId: string,
       variant?: number,
-    ) => Effect.Effect<{ readonly path: string; readonly title: string }, GuestShareAccessError>;
+      thumbnail?: boolean,
+    ) => Effect.Effect<
+      {
+        readonly path: string;
+        readonly title: string;
+        readonly mimeType: "text/html" | "image/png";
+      },
+      GuestShareAccessError
+    >;
     /** One item of the shared thread, as the owner's expanded row loads it, without file diffs. */
     readonly item: (
       session: string,
@@ -757,10 +770,30 @@ const make = Effect.gen(function* () {
     session: string,
     itemId: string,
     variant?: number,
+    thumbnail?: boolean,
   ) {
-    const { item } = yield* threadItem(session, itemId);
+    const { thread, item } = yield* threadItem(session, itemId);
     if (item.type !== "dynamic_tool") return yield* unavailable;
+    const sketches = designSketchesFromToolItem(item);
     const variants = htmlVariantsFromToolItem(item);
+    // An html_variants item keeps serving its own pages; only its thumbnails come from the sketches.
+    if (sketches !== undefined && (variants === undefined || thumbnail === true)) {
+      const sketch = sketches[variant ?? 0];
+      const attachmentId = projectDesignSketchAttachmentId(
+        thread.projectId,
+        thumbnail === true ? sketch?.thumbnailAttachmentId : sketch?.attachmentId,
+      );
+      const path =
+        attachmentId === undefined
+          ? null
+          : resolveAttachmentPathById({ attachmentsDir, attachmentId });
+      if (sketch === undefined || path === null) return yield* unavailable;
+      return {
+        path,
+        title: sketch.title,
+        mimeType: thumbnail === true ? ("image/png" as const) : ("text/html" as const),
+      };
+    }
     const reference =
       variants === undefined
         ? htmlRenderFromToolItem(item)
@@ -775,7 +808,7 @@ const make = Effect.gen(function* () {
         ? null
         : resolveAttachmentPathById({ attachmentsDir, attachmentId });
     if (reference === undefined || path === null) return yield* unavailable;
-    return { path, title: reference.title };
+    return { path, title: reference.title, mimeType: "text/html" as const };
   });
 
   const item = Effect.fn("GuestShareService.item")(function* (session: string, itemId: string) {

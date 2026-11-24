@@ -463,9 +463,64 @@ it.effect("opens each variation of an html_variants item by its index", () =>
     assert.deepEqual(second, {
       path: resolveAttachmentPathById({ attachmentsDir, attachmentId: attachmentIds[1]! }),
       title: "Table",
+      mimeType: "text/html",
     });
     assert.isTrue(Exit.isFailure(yield* Effect.exit(guestShares.render(session, variants, 2))));
     assert.isTrue(Exit.isFailure(yield* Effect.exit(guestShares.render(session, variants))));
+  }).pipe(Effect.provide(layerTest)),
+);
+
+it.effect("opens a Design sketch's page and thumbnail only from the thread's own project", () =>
+  Effect.gen(function* () {
+    const { guestShares, credential } = yield* shareThread;
+    const { token: session } = yield* guestShares.redeem({ credential, name: "Sam" });
+    const { attachmentsDir } = yield* ServerConfig.ServerConfig;
+    const fileSystem = yield* FileSystem.FileSystem;
+    const own = (extension: "html" | "png") =>
+      createAttachmentId("design-project:guest-share-service", extension)!;
+    const foreign = createAttachmentId("design-project:other", "html")!;
+    const [page, thumbnail] = [own("html"), own("png")];
+    for (const [id, extension] of [
+      [page, "html"],
+      [thumbnail, "png"],
+      [foreign, "html"],
+    ] as const) {
+      yield* fileSystem.writeFileString(`${attachmentsDir}/${id}.${extension}`, "bytes");
+    }
+    const sketch = (attachmentId: string) => ({
+      sketchId: "sketch:1",
+      attachmentId,
+      thumbnailAttachmentId: thumbnail,
+      title: "Home",
+      width: 1280,
+      height: 800,
+    });
+    const owned = yield* writeItem("item:sketch", {
+      type: "dynamic_tool",
+      status: "completed",
+      toolName: "mcp__t3-code__design_sketch",
+      input: {},
+      output: { structuredContent: { designSketch: sketch(page) } },
+    });
+    const stolen = yield* writeItem("item:sketch-foreign", {
+      type: "dynamic_tool",
+      status: "completed",
+      toolName: "mcp__t3-code__design_sketch",
+      input: {},
+      output: { structuredContent: { designSketch: sketch(foreign) } },
+    });
+
+    assert.deepEqual(yield* guestShares.render(session, owned), {
+      path: resolveAttachmentPathById({ attachmentsDir, attachmentId: page }),
+      title: "Home",
+      mimeType: "text/html",
+    });
+    assert.deepEqual(yield* guestShares.render(session, owned, undefined, true), {
+      path: resolveAttachmentPathById({ attachmentsDir, attachmentId: thumbnail }),
+      title: "Home",
+      mimeType: "image/png",
+    });
+    assert.isTrue(Exit.isFailure(yield* Effect.exit(guestShares.render(session, stolen))));
   }).pipe(Effect.provide(layerTest)),
 );
 
@@ -707,6 +762,7 @@ it.effect("gives a fork's guest the commands the fork shows from its source thre
     assert.deepEqual(yield* guestShares.render(session, render), {
       path: resolveAttachmentPathById({ attachmentsDir, attachmentId: page })!,
       title: "Plan",
+      mimeType: "text/html",
     });
   }).pipe(Effect.provide(layerTest)),
 );
