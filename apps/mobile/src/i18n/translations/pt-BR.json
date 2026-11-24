@@ -2865,6 +2865,7 @@
   "dff9e061996e7b1d": "Ativar o merge automático?",
   "dafc4bac6e5e37b0": "Desativar o merge automático?",
   "88c7a80c40bbfe56": "Mesclar {layers} em {base} usando {kind, select, squash {squash} merge {merge} rebase {rebase} fastForward {fast-forward} other {{method}}}. As camadas acima de #{number} continuam abertas.",
+  "892f08d21b8e48a9": "Mesclar {layers} em {base} usando {kind, select, squash {squash} merge {merge} rebase {rebase} fastForward {fast-forward} other {{method}}} quando os requisitos forem atendidos. Isso pode acontecer imediatamente.",
   "700223fdcaa96bb7": "Mesclar #{number} usando {kind, select, squash {squash} merge {merge} rebase {rebase} fastForward {fast-forward} other {{method}}} quando os requisitos forem atendidos. Isso pode acontecer imediatamente.",
   "de93a05a4db7ab76": "Impede que o provedor mescle {term, select, mr {este merge request} cr {esta solicitação de alteração} other {este pull request}} automaticamente.",
   "385ba70d2783260b": "Mesclar #{number} em {branch} usando {kind, select, squash {squash} merge {merge} rebase {rebase} fastForward {fast-forward} other {{method}}}.",
@@ -4220,6 +4221,7 @@
   "6c1de230705e0528": "Quantidade da duração",
   "eb4ae844f33fffd0": "Unidade da duração",
   "5f8693d00859a838": "Cancelar adiamento personalizado",
+  "3e19afa2072da269": "Abrir esboço {title}",
   "75cec2ebcb7284a7": "Escolher ambiente, {label}, offline",
   "cfc423d0d58aca94": "Escolher ambiente, {label}, conectado",
   "0bc72950072ee1aa": [
@@ -5388,6 +5390,7 @@
   "744127f8dfad7d22": "Conecte um ambiente para ver as execuções de workflow dele.",
   "b9aae2f7cdb1a379": "Nenhuma execução de workflow ainda",
   "ace8fc1c643cf9f6": "Um workflow reúne agentes, código, agendamentos e perguntas para você em uma única execução que sobrevive a reinicializações. Escreva um no seu computador, em Workflows e depois Definições.",
+  "fceb81aa6685fb47": "Chats",
   "86798f07ba2d7f4d": "Pesquisar issues",
   "484cd83bb303bab8": "Pesquisar pull requests",
   "75ed31fcea4f741a": "Filtrar issues",
@@ -5421,7 +5424,6 @@
   "f03ba5bbef74ca6d": "Issues",
   "ee0df48be7144de4": "Workflows",
   "724eacadecd3a4cf": "Uso",
-  "fceb81aa6685fb47": "Chats",
   "f1bb8f9323639c63": "PRs",
   "a3bd0ffad2733714": "Guia de revisão",
   "399447461c149bb1": "Reconecte ou peça a alguém com acesso de escrita para tentar novamente.",
@@ -5671,6 +5673,5 @@
   "ad208e3e32c85029": "Ocultar todas",
   "3328503592789bed": "Zen",
   "856812e7e1fc445e": "Chamadas de ferramentas no chat",
-  "8d545d54c0a9e950": "Oculta os comandos, edições e pesquisas que os agentes executam. \"Ocultar bem-sucedidas\" mantém as falhas. Zen mostra só as respostas finais. Aprovações, perguntas e erros sempre aparecem.",
-  "892f08d21b8e48a9": "Mesclar {layers} em {base} usando {kind, select, squash {squash} merge {merge} rebase {rebase} fastForward {fast-forward} other {{method}}} quando os requisitos forem atendidos. Isso pode acontecer imediatamente."
+  "8d545d54c0a9e950": "Oculta os comandos, edições e pesquisas que os agentes executam. \"Ocultar bem-sucedidas\" mantém as falhas. Zen mostra só as respostas finais. Aprovações, perguntas e erros sempre aparecem."
 }

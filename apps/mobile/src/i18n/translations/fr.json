@@ -2865,6 +2865,7 @@
   "dff9e061996e7b1d": "Activer la fusion automatique ?",
   "dafc4bac6e5e37b0": "Désactiver la fusion automatique ?",
   "88c7a80c40bbfe56": "Fusionner {layers} dans {base} avec {kind, select, squash {squash} merge {merge} rebase {rebase} fastForward {fast-forward} other {{method}}}. Les couches au-dessus de #{number} restent ouvertes.",
+  "892f08d21b8e48a9": "Fusionner {layers} dans {base} avec {kind, select, squash {squash} merge {merge} rebase {rebase} fastForward {fast-forward} other {{method}}} dès que leurs conditions sont remplies. Cela peut se produire immédiatement.",
   "700223fdcaa96bb7": "Fusionner #{number} avec {kind, select, squash {squash} merge {merge} rebase {rebase} fastForward {fast-forward} other {{method}}} dès que ses conditions sont remplies. Cela peut se produire immédiatement.",
   "de93a05a4db7ab76": "Empêcher le fournisseur de fusionner automatiquement cette {term, select, mr {merge request} cr {demande de modification} other {pull request}}.",
   "385ba70d2783260b": "Fusionner #{number} dans {branch} avec {kind, select, squash {squash} merge {merge} rebase {rebase} fastForward {fast-forward} other {{method}}}.",
@@ -4220,6 +4221,7 @@
   "6c1de230705e0528": "Durée",
   "eb4ae844f33fffd0": "Unité de durée",
   "5f8693d00859a838": "Annuler le report personnalisé",
+  "3e19afa2072da269": "Ouvrir l'esquisse {title}",
   "75cec2ebcb7284a7": "Choisir l’environnement, {label}, hors ligne",
   "cfc423d0d58aca94": "Choisir l’environnement, {label}, connecté",
   "0bc72950072ee1aa": [
@@ -5388,6 +5390,7 @@
   "744127f8dfad7d22": "Connectez un environnement pour voir ses exécutions de workflow.",
   "b9aae2f7cdb1a379": "Aucune exécution de workflow pour l’instant",
   "ace8fc1c643cf9f6": "Un workflow réunit agents, code, planifications et questions qui vous sont posées en une seule exécution qui survit aux redémarrages. Écrivez-en un sur votre ordinateur, dans Workflows, puis Définitions.",
+  "fceb81aa6685fb47": "Discussions",
   "86798f07ba2d7f4d": "Rechercher des tickets",
   "484cd83bb303bab8": "Rechercher des pull requests",
   "75ed31fcea4f741a": "Filtrer les tickets",
@@ -5421,7 +5424,6 @@
   "f03ba5bbef74ca6d": "Tickets",
   "ee0df48be7144de4": "Workflows",
   "724eacadecd3a4cf": "Utilisation",
-  "fceb81aa6685fb47": "Discussions",
   "f1bb8f9323639c63": "PR",
   "a3bd0ffad2733714": "Guide de revue",
   "399447461c149bb1": "Reconnectez-vous ou demandez à une personne ayant un accès en écriture de réessayer.",
@@ -5671,6 +5673,5 @@
   "ad208e3e32c85029": "Tout masquer",
   "3328503592789bed": "Zen",
   "856812e7e1fc445e": "Appels d’outils dans la discussion",
-  "8d545d54c0a9e950": "Masque les commandes, modifications et recherches lancées par les agents. Masquer les réussis garde les échecs. Zen n’affiche que les réponses finales. Les approbations, questions et erreurs s’affichent toujours.",
-  "892f08d21b8e48a9": "Fusionner {layers} dans {base} avec {kind, select, squash {squash} merge {merge} rebase {rebase} fastForward {fast-forward} other {{method}}} dès que leurs conditions sont remplies. Cela peut se produire immédiatement."
+  "8d545d54c0a9e950": "Masque les commandes, modifications et recherches lancées par les agents. Masquer les réussis garde les échecs. Zen n’affiche que les réponses finales. Les approbations, questions et erreurs s’affichent toujours."
 }

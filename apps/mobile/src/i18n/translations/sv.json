@@ -2869,6 +2869,7 @@
   "dff9e061996e7b1d": "Aktivera automatisk merge?",
   "dafc4bac6e5e37b0": "Inaktivera automatisk merge?",
   "88c7a80c40bbfe56": "Merga {layers} in i {base} med {kind, select, squash {squash} merge {merge} rebase {rebase} fastForward {fast-forward} other {{method}}}. Lager ovanför #{number} förblir öppna.",
+  "892f08d21b8e48a9": "Merga {layers} in i {base} med {kind, select, squash {squash} merge {merge} rebase {rebase} fastForward {fast-forward} other {{method}}} när kraven är uppfyllda. Det kan ske direkt.",
   "700223fdcaa96bb7": "Merga #{number} med {kind, select, squash {squash} merge {merge} rebase {rebase} fastForward {fast-forward} other {{method}}} när kraven är uppfyllda. Det kan ske direkt.",
   "de93a05a4db7ab76": "Hindra leverantören från att automatiskt merga den här {term, select, mr {merge requesten} cr {ändringsbegäran} other {pull requesten}}.",
   "385ba70d2783260b": "Merga #{number} in i {branch} med {kind, select, squash {squash} merge {merge} rebase {rebase} fastForward {fast-forward} other {{method}}}.",
@@ -4226,6 +4227,7 @@
   "6c1de230705e0528": "Varaktighet",
   "eb4ae844f33fffd0": "Tidsenhet",
   "5f8693d00859a838": "Avbryt anpassad snooze",
+  "3e19afa2072da269": "Öppna skiss {title}",
   "75cec2ebcb7284a7": "Välj miljö, {label}, offline",
   "cfc423d0d58aca94": "Välj miljö, {label}, ansluten",
   "0bc72950072ee1aa": [
@@ -5394,6 +5396,7 @@
   "744127f8dfad7d22": "Anslut en miljö för att se dess arbetsflödeskörningar.",
   "b9aae2f7cdb1a379": "Inga arbetsflödeskörningar än",
   "ace8fc1c643cf9f6": "Ett arbetsflöde knyter ihop agenter, kod, scheman och frågor till dig i en enda körning som överlever omstarter. Skriv ett på din dator, under Arbetsflöden och sedan Definitioner.",
+  "fceb81aa6685fb47": "Chattar",
   "86798f07ba2d7f4d": "Sök ärenden",
   "484cd83bb303bab8": "Sök pull requests",
   "75ed31fcea4f741a": "Filtrera ärenden",
@@ -5427,7 +5430,6 @@
   "f03ba5bbef74ca6d": "Ärenden",
   "ee0df48be7144de4": "Arbetsflöden",
   "724eacadecd3a4cf": "Användning",
-  "fceb81aa6685fb47": "Chattar",
   "f1bb8f9323639c63": "PR",
   "a3bd0ffad2733714": "Granskningsguide",
   "399447461c149bb1": "Återanslut eller be någon med skrivåtkomst att försöka igen.",
@@ -5677,6 +5679,5 @@
   "ad208e3e32c85029": "Dölj alla",
   "3328503592789bed": "Zen",
   "856812e7e1fc445e": "Verktygsanrop i chatten",
-  "8d545d54c0a9e950": "Dölj kommandon, redigeringar och sökningar som agenter kör. Dölj lyckade behåller misslyckanden. Zen visar bara slutliga svar. Godkännanden, frågor och fel visas alltid.",
-  "892f08d21b8e48a9": "Merga {layers} in i {base} med {kind, select, squash {squash} merge {merge} rebase {rebase} fastForward {fast-forward} other {{method}}} när kraven är uppfyllda. Det kan ske direkt."
+  "8d545d54c0a9e950": "Dölj kommandon, redigeringar och sökningar som agenter kör. Dölj lyckade behåller misslyckanden. Zen visar bara slutliga svar. Godkännanden, frågor och fel visas alltid."
 }
