@@ -33,7 +33,6 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as TestClock from "effect/testing/TestClock";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { McpAttachmentInput } from "./attachment/input.ts";
 import { McpSchema, McpServer } from "effect/ai";
@@ -379,7 +378,7 @@ const htmlToolkitLayer = (design?: Layer.Layer<DesignService.DesignService>) => 
         executable: Effect.fail(
           new PreviewBrowser.PreviewBrowserUnsupportedError({ platform: "test", arch: "test" }),
         ),
-        installed: Effect.succeed(Option.none()),
+        installed: Effect.succeedNone,
       }),
     ),
     Layer.provide(

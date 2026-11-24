@@ -188,7 +188,7 @@ const HtmlVariantsTool = Tool.make(HTML_VARIANTS_TOOL_NAME, {
 
 // Like html_render, it only touches the caller's thread and project canvas, so read-only sandboxes may use it.
 const DesignSketchTool = Tool.make(DESIGN_SKETCH_TOOL_NAME, {
-  description: `Explore an idea for an interface or screen as an HTML page. It opens in the thread's Design section, where the user can compare and refine it. For a chart or other data, use html_render. ${PAGE_RULES} ${HTML_RENDER_THEME_GUIDE}`,
+  description: `Explore an idea for an interface or screen as an HTML page. It opens in the thread's Design section, where the user can compare and refine it. For a chart or other data, use html_render. ${PAGE_RULES} Theme and layout rules are in html_render.`,
   parameters: Schema.Struct({
     path: Schema.optional(HtmlPath),
     html: Schema.optional(Html),
