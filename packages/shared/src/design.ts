@@ -1,12 +1,12 @@
 export const DESIGN_SKETCH_TOOL_NAME = "design_sketch";
-const DESIGN_SKETCH_MIN_WIDTH = 240;
-const DESIGN_SKETCH_MAX_WIDTH = 1920;
-const DESIGN_SKETCH_DEFAULT_WIDTH = 1280;
-const DESIGN_SKETCH_MIN_HEIGHT = 80;
-const DESIGN_SKETCH_MAX_HEIGHT = 10_000;
+export const DESIGN_SKETCH_MIN_WIDTH = 240;
+export const DESIGN_SKETCH_MAX_WIDTH = 1920;
+export const DESIGN_SKETCH_DEFAULT_WIDTH = 1280;
+export const DESIGN_SKETCH_MIN_HEIGHT = 80;
+export const DESIGN_SKETCH_MAX_HEIGHT = 10_000;
 /** A page that grows with its frame would otherwise get an enormous sketch. */
 export const DESIGN_SKETCH_DEFAULT_MAX_HEIGHT = 4_000;
-const DESIGN_SKETCH_MAX_TITLE_LENGTH = 200;
+export const DESIGN_SKETCH_MAX_TITLE_LENGTH = 200;
 export const DESIGN_CANVAS_GAP = 80;
 
 export interface DesignSketchReference {

@@ -68,7 +68,11 @@ const withService = <A, E>(
   options: { readonly chrome: boolean },
   body: (
     service: DesignService.DesignService["Service"],
-  ) => Effect.Effect<A, E, FileSystem.FileSystem | ServerConfig.ServerConfig>,
+  ) => Effect.Effect<
+    A,
+    E,
+    FileSystem.FileSystem | ServerConfig.ServerConfig | HtmlRender.HtmlRender
+  >,
 ) =>
   Effect.gen(function* () {
     return yield* body(yield* DesignService.DesignService);

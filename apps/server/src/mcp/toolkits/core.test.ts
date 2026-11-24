@@ -7,6 +7,7 @@ import {
   DEFAULT_SERVER_SETTINGS,
   ChatImageAttachment,
   CommandId,
+  DesignError,
   EnvironmentId,
   NodeId,
   OrchestratorMcpThreadReadResult,
@@ -32,6 +33,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as TestClock from "effect/testing/TestClock";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { McpAttachmentInput } from "./attachment/input.ts";
 import { McpSchema, McpServer } from "effect/ai";
@@ -47,6 +49,8 @@ import {
 import * as Upload from "../../assets/AttachmentUpload.ts";
 import * as ServerSecretStore from "../../auth/ServerSecretStore.ts";
 import * as ServerConfig from "../../config.ts";
+import * as DesignService from "../../design/DesignService.ts";
+import * as SqlitePersistence from "../../persistence/Sqlite.ts";
 import * as ProviderAdapterRegistry from "../../orchestration-v2/ProviderAdapterRegistry.ts";
 import * as ThreadLaunchService from "../../orchestration-v2/ThreadLaunchService.ts";
 import * as GitVcsDriver from "../../vcs/GitVcsDriver.ts";
@@ -81,7 +85,11 @@ const declaredFailure = (result: McpSchema.CallToolResult) => {
   const text = result.content[0];
   return result.isError === true && text?.type === "text" ? JSON.parse(text.text) : undefined;
 };
-import { htmlRenderFromToolItem, htmlVariantsFromToolItem } from "@t3tools/shared/toolOutput";
+import {
+  designSketchesFromToolItem,
+  htmlRenderFromToolItem,
+  htmlVariantsFromToolItem,
+} from "@t3tools/shared/toolOutput";
 
 const decodeMcpAttachmentInput = Schema.decodeUnknownEffect(McpAttachmentInput);
 const decodeThreadReadResult = Schema.decodeUnknownEffect(OrchestratorMcpThreadReadResult);
@@ -346,6 +354,53 @@ it("bounds public command rejections and redacts internal dispatch causes", () =
 
 const fullAccessThreadId = ThreadId.make("mcp-core-full-access-thread");
 
+const designProjectId = ProjectId.make("mcp-core-project");
+
+const htmlToolkitLayer = (design?: Layer.Layer<DesignService.DesignService>) => {
+  const threads = Layer.mock(ThreadManagement.ThreadManagementService)({
+    getThreadShell: (id) =>
+      Effect.succeed({
+        id,
+        projectId: designProjectId,
+        deletedAt: null,
+        archivedAt: null,
+        activeRunId: RunId.make("mcp-core-run"),
+        providerInstanceId: ProviderInstanceId.make("codex"),
+        runtimeMode: id === fullAccessThreadId ? "full-access" : "approval-required",
+        interactionMode: "default",
+      } as OrchestrationV2ThreadShell),
+  });
+  const base = McpHttpServer.layerHtmlToolkit.pipe(
+    Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+    Layer.provide(McpProviderSessions.layer),
+    // The real browser downloads Chrome on first use; without it, thumbnails are skipped.
+    Layer.provide(
+      Layer.mock(PreviewBrowser.PreviewBrowser)({
+        executable: Effect.fail(
+          new PreviewBrowser.PreviewBrowserUnsupportedError({ platform: "test", arch: "test" }),
+        ),
+        installed: Effect.succeed(Option.none()),
+      }),
+    ),
+    Layer.provide(
+      DocumentText.layer.pipe(
+        Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+      ),
+    ),
+    Layer.provide(FetchHttpClient.layer),
+  );
+  return (
+    design === undefined
+      ? base.pipe(Layer.provideMerge(DesignService.layer))
+      : base.pipe(Layer.provideMerge(design))
+  ).pipe(
+    Layer.provide(threads),
+    Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-html-render-" })),
+    Layer.provide(SqlitePersistence.layerMemory),
+    Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+  );
+};
+
 it.effect("returns an HTML render reference that Codex and Claude tool rows both carry", () =>
   Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
@@ -387,36 +442,7 @@ it.effect("returns an HTML render reference that Codex and Claude tool rows both
       expect(yield* byPath(name, scope), name).toContain("only full-access threads");
       expect(yield* byPath(name, fullAccess), name).toContain("not a readable HTML document");
     }
-  }).pipe(
-    Effect.provide(
-      McpHttpServer.layerHtmlToolkit.pipe(
-        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
-        Layer.provide(McpProviderSessions.layer),
-        Layer.provide(PreviewBrowser.layer),
-        Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-html-render-" })),
-        Layer.provide(
-          DocumentText.layer.pipe(
-            Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
-          ),
-        ),
-        Layer.provide(FetchHttpClient.layer),
-        Layer.provide(
-          Layer.mock(ThreadManagement.ThreadManagementService)({
-            getThreadShell: (id) =>
-              Effect.succeed({
-                id,
-                deletedAt: null,
-                archivedAt: null,
-                activeRunId: RunId.make("mcp-core-run"),
-                providerInstanceId: ProviderInstanceId.make("codex"),
-                runtimeMode: id === fullAccessThreadId ? "full-access" : "approval-required",
-                interactionMode: "default",
-              } as OrchestrationV2ThreadShell),
-          }),
-        ),
-      ),
-    ),
-  ),
+  }).pipe(Effect.provide(htmlToolkitLayer())),
 );
 
 it.effect("returns one labeled reference per html_variants page", () =>
@@ -446,34 +472,127 @@ it.effect("returns one labeled reference per html_variants page", () =>
       { label: "Airy", height: 260 },
     ]);
     expect(new Set(variants?.map((variant) => variant.attachmentId)).size).toBe(2);
+  }).pipe(Effect.provide(htmlToolkitLayer())),
+);
+
+const callHtmlTool = (
+  name: string,
+  args: Record<string, unknown>,
+  caller: McpInvocationContext.McpInvocationScope = scope,
+) =>
+  Effect.gen(function* () {
+    const server = yield* McpServer.McpServer;
+    return yield* server
+      .callTool({ name, arguments: args })
+      .pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, caller),
+        Effect.provideService(McpSchema.McpServerClient, client),
+      );
+  });
+
+it.effect(
+  "design_sketch saves a page to the thread's canvas and refuses a path unless full-access",
+  () =>
+    Effect.gen(function* () {
+      const result = yield* callHtmlTool("design_sketch", {
+        html: "<p>Login</p>",
+        title: "Login",
+        width: 390,
+        height: 700,
+      });
+      expect(result.isError).not.toBe(true);
+      const sketch = designSketchesFromToolItem({
+        toolName: "t3-code.design_sketch",
+        output: result.structuredContent,
+      });
+      expect(sketch).toMatchObject([{ title: "Login", width: 390, height: 700 }]);
+      const design = yield* DesignService.DesignService;
+      const snapshot = yield* design.snapshot(threadId);
+      expect(snapshot.sketches.map((entry) => entry.title)).toEqual(["Login"]);
+
+      const byPath = (caller: McpInvocationContext.McpInvocationScope) =>
+        callHtmlTool(
+          "design_sketch",
+          { path: "/t3-missing-dir/login.html", title: "Login" },
+          caller,
+        ).pipe(Effect.map((value) => JSON.stringify(value.content)));
+      const fullAccess = { ...scope, thread: { ...scope.thread!, threadId: fullAccessThreadId } };
+      expect(yield* byPath(scope)).toContain("only full-access threads");
+      expect(yield* byPath(fullAccess)).toContain("not a readable HTML document");
+    }).pipe(Effect.provide(htmlToolkitLayer())),
+);
+
+it.effect("html_variants also saves each page as a sketch in one group", () =>
+  Effect.gen(function* () {
+    const result = yield* callHtmlTool("html_variants", {
+      title: "Home",
+      variants: [
+        { html: "<p>Dense</p>", label: "Dense", height: 240 },
+        { html: "<p>Airy</p>", label: "Airy", height: 260 },
+      ],
+    });
+    expect(
+      htmlVariantsFromToolItem({
+        toolName: "t3-code.html_variants",
+        output: result.structuredContent,
+      }),
+    ).toHaveLength(2);
+    const sketches = designSketchesFromToolItem({
+      toolName: "t3-code.html_variants",
+      output: result.structuredContent,
+    });
+    expect(sketches?.map((entry) => entry.label)).toEqual(["Dense", "Airy"]);
+    const design = yield* DesignService.DesignService;
+    expect((yield* design.snapshot(threadId)).sketches).toHaveLength(2);
+  }).pipe(Effect.provide(htmlToolkitLayer())),
+);
+
+it.effect("html_variants still returns its renders when the canvas cannot save them", () =>
+  Effect.gen(function* () {
+    const result = yield* callHtmlTool("html_variants", {
+      title: "Home",
+      variants: [
+        { html: "<p>Dense</p>", label: "Dense", height: 240 },
+        { html: "<p>Airy</p>", label: "Airy", height: 260 },
+      ],
+    });
+    expect(result.isError).not.toBe(true);
+    expect(
+      htmlVariantsFromToolItem({
+        toolName: "t3-code.html_variants",
+        output: result.structuredContent,
+      }),
+    ).toHaveLength(2);
+    expect(
+      designSketchesFromToolItem({
+        toolName: "t3-code.html_variants",
+        output: result.structuredContent,
+      }),
+    ).toBeUndefined();
   }).pipe(
     Effect.provide(
-      McpHttpServer.layerHtmlToolkit.pipe(
-        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
-        Layer.provide(McpProviderSessions.layer),
-        Layer.provide(PreviewBrowser.layer),
-        Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-html-render-" })),
-        Layer.provide(
-          DocumentText.layer.pipe(
-            Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
-          ),
-        ),
-        Layer.provide(FetchHttpClient.layer),
-        Layer.provide(
-          Layer.mock(ThreadManagement.ThreadManagementService)({
-            getThreadShell: () =>
-              Effect.succeed({
-                id: threadId,
-                deletedAt: null,
-                archivedAt: null,
-                activeRunId: RunId.make("mcp-core-run"),
-                providerInstanceId: ProviderInstanceId.make("codex"),
-              } as OrchestrationV2ThreadShell),
-          }),
-        ),
+      htmlToolkitLayer(
+        Layer.mock(DesignService.DesignService)({
+          createSketches: () => Effect.fail(new DesignError({ message: "canvas unavailable" })),
+        }),
       ),
     ),
   ),
+);
+
+it.effect("html_variants saves no sketch when one page is invalid", () =>
+  Effect.gen(function* () {
+    const result = yield* callHtmlTool("html_variants", {
+      title: "Home",
+      variants: [
+        { html: "<p>Dense</p>", label: "Dense", height: 240 },
+        { html: "<style>body{height:100vh}</style><p>Bad</p>", label: "Bad", height: 260 },
+      ],
+    });
+    expect(result.isError).toBe(true);
+    const design = yield* DesignService.DesignService;
+    expect((yield* design.snapshot(threadId)).sketches).toHaveLength(0);
+  }).pipe(Effect.provide(htmlToolkitLayer())),
 );
 
 it.effect("captures send_to_user results for providers that drop MCP outputs", () =>
