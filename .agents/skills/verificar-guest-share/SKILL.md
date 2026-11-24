@@ -14,6 +14,7 @@ description: "Verifica links de convidado (Share with guest): criar link com ou 
 ## Testes rápidos
 
 - Em `apps/server`: `vp test run src/guest/GuestShareService.test.ts`. O caso "sends a guest's message without the owner when the link does not need approval" cobre o auto-send.
+- Imagens do host: o caso "serves an image on the host only when an agent reply the guest sees shows it" cobre resposta comum, `send_to_user` concluído (libera) e `send_to_user` com falha (não libera). Manual: com o link aberto, peça ao agente um `send_to_user` com `![x](/caminho/absoluto.png)`; o convidado deve ver a imagem, não "Image unavailable".
 
 ## Roteiro manual (web, dev)
 

@@ -1398,7 +1398,9 @@ it.effect("serves an image on the host only when an agent reply the guest sees s
     const fromUser = `${directory}/from-user.png`;
     const unnamed = `${directory}/unnamed.png`;
     const later = `${directory}/later.png`;
-    for (const path of [shot, fileUrl, fromUser, unnamed, later]) {
+    const toUser = `${directory}/to-user.png`;
+    const notSent = `${directory}/not-sent.png`;
+    for (const path of [shot, fileUrl, fromUser, unnamed, later, toUser, notSent]) {
       yield* fileSystem.writeFile(path, PNG);
     }
     yield* fileSystem.writeFileString(page, "<script>alert(1)</script>");
@@ -1446,6 +1448,31 @@ it.effect("serves an image on the host only when an agent reply the guest sees s
             }),
       },
     });
+    // Text sent with `send_to_user` shows as the agent's own words.
+    const asReply = item("item:sent-to-user", 3, { type: "assistant_message", text: "" });
+    const { messageId: _messageId, ...replyFields } = asReply.payload;
+    const sentToUser = {
+      ...asReply,
+      payload: {
+        ...replyFields,
+        type: "dynamic_tool" as const,
+        toolName: "mcp__t3-code__send_to_user",
+        input: {},
+        output: { content: JSON.stringify({ sentMessage: `![Sent](${toUser})` }) },
+      },
+    };
+    // Clients do not show a `send_to_user` call that did not complete.
+    const failedSend = {
+      ...sentToUser,
+      id: EventId.make("event:item:failed-send"),
+      payload: {
+        ...sentToUser.payload,
+        id: TurnItemId.make("item:failed-send"),
+        ordinal: 4,
+        status: "failed" as const,
+        output: { content: JSON.stringify({ sentMessage: `![Not sent](${notSent})` }) },
+      },
+    };
     yield* eventSink.write({
       events: [
         item("item:agent-images", 1, {
@@ -1454,6 +1481,8 @@ it.effect("serves an image on the host only when an agent reply the guest sees s
         }),
         // A guest's sent message is a user message; it must not open files on the host.
         item("item:guest-image", 2, { type: "user_message", text: `![Mine](${fromUser})` }),
+        sentToUser,
+        failedSend,
         {
           id: EventId.make("event:run-done"),
           type: "run.updated" as const,
@@ -1537,13 +1566,13 @@ it.effect("serves an image on the host only when an agent reply the guest sees s
     yield* sentItem("item:later-image");
 
     // The page still shows every reply it was sent, so each image loads.
-    for (const path of [shot, fileUrl, later]) {
+    for (const path of [shot, fileUrl, later, toUser]) {
       assert.deepStrictEqual(yield* guestShares.media(session, path), {
         path,
         mimeType: "image/png",
       });
     }
-    for (const path of [page, fromUser, unnamed, `${directory}/missing.png`]) {
+    for (const path of [page, fromUser, unnamed, notSent, `${directory}/missing.png`]) {
       assert.equal((yield* Effect.flip(guestShares.media(session, path))).reason, "unavailable");
     }
 
