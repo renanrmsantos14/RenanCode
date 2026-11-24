@@ -13114,5 +13114,15 @@
     ")"
   ],
   "33d18dda74f6d7b3": "スタックの自動マージをキャンセル",
-  "012c67c7f1a99e33": "スタックを自動マージ"
+  "012c67c7f1a99e33": "スタックを自動マージ",
+  "32aebea75c7d222a": "Loading image...",
+  "bf41406a4712f977": "Show image {position} of {total}",
+  "37b84080ae64546b": "Show chat",
+  "0954e04a52635abd": "Hide chat",
+  "054b672ee8b1b99a": "Image review",
+  "9e0b11439d738151": "Close image review",
+  "9684c1071cc5a436": "Previous image",
+  "5858a4971b15faff": "Next image",
+  "67a30c98d0ea438d": "Expand chat",
+  "3d54dd7aa4cd6da0": "Resize chat"
 }

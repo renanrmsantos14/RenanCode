@@ -799,6 +799,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
               <button
                 type="button"
                 className="block h-full w-full cursor-zoom-in"
+                data-review-image=""
                 aria-label={gt("Preview {label}", { label: image.name })}
                 onClick={() => {
                   const preview = buildExpandedImagePreview(regularImages, image.id, copySnapshot);

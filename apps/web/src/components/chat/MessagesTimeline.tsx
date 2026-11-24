@@ -72,6 +72,7 @@ import {
 } from "lucide-react";
 import { Skeleton } from "../ui/skeleton";
 import { ExpandedImagePreview } from "./ExpandedImagePreview";
+import type { ReviewReveal } from "./review/useReviewMode";
 import {
   CHAT_TIMELINE_ANCHOR_OFFSET,
   readTimelinePosition,
@@ -234,6 +235,7 @@ interface MessagesTimelineProps {
   canOperateThread?: boolean;
   onRespondToApproval?: TimelineRowSharedState["onRespondToApproval"];
   citationRequest?: AssistantCitationRequest | null;
+  revealRow?: ReviewReveal | null;
   citationHistory?: CitedHistory;
   onCiteAssistantText?: (
     citation: AssistantCitation,
@@ -374,6 +376,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   canOperateThread = false,
   onRespondToApproval,
   citationRequest = null,
+  revealRow = null,
   citationHistory = CITED_HISTORY_LOADING,
   onCiteAssistantText,
   onReplyToResponse,
@@ -790,6 +793,28 @@ const ConversationTimeline = memo(function ConversationTimeline({
     revealedMessageId,
   });
   const rows = useStableRows(rawRows, listIdentityKey);
+  const scrollToRevealedRow = useStableCallback((target: ReviewReveal) => {
+    const index = rows.findIndex((row) => row.id === target.rowId);
+    const list = listRef.current;
+    if (index < 0 || !list) return;
+    const animated = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    void list
+      .scrollToIndex({ index, animated, viewOffset: TIMELINE_MINIMAP_TARGET_OFFSET })
+      .then(() => {
+        // A message can hold many images; after the row, bring the reviewed one to the middle.
+        const row = list
+          .getScrollableNode()
+          ?.querySelector(`[data-timeline-row-id="${CSS.escape(target.rowId)}"]`);
+        row?.querySelectorAll("[data-review-image]")[target.ordinal]?.scrollIntoView({
+          block: "center",
+          behavior: animated ? "smooth" : "auto",
+        });
+      });
+  });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- scrolls the virtualized list, an external system, when review mode moves to another image
+  useEffect(() => {
+    if (revealRow) scrollToRevealedRow(revealRow);
+  }, [revealRow, scrollToRevealedRow]);
   const matchedApprovalRequestIds = new Set<string>();
   for (const row of pendingApprovalRequestIds.size > 0 ? rows : []) {
     const entries =

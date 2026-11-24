@@ -19,13 +19,19 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { userEvent } from "vite-plus/test/browser";
+import { page, userEvent } from "vite-plus/test/browser";
 
 import "~/index.css";
 
 import { render } from "../../../test/render";
 import { makeThreadProjectionFixture } from "../../test-fixtures";
 import { GuestPage } from "./GuestPage";
+
+vi.mock("./guestStream.logic", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./guestStream.logic")>()),
+  guestMediaUrl: (_shareId: string, path: string) =>
+    `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=#${path}`,
+}));
 
 const SHARE_ID = "share-1";
 const encodeEvent = Schema.encodeSync(Schema.fromJsonString(Schema.toCodecJson(GuestStreamEvent)));
@@ -223,6 +229,59 @@ function visit(path: string): Disposable {
     [Symbol.dispose]: () => window.history.replaceState(window.history.state, "", previous),
   };
 }
+
+// A click before an image settles has no gallery item to open yet.
+const waitForImages = (container: Element) =>
+  vi.waitFor(() => {
+    const images = [...container.querySelectorAll<HTMLImageElement>("img[role=button]")];
+    expect(images).toHaveLength(3);
+  });
+
+const REVIEW_REQUEST_ID = RuntimeRequestId.make("request-1");
+
+/** Three images across two replies, then a waiting question. */
+const reviewStream = () =>
+  fakeEventSource(
+    opening(
+      [run("run-1", 1, "completed"), run("run-2", 2, "running")],
+      [
+        items[0]!,
+        reply("first", 1, "![alpha](/work/alpha.png) and ![beta](/work/beta.png)"),
+        reply("second", 2, "![gamma](/work/gamma.png)"),
+        {
+          ...itemBase("question", 5, "run-2"),
+          status: "waiting",
+          completedAt: null,
+          type: "user_input_request",
+          requestId: REVIEW_REQUEST_ID,
+          questions: [
+            {
+              id: "scope",
+              header: "Scope",
+              question: "How much should I change?",
+              options: [{ label: "Everything", description: "Login and logout" }],
+            },
+          ],
+        },
+      ],
+      {
+        view: { ...view, canAnswer: true },
+        runtimeRequests: [
+          {
+            id: REVIEW_REQUEST_ID,
+            nodeId: NodeId.make("node-question"),
+            providerTurnId: null,
+            nativeRequestRef: null,
+            kind: "user_input",
+            status: "pending",
+            responseCapability: { type: "message" },
+            createdAt: started,
+            resolvedAt: null,
+          },
+        ],
+      },
+    ),
+  ) as never;
 
 describe("GuestPage", () => {
   it("shows the shared thread in the real timeline without opening an environment connection", async () => {
@@ -472,5 +531,52 @@ describe("GuestPage", () => {
       await expectAtEnd();
       await expect.element(screen.getByText("Logout reply")).toBeInTheDocument();
     }
+  });
+
+  it("reviews the thread's images beside the chat, which still takes the guest's answer", async () => {
+    using _page = visit(`/guest?share=${SHARE_ID}`);
+    using fetchSpy = vi
+      .spyOn(window, "fetch")
+      .mockImplementation(async () => new Response(null, { status: 204 }));
+    using _stream = vi.spyOn(window, "EventSource").mockImplementation(reviewStream());
+    await page.viewport(1200, 900);
+    await using screen = await render(<GuestPage />);
+
+    await waitForImages(screen.container);
+    await userEvent.click(screen.getByRole("button", { name: "Preview beta" }));
+    await expect.element(screen.getByRole("region", { name: "Image review" })).toBeVisible();
+    await expect.element(screen.getByText("2 / 3")).toBeVisible();
+    await userEvent.keyboard("{ArrowRight}");
+    await expect.element(screen.getByText("3 / 3")).toBeVisible();
+    await userEvent.keyboard("{ArrowLeft}");
+    await expect.element(screen.getByText("2 / 3")).toBeVisible();
+
+    await userEvent.click(screen.getByRole("button", { name: /Everything/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    await vi.waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        `/api/guest/answer?share=${SHARE_ID}`,
+        expect.objectContaining({ method: "POST" }),
+      ),
+    );
+
+    await userEvent.keyboard("{Escape}");
+    await expect
+      .element(screen.getByRole("region", { name: "Image review" }))
+      .not.toBeInTheDocument();
+  });
+
+  it("peeks the pending question in a bottom sheet on a narrow screen", async () => {
+    using _page = visit(`/guest?share=${SHARE_ID}`);
+    using _stream = vi.spyOn(window, "EventSource").mockImplementation(reviewStream());
+    await page.viewport(500, 900);
+    await using screen = await render(<GuestPage />);
+
+    await waitForImages(screen.container);
+    await userEvent.click(screen.getByRole("button", { name: "Preview beta" }));
+    await userEvent.click(screen.getByRole("button", { name: "How much should I change?" }));
+    await expect.element(screen.getByRole("region", { name: "Image review" })).toBeVisible();
+
+    await expect.element(screen.getByRole("button", { name: /Everything/ })).toBeVisible();
   });
 });

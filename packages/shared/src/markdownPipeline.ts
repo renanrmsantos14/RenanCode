@@ -691,20 +691,24 @@ interface ImageSourceNode {
 }
 
 /**
- * Collect the fallback and every theme variant so images are available to all viewers.
+ * Collect the fallback and every theme variant so images are available to all viewers. With
+ * `renderedTheme`, only the source the chat shows in that theme.
  */
-export function chatMarkdownImageSources(markdown: string): Array<string> {
+export function chatMarkdownImageSources(
+  markdown: string,
+  renderedTheme?: "dark" | "light",
+): Array<string> {
   const sources: Array<string> = [];
   const visit = (node: ImageSourceNode) => {
     if (node.type === "element" && node.tagName === "img") {
       const properties = node.properties;
-      const fallback = chatMarkdownImageSource(properties);
+      const fallback = chatMarkdownImageSource(properties, renderedTheme);
       if (fallback) sources.push(fallback.classifiedSrc);
       for (const [theme, variant] of [
         ["dark", properties?.dataDarkSrc],
         ["light", properties?.dataLightSrc],
       ] as const) {
-        if (typeof variant !== "string") continue;
+        if (renderedTheme !== undefined || typeof variant !== "string") continue;
         const source = chatMarkdownImageSource(properties, theme);
         if (source) sources.push(source.classifiedSrc);
       }
