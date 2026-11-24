@@ -335,6 +335,10 @@
       "types": "./src/projectChecklist.ts",
       "default": "./src/projectChecklist.ts"
     },
+    "./state/design": {
+      "types": "./src/state/design.ts",
+      "default": "./src/state/design.ts"
+    },
     "./state/workModules": {
       "types": "./src/state/workModules.ts",
       "default": "./src/state/workModules.ts"
