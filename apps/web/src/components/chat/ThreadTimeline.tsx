@@ -1,6 +1,7 @@
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import { type ComponentProps, useLayoutEffect } from "react";
 import { useIncrementalTimelineEntries } from "../../hooks/useIncrementalTimelineEntries";
+import { useStableCallback } from "../../hooks/useStableCallback";
 import type { TimelineEntriesInput, TimelineEntry } from "../../session-logic";
 import { useTimelineVisibleTurnItems } from "../../state/entities";
 import {
@@ -9,6 +10,7 @@ import {
   resolveThreadSwitchTimeline,
   timelineHasEphemeralPreviewUrls,
 } from "../ChatView.logic";
+import type { ExpandedImagePreview } from "./ExpandedImagePreview";
 import { MessagesTimeline } from "./MessagesTimeline";
 
 /**
@@ -24,8 +26,11 @@ export function ThreadTimeline({
   activeThreadKey,
   syncing,
   detailLoading,
+  onImageExpand,
   ...timelineProps
-}: Omit<ComponentProps<typeof MessagesTimeline>, "timelineEntries"> & {
+}: Omit<ComponentProps<typeof MessagesTimeline>, "timelineEntries" | "onImageExpand"> & {
+  /** Gets the rendered entries too: ChatView's own entries lack the assistant text. */
+  onImageExpand: (preview: ExpandedImagePreview, entries: ReadonlyArray<TimelineEntry>) => void;
   /** Null until the thread's detail may load; see resolveThreadDetailRef. */
   threadDetailRef: ScopedThreadRef | null;
   entriesInput: Omit<TimelineEntriesInput, "visibleTurnItems">;
@@ -54,7 +59,16 @@ export function ThreadTimeline({
     }
     rememberReadyThreadTimeline({ threadKey: activeThreadKey, entries });
   }, [activeThreadKey, detailLoading, entries]);
+  // Stable, so streaming entries do not hand every timeline row a new shared state.
+  const onTimelineImageExpand = useStableCallback((preview: ExpandedImagePreview) =>
+    onImageExpand(preview, displayedEntries),
+  );
   return (
-    <MessagesTimeline {...timelineProps} syncing={syncing} timelineEntries={displayedEntries} />
+    <MessagesTimeline
+      {...timelineProps}
+      syncing={syncing}
+      timelineEntries={displayedEntries}
+      onImageExpand={onTimelineImageExpand}
+    />
   );
 }

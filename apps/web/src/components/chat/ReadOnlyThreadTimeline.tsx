@@ -13,6 +13,7 @@ import {
 import { useRef, useState, type ReactNode } from "react";
 
 import { useIncrementalTimelineEntries } from "~/hooks/useIncrementalTimelineEntries";
+import { useStableCallback } from "~/hooks/useStableCallback";
 import { SideThreadsOpenContext } from "~/hooks/useSideThreadTrigger";
 import { useTheme } from "~/hooks/useTheme";
 import { deriveActiveWorkStartedAt, derivePhase } from "~/session-logic";
@@ -23,6 +24,10 @@ import { MessagesTimeline, type MessagesTimelineHistoryControls } from "./Messag
 import { ScrollToEndButton } from "./TimelineOverlays";
 import type { TimelineRow, TurnItemSource } from "./timelineRowContext";
 import { useTimelineFollow } from "./useTimelineFollow";
+import { ReviewViewer } from "./review/ReviewViewer";
+import { ReviewSheetHandle, reviewChatColumnClassName } from "./review/reviewLayout";
+import { useReviewMode } from "./review/useReviewMode";
+import { cn } from "~/lib/utils";
 
 // The timeline needs an environment id to key its rows. No environment answers to this one, so a
 // row that would ask the thread's environment for something gets nothing.
@@ -48,7 +53,15 @@ export function ReadOnlyThreadTimeline(props: {
   readonly attachmentUrls: (
     items: ReadonlyArray<OrchestrationV2ProjectedTurnItem>,
   ) => ReadonlyMap<string, string>;
+  /** Where a clicked image goes when the thread's gallery has no such image. */
   readonly onImageExpand: (preview: ExpandedImagePreview) => void;
+  /** Opts into review mode for the thread's images; without it a click goes to `onImageExpand`. */
+  readonly review?: {
+    /** Serves the host's workspace files, for images the markdown names by path. */
+    readonly hostImageUrl: ((path: string) => string) | null;
+    /** What the collapsed bottom sheet shows, so a pending question stays visible. */
+    readonly peekLabel: string | null;
+  };
   readonly onFileOpen: (file: ChatFileAttachment) => void;
   readonly renderHtmlRender: (row: Extract<TimelineRow, { kind: "html-render" }>) => ReactNode;
   readonly renderHtmlVariant?: (
@@ -96,57 +109,84 @@ export function ReadOnlyThreadTimeline(props: {
     timelineAnchorMessageId: null,
     setTimelineAnchor: ignore,
   });
+  const review = useReviewMode({
+    scope: null,
+    entries,
+    source: { cwd: undefined, hostImageUrl: props.review?.hostImageUrl ?? null },
+  });
+  const openImage = useStableCallback((preview: ExpandedImagePreview) => {
+    if (!props.review || !review.open(preview)) props.onImageExpand(preview);
+  });
   return (
-    <>
-      <div className="relative min-h-0 flex-1">
-        <SideThreadsOpenContext value={false}>
-          <MessagesTimeline
-            listRef={listRef}
-            timelineEntries={entries}
-            isWorking={isWorking}
-            activeTurnStartedAt={workStartedAt}
-            latestRun={activityRun}
-            runningRunId={runningRunId}
-            turnDiffSummaries={NO_TURN_DIFFS}
-            runs={projection.runs}
-            routeThreadKey={threadKey}
-            onOpenThread={ignore}
-            supportsConversationRollback={false}
-            onRevertToTurnCount={ignore}
-            isRevertingCheckpoint={false}
-            onImageExpand={props.onImageExpand}
-            onFileOpen={props.onFileOpen}
-            onFileDownload={props.onFileOpen}
-            renderHtmlRender={props.renderHtmlRender}
-            renderHtmlVariant={props.renderHtmlVariant}
-            turnItemSource={props.turnItemSource}
-            historyControls={props.historyControls}
-            activeThreadEnvironmentId={NO_ENVIRONMENT_ID}
-            markdownCwd={undefined}
-            resolvedTheme={resolvedTheme}
-            timestampFormat="locale"
-            workspaceRoot={undefined}
-            anchorMessageId={null}
-            onAnchorReady={ignore}
-            onAnchorSizeChanged={ignore}
-            contentInsetEndAdjustment={0}
-            emptyPlaceholderInset={0}
-            liveFollowEnabled={follow.timelineLiveFollowEnabled}
-            onIsAtEndChange={follow.onIsAtEndChangeStable}
-            onViewportAttach={follow.attachTimelineViewport}
-            onFooterGrow={follow.onTimelineFooterGrowStable}
-            footer={props.renderFooter?.(items) ?? null}
-          />
-        </SideThreadsOpenContext>
-        {follow.showScrollToBottom ? (
-          <ScrollToEndButton
-            summary={null}
-            bottom={4}
-            onScrollToEnd={() => follow.scrollToEnd(true)}
-          />
-        ) : null}
+    <div className="flex min-h-0 flex-1">
+      {review.active ? (
+        <ReviewViewer
+          review={review}
+          source={{
+            cwd: undefined,
+            hostImageUrl: props.review?.hostImageUrl ?? null,
+            threadRef: null,
+          }}
+        />
+      ) : null}
+      <div
+        className={cn(
+          "relative flex min-h-0 min-w-0 flex-1 flex-col",
+          reviewChatColumnClassName(review),
+        )}
+      >
+        <ReviewSheetHandle review={review} peekLabel={props.review?.peekLabel ?? null} />
+        <div className="relative min-h-0 flex-1">
+          <SideThreadsOpenContext value={false}>
+            <MessagesTimeline
+              listRef={listRef}
+              timelineEntries={entries}
+              isWorking={isWorking}
+              activeTurnStartedAt={workStartedAt}
+              latestRun={activityRun}
+              runningRunId={runningRunId}
+              turnDiffSummaries={NO_TURN_DIFFS}
+              runs={projection.runs}
+              routeThreadKey={threadKey}
+              onOpenThread={ignore}
+              supportsConversationRollback={false}
+              onRevertToTurnCount={ignore}
+              isRevertingCheckpoint={false}
+              onImageExpand={openImage}
+              revealRow={review.reveal}
+              onFileOpen={props.onFileOpen}
+              onFileDownload={props.onFileOpen}
+              renderHtmlRender={props.renderHtmlRender}
+              renderHtmlVariant={props.renderHtmlVariant}
+              turnItemSource={props.turnItemSource}
+              historyControls={props.historyControls}
+              activeThreadEnvironmentId={NO_ENVIRONMENT_ID}
+              markdownCwd={undefined}
+              resolvedTheme={resolvedTheme}
+              timestampFormat="locale"
+              workspaceRoot={undefined}
+              anchorMessageId={null}
+              onAnchorReady={ignore}
+              onAnchorSizeChanged={ignore}
+              contentInsetEndAdjustment={0}
+              emptyPlaceholderInset={0}
+              liveFollowEnabled={follow.timelineLiveFollowEnabled}
+              onIsAtEndChange={follow.onIsAtEndChangeStable}
+              onViewportAttach={follow.attachTimelineViewport}
+              onFooterGrow={follow.onTimelineFooterGrowStable}
+              footer={props.renderFooter?.(items) ?? null}
+            />
+          </SideThreadsOpenContext>
+          {follow.showScrollToBottom ? (
+            <ScrollToEndButton
+              summary={null}
+              bottom={4}
+              onScrollToEnd={() => follow.scrollToEnd(true)}
+            />
+          ) : null}
+        </div>
+        {props.children({ scrollToEnd: () => follow.scrollToEnd(true) })}
       </div>
-      {props.children({ scrollToEnd: () => follow.scrollToEnd(true) })}
-    </>
+    </div>
   );
 }

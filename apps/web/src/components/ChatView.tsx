@@ -180,6 +180,7 @@ import {
   deriveCanInterruptRunningThread,
   findRevertCheckpoint,
   isLatestRunSettled,
+  type TimelineEntry,
 } from "../session-logic";
 import { type LegendListRef } from "@legendapp/list/react";
 import { useWorkspaceRevision } from "../hooks/useWorkspaceRevision";
@@ -312,6 +313,9 @@ import {
 import { useEnvironmentShellHasSnapshot } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
+import { ReviewViewer } from "./chat/review/ReviewViewer";
+import { ReviewSheetHandle, reviewChatColumnClassName } from "./chat/review/reviewLayout";
+import { useReviewMode } from "./chat/review/useReviewMode";
 import { ExpandedImageDialogHost, openExpandedImagePreview } from "./chat/ExpandedImageDialog";
 import {
   BranchRestoreConfirmHost,
@@ -3406,8 +3410,22 @@ export default function ChatView(props: ChatViewProps) {
       .some((id) => id !== "" && !previousIds.has(id));
     if (hasNewMessage && timelineLiveFollowEnabled) scrollToEnd(true);
   }, [routeThreadKey, pendingGuestMessageKey, timelineLiveFollowEnabled, scrollToEnd]);
-  const onExpandTimelineImage = (preview: ExpandedImagePreview) => {
-    openExpandedImagePreview(routeThreadKey, preview);
+  const reviewSource = { cwd: gitCwd ?? undefined, hostImageUrl: null };
+  const review = useReviewMode({
+    scope: routeThreadKey,
+    entries: timelineEntries,
+    source: reviewSource,
+  });
+  // Review mode takes the right panel's place without changing what the panel store remembers.
+  const rightPanelShown = rightPanelOpen && !review.active;
+  const chatColumnMaximizedAway = rightPanelMaximized && !review.active;
+  const onExpandTimelineImage = (
+    preview: ExpandedImagePreview,
+    entries?: ReadonlyArray<TimelineEntry>,
+  ) => {
+    if (!review.open(preview, entries)) {
+      openExpandedImagePreview(routeThreadKey, preview);
+    }
   };
   const onExpandTimelineImageStable = useStableCallback(onExpandTimelineImage);
   const queuedRunsControl =
@@ -3600,7 +3618,7 @@ export default function ChatView(props: ChatViewProps) {
       activeSurfaceId={activeRightPanelSurface?.id ?? null}
       threadRef={activeThreadRef}
       environmentId={activeThread.environmentId}
-      visible={rightPanelOpen}
+      visible={rightPanelShown}
       composerDraftTarget={composerDraftTarget}
       keybindings={keybindings}
       configuredPreviewUrls={configuredPreviewUrls}
@@ -3699,18 +3717,26 @@ export default function ChatView(props: ChatViewProps) {
           state={deviceState}
         />
       )}
-      {rightPanelControlsAtRoot && !embedded ? panelLayoutControls : null}
+      {review.active ? (
+        <ReviewViewer review={review} source={{ ...reviewSource, threadRef: activeThreadRef }} />
+      ) : null}
+      {rightPanelControlsAtRoot && !embedded && !review.active ? panelLayoutControls : null}
       <div
         className={cn(
           "flex min-h-0 min-w-0 flex-col overflow-x-hidden",
-          rightPanelMaximized ? "w-0 flex-none" : "flex-1",
+          chatColumnMaximizedAway ? "w-0 flex-none" : "flex-1",
+          reviewChatColumnClassName(review),
         )}
-        data-chat-column-maximized-away={rightPanelMaximized ? "true" : "false"}
+        data-chat-column-maximized-away={chatColumnMaximizedAway ? "true" : "false"}
         data-chat-column
-        inert={rightPanelMaximized}
+        inert={chatColumnMaximizedAway}
         onMouseUp={preventMiddleClickPasteOutsideEditable}
       >
-        {embedded ? null : (
+        <ReviewSheetHandle
+          review={review}
+          peekLabel={activePendingUserInput?.questions[0]?.question ?? null}
+        />
+        {embedded || review.active ? null : (
           <header
             ref={threadPanelPopoverAnchorRef}
             data-chat-header
@@ -3866,6 +3892,7 @@ export default function ChatView(props: ChatViewProps) {
                   isPreparingWorktree={isPreparingWorktree}
                   footer={timelineFooter}
                   listRef={legendListRef}
+                  revealRow={review.reveal}
                   runs={serverProjection?.runs ?? []}
                   latestRun={activeActivityRun}
                   usageLimitRunId={usageLimitRunId}
@@ -4414,12 +4441,12 @@ export default function ChatView(props: ChatViewProps) {
           widthStorageKey={`t3code:preview-panel-width:${activeThreadKey}`}
           sheetAnimationDurationMs={panelAnimationsActive ? panelAnimationDurationMs : 0}
           onCloseSheet={closePreviewPanelStable}
-          open={rightPanelOpen}
+          open={rightPanelShown}
           keybindings={keybindings}
           getShortcutContext={getShortcutContextStable}
           maximized={rightPanelMaximized}
           layoutControls={
-            rightPanelOpen ? (
+            rightPanelShown ? (
               <div className="mr-px flex items-center gap-1">
                 <RightPanelMaximizeControl
                   maximized={rightPanelMaximized}

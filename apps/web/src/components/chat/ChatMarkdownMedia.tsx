@@ -160,6 +160,7 @@ export function ChatMarkdownImageFallback(props: {
   const content = (
     <span
       data-markdown-copy={props.copyMarkdown}
+      data-review-image={(props.kind ?? "image") === "image" ? "" : undefined}
       className={cn(
         CHAT_MARKDOWN_MEDIA_LAYOUT_CLASS_NAME,
         "rounded-md border border-border/40 bg-muted/40 px-2 py-1 text-xs text-muted-foreground",
@@ -246,6 +247,7 @@ export function ChatMarkdownImage(props: {
           src={src}
           alt={props.alt}
           data-markdown-copy={props.copyMarkdown}
+          data-review-image=""
           decoding="async"
           loading="lazy"
           draggable={false}
@@ -274,6 +276,7 @@ export function ChatMarkdownImage(props: {
       <span
         id={props.imageProps?.id}
         data-markdown-copy={props.copyMarkdown}
+        data-review-image=""
         role="status"
         aria-label={gt("Loading image")}
         className={CHAT_MARKDOWN_MEDIA_LAYOUT_CLASS_NAME}
@@ -285,6 +288,7 @@ export function ChatMarkdownImage(props: {
       <span
         id={props.imageProps?.id}
         data-markdown-copy={props.copyMarkdown}
+        data-review-image=""
         className={cn(
           CHAT_MARKDOWN_MEDIA_LAYOUT_CLASS_NAME,
           CHAT_MARKDOWN_IMAGE_FRAME_CLASS_NAME,

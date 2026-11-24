@@ -469,6 +469,10 @@ function GuestThread({
           turnItemSource={turnItemSource}
           attachmentUrls={attachmentUrls}
           onImageExpand={openExpandedImage}
+          review={{
+            hostImageUrl,
+            peekLabel: question.pending?.questions[question.index]?.question ?? null,
+          }}
           onFileOpen={openFile}
           renderHtmlRender={renderHtmlRender}
           renderHtmlVariant={renderHtmlVariant}
@@ -705,7 +709,7 @@ const BUBBLE =
   "flex min-w-0 max-w-[80%] flex-col gap-2 rounded-2xl p-3 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]";
 
 const openInNewTab = (url: string) => window.open(url, "_blank", "noopener,noreferrer");
-/** Guests have no image viewer; the browser shows the picture in its own tab. */
+/** Images the thread cannot place in review mode open in the browser's own tab. */
 const openExpandedImage = (preview: ExpandedImagePreview) => {
   const src = preview.images[preview.index]?.src;
   if (src) openInNewTab(src);
