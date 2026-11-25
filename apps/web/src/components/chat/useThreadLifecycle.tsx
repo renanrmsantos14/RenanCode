@@ -49,7 +49,7 @@ import {
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
 import { useUiStateStore } from "../../uiStateStore";
-import { type ChatMessage, DEFAULT_INTERACTION_MODE } from "../../types";
+import { type ChatMessage } from "../../types";
 import { AlarmClockIcon, CheckCircle2Icon, FlaskConicalIcon } from "lucide-react";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { titleRegenerationToast } from "../threadTitleRegenerationToast";
@@ -116,6 +116,7 @@ interface ThreadLifecycleInput {
   readonly activeProjectCwd: string | null;
   readonly serverConfig: EnvironmentServerConfig | null;
   readonly runtimeMode: RuntimeMode;
+  readonly interactionMode: ProviderInteractionMode;
   readonly isWorking: boolean;
   /** Also true while the server prepares, starts, or queues a run this client did not send. */
   readonly runIsLive: boolean;
@@ -169,6 +170,7 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
     activeProjectCwd,
     serverConfig,
     runtimeMode,
+    interactionMode,
     isWorking,
     runIsLive,
     pendingBackgroundTasks,
@@ -570,7 +572,7 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
       createdAt,
       ...(localCheckoutBranchMismatch ? { branch: localCheckoutBranchMismatch.currentBranch } : {}),
       runtimeMode,
-      interactionMode: DEFAULT_INTERACTION_MODE,
+      interactionMode,
     });
     const result =
       settingsResult._tag === "Failure"
@@ -582,7 +584,7 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
               message: { messageId, role: "user", text, attachments: [] },
               modelSelection: context.selectedModelSelection,
               runtimeMode,
-              interactionMode: DEFAULT_INTERACTION_MODE,
+              interactionMode,
               createdAt,
             },
           });

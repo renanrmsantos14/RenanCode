@@ -2,6 +2,7 @@ import {
   serializeAssistantCitation,
   expandAssistantCitationsForProvider,
 } from "@t3tools/shared/assistantCitations";
+import { T3_CODE_DESIGN_MODE_INSTRUCTIONS } from "@t3tools/provider-core/server/orchestrationInstructions";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it, vi } from "vite-plus/test";
@@ -2379,6 +2380,25 @@ it("finds abandoned turns in a long history reading each record a bounded number
   const records = runs.length + attempts.length + providerTurns.length;
   expect(reads).toBeLessThanOrEqual(4 * records);
 });
+
+effectIt.effect("asks for sketches on each Design-mode turn", () =>
+  Effect.gen(function* () {
+    const harness = makeLocalCommandHarness({
+      text: "Make the login screen",
+      sideChat: { contextRun: "delivered" },
+    });
+    const projection = harness.projection();
+    harness.setProjection({
+      ...projection,
+      thread: { ...projection.thread, interactionMode: "design" },
+    });
+    harness.tryHandlePromptCommand.mockReturnValue(Effect.succeed(false));
+    yield* harness.start;
+    expect(harness.startTurn.mock.calls[0]?.[0].message.text).toBe(
+      `Make the login screen\n\n${T3_CODE_DESIGN_MODE_INSTRUCTIONS}`,
+    );
+  }),
+);
 
 effectIt.effect("sends new steering text when restarting a manual continuation", () =>
   Effect.gen(function* () {

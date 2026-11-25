@@ -13410,5 +13410,9 @@
   "27d76249d09eb69f": "Granskningsguiden är klar",
   "faa3bb26abb39c93": "Granskningsguiden misslyckades",
   "b7df38b7d8792d78": "Öppna guiden",
-  "9e91e9a77b664e4e": "Kunde inte starta en granskningsguide"
+  "9e91e9a77b664e4e": "Kunde inte starta en granskningsguide",
+  "366a0b63c228e964": "Designläge",
+  "800a26b3337b2a1f": "Designläget är på. Agenten skissar på Design-canvasen.",
+  "e351383cb1cbd4f9": "Aktivera designläget så att agenten skissar på Design-canvasen",
+  "40d22229ae81e753": "Det gick inte att ändra designläget."
 }

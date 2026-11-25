@@ -5760,5 +5760,10 @@
   "3ee30a50b70fffab": "Retirada por {by}: {reason}",
   "201490988858b511": "retirada por {by}",
   "3e19afa2072da269": "Abrir esboço {title}",
-  "46d614fa7b4bf1e5": "Execuções de workflow"
+  "46d614fa7b4bf1e5": "Execuções de workflow",
+  "645cc12677b584a4": "Não foi possível alterar o modo Design",
+  "7810d54298dc35ed": "Design",
+  "366a0b63c228e964": "Modo Design",
+  "c2f1bc4265edcca0": "Desativa o modo Design",
+  "bf40cc00e4b0ca07": "O agente esboça ideias como cartões de design"
 }

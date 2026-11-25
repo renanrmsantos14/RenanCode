@@ -1581,17 +1581,17 @@ function OpenCommandPaletteDialog(props: {
         useRightPanelStore.getState().open(threadRef, "checklist");
       },
     });
+    actionItems.push({
+      kind: "action",
+      value: "action:open-thread-design",
+      searchTerms: ["design", "sketch", "canvas", "screens", "mockup", "html"],
+      title: gt("Open Design"),
+      icon: <FrameIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        useRightPanelStore.getState().open(threadRef, "design");
+      },
+    });
     if (isElectron) {
-      actionItems.push({
-        kind: "action",
-        value: "action:open-thread-design",
-        searchTerms: ["design", "sketch", "canvas", "screens", "mockup", "html"],
-        title: gt("Open Design"),
-        icon: <FrameIcon className={ITEM_ICON_CLASS} />,
-        run: async () => {
-          useRightPanelStore.getState().open(threadRef, "design");
-        },
-      });
       actionItems.push({
         kind: "action",
         value: "action:add-design-frame",

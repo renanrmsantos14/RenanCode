@@ -3,7 +3,12 @@ import * as Dialog from "../../components/ui/Dialog";
 import type { ComposerTextPaste } from "../../native/T3ComposerEditor.types";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
+import {
+  isAtomCommandInterrupted,
+  settlePromise,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
 import { AsyncResult } from "effect/reactivity";
 import { useAtomValue } from "@effect/atom-react";
 import { clampFileAttachmentUploadBytes } from "@t3tools/client-runtime/state/attachments";
@@ -48,7 +53,8 @@ import {
 } from "../../state/use-composer-drafts";
 import type { ComposerDocumentAttachment } from "../../lib/composerContext";
 import { useProject } from "../../state/entities";
-import { environmentThreadShells } from "../../state/threads";
+import { environmentThreadShells, threadEnvironment } from "../../state/threads";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { useMentionableEnvironments } from "../../state/environments";
 import { useLinkedEnvironments } from "../../state/peerLinks";
 import { useEnvironmentScopeDenied } from "../../state/session";
@@ -289,6 +295,29 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
       );
     },
   });
+  const setThreadInteractionMode = useAtomCommand(threadEnvironment.setInteractionMode, {
+    label: "set thread interaction mode",
+    reportFailure: false,
+  });
+  const [settingDesignMode, setSettingDesignMode] = useState(false);
+  const toggleDesignMode = async () => {
+    setSettingDesignMode(true);
+    const result = await setThreadInteractionMode({
+      environmentId: props.environmentId,
+      input: {
+        threadId: props.selectedThread.id,
+        interactionMode: props.selectedThread.interactionMode === "design" ? "default" : "design",
+        createdAt: new Date().toISOString(),
+      },
+    });
+    setSettingDesignMode(false);
+    if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+      Dialog.alert(
+        gt("Could not change design mode"),
+        errorDisplayMessage(squashAtomCommandFailure(result), messages) ?? gt("Try again."),
+      );
+    }
+  };
   const disposeSettingsSheetPresentation = useEffectEvent(settingsSheetPresentation.dispose);
   const wasExpandedBeforePreviewRef = useRef(false);
   const inFlightThreadIdsRef = useRef(new Set<string>());
@@ -729,6 +758,24 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     </View>
   );
 
+  const designActive = props.selectedThread.interactionMode === "design";
+  const designControl = props.isDraft ? null : (
+    <ComposerInlineControl
+      size={usesLargeControls ? "large" : "regular"}
+      icon="paintbrush"
+      label={gt("Design")}
+      iconOnly={!compactEditor.isExpanded}
+      selected={designActive}
+      showChevron={false}
+      disabled={!props.canOperateThread || settingDesignMode}
+      accessibilityLabel={gt("Design mode")}
+      accessibilityHint={
+        designActive ? gt("Turns design mode off") : gt("The agent sketches ideas as design cards")
+      }
+      onPress={() => void toggleDesignMode()}
+    />
+  );
+
   const compactBeforeSend =
     props.compactBeforeSend && !showResumeAction && queuedEdit === null
       ? props.compactBeforeSend
@@ -1069,6 +1116,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                   entering={compactEditor.toolbarControlsEntering}
                 >
                   {compactControl}
+                  {designControl}
                   {modelControl}
                 </Animated.View>
                 <ComposerDictationStartAction

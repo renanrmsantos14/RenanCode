@@ -7,6 +7,7 @@ import type {
   ProviderDriverKind,
   ProviderReplayTranscript,
 } from "@t3tools/contracts";
+import { nativeInteractionMode } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -333,7 +334,7 @@ export function layerWithRegistry<Error>(
         resolve: (input) =>
           Effect.succeed({
             runtimeMode: input.thread.runtimeMode,
-            interactionMode: input.thread.interactionMode,
+            interactionMode: nativeInteractionMode(input.thread.interactionMode),
             cwd: input.thread.worktreePath ?? workspace,
           }),
       };

@@ -5766,5 +5766,10 @@
   "3ee30a50b70fffab": "Återkallad av {by}: {reason}",
   "201490988858b511": "återkallad av {by}",
   "3e19afa2072da269": "Öppna skiss {title}",
-  "46d614fa7b4bf1e5": "Arbetsflödeskörningar"
+  "46d614fa7b4bf1e5": "Arbetsflödeskörningar",
+  "645cc12677b584a4": "Det gick inte att ändra Design-läget",
+  "7810d54298dc35ed": "Design",
+  "366a0b63c228e964": "Design-läge",
+  "c2f1bc4265edcca0": "Stänger av Design-läget",
+  "bf40cc00e4b0ca07": "Agenten skissar idéer som designkort"
 }

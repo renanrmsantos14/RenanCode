@@ -13403,5 +13403,9 @@
   "27d76249d09eb69f": "Guide de revue prêt",
   "faa3bb26abb39c93": "Échec du guide de revue",
   "b7df38b7d8792d78": "Ouvrir le guide",
-  "9e91e9a77b664e4e": "Impossible de démarrer un guide de revue"
+  "9e91e9a77b664e4e": "Impossible de démarrer un guide de revue",
+  "366a0b63c228e964": "Mode Design",
+  "800a26b3337b2a1f": "Le mode Design est activé. L'agent dessine sur le canevas Design.",
+  "e351383cb1cbd4f9": "Activez le mode Design pour que l'agent dessine sur le canevas Design",
+  "40d22229ae81e753": "Impossible de modifier le mode Design."
 }

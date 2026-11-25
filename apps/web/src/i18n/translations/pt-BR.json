@@ -13403,5 +13403,9 @@
   "27d76249d09eb69f": "Guia de revisão pronto",
   "faa3bb26abb39c93": "O guia de revisão falhou",
   "b7df38b7d8792d78": "Abrir guia",
-  "9e91e9a77b664e4e": "Não foi possível iniciar um guia de revisão"
+  "9e91e9a77b664e4e": "Não foi possível iniciar um guia de revisão",
+  "366a0b63c228e964": "Modo Design",
+  "800a26b3337b2a1f": "O modo Design está ativado. O agente desenha no canvas do Design.",
+  "e351383cb1cbd4f9": "Ative o modo Design para o agente desenhar no canvas do Design",
+  "40d22229ae81e753": "Não foi possível alterar o modo Design."
 }

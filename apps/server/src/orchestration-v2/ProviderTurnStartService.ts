@@ -70,6 +70,7 @@ import {
   isSlashCommandMessage,
   withInlineContext,
 } from "./ContextHandoffDelivery.ts";
+import { T3_CODE_DESIGN_MODE_INSTRUCTIONS } from "@t3tools/provider-core/server/orchestrationInstructions";
 import { isProviderCommand, outputInstructions } from "./runOutput.ts";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
@@ -1198,10 +1199,15 @@ export const layer: Layer.Layer<
         session.providerSession.capabilities.turns.supportsNativeGoals === true;
       const goalCommand = goalDriver && parseGoalCommand(providerMessage) !== null;
       // Part of the user text, so every way a turn starts carries it, after the user's own words.
+      const plainTurn = !goalCommand && !isProviderCommand(providerMessage);
+      const designText =
+        plainTurn && projection.thread.interactionMode === "design"
+          ? `${messageText}\n\n${T3_CODE_DESIGN_MODE_INSTRUCTIONS}`
+          : messageText;
       const userText =
-        run.outputSchema === undefined || goalCommand || isProviderCommand(providerMessage)
-          ? messageText
-          : `${messageText}\n\n${outputInstructions(run.outputSchema)}`;
+        run.outputSchema === undefined || !plainTurn
+          ? designText
+          : `${designText}\n\n${outputInstructions(run.outputSchema)}`;
       // The provider turn marks cancellation work delivered; restart continuations use their own text or resume natively.
       const noteContinuation = isRestartNoteContinuation(
         run,
