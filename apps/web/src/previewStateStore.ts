@@ -176,6 +176,16 @@ export function readActivePreviewSessions(): Record<string, ThreadPreviewState> 
   return appAtomRegistry.get(activePreviewSessionsAtom);
 }
 
+const designFrameTabIds = new Set<string>();
+
+/** A Design Frame's page is a preview session too, but it must never become the thread's browser tab. */
+export function markDesignFrameTab(tabId: string, isFrame: boolean): void {
+  if (isFrame) designFrameTabIds.add(tabId);
+  else designFrameTabIds.delete(tabId);
+}
+
+export const isDesignFrameTab = (tabId: string): boolean => designFrameTabIds.has(tabId);
+
 export function readThreadPreviewState(ref: ScopedThreadRef): ThreadPreviewState {
   return appAtomRegistry.get(previewStateAtom(scopedThreadKey(ref)));
 }

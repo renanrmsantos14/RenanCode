@@ -36,10 +36,14 @@ import { useAtomCommand } from "~/state/use-atom-command";
 import { designEnvironment } from "~/state/design";
 
 import { HtmlRenderDocument } from "../files/BrowserDocumentFrame";
+import { previewBridge } from "../preview/previewBridge";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { AddFrameMenu } from "./AddFrameMenu";
+import { DesignFrameContext, FrameNode, type FrameFlowNode } from "./DesignFrameNode";
 import { EnvironmentSketchViewer } from "./DesignSketchCard";
 import { useDesignFocusStore } from "./designFocusStore";
+import { useDesignFrameStore } from "./designFrameStore";
 import { useSketchPageUrl, useSketchThumbnailUrl } from "./sketchAssets";
 
 /** Below this zoom a node is a thumbnail: a live page this small is unreadable and costs a frame each. */
@@ -143,7 +147,7 @@ function variantLetter(sketches: ReadonlyArray<DesignSketch>, sketch: DesignSket
   return siblings.length > 1 ? htmlVariantLetter(siblings.indexOf(sketch)) : undefined;
 }
 
-const NODE_TYPES = { sketch: SketchNode };
+const NODE_TYPES = { sketch: SketchNode, frame: FrameNode };
 
 function ToolbarButton(props: {
   readonly label: string;
@@ -210,25 +214,36 @@ function DesignCanvasInner(props: {
   }, [containerWidth, containerHeight, flow]);
 
   const sketchesById = new Map(snapshot.sketches.map((sketch) => [sketch.id, sketch]));
-  const nodes: SketchFlowNode[] = snapshot.nodes.flatMap((node) => {
+  const nodes: Array<SketchFlowNode | FrameFlowNode> = snapshot.nodes.flatMap<
+    SketchFlowNode | FrameFlowNode
+  >((node) => {
+    const base = {
+      id: node.id,
+      position: dragging[node.id] ?? { x: node.x, y: node.y },
+      width: node.width,
+      height: node.height,
+      zIndex: node.z,
+      selected: node.id === selectedId,
+      draggable: props.canWrite,
+    };
+    if (node.kind === "frame") {
+      // Frames run in a desktop webview; every other client leaves them out.
+      return previewBridge === null
+        ? []
+        : [{ ...base, type: "frame" as const, data: { frame: node } }];
+    }
     const sketch = sketchesById.get(node.sketchId);
     if (sketch === undefined) return [];
     return [
       {
-        id: node.id,
+        ...base,
         type: "sketch" as const,
-        position: dragging[node.id] ?? { x: node.x, y: node.y },
-        width: node.width,
-        height: node.height,
-        zIndex: node.z,
-        selected: node.id === selectedId,
-        draggable: props.canWrite,
         data: { sketch, letter: variantLetter(snapshot.sketches, sketch) },
       },
     ];
   });
 
-  const onNodesChange: OnNodesChange<SketchFlowNode> = (changes) => {
+  const onNodesChange: OnNodesChange<SketchFlowNode | FrameFlowNode> = (changes) => {
     for (const change of changes.getByType("position")) {
       if (change.dragging === true && change.position) {
         const { id, position } = change;
@@ -252,7 +267,9 @@ function DesignCanvasInner(props: {
   };
 
   const focusSketchId = useDesignFocusStore((state) => state.pending[scopedThreadKey(threadRef)]);
-  const focusNodeId = snapshot.nodes.find((node) => node.sketchId === focusSketchId)?.id;
+  const focusNodeId = snapshot.nodes.find(
+    (node) => node.kind === "sketch" && node.sketchId === focusSketchId,
+  )?.id;
   const [handledFocusId, setHandledFocusId] = useState<string | undefined>(undefined);
   if (focusNodeId !== handledFocusId) {
     setHandledFocusId(focusNodeId);
@@ -297,95 +314,151 @@ function DesignCanvasInner(props: {
 
   const selectedNode = snapshot.nodes.find((node) => node.id === selectedId);
 
+  const threadKey = scopedThreadKey(threadRef);
+  const storedFrameId = useDesignFrameStore((state) => state.focusedByThread[threadKey]);
+  const focusedFrameId = nodes.some((node) => node.type === "frame" && node.id === storedFrameId)
+    ? storedFrameId
+    : undefined;
+  const addMenuOpen = useDesignFrameStore((state) => state.addMenuOpen[threadKey] === true);
+  const focusFrame = (nodeId: string) => useDesignFrameStore.getState().focus(threadRef, nodeId);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- moves the React Flow viewport, an external system, onto the focused Frame: its native webview only runs while the whole Frame is in view
+  useEffect(() => {
+    if (focusedFrameId === undefined) return;
+    viewportTouched.current = true;
+    void flow.fitView({
+      nodes: [{ id: focusedFrameId }],
+      maxZoom: 1,
+      padding: "8%",
+      duration: 200,
+    });
+  }, [focusedFrameId, flow]);
+
   return (
     <DesignCanvasContext value={{ environmentId: props.environmentId, threadRef, onOpenSketch }}>
-      <ReactFlow
-        nodes={nodes}
-        edges={[]}
-        nodeTypes={NODE_TYPES}
-        defaultViewport={snapshot.viewport ?? { x: 0, y: 0, zoom: 1 }}
-        fitView={snapshot.viewport === null}
-        fitViewOptions={FIT_OPTIONS}
-        proOptions={{ hideAttribution: true }}
-        minZoom={0.05}
-        maxZoom={2}
-        onlyRenderVisibleElements
-        nodesConnectable={false}
-        deleteKeyCode={null}
-        onNodesChange={onNodesChange}
-        onNodeClick={(_, node) => setSelectedId(node.id)}
-        onPaneClick={() => setSelectedId(null)}
-        onNodeDragStop={async (_, __, dragged) => {
-          const moved = dragged.map((node) => ({
-            nodeId: DesignNodeId.make(node.id),
-            x: node.position.x,
-            y: node.position.y,
-          }));
-          await moveNodes({
-            environmentId: props.environmentId,
-            input: { threadId: threadRef.threadId, nodes: moved },
-          });
-          setDragging({});
-        }}
-        onMoveStart={(event) => {
-          if (event !== null) viewportTouched.current = true;
-        }}
-        onMoveEnd={(event, viewport) => {
-          if (event === null || !props.canWrite) return;
-          clearTimeout(viewportTimer.current);
-          viewportTimer.current = setTimeout(() => {
-            void setViewport({
-              environmentId: props.environmentId,
-              input: { threadId: threadRef.threadId, viewport },
-            });
-          }, VIEWPORT_SAVE_DELAY_MS);
+      <DesignFrameContext
+        value={{
+          environmentId: props.environmentId,
+          threadRef,
+          canWrite: props.canWrite,
+          focusedId: focusedFrameId,
         }}
       >
-        <Background />
-        <Panel position="top-right" className="flex gap-1">
-          <ToolbarButton
-            label={gt("Remove from canvas")}
-            disabled={!props.canWrite || selectedNode === undefined}
-            onClick={async () => {
-              if (selectedNode === undefined) return;
-              setSelectedId(null);
-              await removeNode({
+        <ReactFlow
+          nodes={nodes}
+          edges={[]}
+          nodeTypes={NODE_TYPES}
+          defaultViewport={snapshot.viewport ?? { x: 0, y: 0, zoom: 1 }}
+          fitView={snapshot.viewport === null}
+          fitViewOptions={FIT_OPTIONS}
+          proOptions={{ hideAttribution: true }}
+          minZoom={0.05}
+          maxZoom={2}
+          onlyRenderVisibleElements
+          nodesConnectable={false}
+          deleteKeyCode={null}
+          onNodesChange={onNodesChange}
+          onNodeClick={(_, node) => {
+            setSelectedId(node.id);
+            if (node.type === "frame" && node.id !== focusedFrameId) focusFrame(node.id);
+          }}
+          onPaneClick={() => setSelectedId(null)}
+          onNodeDragStop={async (_, __, dragged) => {
+            const moved = dragged.map((node) => ({
+              nodeId: DesignNodeId.make(node.id),
+              x: node.position.x,
+              y: node.position.y,
+            }));
+            await moveNodes({
+              environmentId: props.environmentId,
+              input: { threadId: threadRef.threadId, nodes: moved },
+            });
+            setDragging({});
+          }}
+          onMoveStart={(event) => {
+            if (event !== null) viewportTouched.current = true;
+          }}
+          onMoveEnd={(event, viewport) => {
+            if (event === null || !props.canWrite) return;
+            clearTimeout(viewportTimer.current);
+            viewportTimer.current = setTimeout(() => {
+              void setViewport({
                 environmentId: props.environmentId,
-                input: { threadId: threadRef.threadId, nodeId: selectedNode.id },
+                input: { threadId: threadRef.threadId, viewport },
               });
-            }}
-          >
-            <Trash2Icon className="size-3.5" />
-          </ToolbarButton>
-          <ToolbarButton label={gt("Zoom out")} onClick={() => void flow.zoomOut()}>
-            <MinusIcon className="size-3.5" />
-          </ToolbarButton>
-          <ToolbarButton label={gt("Zoom in")} onClick={() => void flow.zoomIn()}>
-            <PlusIcon className="size-3.5" />
-          </ToolbarButton>
-          <ToolbarButton label={gt("Fit to screen")} onClick={() => void flow.fitView(FIT_OPTIONS)}>
-            <ScanIcon className="size-3.5" />
-          </ToolbarButton>
-          <ToolbarButton
-            label={props.maximized ? gt("Exit full screen") : gt("Full screen")}
-            onClick={props.onToggleMaximized}
-          >
-            {props.maximized ? (
-              <Minimize2Icon className="size-3.5" />
-            ) : (
-              <Maximize2Icon className="size-3.5" />
-            )}
-          </ToolbarButton>
-        </Panel>
-      </ReactFlow>
+            }, VIEWPORT_SAVE_DELAY_MS);
+          }}
+        >
+          <Background />
+          <Panel position="top-right" className="flex gap-1">
+            {previewBridge !== null ? (
+              <AddFrameMenu
+                environmentId={props.environmentId}
+                threadRef={threadRef}
+                canWrite={props.canWrite}
+                open={addMenuOpen && props.canWrite}
+                onOpenChange={(open) =>
+                  useDesignFrameStore.getState().setAddMenuOpen(threadRef, open)
+                }
+                onAdded={(nodeId) => {
+                  setSelectedId(nodeId);
+                  focusFrame(nodeId);
+                }}
+              />
+            ) : null}
+            <ToolbarButton
+              label={gt("Remove from canvas")}
+              disabled={!props.canWrite || selectedNode === undefined}
+              onClick={async () => {
+                if (selectedNode === undefined) return;
+                setSelectedId(null);
+                await removeNode({
+                  environmentId: props.environmentId,
+                  input: { threadId: threadRef.threadId, nodeId: selectedNode.id },
+                });
+              }}
+            >
+              <Trash2Icon className="size-3.5" />
+            </ToolbarButton>
+            <ToolbarButton label={gt("Zoom out")} onClick={() => void flow.zoomOut()}>
+              <MinusIcon className="size-3.5" />
+            </ToolbarButton>
+            <ToolbarButton label={gt("Zoom in")} onClick={() => void flow.zoomIn()}>
+              <PlusIcon className="size-3.5" />
+            </ToolbarButton>
+            <ToolbarButton
+              label={gt("Fit to screen")}
+              onClick={() => void flow.fitView(FIT_OPTIONS)}
+            >
+              <ScanIcon className="size-3.5" />
+            </ToolbarButton>
+            <ToolbarButton
+              label={props.maximized ? gt("Exit full screen") : gt("Full screen")}
+              onClick={props.onToggleMaximized}
+            >
+              {props.maximized ? (
+                <Minimize2Icon className="size-3.5" />
+              ) : (
+                <Maximize2Icon className="size-3.5" />
+              )}
+            </ToolbarButton>
+          </Panel>
+        </ReactFlow>
+      </DesignFrameContext>
       {nodes.length === 0 ? (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 px-8 text-center text-muted-foreground">
           <FrameIcon className="size-7" />
           <p className="max-w-xs text-sm">
-            <T>
-              No sketches yet. Ask the agent to design a screen and it will place it here with
-              design_sketch.
-            </T>
+            {previewBridge !== null ? (
+              <T>
+                Nothing here yet. Ask the agent to design a screen with design_sketch, or add a
+                Frame to see your running app.
+              </T>
+            ) : (
+              <T>
+                No sketches yet. Ask the agent to design a screen and it will place it here with
+                design_sketch.
+              </T>
+            )}
           </p>
         </div>
       ) : null}

@@ -11,6 +11,7 @@ import {
   DesktopPreviewRecordingSaveInputSchema,
   DesktopPreviewRegisterWebviewInputSchema,
   DesktopPreviewScreenshotArtifactSchema,
+  DesktopPreviewSnapshotSchema,
   DesktopPreviewSetAudioMutedInputSchema,
   DesktopPreviewSetShownInputSchema,
   DesktopPreviewSetCaptureDrawnInputSchema,
@@ -513,6 +514,18 @@ export const captureScreenshot = DesktopIpc.makeIpcMethod({
   }),
 });
 
+const captureSnapshot = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.PREVIEW_CAPTURE_SNAPSHOT_CHANNEL,
+  payload: DesktopPreviewTabInputSchema,
+  result: Schema.Union([DesktopPreviewSnapshotSchema, PreviewCaptureFailure]),
+  handler: Effect.fn("desktop.ipc.preview.captureSnapshot")(function* ({ tabId }) {
+    const manager = yield* PreviewManager.PreviewManager;
+    return yield* manager
+      .captureSnapshot(tabId)
+      .pipe(Effect.catch((error) => Effect.succeed(normalizeCaptureFailure(error, "screenshot"))));
+  }),
+});
+
 const revealArtifact = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PREVIEW_REVEAL_ARTIFACT_CHANNEL,
   payload: DesktopPreviewArtifactInputSchema,
@@ -579,6 +592,7 @@ export const methods = [
   pickElement,
   cancelPickElement,
   captureScreenshot,
+  captureSnapshot,
   revealArtifact,
   copyArtifactToClipboard,
   openPictureInPicture,

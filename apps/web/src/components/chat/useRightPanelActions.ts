@@ -26,7 +26,7 @@ import {
 } from "../../rightPanelStore";
 import { isElectron } from "../../env";
 import { requestWorkspaceContentFocus, requestWorkspaceFocus } from "../../lib/workspaceFocus";
-import { setActivePreviewTab } from "../../previewStateStore";
+import { isDesignFrameTab, setActivePreviewTab } from "../../previewStateStore";
 import { isBrowserSettingsReadError } from "../../browser/openFileInPreview";
 import { addBrowserSurface } from "../preview/addBrowserSurface";
 import { focusActivePanelTerminal, focusTerminal } from "../../lib/terminalFocus";
@@ -213,7 +213,7 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
     }
     if (!canOperatePreview) return;
     const activeTabId = activePreviewState.activeTabId;
-    if (activeTabId) {
+    if (activeTabId && !isDesignFrameTab(activeTabId)) {
       useRightPanelStore.getState().openBrowser(activeThreadRef, activeTabId);
     } else {
       createBrowserSurface();

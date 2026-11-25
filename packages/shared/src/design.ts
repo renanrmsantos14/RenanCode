@@ -52,7 +52,7 @@ export const designFrameSize = (
 ) => {
   if (device !== "custom") return DESIGN_FRAME_DEVICE_SIZES[device];
   const clamp = (value: number | undefined, fallback: number) =>
-    Math.min(4000, Math.max(200, Math.round(value ?? fallback)));
+    Math.min(2400, Math.max(240, Math.round(value ?? fallback)));
   return { width: clamp(custom?.width, 1280), height: clamp(custom?.height, 800) };
 };
 

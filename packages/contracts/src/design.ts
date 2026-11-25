@@ -117,7 +117,7 @@ export const DesignPlaceSketchInput = Schema.Struct({
 });
 export type DesignPlaceSketchInput = typeof DesignPlaceSketchInput.Type;
 
-const DesignFrameSize = Schema.Int.check(Schema.isBetween({ minimum: 200, maximum: 4000 }));
+const DesignFrameSize = Schema.Int.check(Schema.isBetween({ minimum: 240, maximum: 2400 }));
 
 export const DesignAddFrameInput = Schema.Struct({
   threadId: ThreadId,

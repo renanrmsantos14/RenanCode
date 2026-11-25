@@ -504,6 +504,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
       ipcRenderer.invoke(IpcChannels.PREVIEW_CANCEL_PICK_ELEMENT_CHANNEL, { tabId }),
     captureScreenshot: (tabId) =>
       ipcRenderer.invoke(IpcChannels.PREVIEW_CAPTURE_SCREENSHOT_CHANNEL, { tabId }),
+    captureSnapshot: (tabId) =>
+      ipcRenderer.invoke(IpcChannels.PREVIEW_CAPTURE_SNAPSHOT_CHANNEL, { tabId }),
     revealArtifact: (path) =>
       ipcRenderer.invoke(IpcChannels.PREVIEW_REVEAL_ARTIFACT_CHANNEL, { path }),
     copyArtifactToClipboard: (path) =>

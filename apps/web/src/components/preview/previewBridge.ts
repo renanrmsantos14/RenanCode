@@ -19,6 +19,8 @@ export const previewBridge = nativePreviewBridge
       ...nativePreviewBridge,
       captureScreenshot: async (tabId: string) =>
         unwrapPreviewCaptureResult(await nativePreviewBridge.captureScreenshot(tabId)),
+      captureSnapshot: async (tabId: string) =>
+        unwrapPreviewCaptureResult(await nativePreviewBridge.captureSnapshot(tabId)),
       recording: {
         ...nativePreviewBridge.recording,
         startScreencast: async (tabId: string) =>
