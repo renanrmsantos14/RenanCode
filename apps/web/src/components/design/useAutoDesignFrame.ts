@@ -24,7 +24,8 @@ export function useAutoDesignFrame(input: {
     reportFailure: false,
   });
   const { servers } = useDiscoveredPortsState(previewBridge === null ? null : environmentId);
-  const tried = useRef(false);
+  const tried = useRef<string | null>(null);
+  const threadKey = `${threadRef.environmentId}:${threadRef.threadId}`;
   const own = servers.find(
     (server) =>
       server.terminal?.threadId === threadRef.threadId ||
@@ -34,8 +35,8 @@ export function useAutoDesignFrame(input: {
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- asks the server, an external system, to open the thread's first Frame once a dev server shows up
   useEffect(() => {
-    if (tried.current || !ready || !canWrite || url === undefined) return;
-    tried.current = true;
+    if (tried.current === threadKey || !ready || !canWrite || url === undefined) return;
+    tried.current = threadKey;
     void addFrame({
       environmentId,
       input: { threadId: threadRef.threadId, url, device: "desktop", auto: true },
@@ -44,5 +45,5 @@ export function useAutoDesignFrame(input: {
         useDesignFrameStore.getState().focus(threadRef, result.value.id);
       }
     });
-  }, [ready, canWrite, url, addFrame, environmentId, threadRef]);
+  }, [ready, canWrite, url, addFrame, environmentId, threadRef, threadKey]);
 }

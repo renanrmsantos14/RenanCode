@@ -78,6 +78,7 @@ export function useDesignFrameLive(input: {
       });
       if (closed._tag === "Failure") {
         cancelPreviewSessionClose(threadRef, null, target.tabId);
+        return;
       }
       markDesignFrameTab(target.tabId, false);
     };
@@ -92,10 +93,10 @@ export function useDesignFrameLive(input: {
         threadRef,
         url,
         viewport: { _tag: "freeform", width: frame.width, height: frame.height },
+        designFrame: true,
       });
       if (result._tag !== "Success") return;
       const tabId = result.value.tabId;
-      markDesignFrameTab(tabId, true);
       const runtimeTabId = previewRuntimeTabId(
         threadRef,
         readThreadPreviewState(threadRef).serverEpoch,

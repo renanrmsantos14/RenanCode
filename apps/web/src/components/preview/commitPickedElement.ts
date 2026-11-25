@@ -1,8 +1,8 @@
 import type {
   PreviewAnnotationPayload,
   PreviewAnnotationSubmissionResult,
+  ScopedThreadRef,
 } from "@t3tools/contracts";
-import type { ScopedThreadRef } from "@t3tools/contracts";
 
 import { type ComposerImageAttachment, useComposerDraftStore } from "~/composerDraftStore";
 import { capturePreviewAnnotationScreenshot } from "~/lib/previewAnnotation";

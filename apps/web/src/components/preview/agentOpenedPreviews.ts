@@ -19,6 +19,7 @@ import {
   usePreviewMiniPlayerStore,
 } from "../../previewMiniPlayerStore";
 import {
+  isDesignFrameTab,
   previewStateAtom,
   previewThreadRefsAtom,
   type ThreadPreviewState,
@@ -63,7 +64,10 @@ export function revealServerTabs(
  */
 export function followPreviewSessions(threadRef: ScopedThreadRef, state: ThreadPreviewState): void {
   if (readEnvironmentSupportsServerBrowser(threadRef.environmentId) && !state.listLoaded) return;
-  const sessions = Object.values(state.sessions);
+  // A Design Frame's page is no browser tab, even when its session event lands before the Frame is marked.
+  const sessions = Object.values(state.sessions).filter(
+    (session) => !isDesignFrameTab(session.tabId),
+  );
   useRightPanelStore.getState().reconcileBrowserSurfaces(
     threadRef,
     sessions.map((session) => session.tabId),

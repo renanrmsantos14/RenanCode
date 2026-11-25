@@ -608,14 +608,19 @@ export const layer = Layer.effect(
         .pipe(Effect.mapError(storage));
       yield* fileSystem.writeFile(target.filePath, png).pipe(Effect.mapError(storage));
       const now = iso(yield* DateTime.now);
-      yield* sql`
+      const updated = yield* sql`
         UPDATE design_canvas_nodes
         SET snapshot_attachment_id = ${target.attachmentId}, updated_at = ${now}
         WHERE node_id = ${input.nodeId} AND thread_id = ${input.threadId} AND kind = 'frame'
+        RETURNING node_id
       `.pipe(
         Effect.mapError(storage),
         Effect.onError(() => removePrint(target.attachmentId)),
       );
+      if (updated.length === 0) {
+        yield* removePrint(target.attachmentId);
+        return yield* fail("The frame was not found.");
+      }
       yield* removePrint(frame.snapshot_attachment_id);
       yield* notify(input.threadId);
     });

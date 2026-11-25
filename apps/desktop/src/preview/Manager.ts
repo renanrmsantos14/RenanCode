@@ -132,8 +132,9 @@ const ZOOM_LEVELS: ReadonlyArray<number> = [
 
 const DEFAULT_ZOOM_FACTOR = 1.0;
 const ZOOM_EPSILON = 0.001;
-/** A Frame print only has to read as a thumbnail; wider PNGs blow the 3 MB wire limit. */
+/** A Frame print only has to read as a thumbnail; larger PNGs blow the 3 MB wire limit. */
 const SNAPSHOT_MAX_WIDTH = 900;
+const SNAPSHOT_MAX_HEIGHT = 1600;
 const RECORDING_ARM_GRACE_MS = 10_000;
 const PICTURE_IN_PICTURE_FRAME_INTERVAL_MS = Math.ceil(1_000 / 12);
 const PICTURE_IN_PICTURE_JPEG_QUALITY = 80;
@@ -2432,6 +2433,14 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
               tabId,
               wc,
             ).pipe(
+              // A Design Frame's guest is scaled under a transform and never completes a plain capturePage.
+              Effect.catch(() =>
+                captureStillImage(
+                  { operation: "captureAnnotationScreenshot", tabId, webContentsId: wc.id },
+                  tabId,
+                  wc,
+                ),
+              ),
               Effect.map((image) =>
                 cropAnnotationScreenshot(image, cropRect, devicePixelRatio, targetRects),
               ),
@@ -2775,8 +2784,8 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       wc,
     );
     const size = image.getSize();
-    const scaled =
-      size.width > SNAPSHOT_MAX_WIDTH ? image.resize({ width: SNAPSHOT_MAX_WIDTH }) : image;
+    const factor = Math.min(1, SNAPSHOT_MAX_WIDTH / size.width, SNAPSHOT_MAX_HEIGHT / size.height);
+    const scaled = factor < 1 ? image.resize({ width: Math.round(size.width * factor) }) : image;
     return { pngBase64: scaled.toPNG().toString("base64") };
   });
 

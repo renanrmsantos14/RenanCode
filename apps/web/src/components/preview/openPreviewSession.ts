@@ -15,7 +15,11 @@ import { AsyncResult } from "effect/reactivity";
 import { resolveBrowserDefaults } from "~/browser/browserDefaults";
 import { BrowserSettingsReadError, isBrowserSettingsReadError } from "~/browser/openFileInPreview";
 import { previewRuntimeFor } from "~/browser/previewRuntime";
-import { applyPreviewServerSnapshot, rememberPreviewUrl } from "~/previewStateStore";
+import {
+  applyPreviewServerSnapshot,
+  markDesignFrameTab,
+  rememberPreviewUrl,
+} from "~/previewStateStore";
 
 interface OpenPreviewSessionInput<E> {
   openPreview: (input: {
@@ -29,6 +33,8 @@ interface OpenPreviewSessionInput<E> {
   zoomFactor?: PreviewZoomFactor;
   colorScheme?: PreviewAppearancePreference;
   runtime?: PreviewRuntime;
+  /** The page belongs to a Design Frame: it never gets a browser tab of its own. */
+  designFrame?: boolean;
 }
 
 export async function openPreviewSession<E>(
@@ -62,8 +68,10 @@ export async function openPreviewSession<E>(
     return result;
   }
   const snapshot = result.value;
+  // Marked before the snapshot lands so the panel never sees an unmarked Frame tab.
+  if (input.designFrame === true) markDesignFrameTab(snapshot.tabId, true);
   applyPreviewServerSnapshot(input.threadRef, snapshot);
-  if (input.url !== undefined) {
+  if (input.url !== undefined && input.designFrame !== true) {
     rememberPreviewUrl(
       input.threadRef,
       snapshot.navStatus._tag === "Idle" ? input.url : snapshot.navStatus.url,

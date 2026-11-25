@@ -14,6 +14,7 @@ import {
   applyPreviewServerSnapshot,
   beginPreviewSessionClose,
   cancelPreviewSessionClose,
+  markDesignFrameTab,
   previewStateAtom,
   readThreadPreviewState,
   reconcilePreviewServerSessions,
@@ -238,6 +239,19 @@ describe("previewStateStore (single-tab)", () => {
     expect(Object.keys(state.sessions)).toEqual([first.tabId, second.tabId]);
     expect(state.snapshot?.tabId).toBe(first.tabId);
     expect(state.desktopOverlay?.canGoBack).toBe(true);
+  });
+
+  it("keeps the user's tab active while a Design Frame's page opens and closes", () => {
+    const browser = makeSnapshot();
+    const frame = { ...makeSnapshot(), tabId: "tab_frame", updatedAt: "2026-01-03T00:00:00.000Z" };
+    applyPreviewServerSnapshot(ref, browser);
+    markDesignFrameTab(frame.tabId, true);
+    applyPreviewServerSnapshot(ref, frame);
+    expect(readThreadPreviewState(ref).activeTabId).toBe(browser.tabId);
+
+    beginPreviewSessionClose(ref, browser.tabId);
+    expect(readThreadPreviewState(ref).activeTabId).toBe(frame.tabId);
+    markDesignFrameTab(frame.tabId, false);
   });
 
   it("reconciles an authoritative session list without focusing a background tab", () => {

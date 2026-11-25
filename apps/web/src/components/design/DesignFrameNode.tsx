@@ -66,21 +66,24 @@ export function FrameNode({
   const print = useSketchThumbnailUrl(ctx.environmentId, frame.snapshotAttachmentId);
 
   const pickElement = async () => {
-    if (previewBridge === null || runtimeTabId === null) return;
+    const bridge = previewBridge;
+    if (bridge === null || runtimeTabId === null) return;
     if (picking) {
-      void previewBridge.cancelPickElement(runtimeTabId).catch(() => undefined);
+      void bridge.cancelPickElement(runtimeTabId).catch(() => undefined);
       return;
     }
     setPicking(true);
-    try {
-      // The pick only attaches to the composer here; sending a prompt stays in the chat.
-      await previewBridge.setAnnotationSendEnabled(runtimeTabId, false);
-      focusPreviewWebview(runtimeTabId);
-      const result = await previewBridge.pickElement(runtimeTabId);
-      if (result !== null) await commitPickedElement({ threadRef: ctx.threadRef, result, gt });
-    } finally {
-      setPicking(false);
-    }
+    // The pick only attaches to the composer here; sending a prompt stays in the chat.
+    await bridge
+      .setAnnotationSendEnabled(runtimeTabId, false)
+      .then(() => {
+        focusPreviewWebview(runtimeTabId);
+        return bridge.pickElement(runtimeTabId);
+      })
+      .then((result) =>
+        result === null ? undefined : commitPickedElement({ threadRef: ctx.threadRef, result, gt }),
+      )
+      .finally(() => setPicking(false));
   };
 
   return (
