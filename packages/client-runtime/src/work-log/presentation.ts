@@ -545,9 +545,17 @@ export interface ViewedImageAsset {
   readonly srcFragment: string;
 }
 
+/**
+ * A tool reports the literal path it read, not a markdown destination. Escape what markdown
+ * resolution would decode or split off, so a name like Grok's `sessions/%2FUsers...` survives.
+ */
+export function viewedImageMarkdownSource(path: string): string {
+  return /^file:/i.test(path) ? path : path.replace(/[%#?]/g, encodeURIComponent);
+}
+
 /** An item id means the bytes come from the item's output instead of a file on the host. */
 export function resolveViewedImageAsset(
-  source: string,
+  path: string,
   input: {
     readonly threadId: ThreadId;
     readonly workspaceRoot?: string | null | undefined;
@@ -563,10 +571,11 @@ export function resolveViewedImageAsset(
         itemId: input.itemId,
         index: input.index ?? 0,
       },
-      alt: source.split(/[\\/]/).pop() || source,
+      alt: path.split(/[\\/]/).pop() || path,
       srcFragment: "",
     };
   }
+  const source = viewedImageMarkdownSource(path);
   const imageSource = classifyMarkdownImageSource(source, input.workspaceRoot ?? ".");
   if (imageSource._tag !== "WorkspaceFile") return null;
   const resolvedFilePath =

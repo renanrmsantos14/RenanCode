@@ -34,6 +34,7 @@ const environmentThreads = createEnvironmentThreadStateAtoms(connectionAtomRunti
 export const threadEnvironment = createThreadEnvironmentAtoms(
   connectionAtomRuntime,
   threadFamilies.snapshotAtom,
+  environmentShell.statusAtom,
   environmentThreads.stateAtom,
 );
 export const environmentThreadDetails = createEnvironmentThreadDetailAtoms(
