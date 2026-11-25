@@ -30,6 +30,7 @@ import {
   toolGroupSummaryKind,
   contextCompactionTokenCounts,
   workEntriesViewedImages,
+  workEntrySendsImages,
   type ToolGroupSummaryKind,
   type ViewedImageRef,
   liveThoughtLine,
@@ -1259,6 +1260,7 @@ function deriveTurnFolds(input: {
       }
       if (entry.kind === "work" && entry.entry.itemType === "notification") continue;
       if (entry.kind === "work" && entry.entry.questionAnswer !== undefined) continue;
+      if (entry.kind === "work" && workEntrySendsImages(entry.entry)) continue;
       hiddenEntryIds.add(entry.id);
     }
     if (hiddenEntryIds.size === 0) {
