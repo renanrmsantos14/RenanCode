@@ -272,6 +272,15 @@
       }
     },
     {
+      "name": "react-compiler-runtime",
+      "version": "1.0.0",
+      "sourceUrl": "https://github.com/facebook/react",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": ["Copyright (c) Meta Platforms, Inc. and affiliates."]
+      }
+    },
+    {
       "name": "xml-naming",
       "version": "0.1.0",
       "sourceUrl": "https://github.com/NaturalIntelligence/xml-naming",
