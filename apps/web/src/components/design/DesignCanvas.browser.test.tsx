@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   setViewport: vi.fn(),
   removeNode: vi.fn(),
   placeSketch: vi.fn(),
+  addFrame: vi.fn(),
+  setNodeZ: vi.fn(),
 }));
 
 vi.mock(import("~/state/design"), () => ({
@@ -26,12 +28,13 @@ vi.mock(import("~/state/design"), () => ({
     setViewport: "setViewport",
     removeNode: "removeNode",
     placeSketch: "placeSketch",
+    addFrame: "addFrame",
+    setNodeZ: "setNodeZ",
   } as never,
 }));
 vi.mock(import("~/state/use-atom-command"), async (original) => ({
   ...(await original()),
-  useAtomCommand: ((command: "moveNodes" | "setViewport" | "removeNode" | "placeSketch") =>
-    mocks[command]) as never,
+  useAtomCommand: ((command: keyof typeof mocks) => mocks[command]) as never,
 }));
 vi.mock(import("./sketchAssets"), () => ({
   useSketchPageUrl: () => "about:blank",
@@ -86,7 +89,7 @@ function setup() {
 }
 
 // d3-drag follows real mouse events, which an HTML5 drag-and-drop would not send.
-async function dragBy(element: HTMLElement, dx: number, dy: number) {
+async function dragBy(element: HTMLElement, dx: number, dy: number, modifiers = 0) {
   const rect = element.getBoundingClientRect();
   const x = rect.left + 60;
   const y = rect.top + 120;
@@ -102,6 +105,7 @@ async function dragBy(element: HTMLElement, dx: number, dy: number) {
       button: type === "mouseMoved" && buttons === 0 ? "none" : "left",
       buttons,
       clickCount: type === "mouseMoved" ? 0 : 1,
+      modifiers,
     });
   await mouse("mouseMoved", { x, y }, 0);
   await mouse("mousePressed", { x, y }, 1);
@@ -190,7 +194,9 @@ describe("DesignCanvas", () => {
     await act(() => dragBy(node, 200, 200));
 
     expect(mocks.moveNodes).not.toHaveBeenCalled();
-    await expect.element(screen.getByRole("button", { name: "Remove from canvas" })).toBeDisabled();
+    await userEvent.click(page.elementLocator(node), { position: { x: 80, y: 200 } });
+    await userEvent.keyboard("{Delete}");
+    expect(mocks.removeNode).not.toHaveBeenCalled();
   });
 
   it("selects the sketch a chat card asked for and consumes the request", async () => {
@@ -269,12 +275,89 @@ describe("DesignCanvas", () => {
     );
 
     await userEvent.click(page.elementLocator(node), { position: { x: 80, y: 200 } });
-    await userEvent.click(screen.getByRole("button", { name: "Remove from canvas" }));
+    await userEvent.keyboard("{Delete}");
 
     expect(mocks.removeNode).toHaveBeenCalledOnce();
     expect(mocks.removeNode.mock.calls[0]?.[0]).toMatchObject({
       input: { threadId: threadRef.threadId, nodeId: "node-a" },
     });
+  });
+
+  it("puts a removed sketch back where it was on undo", async () => {
+    using _setup = setup();
+    mocks.placeSketch.mockResolvedValue({ _tag: "Success", value: { id: "node-new" } });
+    await using screen = await mount(snapshot(2));
+    const node = await vi.waitUntil(() =>
+      screen.container.querySelector<HTMLElement>('.react-flow__node[data-id="node-a"]'),
+    );
+    const placed = snapshot(2).nodes[0]!;
+
+    await userEvent.click(page.elementLocator(node), { position: { x: 80, y: 200 } });
+    await userEvent.keyboard("{Delete}");
+    await userEvent.keyboard("{Control>}z{/Control}");
+
+    await vi.waitFor(() => expect(mocks.setNodeZ).toHaveBeenCalledOnce());
+    expect(mocks.placeSketch.mock.calls[0]?.[0]).toMatchObject({
+      input: { sketchId: "sketch-a" },
+    });
+    expect(mocks.moveNodes.mock.calls[0]?.[0]).toMatchObject({
+      input: { nodes: [{ nodeId: "node-new", x: placed.x, y: placed.y }] },
+    });
+    expect(mocks.setNodeZ.mock.calls[0]?.[0]).toMatchObject({
+      input: { nodeId: "node-new", z: placed.z },
+    });
+  });
+
+  it("nudges the selection with the arrow keys and saves once", async () => {
+    using _setup = setup();
+    await using screen = await mount(snapshot(1));
+    const node = await vi.waitUntil(() =>
+      screen.container.querySelector<HTMLElement>(".react-flow__node"),
+    );
+    const placed = snapshot(1).nodes[0]!;
+
+    await userEvent.click(page.elementLocator(node), { position: { x: 80, y: 200 } });
+    await userEvent.keyboard("{ArrowRight}{ArrowRight}{Shift>}{ArrowDown}{/Shift}");
+
+    await vi.waitFor(() => expect(mocks.moveNodes).toHaveBeenCalledOnce());
+    expect(mocks.moveNodes.mock.calls[0]?.[0]).toMatchObject({
+      input: { nodes: [{ nodeId: "node-a", x: placed.x + 2, y: placed.y + 10 }] },
+    });
+  });
+
+  it("locks editing in Preview", async () => {
+    using _setup = setup();
+    await using screen = await mount(snapshot(1));
+    const node = await vi.waitUntil(() =>
+      screen.container.querySelector<HTMLElement>(".react-flow__node"),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Preview (P)" }));
+    await userEvent.click(page.elementLocator(node), { position: { x: 80, y: 200 } });
+    await userEvent.keyboard("{Delete}");
+
+    expect(mocks.removeNode).not.toHaveBeenCalled();
+    await expect.element(screen.getByRole("button", { name: "Add Frame" })).not.toBeInTheDocument();
+  });
+
+  it("pans with a held Ctrl instead of moving the node, as in RenanDesign", async () => {
+    using _setup = setup();
+    await using screen = await mount(snapshot(1));
+    const node = await vi.waitUntil(() =>
+      screen.container.querySelector<HTMLElement>(".react-flow__node"),
+    );
+    const viewport = screen.container.querySelector<HTMLElement>(".react-flow__viewport")!;
+    const before = viewport.style.transform;
+    const pan = screen.getByRole("button", { name: "Pan" });
+
+    await userEvent.keyboard("{Control>}");
+    await expect.element(pan).toHaveAttribute("aria-pressed", "true");
+    await act(() => dragBy(node, 120, 80, 2));
+    await userEvent.keyboard("{/Control}");
+
+    await expect.element(pan).toHaveAttribute("aria-pressed", "false");
+    await vi.waitFor(() => expect(viewport.style.transform).not.toBe(before));
+    expect(mocks.moveNodes).not.toHaveBeenCalled();
   });
 
   it("hides the React Flow attribution", async () => {

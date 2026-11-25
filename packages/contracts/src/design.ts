@@ -116,6 +116,14 @@ export const DesignRemoveNodeInput = Schema.Struct({
 });
 export type DesignRemoveNodeInput = typeof DesignRemoveNodeInput.Type;
 
+/** Moves a node in the canvas stacking order: higher `z` draws on top. */
+export const DesignSetNodeZInput = Schema.Struct({
+  threadId: ThreadId,
+  nodeId: DesignNodeId,
+  z: Schema.Int,
+});
+export type DesignSetNodeZInput = typeof DesignSetNodeZInput.Type;
+
 export const DesignPlaceSketchInput = Schema.Struct({
   threadId: ThreadId,
   sketchId: DesignSketchId,

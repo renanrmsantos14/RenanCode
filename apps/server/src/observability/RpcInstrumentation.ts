@@ -131,6 +131,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.designMoveNodes]: "design",
   [WS_METHODS.designSetViewport]: "design",
   [WS_METHODS.designRemoveNode]: "design",
+  [WS_METHODS.designSetNodeZ]: "design",
   [WS_METHODS.designPlaceSketch]: "design",
   [WS_METHODS.designAddFrame]: "design",
   [WS_METHODS.designUpdateFrame]: "design",
