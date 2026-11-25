@@ -229,6 +229,22 @@ describe("composerContextRecords", () => {
     expect(record.label).toBe(`${"a".repeat(46)}…`);
   });
 
+  it("names a comment-less element pick by its selector, or its tag without one", () => {
+    const picked = { ...annotation, comment: "" };
+    expect(previewAnnotationContextRecord(picked).label).toBe("#pay");
+    const element = picked.elements[0]!;
+    const noSelector = {
+      ...picked,
+      elements: [{ ...element, element: { ...element.element, selector: null } }],
+    };
+    expect(previewAnnotationContextRecord(noSelector).label).toBe("<button>");
+    const long = {
+      ...picked,
+      elements: [{ ...element, element: { ...element.element, selector: `.${"a".repeat(80)}` } }],
+    };
+    expect(previewAnnotationContextRecord(long).label.endsWith("…")).toBe(true);
+  });
+
   it("shortens a long reply label without splitting an emoji", () => {
     const text = `${"a".repeat(63)}😀 trailing`;
     const record = responseContextRecord({
