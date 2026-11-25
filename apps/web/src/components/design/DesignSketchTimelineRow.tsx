@@ -1,3 +1,4 @@
+import { useAtomValue } from "@effect/atom-react";
 import { DesignSketchId } from "@t3tools/contracts";
 import type { DesignSketchReference } from "@t3tools/shared/design";
 import { use, useState } from "react";
@@ -35,12 +36,13 @@ function EnvironmentDesignSketches(props: {
   const placeSketch = useAtomCommand(designEnvironment.placeSketch, {
     label: "design place sketch",
   });
+  const canWrite = useAtomValue(designEnvironment.placeSketch.permissionAtom(environmentId));
   const [viewing, setViewing] = useState<number | null>(null);
 
   const open = async (index: number) => {
     const sketch = props.sketches[index];
     if (sketch === undefined) return;
-    if (!isElectron || threadRef === null) {
+    if (!isElectron || threadRef === null || !canWrite) {
       setViewing(index);
       return;
     }

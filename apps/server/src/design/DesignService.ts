@@ -186,7 +186,7 @@ export const layer = Layer.effect(
           OR sketch_id IN (
             SELECT sketch_id FROM design_canvas_nodes WHERE thread_id = ${threadId}
           )
-        ORDER BY created_at
+        ORDER BY created_at, rowid
       `;
       const viewports = yield* sql<{ x: number; y: number; zoom: number }>`
         SELECT x, y, zoom FROM design_canvas_viewports WHERE thread_id = ${threadId}
@@ -386,7 +386,7 @@ export const layer = Layer.effect(
               }
               const rows = yield* sql<SketchRow>`
                 SELECT * FROM design_sketches WHERE sketch_id IN ${sql.in(pages.map((page) => page.id))}
-                ORDER BY created_at
+                ORDER BY created_at, rowid
               `;
               const byId = new Map(rows.map((row) => [row.sketch_id, toSketch(row)]));
               return pages.map((page) => designSketchReference(byId.get(page.id)!));
