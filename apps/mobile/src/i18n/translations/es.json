@@ -5760,5 +5760,10 @@
   "3ee30a50b70fffab": "Retirada por {by}: {reason}",
   "201490988858b511": "retirada por {by}",
   "3e19afa2072da269": "Abrir boceto {title}",
-  "46d614fa7b4bf1e5": "Ejecuciones de flujos de trabajo"
+  "46d614fa7b4bf1e5": "Ejecuciones de flujos de trabajo",
+  "645cc12677b584a4": "No se pudo cambiar el modo Design",
+  "7810d54298dc35ed": "Design",
+  "366a0b63c228e964": "Modo Design",
+  "c2f1bc4265edcca0": "Desactiva el modo Design",
+  "bf40cc00e4b0ca07": "El agente esboza ideas como tarjetas de diseño"
 }

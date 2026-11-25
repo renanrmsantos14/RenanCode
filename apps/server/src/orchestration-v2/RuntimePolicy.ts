@@ -1,5 +1,6 @@
 import {
   isRuntimeModeAbove,
+  nativeInteractionMode,
   managedRuntimeModeCeilingMessage,
   ModelSelection,
   OrchestrationV2AppThread,
@@ -192,7 +193,7 @@ export const layerFromProjectStore: Layer.Layer<
           );
         return ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
           runtimeMode: providerRuntimeMode(input.thread.runtimeMode, supportedRuntimeModes),
-          interactionMode: input.thread.interactionMode,
+          interactionMode: nativeInteractionMode(input.thread.interactionMode),
           cwd,
           ...(maxRuntimeMode === undefined ? {} : { maxRuntimeMode }),
           ...(workspace === undefined || workspace.folders.length === 0 ? {} : { workspace }),

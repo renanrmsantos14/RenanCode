@@ -25,6 +25,7 @@ import {
   type OrchestrationV2DomainEvent,
   type OrchestrationV2ProviderThread,
   type OrchestrationV2TurnItem,
+  nativeInteractionMode,
 } from "@t3tools/contracts";
 import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
@@ -634,7 +635,7 @@ const make = Effect.gen(function* () {
         modelSelection: thread.modelSelection,
         runtimePolicy: {
           runtimeMode: thread.runtimeMode,
-          interactionMode: thread.interactionMode,
+          interactionMode: nativeInteractionMode(thread.interactionMode),
           cwd: thread.worktreePath ?? input.workspaceRoot,
         },
         initialNativeThreadId: nativeThreadId,

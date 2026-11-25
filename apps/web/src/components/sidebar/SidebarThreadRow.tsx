@@ -55,6 +55,7 @@ import {
   MessageCircleQuestionIcon,
   PinIcon,
   PinOffIcon,
+  SquareDashedIcon,
   ShieldQuestionIcon,
   SquarePenIcon,
   TerminalIcon,
@@ -168,6 +169,26 @@ function compactSidebarTimeLabel(timestamp: string, nowMs: number, resolve: Mess
   const parts = formatRelativeTime(timestamp, nowMs, resolve);
   if (parts === null) return "";
   return parts.suffix === null ? resolve(msg("now", { $context: "relative time" })) : parts.value;
+}
+
+function SidebarDesignModeIcon() {
+  const gt = useGT();
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            role="img"
+            aria-label={gt("Design mode")}
+            className="inline-flex shrink-0 items-center text-sidebar-muted-foreground/70"
+          />
+        }
+      >
+        <SquareDashedIcon aria-hidden className="size-3.5" />
+      </TooltipTrigger>
+      <TooltipPopup side="top">{gt("Design mode")}</TooltipPopup>
+    </Tooltip>
+  );
 }
 
 function PendingSyncLabel() {
@@ -1360,6 +1381,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
       providerEntryByInstanceId={props.providerEntryByInstanceId}
     />
   ) : null;
+  const designModeIcon = thread.interactionMode === "design" ? <SidebarDesignModeIcon /> : null;
   // Only the trailing icons would remain, so the row moves them to the title line instead.
   const metaLineEmpty =
     environmentLabel === null &&
@@ -1367,7 +1389,8 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     shownPrBadge === null &&
     issueBadge === null &&
     diff === null &&
-    runningTerminalIds.length === 0;
+    runningTerminalIds.length === 0 &&
+    designModeIcon === null;
   const metaLine = metaLineEmpty ? null : (
     <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-xs">
       {environmentLabel !== null ? (
@@ -1389,6 +1412,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
       ) : (
         <span className="flex-1" />
       )}
+      {designModeIcon}
       {terminalStatusIcon}
       {shownPrBadge}
       {issueBadge}
@@ -1476,6 +1500,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
               {title}
               {multiline ? titleLineIcons : machineIcon}
               {pinIndicator}
+              {multiline ? null : designModeIcon}
               {multiline ? null : terminalStatusIcon}
               {multiline ? null : issueBadge}
               {isRegeneratingTitle ? (

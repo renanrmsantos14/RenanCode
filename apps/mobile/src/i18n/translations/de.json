@@ -5765,5 +5765,10 @@
   "3ee30a50b70fffab": "Zurückgezogen von {by}: {reason}",
   "201490988858b511": "zurückgezogen von {by}",
   "3e19afa2072da269": "Skizze {title} öffnen",
-  "46d614fa7b4bf1e5": "Workflow-Ausführungen"
+  "46d614fa7b4bf1e5": "Workflow-Ausführungen",
+  "645cc12677b584a4": "Design-Modus konnte nicht geändert werden",
+  "7810d54298dc35ed": "Design",
+  "366a0b63c228e964": "Design-Modus",
+  "c2f1bc4265edcca0": "Schaltet den Design-Modus aus",
+  "bf40cc00e4b0ca07": "Der Agent skizziert Ideen als Design-Karten"
 }

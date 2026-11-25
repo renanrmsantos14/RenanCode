@@ -13412,5 +13412,9 @@
   "27d76249d09eb69f": "Review guide ready",
   "faa3bb26abb39c93": "Review guide failed",
   "b7df38b7d8792d78": "Open guide",
-  "9e91e9a77b664e4e": "Could not start a review guide"
+  "9e91e9a77b664e4e": "Could not start a review guide",
+  "366a0b63c228e964": "Design mode",
+  "800a26b3337b2a1f": "Design mode is on. The agent sketches on the Design canvas.",
+  "e351383cb1cbd4f9": "Turn on Design mode so the agent sketches on the Design canvas",
+  "40d22229ae81e753": "Could not change Design mode."
 }

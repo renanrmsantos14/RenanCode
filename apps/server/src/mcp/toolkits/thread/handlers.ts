@@ -216,7 +216,7 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
     ),
   ),
   t3_thread_configure: McpToolAccess.either(
-    (input) => input.modelSelection === undefined,
+    (input) => input.modelSelection === undefined && input.design === undefined,
     McpToolAccess.reads((input) =>
       Effect.gen(function* () {
         const {
@@ -232,16 +232,36 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
     ),
     writesThread((input) =>
       Effect.gen(function* () {
-        const modelSelection = yield* required(input.modelSelection, "modelSelection");
         const {
           threads,
           projection: { thread },
         } = yield* readThread(input.threadId);
-        const type = modelSelectionCommandType(thread.providerInstanceId, modelSelection);
-        const result = yield* threads
-          .dispatch({ type, threadId: thread.id, commandId: yield* newCommandId(), modelSelection })
-          .pipe(Effect.mapError(dispatchFailure));
-        return { sequence: result.sequence };
+        const dispatch = (command: Parameters<typeof threads.dispatch>[0]) =>
+          threads.dispatch(command).pipe(Effect.mapError(dispatchFailure));
+        let last: { readonly sequence: number } | undefined;
+        if (input.design !== undefined) {
+          last = yield* dispatch({
+            type: "thread.interaction-mode.set",
+            threadId: thread.id,
+            commandId: yield* newCommandId(),
+            // Turning Design off leaves a Plan thread in Plan.
+            interactionMode: input.design
+              ? "design"
+              : thread.interactionMode === "design"
+                ? "default"
+                : thread.interactionMode,
+          });
+        }
+        if (input.modelSelection !== undefined) {
+          const modelSelection = input.modelSelection;
+          last = yield* dispatch({
+            type: modelSelectionCommandType(thread.providerInstanceId, modelSelection),
+            threadId: thread.id,
+            commandId: yield* newCommandId(),
+            modelSelection,
+          });
+        }
+        return { sequence: (yield* required(last, "modelSelection")).sequence };
       }),
     ),
   ),

@@ -7,6 +7,7 @@ import type {
 import { createModelSelection } from "@t3tools/shared/model";
 import { T, useGT, useMessages } from "gt-react";
 import { type ComponentProps, memo, useId, useRef, useState } from "react";
+import { SquareDashedIcon } from "lucide-react";
 
 import type { ContextWindowSnapshot } from "@t3tools/client-runtime/state/context-window";
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
@@ -26,6 +27,37 @@ export type RuntimeModeOption = {
   mode: RuntimeMode;
   disabledReason?: string;
 } & (typeof runtimeModeConfig)[RuntimeMode];
+export const ComposerDesignToggle = memo(function ComposerDesignToggle(props: {
+  pressed: boolean;
+  size?: "sm" | "xs";
+  onPressedChange: (pressed: boolean) => void;
+}) {
+  const gt = useGT();
+  const label = gt("Design mode");
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <ComposerControl
+            size={props.size ?? "sm"}
+            aria-label={label}
+            aria-pressed={props.pressed}
+            data-composer-design-toggle
+            onClick={() => props.onPressedChange(!props.pressed)}
+          />
+        }
+      >
+        <ComposerControlIcon icon={SquareDashedIcon} size={props.size ?? "sm"} />
+      </TooltipTrigger>
+      <TooltipPopup side="top">
+        {props.pressed
+          ? gt("Design mode is on. The agent sketches on the Design canvas.")
+          : gt("Turn on Design mode so the agent sketches on the Design canvas")}
+      </TooltipPopup>
+    </Tooltip>
+  );
+});
+
 export const ComposerFooterModeControls = memo(function ComposerFooterModeControls(props: {
   runtimeMode: RuntimeMode;
   runtimeModeOptions: ReadonlyArray<RuntimeModeOption>;

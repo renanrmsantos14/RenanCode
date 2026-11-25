@@ -13402,5 +13402,9 @@
   "27d76249d09eb69f": "Review-Leitfaden bereit",
   "faa3bb26abb39c93": "Review-Leitfaden fehlgeschlagen",
   "b7df38b7d8792d78": "Leitfaden öffnen",
-  "9e91e9a77b664e4e": "Review-Leitfaden konnte nicht gestartet werden"
+  "9e91e9a77b664e4e": "Review-Leitfaden konnte nicht gestartet werden",
+  "366a0b63c228e964": "Design-Modus",
+  "800a26b3337b2a1f": "Der Design-Modus ist aktiv. Der Agent skizziert auf der Design-Leinwand.",
+  "e351383cb1cbd4f9": "Design-Modus aktivieren, damit der Agent auf der Design-Leinwand skizziert",
+  "40d22229ae81e753": "Der Design-Modus konnte nicht geändert werden."
 }

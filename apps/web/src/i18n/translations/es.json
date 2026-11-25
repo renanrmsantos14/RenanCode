@@ -13398,5 +13398,9 @@
   "27d76249d09eb69f": "Guía de revisión lista",
   "faa3bb26abb39c93": "Falló la guía de revisión",
   "b7df38b7d8792d78": "Abrir guía",
-  "9e91e9a77b664e4e": "No se pudo iniciar una guía de revisión"
+  "9e91e9a77b664e4e": "No se pudo iniciar una guía de revisión",
+  "366a0b63c228e964": "Modo Design",
+  "800a26b3337b2a1f": "El modo Design está activado. El agente dibuja en el lienzo de Design.",
+  "e351383cb1cbd4f9": "Activa el modo Design para que el agente dibuje en el lienzo de Design",
+  "40d22229ae81e753": "No se pudo cambiar el modo Design."
 }

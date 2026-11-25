@@ -5760,5 +5760,10 @@
   "3ee30a50b70fffab": "Retirée par {by} : {reason}",
   "201490988858b511": "retirée par {by}",
   "3e19afa2072da269": "Ouvrir l'esquisse {title}",
-  "46d614fa7b4bf1e5": "Exécutions de workflow"
+  "46d614fa7b4bf1e5": "Exécutions de workflow",
+  "645cc12677b584a4": "Impossible de changer le mode Design",
+  "7810d54298dc35ed": "Design",
+  "366a0b63c228e964": "Mode Design",
+  "c2f1bc4265edcca0": "Désactive le mode Design",
+  "bf40cc00e4b0ca07": "L'agent esquisse ses idées sous forme de cartes de design"
 }
