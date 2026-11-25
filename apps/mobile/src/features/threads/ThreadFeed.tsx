@@ -119,6 +119,7 @@ import {
   contextCompactionTokenCounts,
   resolveViewedImageAsset,
   type ViewedImageRef,
+  viewedImageMarkdownSource,
 } from "@t3tools/client-runtime/work-log/presentation";
 import {
   renderCodexInlineDirectivesAsMarkdown,
@@ -3748,7 +3749,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       index: image.index,
     });
     const media = viewedImage
-      ? resolveMarkdownMediaPreview(image.path, {
+      ? resolveMarkdownMediaPreview(viewedImageMarkdownSource(image.path), {
           environmentId: props.environmentId,
           threadId: props.threadId,
           workspaceRoot: props.workspaceRoot,

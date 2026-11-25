@@ -1,19 +1,35 @@
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import type { DesignSketchReference } from "@t3tools/shared/design";
+import { Atom } from "effect/reactivity";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
 import "~/index.css";
 import { render } from "../../../test/render";
 
-const mocks = vi.hoisted(() => ({ placeSketch: vi.fn() }));
+const mocks = vi.hoisted(() => ({ placeSketch: vi.fn(), permitted: { value: true } }));
 
 vi.mock("~/env", () => ({ isElectron: true }));
 vi.mock(import("~/state/use-atom-command"), async (original) => ({
   ...(await original()),
   useAtomCommand: (() => mocks.placeSketch) as never,
 }));
+vi.mock(import("~/state/design"), async (original) => {
+  const actual = await original();
+  const granted = Atom.make(true);
+  const denied = Atom.make(false);
+  return {
+    ...actual,
+    designEnvironment: {
+      ...actual.designEnvironment,
+      placeSketch: {
+        ...actual.designEnvironment.placeSketch,
+        permissionAtom: () => (mocks.permitted.value ? granted : denied),
+      },
+    },
+  };
+});
 vi.mock(import("./sketchAssets"), () => ({
   useSketchPageUrl: () => "about:blank",
   useSketchThumbnailUrl: () => null,
@@ -38,7 +54,8 @@ const sketch = (id: string, label?: string): DesignSketchReference => ({
 });
 
 // The shared stores and the mocked command outlive a test, so each one starts by resetting them.
-function setup(options: { placed?: "Success" | "Failure" } = {}) {
+function setup(options: { placed?: "Success" | "Failure"; permitted?: boolean } = {}) {
+  mocks.permitted.value = options.permitted ?? true;
   mocks.placeSketch.mockReset().mockResolvedValue({ _tag: options.placed ?? "Success" });
   useDesignFocusStore.setState({ pending: {} });
   useRightPanelStore.setState({ byThreadKey: {} });
@@ -90,5 +107,15 @@ describe("DesignSketchTimelineRow on desktop", () => {
 
     await expect.element(page.getByRole("dialog")).toBeVisible();
     expect(useDesignFocusStore.getState().pending).toEqual({});
+  });
+
+  it("opens the viewer without placing when the client cannot write", async () => {
+    using _setup = setup({ permitted: false });
+    await using screen = await mount([sketch("a")]);
+
+    await userEvent.click(screen.getByRole("button", { name: "Open sketch Home a" }));
+
+    await expect.element(page.getByRole("dialog")).toBeVisible();
+    expect(mocks.placeSketch).not.toHaveBeenCalled();
   });
 });

@@ -1360,9 +1360,9 @@
   "a9b663922945a4fa": "Esta conexión no puede abrir un editor en este entorno.",
   "868596d482a1a2bd": "Abrir",
   "f58caaa68c09fbeb": "Abrir con",
-  "75b6d7c3bc9c72da": "No se pudo abrir en {editor}",
   "415d9fed5542d278": "No se pudo abrir el archivo",
   "1d1bbe5b700afe63": "No se puede mostrar el archivo",
+  "75b6d7c3bc9c72da": "No se pudo abrir en {editor}",
   "31dc19d033af2774": "No se puede abrir el enlace.",
   "029d8d0201aed231": "No se puede abrir Ajustes del Sistema.",
   "9af3083226778d3c": "Open VSX devolvió detalles del tema con formato incorrecto.",
@@ -1571,6 +1571,7 @@
   "6848f5bbb2bd9eec": "Documento PDF",
   "7873a79df0cf6d0e": "Página del navegador",
   "0b55696e27387e4e": "Pulsa Shift+Escape para salir de la página del navegador.",
+  "90dfebe26eb86b2d": "Opciones de selección de la página",
   "737d3c6bec93f9e6": "Elige archivos para la página",
   "e6a3fa7cfc14f86a": "Cuadro de diálogo del navegador",
   "61a552a67e9e3eac": "Respuesta al cuadro de diálogo",
@@ -1878,7 +1879,6 @@
   "a1fcc064a5cece14": "Copiar hilo",
   "2eb493c9e7a5fe9a": "Vincular una pull request al hilo",
   "3405c339d5fce935": "Open checklist",
-  "d9d919faea40ccfd": "Abrir Design",
   "abbbacfec60327d7": "Mostrar elementos vinculados",
   "67f5b13c3c7bcd40": "Compartir con un invitado",
   "d3f8a524d30d92fb": "Abrir el hilo continuado",
@@ -2473,8 +2473,6 @@
   "1354df9fb7278843": "Mira un simulador de iOS o un emulador de Android.",
   "f76f10942c4a91ed": "Checklist",
   "183de47c219c061e": "Track this project's modules and tasks, with due dates.",
-  "7810d54298dc35ed": "Diseño",
-  "37311e0add03806b": "Organiza en un lienzo las pantallas que el agente esboza.",
   "fdcd9643e2e63b15": "Haz una pregunta aparte mientras este hilo sigue trabajando.",
   "1944f04b75ddf26d": "Hilo en {label}",
   "314cfeebf191ba0d": "necesita aprobación",
@@ -3366,6 +3364,9 @@
   "b90e87f4b7125237": "Detalles",
   "16dc67f5429d8bae": "Trabajo en segundo plano",
   "2188eee8f81b0f51": "Abrir subagente",
+  "ec9e0be8ec693302": "Contraer todas las carpetas",
+  "b791dd86f7991cc0": "Expandir todas las carpetas",
+  "55b936e3014e16c8": "Abrir diff",
   "28bb7ce40dfd349a": "La salida de la terminal no se puede añadir a la respuesta de una pregunta.",
   "801cb8edea94b8f6": "Responde o descarta primero la pregunta y luego añádelo al chat.",
   "aa5507f20d94d5a9": "Actualiza este servidor para enviar archivos con las respuestas a preguntas",
@@ -3739,7 +3740,6 @@
   "18d166056c1ab6ff": "Dejar de compartir",
   "7a2d510eac9e4587": "El enlace de invitado caducó",
   "21888e302219891d": "Vista previa ampliada de {title}",
-  "2f29a7ca348cd2a0": "Mostrar {variant}",
   "419719298a7acaea": "Alejar",
   "ed8d5db95359cff4": "Restablecer zoom",
   "8c32e9085e525c19": "Acercar",
@@ -3754,6 +3754,7 @@
       "v": "v"
     }
   ],
+  "2f29a7ca348cd2a0": "Mostrar {variant}",
   "f483c3f170663a6e": [
     "Usar ",
     {
@@ -3887,6 +3888,21 @@
       "v": "v"
     },
     " salió de su página y se detuvo"
+  ],
+  "796b81c4875c4feb": [
+    "La app ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " necesita un servidor de ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    },
+    " más reciente en este entorno. Actualiza el servidor para usarla."
   ],
   "5ef18e4d39b398bf": [
     "No se puede cargar la app ",
@@ -4343,7 +4359,6 @@
   "42f634397f3960aa": "Mostrar en los detalles del hilo",
   "e3738ef0423ddfe7": "Restablecer al valor predeterminado",
   "ae10d34e11064fec": "Control de versiones",
-  "d6e524382c619981": "Abrir Design",
   "8ab1235557b08956": "Elige qué mostrar",
   "e8f045adbbaf328e": "Añadido al cuadro de mensaje",
   "e7de5d4c3cc68013": "La tarea está en el cuadro de mensaje. Revísala y envíala.",
@@ -4731,6 +4746,7 @@
   "7f0f9b1ee42892db": "La salida ya no está disponible.",
   "e470bb79fa74a6ae": "Imagen de salida de la herramienta",
   "e8c80b6d40c0944c": "Resultado de búsqueda",
+  "76cf478e5674fd12": "{count, plural, one {{count} coincidencia} other {{count} coincidencias}}",
   "8d1906900b5c95c7": [
     "salida ",
     {
@@ -4739,7 +4755,6 @@
       "v": "v"
     }
   ],
-  "55b936e3014e16c8": "Abrir diff",
   "83c29850641c8935": "En cola",
   "8402f099f88fd0e0": "En ejecución",
   "c5f5b73e92221a6a": "Esperando",
@@ -5376,13 +5391,6 @@
   "c752acb0b7088295": "Conectado",
   "a097631b7acab9d8": "Esperando aprobación…",
   "aabd9632196ee7e5": "Reconectando…",
-  "3e19afa2072da269": "Abrir boceto {title}",
-  "f0193fc422ae70cd": "Quitar del lienzo",
-  "43878fb3f7e42f0e": "Ajustar a la pantalla",
-  "bae2ec2de83b8e19": "Pantalla completa",
-  "fc5f9903c7a7a997": "Aún no hay bocetos. Pide al agente que diseñe una pantalla y la colocará aquí con design_sketch.",
-  "16e20108e473df2e": "Boceto sin miniatura",
-  "75810a0ab0d14ba4": "Design no está disponible en este entorno.",
   "a80895f122d7020f": "No se pudo abrir el enlace",
   "2a1758375b2701f3": "No se pudo añadir el backend",
   "6730fa8ae68fad99": "No se pudo añadir el backend.",
@@ -5666,8 +5674,6 @@
   "1601d7e39a52c48f": "Reintentar la carga del diff",
   "b7b137472adb6989": "Vista previa parcial del diff",
   "f0d79aa56f06663f": "Este archivo es demasiado grande para mostrarlo completo. Los recuentos incluyen todos los cambios.",
-  "ec9e0be8ec693302": "Contraer todas las carpetas",
-  "b791dd86f7991cc0": "Expandir todas las carpetas",
   "7fdde2b893ba1b9d": "Eliminado",
   "e58ce271d835b447": "Añadido",
   "07b9970b662ab70d": "Mostrar el código fuente de Mermaid",
@@ -6792,6 +6798,8 @@
   "1b381201aba745c2": "No se informó de ninguna comprobación",
   "a6d75a4380173c60": "Abrir comprobaciones: {summary}",
   "be3d1766bad18693": "Comprobaciones: {summary}",
+  "425e4a3d6c5c2867": "{count, plural, one {{count} con errores} other {{count} con errores}}",
+  "fd63b391898889f9": "{count, plural, one {{count} pendiente de acción} other {{count} pendientes de acción}}",
   "cb116c139cdace98": "No se informó de ninguna comprobación",
   "60b56e201607c7ec": "Los detalles de las comprobaciones están desactualizados. Actualiza la pull request para ponerlos al día.",
   "e74cd4e960cbb5e5": "Las líneas sin cambios no están disponibles en un archivo con líneas cortadas.",
@@ -7173,27 +7181,19 @@
     }
   ],
   "ce703d4ba40dc9b4": "Fusionando la pila...",
-  "8a883c4fbc127b68": "Activando la fusión automática de la pila...",
   "ac7feb9c583b02a0": "Haciendo rebase de la pila...",
   "cb0f63bbb0b68d94": "No se pudo fusionar la pila",
-  "5fb2a26ae31e8983": "No se pudo activar la fusión automática de la pila",
   "c8a943fa15a56b2b": "No se pudo hacer rebase de la pila",
   "ec22caeb8b949ed1": "El host rechazó el rebase. Un rebase se detiene en el primer commit que no se aplica limpiamente.",
   "ead3e2bac1a8d231": "Solicitud de fusión de la pila completada",
-  "986d0dcbf4dd0098": "Fusión automática de la pila activada",
   "d7079b5ac269c65e": "Rebase de la pila hecho",
   "5631b32be0ce48d3": "{host} fusionó la pila o la añadió a su cola de fusión.",
-  "f3ed1f63c8a3eef2": "{host} fusionará la pila hasta #{number} cuando se cumplan sus requisitos.",
-  "bd536a0a1754f6cb": "No se pudo cancelar la fusión automática de la pila",
-  "bb90ac3b2f3a72d5": "El host rechazó cancelar la fusión automática. Actualiza e inténtalo de nuevo.",
   "2d3b55018a54287e": "Comprobando la pila con el host…",
   "eea55205e46d2e3d": "Pila {number}, capa {position} de {size}",
   "b6f729119107a145": "{count, plural, one {Fusionar la pila hasta '#'{number} en {base} ({count} {term, select, mr {merge request} cr {solicitud de cambios} other {pull request}})} other {Fusionar la pila hasta '#'{number} en {base} ({count} {term, select, mr {merge requests} cr {solicitudes de cambios} other {pull requests}})}}",
   "d4bfcdc6bb7676a3": "{count, plural, one {¿Fusionar {count} {term, select, mr {merge request} cr {solicitud de cambios} other {pull request}}?} other {¿Fusionar {count} {term, select, mr {merge requests} cr {solicitudes de cambios} other {pull requests}}?}}",
-  "9c28753c777c37b7": "{count, plural, one {¿Fusionar automáticamente {count} {term, select, mr {merge request} cr {solicitud de cambios} other {pull request}}?} other {¿Fusionar automáticamente {count} {term, select, mr {merge requests} cr {solicitudes de cambios} other {pull requests}}?}}",
   "b9f2a24a3757f6c9": "{count, plural, one {¿Hacer rebase de {count} {term, select, mr {merge request} cr {solicitud de cambios} other {pull request}}?} other {¿Hacer rebase de {count} {term, select, mr {merge requests} cr {solicitudes de cambios} other {pull requests}}?}}",
   "d1bcf19eb2753fff": "Fusiona #{number} y sus capas sin fusionar de debajo en {base} mediante {method}. {host} comprueba sus reglas antes de fusionarlas o ponerlas en cola, y hace rebase del resto de la pila después de fusionar.",
-  "a86b49982e18784d": "Fusiona #{number} y sus capas sin fusionar de debajo en {base} mediante {method} cuando todas cumplan los requisitos de {host}. Puede ocurrir de inmediato.",
   "31d2f22f5a282719": "Hace rebase de las ramas remotas de abajo arriba sobre {base}. Esto reescribe el historial de las ramas y puede reiniciar las comprobaciones. Si una capa falla, las actualizaciones anteriores se mantienen.",
   "a0adf78733c368ae": "Fusionar pila",
   "140dc384c58b74f3": "Hacer rebase de la pila",
@@ -7228,19 +7228,8 @@
     },
     ")"
   ],
-  "b1afda5c964deee4": [
-    "Fusión automática de la pila (",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    ")"
-  ],
-  "33d18dda74f6d7b3": "Cancelar la fusión automática de la pila",
   "30440f98e929440a": "Hacer rebase de la pila",
   "13718a03e3144142": "Todas las capas que se fusionan deben estar abiertas y listas para revisión.",
-  "012c67c7f1a99e33": "Fusión automática de la pila",
   "4aafe1baf113088a": "Fusionar pila",
   "0292da19054f2a04": "Cargando la pila…",
   "583869e6df57abeb": "Esta pull request ya no está en una pila.",
@@ -7479,9 +7468,6 @@
   "9b0647af63a7d8c1": "Aprobó cambios anteriores",
   "abe99679224fea5e": "Solicitó cambios en una versión anterior",
   "6b31ad910278ff72": "Revisión de cambios anteriores descartada",
-  "425e4a3d6c5c2867": "{count, plural, one {{count} con errores} other {{count} con errores}}",
-  "fd63b391898889f9": "{count, plural, one {{count} pendiente de acción} other {{count} pendientes de acción}}",
-  "948185631ef288e6": "{count, plural, one {{count} en ejecución} other {{count} en ejecución}}",
   "aaf22207b2f18c45": "{workflows, plural, one {{workflows} flujo de trabajo} other {{workflows} flujos de trabajo}} y {checks, plural, one {{checks} comprobación} other {{checks} comprobaciones}} esperando una acción",
   "c51411813ebafcc1": "{count, plural, one {{count} flujo de trabajo esperando aprobación} other {{count} flujos de trabajo esperando aprobación}}",
   "4946778c8e18a1db": "{count, plural, one {{count} comprobación esperando una acción} other {{count} comprobaciones esperando una acción}}",
@@ -7690,9 +7676,20 @@
   "dc87902396b8ade4": "Letras, dígitos, '-' o '_'.",
   "251dfec07b7c3612": "Este driver no tiene configuración obligatoria. Puedes añadir la instancia ahora.",
   "08fe32f007e788f1": "Configurar manualmente",
+  "65300794c1edb929": "Token de portador (opcional)",
   "84eb2878dc17d3eb": "Clave de gestión",
   "7ac196c1e8175928": "Por defecto, el nombre de host del hub",
+  "0c026221dcd2820b": "Añadir una fuente de cuotas HTTP",
   "e3548407052e9e12": "Añadir un hub de CLIProxyAPI",
+  "d185c750156b2121": [
+    "Consulta las cuotas desde un punto de conexión en ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    "."
+  ],
   "432e85a50e2e7964": [
     "Muestra la cuota de cada cuenta que agrupa el hub, junto a los proveedores en",
     " ",
@@ -7703,7 +7700,9 @@
     },
     ". La clave se queda en ese servidor."
   ],
+  "2324770ba91371ac": "URL del punto de conexión",
   "556a695b117565ac": "URL del hub",
+  "e4e5b75bba51396c": "Token de portador (opcional)",
   "e62cedcbcdbafc75": "Clave de gestión",
   "f1b3d0634ec035cb": "Etiqueta (opcional)",
   "52814dd6f7d0a15c": "Añadir hub",
@@ -7715,7 +7714,6 @@
   "d5dc7576fd468be7": "Cómodo",
   "3141408bf3874e64": "Ancho",
   "831badd18b64547e": "Completo",
-  "6287212fed0deec6": "Igual que el chat",
   "a96255594ebf2ce3": "Palabra",
   "1ee44eb65708a8aa": "Barras",
   "7670f789e0d8672a": "Solo los temas integrados muestran ilustración, así que este tema muestra la etiqueta de versión.",
@@ -7733,11 +7731,12 @@
   "03338c6aec8edacd": "Define cuánto pueden crecer los mensajes y el cuadro de mensaje en pantallas grandes.",
   "92785adb251da88c": "Restablecer el ancho del chat al valor predeterminado",
   "4d457bcce0c0e272": "Ancho del chat",
-  "81f3a196537bbee0": "Cómodo (predeterminado)",
+  "7d7f65967cc821e3": "Ancho de la vista previa HTML",
   "70ce0af7f78d5957": "Permite que las vistas previas HTML de un chat sean más anchas que sus mensajes, que siguen centrados.",
   "f2b119bf02ae2558": "Restablecer el ancho de la vista previa HTML al valor predeterminado",
-  "7d7f65967cc821e3": "Ancho de la vista previa HTML",
+  "6287212fed0deec6": "Igual que el chat",
   "dc8e85ea0364649c": "Igual que el chat (predeterminado)",
+  "81f3a196537bbee0": "Cómodo (predeterminado)",
   "e79e5388f669495f": "Muestra el esfuerzo de razonamiento en el cuadro de mensaje por su nombre, como Alto, o con barras.",
   "7f0365c7e4e8bcbf": "Restablecer la visualización del esfuerzo al valor predeterminado",
   "14bf40f765172a50": "Visualización del esfuerzo",
@@ -8986,7 +8985,7 @@
   "a9cdd8c7073be920": "Paleta de comandos: alternar",
   "4e0943e8c7a465d1": "Selector de archivos: alternar",
   "df5fdcdf26a6b52a": "Búsqueda en el proyecto: alternar",
-  "a8ff6d33b060736f": "Uso: abrir",
+  "0ca6fd2b8fcab2c3": "Uso: Mostrar u ocultar",
   "a513d51b71b95674": "Tema: seleccionar",
   "1ffd8427452372e1": "Apariencia: alternar",
   "3a3bb4a7551a87cc": "Editor de temas: alternar",
@@ -9769,6 +9768,7 @@
   "8da6072f5854cc90": "Implementación",
   "1738f499d0c9cf60": "Investigación",
   "4cd3a0ae6907eec5": "Revisión",
+  "7810d54298dc35ed": "Diseño",
   "119f85abd1a42c19": "Pruebas",
   "eb2d10b70802ea9e": "Modelo del miembro",
   "118ac617fe13e248": "Quitar miembro",
@@ -11784,10 +11784,11 @@
       "v": "v"
     }
   ],
-  "f54364b854a07918": "No hay hubs configurados.",
+  "39f64d971ba424b5": "No hay fuentes de uso configuradas.",
+  "dbd877abdc2c7c81": "Fuente de cuotas HTTP",
   "4cf6a373a7535324": "{name} · Deshabilitado",
-  "1d1e9cda847bd398": "La clave de gestión del hub se elimina de este servidor. Sus cuentas salen de la vista Límites; el hub en sí no se toca. Vuelve a añadirlo con la URL y la clave para recuperarlas.",
-  "c9bee4f93481b77a": "Quitar hub",
+  "c792e744936dbe1b": "Añadir fuente HTTP",
+  "4032a03ee5301037": "La conexión guardada y sus credenciales se eliminan de este entorno.",
   "0424112d5a0ecd71": "Automático",
   "3f0e1b77e45d53a9": "Toca para alternar, mantén para hablar",
   "45928549c050a1b4": "Mantener",
@@ -12128,6 +12129,10 @@
   "3b8a7cb01823503d": "beta claude code web nube cloud sesiones remotas claude.ai barra lateral",
   "6d672d22f3bf5318": "beta claude cloud nube auto enrutar tarea máquina local recursos push",
   "bc0b409d89ce086e": "beta flujo de trabajo workflow ejecuciones duraderas automatización pasos programación webhook carpeta",
+  "933dabf0700708af": "Cuántas ejecuciones omitidas conserva cada flujo de trabajo en su historial. Las ejecuciones omitidas más antiguas se eliminan; las que hicieron algo se conservan siempre.",
+  "f172d7e5deb24f75": "Restablecer las ejecuciones omitidas conservadas al valor predeterminado",
+  "ba94015389f327bc": "Ejecuciones omitidas conservadas",
+  "4b2669dcdb7d3776": "workflow flujo historial retención eliminar antiguas ejecuciones omitidas webhook history retention skipped runs",
   "4a21cf825a2045b0": "beta tab autocompletar predecir siguiente mensaje claude codex texto fantasma",
   "fea2dc36585c4a20": "Hosts de dispositivos Simlock (alfa)",
   "9d834d178130180e": "beta alfa simlock callstack simulador emulador ios android grupo préstamo gateway",
@@ -12353,12 +12358,15 @@
   "37ffec8201f153c1": "Falló",
   "984b361806ce8d25": "Reactivado",
   "c6e8abc00ae470d2": "Hecho",
+  "353b08f4363dbb2c": "Pendiente",
   "f31a95961de19433": "Incidencia {key}: {title}, {state}",
   "2dd9d295c882ef65": "{count, plural, one {{count} incidencia vinculada} other {{count} incidencias vinculadas}}",
   "8cf699ae75fd8067": "Fijados",
   "be451f475c514b37": "Descartar notificación de reactivación",
   "e9ced65134f2f36c": "Reactivar hilo ahora",
   "37c6da576bc139ce": "Marcar el hilo como en pruebas",
+  "374dac09151d4578": "Pendiente",
+  "a8f30f631e2b010e": "Esperando para sincronizar con su entorno",
   "aca5896600bf173e": "Ahora mismo tienes otra rama en el checkout.",
   "f665b5be60d8c144": [
     "Traspasado desde ",
@@ -12427,6 +12435,7 @@
   "c1a9fe8e24876f1d": "{count, plural, one {Se interrumpirá {count} hilo en ejecución.} other {Se interrumpirán {count} hilos en ejecución.}}",
   "ecdf5f108ecc71d0": "{count, plural, one {{count} puede reanudarse después del reinicio.} other {{count} pueden reanudarse después del reinicio.}}",
   "0576c87870fb6389": "Actualizar",
+  "948185631ef288e6": "{count, plural, one {{count} en ejecución} other {{count} en ejecución}}",
   "3d9a2f6b9c114039": "Proveedores",
   "f4baf8deafbb227d": "Omitido",
   "f938bb483eb3d189": "se reinicia el último",
@@ -12436,9 +12445,10 @@
   "2986c81f108d6958": "Líneas cambiadas",
   "c523c744eaa0855e": "Agente",
   "eae844f05caa42d2": "Máquina remota",
-  "f13e08bd3614112e": "actualiza T3 Code en ese equipo",
   "9bca02be2b4d612a": "sin conexión",
   "2dcc418b6a13b83c": "requiere una actualización manual",
+  "f13e08bd3614112e": "actualiza T3 Code en ese equipo",
+  "3c3348c36a2695af": "cambia el canal de actualizaciones en ese equipo",
   "fa8faa732a2688ef": "en el canal {channel}",
   "e65649675cb4cbaa": "desactivado",
   "a1e7c08d9ef315c7": "aún cargando",
@@ -12455,7 +12465,6 @@
   "3ac986d604a2ad62": "Esta app no puede cambiar: su servidor no está conectado, así que no se puede comprobar su base de datos.",
   "3bbb6e9ade0cf7e1": "ejecuta `{command}` allí",
   "e7194946af611278": "ejecuta una compilación preliminar",
-  "3c3348c36a2695af": "cambia el canal de actualizaciones en ese equipo",
   "f5eac23351c99297": "cambia la app de Mac en ese Mac",
   "d7444fbde9a80f04": "<1 min",
   "09c1af20e9323765": "Reiniciar en {seconds} s",
@@ -12498,6 +12507,7 @@
   "9c015d3d034316cb": "Usa las flechas para ajustar el valor enfocado. Mantén Shift para pasos más grandes. Usa Inicio y Fin para el mínimo y el máximo. Pulsa Tab para pasar entre saturación y brillo.",
   "8639d5532561f87f": "Cerrar",
   "e1186ad82ee08b33": "Cerrar",
+  "a4579e548b768663": "Mostrar barra lateral",
   "a1b11a1cf39c9dc9": "Cambiar el tamaño de la barra lateral",
   "c557090df5722838": "Alternar barra lateral",
   "bbde430e56272901": "Arrastra para cambiar el tamaño de la barra lateral",
@@ -12548,6 +12558,28 @@
   "8bcab2ef61de6518": "Límite de 0 $",
   "a16b48709357a5a7": "Gestionar uso",
   "a00e74aaa421c524": "restante",
+  "0e34c3076c08feb2": [
+    {
+      "t": "span",
+      "i": 1,
+      "c": [
+        "↻ +",
+        {
+          "i": 2,
+          "k": "_gt_value_2",
+          "v": "v"
+        },
+        "%"
+      ]
+    },
+    " ",
+    "en ",
+    {
+      "i": 3,
+      "k": "_gt_value_3",
+      "v": "v"
+    }
+  ],
   "8bd6f07136317c8f": "Ningún proveedor de los entornos seleccionados informa de límites de suscripción.",
   "87f5d0c61b335f38": "Consulta el uso en ChatGPT con tu cuenta conectada.",
   "5b4c71b36b979e80": "Coste",
@@ -12990,9 +13022,13 @@
   "5459bf696a187c26": "No se pudieron cargar las ejecuciones de flujos de trabajo",
   "d57c35d43b0f163a": "Esta ejecución no está aquí",
   "b9aae2f7cdb1a379": "Aún no hay ejecuciones de flujos de trabajo",
+  "45a94c724845ec1d": "Otras",
   "8f15f66e545af7c0": "Qué ejecuciones",
   "b6409289e0c9a4dd": "Flujo de trabajo",
   "035cb02ca1ae4952": "Los {count} flujos de trabajo",
+  "8eeb9cb07d7c59e1": "Tipo de pregunta",
+  "e4d1316c85ed7066": "No hay preguntas de este tipo esperándote.",
+  "e2131cbec8accfe3": "Todos los tipos",
   "46d614fa7b4bf1e5": "Ejecuciones de flujos de trabajo",
   "1c635faa2fb45b8b": "Aún no se ha ejecutado.",
   "156ff7b625287a1e": "Ocultar omitidos",
@@ -13034,6 +13070,7 @@
     }
   ],
   "5d8d278ff828102d": "Todos los flujos de trabajo",
+  "3b0f1659172107e4": "Todos los tipos",
   "39459da07479f482": "Agente",
   "7741243632056b81": "{step} · transcripción",
   "c512071143a5ba32": "Este hilo ya no existe.",
@@ -13064,16 +13101,6 @@
   "5d18537f82794deb": "El entorno local está desactivado.",
   "d5ef094f40aedece": "Entrada de la terminal",
   "f7046b10d49caab6": "Historial de desplazamiento de la terminal",
-  "32aebea75c7d222a": "Loading image...",
-  "bf41406a4712f977": "Show image {position} of {total}",
-  "37b84080ae64546b": "Show chat",
-  "0954e04a52635abd": "Hide chat",
-  "054b672ee8b1b99a": "Image review",
-  "9e0b11439d738151": "Close image review",
-  "9684c1071cc5a436": "Previous image",
-  "5858a4971b15faff": "Next image",
-  "67a30c98d0ea438d": "Expand chat",
-  "3d54dd7aa4cd6da0": "Resize chat",
   "92efb7efc26f6f06": "Grabando dictado",
   "2ddb62c94293eb14": "Cancelar dictado",
   "f47533fed3606ffb": "Terminar dictado",
@@ -13193,5 +13220,155 @@
   "27d76249d09eb69f": "Guía de revisión lista",
   "faa3bb26abb39c93": "Falló la guía de revisión",
   "b7df38b7d8792d78": "Abrir guía",
-  "9e91e9a77b664e4e": "No se pudo iniciar una guía de revisión"
+  "9e91e9a77b664e4e": "No se pudo iniciar una guía de revisión",
+  "8a883c4fbc127b68": "Activando la fusión automática de la pila...",
+  "5fb2a26ae31e8983": "No se pudo activar la fusión automática de la pila",
+  "986d0dcbf4dd0098": "Fusión automática de la pila activada",
+  "f3ed1f63c8a3eef2": "{host} fusionará la pila hasta #{number} cuando se cumplan sus requisitos.",
+  "bd536a0a1754f6cb": "No se pudo cancelar la fusión automática de la pila",
+  "bb90ac3b2f3a72d5": "El host rechazó cancelar la fusión automática. Actualiza e inténtalo de nuevo.",
+  "9c28753c777c37b7": "{count, plural, one {¿Fusionar automáticamente {count} {term, select, mr {merge request} cr {solicitud de cambios} other {pull request}}?} other {¿Fusionar automáticamente {count} {term, select, mr {merge requests} cr {solicitudes de cambios} other {pull requests}}?}}",
+  "a86b49982e18784d": "Fusiona #{number} y sus capas sin fusionar de debajo en {base} mediante {method} cuando todas cumplan los requisitos de {host}. Puede ocurrir de inmediato.",
+  "b1afda5c964deee4": [
+    "Fusión automática de la pila (",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ")"
+  ],
+  "33d18dda74f6d7b3": "Cancelar la fusión automática de la pila",
+  "012c67c7f1a99e33": "Fusión automática de la pila",
+  "32aebea75c7d222a": "Loading image...",
+  "bf41406a4712f977": "Show image {position} of {total}",
+  "37b84080ae64546b": "Show chat",
+  "0954e04a52635abd": "Hide chat",
+  "054b672ee8b1b99a": "Image review",
+  "9e0b11439d738151": "Close image review",
+  "9684c1071cc5a436": "Previous image",
+  "5858a4971b15faff": "Next image",
+  "67a30c98d0ea438d": "Expand chat",
+  "3d54dd7aa4cd6da0": "Resize chat",
+  "4a18481bea4b4ad5": "Nuevo dispositivo conectado a {environmentLabel}",
+  "4144ab6aa487528a": "{device} se conectó a través de {product}. ¿No fuiste tú? Revísalo.",
+  "a10cfdb27152c757": "{count, plural, one {{count} dispositivo se conectó} other {{count} dispositivos se conectaron}} a través de {product}. ¿No fuiste tú? Revísalos.",
+  "e0856d6a402ad821": "La política de {organization} no permite comandos de diseño de worktrees de proyectos.",
+  "206811f6f441bfc7": "Este proyecto prepara los worktrees con su propio comando, que nadie ha aprobado tal como está escrito ahora. Esta conexión no puede aprobarlo: apruébalo desde un cliente que pueda usar el terminal.",
+  "b8087c9a70c26da9": "No se pudo aprobar el comando de diseño de worktrees.",
+  "49eda70cfd56e621": "Se ejecuta cuando empieza un hilo en un worktree y cuando se restaura su carpeta",
+  "188ccaa1199f5611": "Se ejecuta cuando se elimina el worktree de un hilo",
+  "7e8476e7306acabe": "¿Permitir que este proyecto ejecute sus comandos de worktree?",
+  "8e11914556fd8b13": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " prepara los hilos en worktrees con sus propios comandos de ",
+    {
+      "t": "code",
+      "i": 2,
+      "c": "t3.json"
+    },
+    ". Se ejecutan en la máquina de este entorno con tus permisos, fuera de cualquier sandbox de agente. Se te volverá a preguntar cada vez que cambie su texto."
+  ],
+  "46807acd02a4ff72": "Aprobar y continuar",
+  "a9cb97fca6a6576b": "Comando de creación",
+  "90f45a354884ccdd": "Comando de eliminación",
+  "78e308ada516928b": "No se pudo aprobar el comando",
+  "a0c772d32a233da6": "No se pudo revocar la aprobación",
+  "0cdc8cdbed3e5eae": "Diseño de worktrees",
+  "c17b25519e2b194e": "No se pudieron cargar los comandos de diseño de worktrees",
+  "5ccd5614c65f8d1f": "Revocar la aprobación del comando {kind}",
+  "80c3794a5fa12f3a": "Aprobar el comando {kind}",
+  "f206891e124c77b0": [
+    "El ",
+    {
+      "t": "code",
+      "i": 1,
+      "c": "t3.json"
+    },
+    " de este proyecto prepara los hilos en worktrees con sus propios comandos. Se ejecutan en la máquina de este entorno con tus permisos y solo tal como se aprobaron aquí: un comando cuyo texto cambia necesita aprobación de nuevo."
+  ],
+  "f6a91589456cca50": "Aprobado",
+  "c92657bb7f2293ff": "Necesita aprobación",
+  "f1e5c1be1ac92361": "Aprobar",
+  "fcb5f3c4d4753326": "Esta conexión no puede aprobar comandos. Usa un cliente que pueda usar el terminal.",
+  "4e96712d839ccbff": "{who} dijo {choice}",
+  "19097cfb8f5a79cf": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " dijo",
+    " ",
+    {
+      "t": "span",
+      "i": 2,
+      "c": {
+        "i": 3,
+        "k": "_gt_value_3",
+        "v": "v"
+      }
+    },
+    "."
+  ],
+  "e7bbf693910057bf": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " dijo",
+    " ",
+    {
+      "t": "span",
+      "i": 2,
+      "c": {
+        "i": 3,
+        "k": "_gt_value_3",
+        "v": "v"
+      }
+    },
+    ": ",
+    {
+      "i": 4,
+      "k": "_gt_value_4",
+      "v": "v"
+    }
+  ],
+  "3759768c5d342c22": [
+    "respondida",
+    " ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "e114d37b32ab0dc7": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " necesita un motivo."
+  ],
+  "91aadfc843c600de": "Verificar cuenta de Google",
+  "201490988858b511": "retirada por {by}",
+  "99451a5d2d40440f": "Retirada por {by}.",
+  "3ee30a50b70fffab": "Retirada por {by}: {reason}",
+  "92e129bf413a1220": "retirada",
+  "d9d919faea40ccfd": "Abrir Design",
+  "37311e0add03806b": "Organiza en un lienzo las pantallas que el agente esboza.",
+  "d6e524382c619981": "Abrir Design",
+  "3e19afa2072da269": "Abrir boceto {title}",
+  "f0193fc422ae70cd": "Quitar del lienzo",
+  "43878fb3f7e42f0e": "Ajustar a la pantalla",
+  "bae2ec2de83b8e19": "Pantalla completa",
+  "fc5f9903c7a7a997": "Aún no hay bocetos. Pide al agente que diseñe una pantalla y la colocará aquí con design_sketch.",
+  "16e20108e473df2e": "Boceto sin miniatura",
+  "75810a0ab0d14ba4": "Design no está disponible en este entorno."
 }

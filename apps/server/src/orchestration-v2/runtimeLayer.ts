@@ -435,6 +435,7 @@ const layerEffectExecutorProvided = EffectWorker.layerExecutor.pipe(
       layerNextActionSuggestionProvided,
       layerThreadManagementProvided,
       ProjectionStore.layer,
+      layerProjectionMaintenanceProvided,
     ),
   ),
 );
