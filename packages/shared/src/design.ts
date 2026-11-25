@@ -39,6 +39,23 @@ export const designSketchReference = (sketch: {
   ...(sketch.label === null ? {} : { label: sketch.label }),
 });
 
+const DESIGN_FRAME_DEVICE_SIZES = {
+  desktop: { width: 1440, height: 900 },
+  tablet: { width: 768, height: 1024 },
+  mobile: { width: 390, height: 844 },
+} as const;
+
+/** A preset's fixed size, or the custom size clamped to what a Frame can hold. */
+export const designFrameSize = (
+  device: "desktop" | "tablet" | "mobile" | "custom",
+  custom?: { readonly width?: number | undefined; readonly height?: number | undefined },
+) => {
+  if (device !== "custom") return DESIGN_FRAME_DEVICE_SIZES[device];
+  const clamp = (value: number | undefined, fallback: number) =>
+    Math.min(4000, Math.max(200, Math.round(value ?? fallback)));
+  return { width: clamp(custom?.width, 1280), height: clamp(custom?.height, 800) };
+};
+
 export interface DesignRect {
   readonly x: number;
   readonly y: number;

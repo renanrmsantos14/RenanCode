@@ -33,7 +33,7 @@ export const DesignSketch = Schema.Struct({
 export type DesignSketch = typeof DesignSketch.Type;
 
 /** A sketch placed on a thread canvas. */
-export const DesignCanvasNode = Schema.Struct({
+export const DesignSketchNode = Schema.Struct({
   id: DesignNodeId,
   kind: Schema.Literal("sketch"),
   sketchId: DesignSketchId,
@@ -43,6 +43,33 @@ export const DesignCanvasNode = Schema.Struct({
   height: DesignLength,
   z: Schema.Int,
 });
+export type DesignSketchNode = typeof DesignSketchNode.Type;
+
+export const DesignFrameDevice = Schema.Literals(["desktop", "tablet", "mobile", "custom"]);
+export type DesignFrameDevice = typeof DesignFrameDevice.Type;
+
+const DesignFrameUrl = Schema.String.check(
+  Schema.isMaxLength(2048),
+  Schema.isPattern(/^https?:\/\/\S+$/i),
+);
+
+/** A running page placed on a thread canvas. Only the focused Frame is live; the others show a saved print. */
+export const DesignFrameNode = Schema.Struct({
+  id: DesignNodeId,
+  kind: Schema.Literal("frame"),
+  url: DesignFrameUrl,
+  device: DesignFrameDevice,
+  title: DesignTitle,
+  snapshotAttachmentId: Schema.NullOr(DesignAttachmentId),
+  x: DesignLength,
+  y: DesignLength,
+  width: DesignLength,
+  height: DesignLength,
+  z: Schema.Int,
+});
+export type DesignFrameNode = typeof DesignFrameNode.Type;
+
+export const DesignCanvasNode = Schema.Union([DesignSketchNode, DesignFrameNode]);
 export type DesignCanvasNode = typeof DesignCanvasNode.Type;
 
 export const DesignViewport = Schema.Struct({
@@ -89,6 +116,42 @@ export const DesignPlaceSketchInput = Schema.Struct({
   sketchId: DesignSketchId,
 });
 export type DesignPlaceSketchInput = typeof DesignPlaceSketchInput.Type;
+
+const DesignFrameSize = Schema.Int.check(Schema.isBetween({ minimum: 200, maximum: 4000 }));
+
+export const DesignAddFrameInput = Schema.Struct({
+  threadId: ThreadId,
+  url: DesignFrameUrl,
+  device: DesignFrameDevice,
+  title: Schema.optionalKey(DesignTitle),
+  /** Only read for the custom device; presets have fixed sizes. */
+  width: Schema.optionalKey(DesignFrameSize),
+  height: Schema.optionalKey(DesignFrameSize),
+  /** The Frame opened for the thread's dev server. The server creates it once per thread. */
+  auto: Schema.optionalKey(Schema.Boolean),
+});
+export type DesignAddFrameInput = typeof DesignAddFrameInput.Type;
+
+export const DesignUpdateFrameInput = Schema.Struct({
+  threadId: ThreadId,
+  nodeId: DesignNodeId,
+  url: Schema.optionalKey(DesignFrameUrl),
+  device: Schema.optionalKey(DesignFrameDevice),
+  title: Schema.optionalKey(DesignTitle),
+  width: Schema.optionalKey(DesignFrameSize),
+  height: Schema.optionalKey(DesignFrameSize),
+});
+export type DesignUpdateFrameInput = typeof DesignUpdateFrameInput.Type;
+
+const DESIGN_FRAME_SNAPSHOT_MAX_BASE64_LENGTH = 3_000_000;
+
+export const DesignSetFrameSnapshotInput = Schema.Struct({
+  threadId: ThreadId,
+  nodeId: DesignNodeId,
+  /** PNG, base64 without a data: prefix. */
+  png: Schema.String.check(Schema.isMaxLength(DESIGN_FRAME_SNAPSHOT_MAX_BASE64_LENGTH)),
+});
+export type DesignSetFrameSnapshotInput = typeof DesignSetFrameSnapshotInput.Type;
 
 export class DesignError extends Schema.TaggedError<DesignError>()("DesignError", {
   message: Schema.String,

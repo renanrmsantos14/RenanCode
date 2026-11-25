@@ -2,6 +2,7 @@ import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import {
+  type DesignFrameNode,
   type DesignSketchId,
   type OrchestrationV2ThreadShell,
   ProjectId,
@@ -35,6 +36,9 @@ const shells: Record<string, OrchestrationV2ThreadShell> = {
 };
 
 const PNG = Buffer.from("png-bytes").toString("base64");
+const PNG_SIGNATURE_B64 = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString(
+  "base64",
+);
 
 const makeHtmlRender = (options: { readonly chrome: boolean }) =>
   Layer.mock(HtmlRender.HtmlRender)({
@@ -302,6 +306,163 @@ it.effect("deleting a thread drops its nodes and viewport but keeps the sketches
         sketchId: sketch!.sketchId as DesignSketchId,
       });
       assert.strictEqual((yield* service.snapshot(threadB)).nodes.length, 1);
+    }),
+  ),
+);
+
+const frameInput = (threadId: ThreadId, extra?: object) => ({
+  threadId,
+  url: "http://localhost:5173/",
+  device: "desktop" as const,
+  ...extra,
+});
+
+it.effect("adds Frames with preset sizes below the sketches and updates them", () =>
+  withService({ chrome: true }, (service) =>
+    Effect.gen(function* () {
+      yield* service.createSketches({
+        threadId: threadA,
+        projectId: app,
+        pages: [page("A", { height: 300 })],
+      });
+      const desktop = (yield* service.addFrame(frameInput(threadA)))!;
+      const mobile = (yield* service.addFrame(
+        frameInput(threadA, { device: "mobile", url: "http://localhost:5173/login" }),
+      ))!;
+      assert.strictEqual(desktop.kind, "frame");
+      assert.deepStrictEqual([desktop.width, desktop.height], [1440, 900]);
+      assert.deepStrictEqual([mobile.width, mobile.height], [390, 844]);
+      assert.strictEqual(desktop.title, "localhost:5173");
+      assert.strictEqual(mobile.title, "localhost:5173/login");
+      assert.isTrue(desktop.y >= 300);
+      assert.strictEqual(desktop.snapshotAttachmentId, null);
+      const custom = (yield* service.addFrame(
+        frameInput(threadA, { device: "custom", width: 500, height: 600 }),
+      ))!;
+      assert.deepStrictEqual([custom.width, custom.height], [500, 600]);
+
+      yield* service.updateFrame({
+        threadId: threadA,
+        nodeId: mobile.id,
+        device: "tablet",
+        title: "Login",
+      });
+      const updated = (yield* service.snapshot(threadA)).nodes.find(
+        (node) => node.id === mobile.id,
+      ) as DesignFrameNode;
+      assert.deepStrictEqual(
+        [updated.device, updated.width, updated.height],
+        ["tablet", 768, 1024],
+      );
+      assert.strictEqual(updated.title, "Login");
+      assert.strictEqual((yield* service.snapshot(threadA)).sketches.length, 1);
+    }),
+  ),
+);
+
+it.effect("refuses a Frame in a thread that does not exist", () =>
+  withService({ chrome: true }, (service) =>
+    Effect.gen(function* () {
+      const refused = yield* service
+        .addFrame(frameInput(ThreadId.make("thread:missing")))
+        .pipe(Effect.flip);
+      assert.include(refused.message, "not found");
+    }),
+  ),
+);
+
+it.effect("makes the automatic Frame once per thread, even after it is removed", () =>
+  withService({ chrome: true }, (service) =>
+    Effect.gen(function* () {
+      const first = yield* service.addFrame(frameInput(threadA, { auto: true }));
+      assert.isNotNull(first);
+      assert.isNull(yield* service.addFrame(frameInput(threadA, { auto: true })));
+      yield* service.removeNode({ threadId: threadA, nodeId: first!.id });
+      assert.isNull(yield* service.addFrame(frameInput(threadA, { auto: true })));
+      assert.strictEqual((yield* service.snapshot(threadA)).nodes.length, 0);
+      // A Frame the user adds is not automatic, and another thread has its own.
+      assert.isNotNull(yield* service.addFrame(frameInput(threadA)));
+      assert.isNotNull(yield* service.addFrame(frameInput(threadB, { auto: true })));
+    }),
+  ),
+);
+
+it.effect("keeps a Frame print under the thread prefix and replaces it on every save", () =>
+  withService({ chrome: true }, (service) =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const config = yield* ServerConfig.ServerConfig;
+      const frame = (yield* service.addFrame(frameInput(threadA)))!;
+      const pngPath = (id: string | null) => `${config.attachmentsDir}/${id}.png`;
+
+      yield* service.setFrameSnapshot({
+        threadId: threadA,
+        nodeId: frame.id,
+        png: PNG_SIGNATURE_B64,
+      });
+      const first = ((yield* service.snapshot(threadA)).nodes[0] as DesignFrameNode)
+        .snapshotAttachmentId;
+      assert.isNotNull(first);
+      assert.isFalse(first!.startsWith("design-"));
+      assert.isTrue(yield* fileSystem.exists(pngPath(first)));
+
+      yield* service.setFrameSnapshot({
+        threadId: threadA,
+        nodeId: frame.id,
+        png: PNG_SIGNATURE_B64,
+      });
+      const second = ((yield* service.snapshot(threadA)).nodes[0] as DesignFrameNode)
+        .snapshotAttachmentId;
+      assert.notStrictEqual(second, first);
+      assert.isFalse(yield* fileSystem.exists(pngPath(first)));
+
+      // A new page makes the print wrong, so it goes.
+      yield* service.updateFrame({
+        threadId: threadA,
+        nodeId: frame.id,
+        url: "http://localhost:5173/x",
+      });
+      assert.isNull(
+        ((yield* service.snapshot(threadA)).nodes[0] as DesignFrameNode).snapshotAttachmentId,
+      );
+      assert.isFalse(yield* fileSystem.exists(pngPath(second)));
+
+      yield* service.setFrameSnapshot({
+        threadId: threadA,
+        nodeId: frame.id,
+        png: PNG_SIGNATURE_B64,
+      });
+      const third = ((yield* service.snapshot(threadA)).nodes[0] as DesignFrameNode)
+        .snapshotAttachmentId;
+      yield* service.removeNode({ threadId: threadA, nodeId: frame.id });
+      assert.isFalse(yield* fileSystem.exists(pngPath(third)));
+    }),
+  ),
+);
+
+it.effect("rejects a print that is not a PNG or belongs to no Frame of the thread", () =>
+  withService({ chrome: true }, (service) =>
+    Effect.gen(function* () {
+      const frame = (yield* service.addFrame(frameInput(threadA)))!;
+      const notPng = yield* service
+        .setFrameSnapshot({ threadId: threadA, nodeId: frame.id, png: PNG })
+        .pipe(Effect.flip);
+      assert.include(notPng.message, "PNG");
+      const otherThread = yield* service
+        .setFrameSnapshot({ threadId: threadB, nodeId: frame.id, png: PNG_SIGNATURE_B64 })
+        .pipe(Effect.flip);
+      assert.include(otherThread.message, "not found");
+    }),
+  ),
+);
+
+it.effect("deleting a thread drops its Frames and lets the automatic one be made again", () =>
+  withService({ chrome: true }, (service) =>
+    Effect.gen(function* () {
+      yield* service.addFrame(frameInput(threadA, { auto: true }));
+      yield* service.cleanupThread(threadA);
+      assert.strictEqual((yield* service.snapshot(threadA)).nodes.length, 0);
+      assert.isNotNull(yield* service.addFrame(frameInput(threadA, { auto: true })));
     }),
   ),
 );
