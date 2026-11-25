@@ -765,6 +765,13 @@ export const layer = Layer.effect(
       }
       const moved = new Set(moves.map((move) => move.nodeId));
       if (moved.size !== moves.length) return yield* fail("A node can be moved only once.");
+      if (group !== undefined && group.label.trim() === "") {
+        return yield* fail("A group needs a label.");
+      }
+      const movedAndGrouped = groupIds.find((id) => moved.has(id));
+      if (movedAndGrouped !== undefined) {
+        return yield* fail(`Node ${movedAndGrouped} cannot be moved and grouped in the same call.`);
+      }
       const removed = new Set<string>(remove);
       const clash = [...moved, ...groupIds].find((id) => removed.has(id));
       if (clash !== undefined) return yield* fail(`Node ${clash} cannot be moved and removed.`);
@@ -844,7 +851,11 @@ export const layer = Layer.effect(
       const rows = yield* sql<SketchRow & { readonly rid: number }>`
         SELECT s.*, s.rowid AS rid FROM design_sketches s
         WHERE s.project_id = ${input.projectId}
-          AND (${query} = '' OR instr(lower(s.title), lower(${query})) > 0)
+          AND (
+            ${query} = ''
+            OR instr(lower(s.title), lower(${query})) > 0
+            OR instr(lower(coalesce(s.label, '')), lower(${query})) > 0
+          )
           AND (
             ${hasCursor ? 1 : 0} = 0
             OR s.created_at < ${cursorAt ?? ""}

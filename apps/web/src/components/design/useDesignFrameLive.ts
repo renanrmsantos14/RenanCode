@@ -1,6 +1,6 @@
 import type { DesignFrameNode, ScopedThreadRef } from "@t3tools/contracts";
 import { DesignNodeId } from "@t3tools/contracts";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { previewRuntimeFor } from "~/browser/previewRuntime";
 import { resolveDiscoveredServerUrl } from "~/browser/browserTargetResolver";
@@ -52,6 +52,7 @@ export function useDesignFrameLive(input: {
     reportFailure: false,
   });
   const [session, setSession] = useState<FrameLiveSession | null>(null);
+  const reportQueue = useRef<Promise<unknown>>(Promise.resolve());
   const frameKey = `${frame.id}|${frame.url}|${frame.width}x${frame.height}`;
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- opens and closes a desktop webview session, an external system, as the Frame gains and loses focus
@@ -61,16 +62,21 @@ export function useDesignFrameLive(input: {
     let cancelled = false;
     let opened: FrameLiveSession | null = null;
 
-    const report = (tabId: string | null) =>
-      canWrite
-        ? reportLiveFrame({
-            environmentId: threadRef.environmentId,
-            input: { threadId: threadRef.threadId, nodeId: DesignNodeId.make(frame.id), tabId },
-          })
-        : Promise.resolve();
+    // Reports go out in order: a late "not live" must not erase the next session's tab.
+    const report = (tabId: string | null) => {
+      if (!canWrite) return Promise.resolve();
+      const sent = reportQueue.current.then(() =>
+        reportLiveFrame({
+          environmentId: threadRef.environmentId,
+          input: { threadId: threadRef.threadId, nodeId: DesignNodeId.make(frame.id), tabId },
+        }),
+      );
+      reportQueue.current = sent.catch(() => undefined);
+      return sent;
+    };
 
-    const retire = async (target: FrameLiveSession) => {
-      await report(null);
+    const retire = async (target: FrameLiveSession, reported: boolean) => {
+      if (reported) await report(null);
       if (canWrite) {
         const snapshot = await bridge.captureSnapshot(target.runtimeTabId).catch(() => null);
         if (snapshot !== null) {
@@ -117,7 +123,7 @@ export function useDesignFrameLive(input: {
       );
       const next = { frameKey, tabId, runtimeTabId };
       if (cancelled) {
-        void retire(next);
+        void retire(next, false);
         return;
       }
       opened = next;
@@ -128,7 +134,7 @@ export function useDesignFrameLive(input: {
 
     return () => {
       cancelled = true;
-      if (opened !== null) void retire(opened);
+      if (opened !== null) void retire(opened, true);
       setSession(null);
     };
     // oxlint-disable-next-line react/exhaustive-effect-dependencies -- the command callbacks are stable per render; the Frame's identity, page and size decide when a session restarts

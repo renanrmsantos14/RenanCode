@@ -523,6 +523,19 @@ it.effect("arranges: moves, groups side by side with a label and removes, all or
         1000,
       );
 
+      const blank = yield* service
+        .arrange({ threadId: threadA, group: { nodeIds: [b!.id], label: "   " } })
+        .pipe(Effect.flip);
+      assert.include(blank.message, "needs a label");
+      const both = yield* service
+        .arrange({
+          threadId: threadA,
+          moves: [{ nodeId: b!.id, x: 0, y: 0 }],
+          group: { nodeIds: [b!.id], label: "Again" },
+        })
+        .pipe(Effect.flip);
+      assert.include(both.message, "moved and grouped");
+
       const missing = yield* service
         .arrange({ threadId: threadA, remove: ["design-node:missing" as DesignNodeId] })
         .pipe(Effect.flip);
@@ -547,7 +560,7 @@ it.effect(
         yield* service.createSketches({
           threadId: threadA,
           projectId: app,
-          pages: [page("Home"), page("Login")],
+          pages: [page("Home"), page("Login", { label: "Variante Azul" })],
         });
         yield* service.createSketches({
           threadId: threadB,
@@ -571,6 +584,11 @@ it.effect(
         const found = yield* service.listProjectSketches({ projectId: app, query: "logIN" });
         assert.deepStrictEqual(
           found.sketches.map((sketch) => sketch.title),
+          ["Login"],
+        );
+        const byLabel = yield* service.listProjectSketches({ projectId: app, query: "azul" });
+        assert.deepStrictEqual(
+          byLabel.sketches.map((sketch) => sketch.title),
           ["Login"],
         );
 
