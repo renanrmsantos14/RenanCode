@@ -1,7 +1,7 @@
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import { type DesignCanvasSnapshot, DesignNodeId, type DesignSketch } from "@t3tools/contracts";
-import type { DesignSketchReference } from "@t3tools/shared/design";
+import { type DesignSketchReference, designSketchReference } from "@t3tools/shared/design";
 import {
   Background,
   type Node,
@@ -49,18 +49,6 @@ interface DesignCanvasContextValue {
 }
 
 const DesignCanvasContext = createContext<DesignCanvasContextValue | null>(null);
-
-function sketchReference(sketch: DesignSketch): DesignSketchReference {
-  return {
-    sketchId: sketch.id,
-    attachmentId: sketch.htmlAttachmentId,
-    thumbnailAttachmentId: sketch.thumbnailAttachmentId,
-    title: sketch.title,
-    width: sketch.width,
-    height: sketch.height,
-    ...(sketch.label === null ? {} : { label: sketch.label }),
-  };
-}
 
 function SketchThumbnail(props: { readonly sketch: DesignSketch }) {
   const ctx = use(DesignCanvasContext)!;
@@ -211,7 +199,7 @@ function DesignCanvasInner(props: {
         ? [sketch]
         : snapshot.sketches.filter((entry) => entry.groupId === sketch.groupId);
     setViewing({
-      sketches: siblings.map(sketchReference),
+      sketches: siblings.map(designSketchReference),
       index: Math.max(
         0,
         siblings.findIndex((entry) => entry.id === sketch.id),
@@ -230,7 +218,7 @@ function DesignCanvasInner(props: {
   useEffect(() => {
     if (focusNodeId === undefined) return;
     useDesignFocusStore.getState().consume(threadRef);
-    void flow.fitView({ nodes: [{ id: focusNodeId }], maxZoom: 1, padding: 0.25, duration: 200 });
+    void flow.fitView({ nodes: [{ id: focusNodeId }], maxZoom: 1, padding: "25%", duration: 200 });
   }, [focusNodeId, threadRef, flow]);
 
   const selectedNode = snapshot.nodes.find((node) => node.id === selectedId);
@@ -243,7 +231,7 @@ function DesignCanvasInner(props: {
         nodeTypes={NODE_TYPES}
         defaultViewport={snapshot.viewport ?? { x: 0, y: 0, zoom: 1 }}
         fitView={snapshot.viewport === null}
-        fitViewOptions={{ maxZoom: 1, padding: 0.2 }}
+        fitViewOptions={{ maxZoom: 1, padding: "20%" }}
         minZoom={0.05}
         maxZoom={2}
         onlyRenderVisibleElements
@@ -299,7 +287,7 @@ function DesignCanvasInner(props: {
           </ToolbarButton>
           <ToolbarButton
             label={gt("Fit to screen")}
-            onClick={() => void flow.fitView({ maxZoom: 1, padding: 0.2 })}
+            onClick={() => void flow.fitView({ maxZoom: 1, padding: "20%" })}
           >
             <ScanIcon className="size-3.5" />
           </ToolbarButton>

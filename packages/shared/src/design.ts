@@ -19,6 +19,24 @@ export interface DesignSketchReference {
   readonly label?: string;
 }
 
+export const designSketchReference = (sketch: {
+  readonly id: string;
+  readonly htmlAttachmentId: string;
+  readonly thumbnailAttachmentId: string | null;
+  readonly title: string;
+  readonly width: number;
+  readonly height: number;
+  readonly label: string | null;
+}): DesignSketchReference => ({
+  sketchId: sketch.id,
+  attachmentId: sketch.htmlAttachmentId,
+  thumbnailAttachmentId: sketch.thumbnailAttachmentId,
+  title: sketch.title,
+  width: sketch.width,
+  height: sketch.height,
+  ...(sketch.label === null ? {} : { label: sketch.label }),
+});
+
 export interface DesignRect {
   readonly x: number;
   readonly y: number;

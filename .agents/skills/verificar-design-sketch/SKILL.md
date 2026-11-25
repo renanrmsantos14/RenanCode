@@ -20,10 +20,17 @@ description: "Verifica a ferramenta MCP design_sketch, os sketches de html_varia
 4. Evals (precisam de `ANTHROPIC_API_KEY` no `.env`): `cd evals && pnpm mcp-tool-use --cases mcp-tool-use/cases/visual-preview.ndjson --case explore-screen-uses-design-sketch,guard-chart-stays-html-render,screen-options-use-html-variants-not-design-sketch --samples 2 --out runs/design`. Sem chave, `--dry-run` confere só a montagem.
 
 5. Clientes: `cd apps/web && vp test run src/components/design src/session-logic.test.ts` (browser tests: cartões web e desktop, canvas com arrasto real por CDP, remover, foco pedido pelo cartão) e `cd apps/mobile && vp test run src/lib/threadActivity.test.ts`.
-6. Passada real (web): subir `vp run dev` com `--base-dir` isolado, parear, pedir "explore a login screen" a um Claude Haiku e conferir cartão, abas A/B/C e zoom no visualizador. O `Replay (dev)` não tem cenário de `design_sketch`.
-7. Passada real (desktop): abrir o cartão deve abrir o painel Design, selecionar o nó e (se removido) recolocar com `design.placeSketch`; arrastar só grava `moveNodes` ao soltar; zoom < 0,35 troca iframe por miniatura; tela cheia pelo botão da barra.
+6. Passada real (web): `vp run dev` com `.t3` da worktree, `node apps/server/src/bin.ts pair --base-dir .t3` para o link de pareamento (Chromium do playwright em `~/.cache/ms-playwright`). Copie `~/.t3/userdata/settings.json` para `.t3/userdata/`. Sem `Replay (dev)` para `design_sketch`: crie projeto e thread pela CLI (`project add --base-dir .t3 <pasta>`, `thread start --provider <instância Claude> --model claude-haiku-5-5 <projeto> "Use design_sketch ..."`, `thread send` para as seguintes). Conferir: cartão com miniatura, clique abre o visualizador em tela cheia com abas A/B/C (a aba C troca a página), Esc fecha, nenhuma superfície Design, sem erro de console.
+7. Passada real (desktop): `T3CODE_DESKTOP_REMOTE_DEBUGGING_PORT=9333 vp run dev:desktop` e `playwright-core` `connectOverCDP("http://127.0.0.1:9333")`. No Linux sem `libsecret-1-dev`, falta o helper `native/browser-secret/build/x64/t3-browser-secret`: um stub (cópia de `/bin/true`, ignorado pelo git) basta. A tela inicial "Welcome" não tem botão de pular: vá à thread pelo clique na barra lateral. Conferir, com o banco (`node:sqlite` somente leitura em `.t3/userdata/statev2.sqlite`, tabelas `design_sketches`, `design_canvas_nodes`, `design_canvas_viewports`):
+   - cartão da thread → painel Design abre e o nó é enquadrado (zoom ≤ 1, margem de 25%);
+   - arrastar um nó (mouse real, passos pequenos) grava `x/y` ao soltar, o nó não volta, e persiste após recarregar;
+   - roda do mouse, Zoom in/out e arrastar o fundo gravam o viewport e ele é restaurado após recarregar;
+   - "Fit to screen" deixa 20% de margem; "Full screen" maximiza o painel (não é a tela cheia do navegador);
+   - selecionar um nó + "Remover do canvas" apaga o nó; clicar no cartão da thread recoloca (nó novo abaixo do último) e enquadra.
 
 ## Limites
 
-- Miniatura exige o Chrome headless; sem ele o sketch fica sem `thumbnailAttachmentId`.
+- Miniatura exige o Chrome headless; sem ele (ou enquanto o primeiro uso o baixa, `PreviewBrowserInstallingError`) o sketch fica sem `thumbnailAttachmentId`: o cartão mostra um quadro com ícone e o nó do canvas fica em branco. Não há regeração depois.
+- Link de convidado de verdade exige T3 Connect; aqui só os testes de `apps/server/src/guest` e `GuestPage` cobrem a rota.
+- No `fitView` do `@xyflow/react` 13, `padding` numérico é em pixels; use string com `%`.
 - ACP e OpenCode não têm lista de tools: recebem `design_sketch` pelo MCP sem ajuste.

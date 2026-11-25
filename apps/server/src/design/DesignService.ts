@@ -13,6 +13,7 @@ import {
   clampDesignSketchHeight,
   clampDesignSketchWidth,
   DESIGN_SKETCH_DEFAULT_MAX_HEIGHT,
+  designSketchReference,
   type DesignRect,
   type DesignSketchReference,
   placeSketches,
@@ -151,16 +152,6 @@ const toNode = (row: NodeRow): DesignCanvasNode =>
     z: row.z,
   }) as DesignCanvasNode;
 
-const toReference = (sketch: DesignSketch): DesignSketchReference => ({
-  sketchId: sketch.id,
-  attachmentId: sketch.htmlAttachmentId,
-  thumbnailAttachmentId: sketch.thumbnailAttachmentId,
-  title: sketch.title,
-  width: sketch.width,
-  height: sketch.height,
-  ...(sketch.label === null ? {} : { label: sketch.label }),
-});
-
 const iso = (value: DateTime.DateTime) => DateTime.formatIso(DateTime.toUtc(value));
 
 const rect = (node: DesignCanvasNode): DesignRect => ({
@@ -203,7 +194,7 @@ export const layer = Layer.effect(
       const viewport = viewports[0];
       return {
         threadId,
-        viewport: viewport === undefined ? null : viewport,
+        viewport: viewport ?? null,
         nodes: nodes.map(toNode),
         sketches: sketches.map(toSketch),
       } satisfies DesignCanvasSnapshot;
@@ -233,6 +224,11 @@ export const layer = Layer.effect(
       sql<SketchRow>`SELECT * FROM design_sketches WHERE sketch_id = ${sketchId}`.pipe(
         Effect.map((rows) => (rows[0] === undefined ? null : toSketch(rows[0]))),
       );
+
+    const nextZ = (threadId: ThreadId) =>
+      sql<{ z: number | null }>`
+        SELECT MAX(z) AS z FROM design_canvas_nodes WHERE thread_id = ${threadId}
+      `.pipe(Effect.map((rows) => (rows[0]?.z ?? -1) + 1));
 
     const attachmentPath = (attachmentId: string, extension: string) =>
       resolveAttachmentRelativePath({
@@ -310,7 +306,6 @@ export const layer = Layer.effect(
               page: { ...page, width },
               written,
             }).pipe(
-              Effect.map((result) => result),
               Effect.catch((cause) =>
                 Effect.logWarning("Could not capture a design sketch thumbnail.", { cause }).pipe(
                   Effect.as(null),
@@ -354,10 +349,7 @@ export const layer = Layer.effect(
                 pages.map((page) => ({ width: page.width, height: page.height })),
                 original === undefined ? undefined : rect(original),
               );
-              const top = yield* sql<{ z: number | null }>`
-                SELECT MAX(z) AS z FROM design_canvas_nodes WHERE thread_id = ${input.threadId}
-              `;
-              const baseZ = (top[0]?.z ?? -1) + 1;
+              const baseZ = yield* nextZ(input.threadId);
               for (const [index, page] of pages.entries()) {
                 const position = positions[index]!;
                 yield* sql`
@@ -397,7 +389,7 @@ export const layer = Layer.effect(
                 ORDER BY created_at
               `;
               const byId = new Map(rows.map((row) => [row.sketch_id, toSketch(row)]));
-              return pages.map((page) => toReference(byId.get(page.id)!));
+              return pages.map((page) => designSketchReference(byId.get(page.id)!));
             }),
           )
           .pipe(Effect.mapError(storage));
@@ -490,9 +482,7 @@ export const layer = Layer.effect(
             const [position] = placeSketches(existing.map(rect), [
               { width: sketch.width, height: sketch.height },
             ]);
-            const top = yield* sql<{ z: number | null }>`
-              SELECT MAX(z) AS z FROM design_canvas_nodes WHERE thread_id = ${input.threadId}
-            `;
+            const z = yield* nextZ(input.threadId);
             const row: NodeRow = {
               node_id: `design-node:${uuid}`,
               thread_id: input.threadId,
@@ -502,7 +492,7 @@ export const layer = Layer.effect(
               y: position!.y,
               width: sketch.width,
               height: sketch.height,
-              z: (top[0]?.z ?? -1) + 1,
+              z,
             };
             yield* sql`
               INSERT INTO design_canvas_nodes ${sql.insert({

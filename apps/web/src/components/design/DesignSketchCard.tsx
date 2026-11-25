@@ -25,13 +25,18 @@ export function DesignSketchCard(props: {
     <button
       type="button"
       aria-label={gt("Open sketch {title}", { title: sketch.title })}
-      className="group/design-card flex min-w-0 flex-col gap-1.5 rounded-lg border border-border/70 bg-card p-2 text-start transition-colors hover:bg-accent/40 focus-visible:outline-2 focus-visible:outline-ring"
+      className="group/design-card flex w-full min-w-0 flex-col gap-1.5 rounded-lg border border-border/70 bg-card p-2 text-start transition-colors hover:bg-accent/40 focus-visible:outline-2 focus-visible:outline-ring"
       onClick={props.onOpen}
     >
       <div
         className="relative w-full overflow-hidden rounded-md bg-muted/40 ring-1 ring-border/50"
         style={{
-          aspectRatio: `${sketch.width} / ${Math.min(sketch.height, sketch.width)}`,
+          aspectRatio:
+            props.thumbnailSrc === null
+              ? "16 / 6"
+              : props.letter
+                ? "16 / 10"
+                : `${sketch.width} / ${Math.min(sketch.height, sketch.width)}`,
           maxHeight: CARD_MAX_THUMBNAIL_HEIGHT,
         }}
       >
@@ -41,7 +46,7 @@ export function DesignSketchCard(props: {
             alt=""
             draggable={false}
             loading="lazy"
-            className="size-full object-cover object-top"
+            className={cn("size-full object-top", props.letter ? "object-contain" : "object-cover")}
           />
         ) : (
           <div

@@ -32,7 +32,7 @@ export const DesignSketch = Schema.Struct({
 });
 export type DesignSketch = typeof DesignSketch.Type;
 
-/** Only sketches today; phase 2 adds frames as another `kind`. */
+/** A sketch placed on a thread canvas. */
 export const DesignCanvasNode = Schema.Struct({
   id: DesignNodeId,
   kind: Schema.Literal("sketch"),

@@ -125,8 +125,9 @@ const handlers = {
       return {
         htmlRenders,
         ...(designSketches === undefined ? {} : { designSketches }),
-        message:
-          "Shown to the reader side by side above your reply, lettered A, B, C. Don't describe them; say only how they differ if the labels don't.",
+        message: `Shown to the reader side by side above your reply, lettered A, B, C.${
+          designSketches === undefined ? "" : " Also saved to this thread's Design section."
+        } Don't describe them; say only how they differ if the labels don't.`,
       };
     }),
   ),
