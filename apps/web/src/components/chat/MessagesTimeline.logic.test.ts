@@ -2456,16 +2456,24 @@ describe("deriveMessagesTimelineRows", () => {
         read("read-missing", 3, "/repo/docs/missing.png", "failed"),
         read("read-sidebar-again", 4, "/repo/docs/sidebar.png", "completed", true),
         read("read-topbar", 5, "/repo/docs/topbar.png"),
+        {
+          ...base("send-shot", 6),
+          type: "dynamic_tool" as const,
+          toolName: "SendUserFile",
+          outputOmitted: true,
+          outputHasImage: true,
+          input: { files: ["/vm/scratchpad/shot.png"] },
+        },
         settled
           ? {
-              ...base("answer", 6),
+              ...base("answer", 7),
               type: "assistant_message" as const,
               messageId: MessageId.make("answer"),
               text: "Here are both layouts",
               streaming: false,
             }
           : {
-              ...base("ask-again", 6),
+              ...base("ask-again", 7),
               status: "waiting" as const,
               completedAt: null,
               type: "user_input_request" as const,
@@ -2503,15 +2511,15 @@ describe("deriveMessagesTimelineRows", () => {
       );
     };
     // The repeated read keeps one image, taken from the read whose output holds the bytes.
-    const images = [
+    const viewed = [
       { path: "/repo/docs/sidebar.png", itemId: "read-sidebar-again" },
       { path: "/repo/docs/topbar.png" },
     ];
+    const sent = [{ path: "/vm/scratchpad/shot.png", itemId: "send-shot", index: 0 }];
 
-    expect(viewedImages(false)).toEqual([{ after: "work-live", images }]);
-    // A settled turn's fold keeps hiding its work, images included, until it is opened.
-    expect(viewedImages(true)).toEqual([]);
-    expect(viewedImages(true, new Set([runId]))).toEqual([{ after: "work-toggle", images }]);
+    expect(viewedImages(false)).toEqual([{ after: "work-live", images: [...viewed, ...sent] }]);
+    // A settled turn's fold hides images the agent only looked at, but not ones it sent.
+    expect(viewedImages(true)).toEqual([{ after: "work", images: sent }]);
   });
 
   it("keeps imported V1 turns folded once the thread's first V2 run starts", () => {

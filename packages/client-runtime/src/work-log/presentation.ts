@@ -512,6 +512,11 @@ function workEntrySentImages(entry: WorkLogPresentationEntry): ViewedImageRef[] 
   return files.map((path, index) => ({ path, itemId: item.id, index }));
 }
 
+/** Images sent to the user are part of the answer, so a settled turn's fold keeps them out. */
+export function workEntrySendsImages(entry: WorkLogPresentationEntry): boolean {
+  return workEntrySentImages(entry).length > 0;
+}
+
 /** The entry's viewed image, with the item id when its output holds the bytes. */
 export function workEntryViewedImage(entry: WorkLogPresentationEntry): ViewedImageRef | null {
   const path = workEntryViewedImagePath(entry);
