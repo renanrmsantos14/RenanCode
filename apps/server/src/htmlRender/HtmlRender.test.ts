@@ -306,6 +306,24 @@ describe("HtmlRender", () => {
     }).pipe(Effect.provide(layerTest)),
   );
 
+  it.effect("readPage returns the page's HTML without publishing it", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const htmlRender = yield* HtmlRender.HtmlRender;
+      const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-html-page-" });
+      const file = path.join(directory, "screen.html");
+      yield* fileSystem.writeFileString(file, "<!doctype html><p>Screen</p>");
+
+      expect(yield* htmlRender.readPage({ path: file })).toContain("<p>Screen</p>");
+      expect(yield* htmlRender.readPage({ html: "<p>Inline</p>" })).toBe("<p>Inline</p>");
+      const missing = yield* htmlRender
+        .readPage({ path: path.join(directory, "missing.html") })
+        .pipe(Effect.flip);
+      expect(missing._tag).toBe("HtmlRenderFileError");
+    }).pipe(Effect.provide(layerTest)),
+  );
+
   it.effect("refuses anything but a regular, singly linked .html file of at most 25 MiB", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;

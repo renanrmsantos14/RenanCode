@@ -46,6 +46,9 @@ import {
   THREAD_DETAILS_PANEL_LABEL_CLASS,
 } from "./threadDetailsPanelStyles";
 import { Menu, MenuPopup } from "../ui/menu";
+import { Button } from "../ui/button";
+import { isElectron } from "../../env";
+import { useRightPanelStore } from "../../rightPanelStore";
 
 interface ThreadDetailsPanelProps extends Pick<
   ComponentProps<typeof ThreadDetailsCard>,
@@ -327,6 +330,31 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
 
               {visible.context && props.contextWindow ? (
                 <ThreadDetailsContext usage={props.contextWindow} />
+              ) : null}
+
+              {isElectron && !props.draftId && visible.design ? (
+                <ThreadDetailsSection
+                  headingId="thread-details-design-heading"
+                  title={gt("Design")}
+                  data-thread-design-panel
+                >
+                  <div className="px-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        useRightPanelStore
+                          .getState()
+                          .open(
+                            { environmentId: props.environmentId, threadId: props.threadId },
+                            "design",
+                          )
+                      }
+                    >
+                      <T>Open Design</T>
+                    </Button>
+                  </div>
+                </ThreadDetailsSection>
               ) : null}
 
               {density === "full" && !props.draftId && visible.checklist ? (

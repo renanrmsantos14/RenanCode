@@ -12778,7 +12778,6 @@
   "0553bd16ceaa299e": "Add a note…",
   "d73183da1334caa7": "No note",
   "56e9fabcabc90c46": "Confirm",
-  "70bdebaa3d291d3b": "Thread unavailable",
   "9e0e71048f2e77ca": "Archived",
   "cbc1a331d14cafe8": "Link existing thread",
   "e1542c9f4b24f8d5": [
@@ -13380,5 +13379,15 @@
   "201490988858b511": "withdrawn by {by}",
   "99451a5d2d40440f": "Withdrawn by {by}.",
   "3ee30a50b70fffab": "Withdrawn by {by}: {reason}",
-  "92e129bf413a1220": "withdrawn"
+  "92e129bf413a1220": "withdrawn",
+  "d9d919faea40ccfd": "Open Design",
+  "37311e0add03806b": "Lay out the screens the agent sketches on a canvas.",
+  "d6e524382c619981": "Open Design",
+  "3e19afa2072da269": "Open sketch {title}",
+  "f0193fc422ae70cd": "Remove from canvas",
+  "43878fb3f7e42f0e": "Fit to screen",
+  "bae2ec2de83b8e19": "Full screen",
+  "fc5f9903c7a7a997": "No sketches yet. Ask the agent to design a screen and it will place it here with design_sketch.",
+  "16e20108e473df2e": "Sketch without thumbnail",
+  "75810a0ab0d14ba4": "Design is not available on this environment."
 }

@@ -208,6 +208,7 @@ it.effect("retries a partial project deletion without repeating child events or 
       assert.deepEqual(
         partialCleanup.map((effect) => [effect.thread_id, effect.effect_type]),
         [
+          [firstThreadId, "design.cleanup"],
           [firstThreadId, "preview.cleanup"],
           [firstThreadId, "scheduled-tasks.cleanup"],
           [firstThreadId, "terminal.cleanup"],
@@ -235,7 +236,7 @@ it.effect("retries a partial project deletion without repeating child events or 
       assert.deepEqual(finalEvents[0], partialEvents[0]);
       assert.equal(finalEvents[2]?.command_id, commandId);
       const finalCleanup = yield* readCleanup;
-      assert.lengthOf(finalCleanup, 10);
+      assert.lengthOf(finalCleanup, 12);
       assert.deepEqual(
         finalCleanup.filter((effect) => effect.thread_id === firstThreadId),
         partialCleanup,
@@ -245,6 +246,12 @@ it.effect("retries a partial project deletion without repeating child events or 
         assert.deepEqual(
           finalCleanup.filter((effect) => effect.thread_id === threadId),
           [
+            {
+              effect_id: `effect:${expectedCommandId}:design.cleanup`,
+              thread_id: threadId,
+              command_id: expectedCommandId,
+              effect_type: "design.cleanup",
+            },
             {
               effect_id: `effect:${expectedCommandId}:preview.cleanup`,
               thread_id: threadId,

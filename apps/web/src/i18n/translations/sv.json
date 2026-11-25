@@ -12776,7 +12776,6 @@
   "0553bd16ceaa299e": "Lägg till en anteckning…",
   "d73183da1334caa7": "Ingen anteckning",
   "56e9fabcabc90c46": "Bekräfta",
-  "70bdebaa3d291d3b": "Tråden är inte tillgänglig",
   "9e0e71048f2e77ca": "Arkiverad",
   "cbc1a331d14cafe8": "Länka befintlig tråd",
   "e1542c9f4b24f8d5": [
@@ -13378,5 +13377,15 @@
   "201490988858b511": "återkallad av {by}",
   "99451a5d2d40440f": "Återkallad av {by}.",
   "3ee30a50b70fffab": "Återkallad av {by}: {reason}",
-  "92e129bf413a1220": "återkallad"
+  "92e129bf413a1220": "återkallad",
+  "d9d919faea40ccfd": "Öppna Design",
+  "37311e0add03806b": "Placera de skärmar som agenten skissar på en canvas.",
+  "d6e524382c619981": "Öppna Design",
+  "3e19afa2072da269": "Öppna skiss {title}",
+  "f0193fc422ae70cd": "Ta bort från canvas",
+  "43878fb3f7e42f0e": "Anpassa till skärmen",
+  "bae2ec2de83b8e19": "Helskärm",
+  "fc5f9903c7a7a997": "Inga skisser än. Be agenten designa en skärm så placerar den den här med design_sketch.",
+  "16e20108e473df2e": "Skiss utan miniatyr",
+  "75810a0ab0d14ba4": "Design är inte tillgängligt i den här miljön."
 }

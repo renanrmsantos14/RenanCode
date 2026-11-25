@@ -12769,7 +12769,6 @@
   "0553bd16ceaa299e": "Notiz hinzufügen…",
   "d73183da1334caa7": "Keine Notiz",
   "56e9fabcabc90c46": "Bestätigen",
-  "70bdebaa3d291d3b": "Thread nicht verfügbar",
   "9e0e71048f2e77ca": "Archiviert",
   "cbc1a331d14cafe8": "Bestehenden Thread verknüpfen",
   "e1542c9f4b24f8d5": [
@@ -13370,5 +13369,15 @@
   "201490988858b511": "zurückgezogen von {by}",
   "99451a5d2d40440f": "Zurückgezogen von {by}.",
   "3ee30a50b70fffab": "Zurückgezogen von {by}: {reason}",
-  "92e129bf413a1220": "zurückgezogen"
+  "92e129bf413a1220": "zurückgezogen",
+  "d9d919faea40ccfd": "Design öffnen",
+  "37311e0add03806b": "Ordne die Bildschirme, die der Agent skizziert, auf einem Canvas an.",
+  "d6e524382c619981": "Design öffnen",
+  "3e19afa2072da269": "Skizze {title} öffnen",
+  "f0193fc422ae70cd": "Vom Canvas entfernen",
+  "43878fb3f7e42f0e": "An Bildschirm anpassen",
+  "bae2ec2de83b8e19": "Vollbild",
+  "fc5f9903c7a7a997": "Noch keine Skizzen. Bitte den Agenten, einen Bildschirm zu entwerfen, und er legt ihn hier mit design_sketch ab.",
+  "16e20108e473df2e": "Skizze ohne Vorschaubild",
+  "75810a0ab0d14ba4": "Design ist in dieser Umgebung nicht verfügbar."
 }

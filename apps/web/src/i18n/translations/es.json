@@ -12763,7 +12763,6 @@
   "0553bd16ceaa299e": "Añadir una nota…",
   "d73183da1334caa7": "Sin nota",
   "56e9fabcabc90c46": "Confirmar",
-  "70bdebaa3d291d3b": "Hilo no disponible",
   "9e0e71048f2e77ca": "Archivado",
   "cbc1a331d14cafe8": "Vincular un hilo existente",
   "e1542c9f4b24f8d5": [
@@ -13366,5 +13365,15 @@
   "201490988858b511": "retirada por {by}",
   "99451a5d2d40440f": "Retirada por {by}.",
   "3ee30a50b70fffab": "Retirada por {by}: {reason}",
-  "92e129bf413a1220": "retirada"
+  "92e129bf413a1220": "retirada",
+  "d9d919faea40ccfd": "Abrir Design",
+  "37311e0add03806b": "Organiza en un lienzo las pantallas que el agente esboza.",
+  "d6e524382c619981": "Abrir Design",
+  "3e19afa2072da269": "Abrir boceto {title}",
+  "f0193fc422ae70cd": "Quitar del lienzo",
+  "43878fb3f7e42f0e": "Ajustar a la pantalla",
+  "bae2ec2de83b8e19": "Pantalla completa",
+  "fc5f9903c7a7a997": "Aún no hay bocetos. Pide al agente que diseñe una pantalla y la colocará aquí con design_sketch.",
+  "16e20108e473df2e": "Boceto sin miniatura",
+  "75810a0ab0d14ba4": "Design no está disponible en este entorno."
 }

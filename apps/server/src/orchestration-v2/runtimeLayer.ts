@@ -71,6 +71,7 @@ import * as ThreadForkService from "./ThreadForkService.ts";
 import * as TurnItemPositionStore from "./TurnItemPositionStore.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as ProjectChecklistService from "../projectChecklist/ProjectChecklistService.ts";
+import * as DesignService from "../design/DesignService.ts";
 import * as WorkModuleService from "../workModules/WorkModuleService.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
 import * as FeedbackStore from "../feedback/FeedbackStore.ts";
@@ -358,6 +359,7 @@ const layerScheduledTaskProvided = ScheduledTaskService.layer.pipe(
 const layerWorkModuleProvided = WorkModuleService.layer.pipe(
   Layer.provide(layerThreadManagementProvided),
 );
+const layerDesignProvided = DesignService.layer.pipe(Layer.provide(layerThreadManagementProvided));
 const layerScratchThreadPromotionProvided = ScratchThreadPromotion.layer.pipe(
   Layer.provide(
     Layer.mergeAll(
@@ -490,6 +492,7 @@ export const layerProduction = Layer.mergeAll(
   layerThreadLaunchProvided,
   layerScheduledTaskProvided,
   layerWorkModuleProvided,
+  layerDesignProvided,
   ProjectChecklistService.layer,
   layerWorkflowsProvided,
   layerScratchThreadPromotionProvided,

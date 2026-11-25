@@ -480,6 +480,15 @@ import {
   ScheduledTaskMutationResult,
 } from "./scheduledTask.ts";
 import {
+  DesignCanvasSnapshot,
+  DesignError,
+  DesignMoveNodesInput,
+  DesignPlaceSketchInput,
+  DesignRemoveNodeInput,
+  DesignSetViewportInput,
+  DesignSubscribeCanvasInput,
+} from "./design.ts";
+import {
   WorkModule,
   WorkModuleDeleteInput,
   WorkModuleDeleteResult,
@@ -718,6 +727,11 @@ export const WS_METHODS = {
   projectChecklistMove: "projectChecklist.move",
   projectChecklistDelete: "projectChecklist.delete",
 
+  designSubscribeCanvas: "design.subscribeCanvas",
+  designMoveNodes: "design.moveNodes",
+  designSetViewport: "design.setViewport",
+  designRemoveNode: "design.removeNode",
+  designPlaceSketch: "design.placeSketch",
   workModulesSubscribe: "workModules.subscribe",
   workModulesUpsert: "workModules.upsert",
   workModulesMove: "workModules.move",
@@ -2566,6 +2580,35 @@ const WsScheduledTasksGetWebhookDeliveryRpc = Rpc.make(
 
 const WorkModuleRpcError = Schema.Union([WorkModuleError, EnvironmentAuthorizationError]);
 
+const DesignRpcError = Schema.Union([DesignError, EnvironmentAuthorizationError]);
+
+const WsDesignSubscribeCanvasRpc = Rpc.make(WS_METHODS.designSubscribeCanvas, {
+  payload: DesignSubscribeCanvasInput,
+  success: DesignCanvasSnapshot,
+  error: DesignRpcError,
+  stream: true,
+});
+
+const WsDesignMoveNodesRpc = Rpc.make(WS_METHODS.designMoveNodes, {
+  payload: DesignMoveNodesInput,
+  error: DesignRpcError,
+});
+
+const WsDesignSetViewportRpc = Rpc.make(WS_METHODS.designSetViewport, {
+  payload: DesignSetViewportInput,
+  error: DesignRpcError,
+});
+
+const WsDesignRemoveNodeRpc = Rpc.make(WS_METHODS.designRemoveNode, {
+  payload: DesignRemoveNodeInput,
+  error: DesignRpcError,
+});
+
+const WsDesignPlaceSketchRpc = Rpc.make(WS_METHODS.designPlaceSketch, {
+  payload: DesignPlaceSketchInput,
+  error: DesignRpcError,
+});
+
 const ProjectChecklistRpcError = Schema.Union([
   ProjectChecklistError,
   EnvironmentAuthorizationError,
@@ -2762,6 +2805,11 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectChecklistUpsertRpc,
   WsProjectChecklistMoveRpc,
   WsProjectChecklistDeleteRpc,
+  WsDesignSubscribeCanvasRpc,
+  WsDesignMoveNodesRpc,
+  WsDesignSetViewportRpc,
+  WsDesignRemoveNodeRpc,
+  WsDesignPlaceSketchRpc,
   WsWorkModulesSubscribeRpc,
   WsWorkModulesUpsertRpc,
   WsWorkModulesMoveRpc,

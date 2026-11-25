@@ -90,6 +90,10 @@ export interface TimelineRowSharedState {
         minHeight: number,
       ) => ReactNode)
     | undefined;
+  /** Draws the cards for saved sketches; unset, the row loads them from the environment. */
+  renderDesignSketches:
+    | ((row: Extract<TimelineRow, { kind: "design-sketches" }>) => ReactNode)
+    | undefined;
   /** Unset, expanded rows read detail and command output from the environment. */
   turnItemSource: TurnItemSource | undefined;
   onOpenThread: (

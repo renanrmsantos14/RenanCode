@@ -12768,7 +12768,6 @@
   "0553bd16ceaa299e": "Ajouter une note…",
   "d73183da1334caa7": "Aucune note",
   "56e9fabcabc90c46": "Confirmer",
-  "70bdebaa3d291d3b": "Fil indisponible",
   "9e0e71048f2e77ca": "Archivé",
   "cbc1a331d14cafe8": "Associer un fil existant",
   "e1542c9f4b24f8d5": [
@@ -13371,5 +13370,15 @@
   "201490988858b511": "retirée par {by}",
   "99451a5d2d40440f": "Retirée par {by}.",
   "3ee30a50b70fffab": "Retirée par {by} : {reason}",
-  "92e129bf413a1220": "retirée"
+  "92e129bf413a1220": "retirée",
+  "d9d919faea40ccfd": "Ouvrir Design",
+  "37311e0add03806b": "Disposez sur un canevas les écrans que l'agent esquisse.",
+  "d6e524382c619981": "Ouvrir Design",
+  "3e19afa2072da269": "Ouvrir l'esquisse {title}",
+  "f0193fc422ae70cd": "Retirer du canevas",
+  "43878fb3f7e42f0e": "Ajuster à l'écran",
+  "bae2ec2de83b8e19": "Plein écran",
+  "fc5f9903c7a7a997": "Aucune esquisse pour l'instant. Demandez à l'agent de concevoir un écran et il le placera ici avec design_sketch.",
+  "16e20108e473df2e": "Esquisse sans miniature",
+  "75810a0ab0d14ba4": "Design n'est pas disponible dans cet environnement."
 }

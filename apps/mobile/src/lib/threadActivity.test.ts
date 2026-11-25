@@ -120,6 +120,42 @@ it("shows completed html_variants as one side-by-side entry", () => {
   ]);
 });
 
+it("shows a completed design_sketch as one card entry, and html_variants with sketches as the same", () => {
+  const sketch = {
+    sketchId: "sketch-1",
+    attachmentId: "s-1-html",
+    thumbnailAttachmentId: "s-1-png",
+    title: "Home",
+    width: 390,
+    height: 844,
+  };
+  const item: OrchestrationV2TurnItem = {
+    ...base("sketch", "2026-11-03T00:00:00.000Z", 1),
+    type: "dynamic_tool",
+    toolName: "t3-code.design_sketch",
+    status: "completed",
+    input: {},
+    output: { structuredContent: { designSketch: sketch } },
+  };
+  const variants: OrchestrationV2TurnItem = {
+    ...base("sketch-variants", "2026-11-03T00:00:01.000Z", 2),
+    type: "dynamic_tool",
+    toolName: "t3-code.html_variants",
+    status: "completed",
+    input: {},
+    output: {
+      structuredContent: {
+        htmlRenders: [{ attachmentId: "s-1-html", title: "Home", height: 400 }],
+        designSketches: [sketch],
+      },
+    },
+  };
+  expect(buildThreadFeed([projected(item, 0), projected(variants, 1)])).toMatchObject([
+    { type: "design-sketches", sketches: [sketch] },
+    { type: "design-sketches", sketches: [sketch] },
+  ]);
+});
+
 it("keeps historical plan detail accessible from its paged turn item", () => {
   const item = {
     ...base("historical-plan", "2026-08-29T00:00:00.000Z", 1),

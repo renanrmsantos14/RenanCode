@@ -5,6 +5,12 @@ import {
 import * as Predicate from "effect/Predicate";
 
 import {
+  DESIGN_SKETCH_TOOL_NAME,
+  readDesignSketchReference,
+  readDesignSketchReferences,
+  type DesignSketchReference,
+} from "./design.ts";
+import {
   HTML_RENDER_TOOL_NAME,
   HTML_VARIANTS_TOOL_NAME,
   readHtmlRenderReference,
@@ -55,6 +61,8 @@ interface CompactToolOutput {
   status?: "rolled_back";
   htmlRender?: HtmlRenderReference;
   htmlRenders?: ReadonlyArray<HtmlVariantReference>;
+  designSketch?: DesignSketchReference;
+  designSketches?: ReadonlyArray<DesignSketchReference>;
   [MCP_APP_OUTPUT_KEY]?: McpAppReference;
   thread?: { threadId: string };
   threads?: Array<{ threadId?: string; status?: "rolled_back" }>;
@@ -161,6 +169,10 @@ export function compactDynamicToolOutput(value: unknown): CompactToolOutput | un
     if (htmlRender !== undefined) output.htmlRender = htmlRender;
     const htmlRenders = readHtmlVariantReferences(data.htmlRenders);
     if (htmlRenders !== undefined) output.htmlRenders = htmlRenders;
+    const designSketch = readDesignSketchReference(data.designSketch);
+    if (designSketch !== undefined) output.designSketch = designSketch;
+    const designSketches = readDesignSketchReferences(data.designSketches);
+    if (designSketches !== undefined) output.designSketches = designSketches;
     const mcpApp = readMcpAppReference(data[MCP_APP_OUTPUT_KEY]);
     if (mcpApp !== undefined) output[MCP_APP_OUTPUT_KEY] = mcpApp;
     const nestedThreadId = Predicate.isObject(data.thread)
@@ -236,6 +248,21 @@ export function htmlVariantsFromToolItem(item: {
   if (resolveT3McpToolId(item.toolName) !== HTML_VARIANTS_TOOL_NAME) return undefined;
   const output = compactDynamicToolOutput(item.output);
   return output?.isError ? undefined : output?.htmlRenders;
+}
+
+/** The sketches a `design_sketch` or `html_variants` call saved to the thread's Design canvas. */
+export function designSketchesFromToolItem(item: {
+  readonly toolName: string | null | undefined;
+  readonly output?: unknown;
+}): ReadonlyArray<DesignSketchReference> | undefined {
+  const toolId = resolveT3McpToolId(item.toolName);
+  if (toolId !== DESIGN_SKETCH_TOOL_NAME && toolId !== HTML_VARIANTS_TOOL_NAME) return undefined;
+  const output = compactDynamicToolOutput(item.output);
+  if (output === undefined || output.isError) return undefined;
+  if (toolId === DESIGN_SKETCH_TOOL_NAME) {
+    return output.designSketch === undefined ? undefined : [output.designSketch];
+  }
+  return output.designSketches;
 }
 
 /** The text `send_to_user` showed the user, which clients render as the agent's own words. */

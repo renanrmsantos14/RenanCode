@@ -151,6 +151,20 @@ export function threadHtmlRenderAttachmentIds(
   });
 }
 
+/** Only this project's sketch files qualify, so a tool output cannot point a guest at another project's. */
+export function projectDesignSketchAttachmentId(
+  projectId: string,
+  attachmentId: string | null | undefined,
+) {
+  const segment = toSafeThreadAttachmentSegment(`design-${projectId}`);
+  return segment !== null &&
+    attachmentId !== null &&
+    attachmentId !== undefined &&
+    parseThreadSegmentFromAttachmentId(attachmentId) === segment
+    ? attachmentId
+    : undefined;
+}
+
 export function attachmentRelativePath(attachment: ChatAttachment): string | null {
   switch (attachment.type) {
     case "image": {

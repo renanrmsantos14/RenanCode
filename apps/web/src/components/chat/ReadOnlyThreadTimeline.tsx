@@ -69,6 +69,9 @@ export function ReadOnlyThreadTimeline(props: {
     index: number,
     minHeight: number,
   ) => ReactNode;
+  readonly renderDesignSketches?: (
+    row: Extract<TimelineRow, { kind: "design-sketches" }>,
+  ) => ReactNode;
   readonly renderFooter?: (items: ReadonlyArray<OrchestrationV2ProjectedTurnItem>) => ReactNode;
   /** What stands below the timeline, where the composer would. */
   readonly children: (controls: { readonly scrollToEnd: () => void }) => ReactNode;
@@ -158,6 +161,7 @@ export function ReadOnlyThreadTimeline(props: {
               onFileDownload={props.onFileOpen}
               renderHtmlRender={props.renderHtmlRender}
               renderHtmlVariant={props.renderHtmlVariant}
+              renderDesignSketches={props.renderDesignSketches}
               turnItemSource={props.turnItemSource}
               historyControls={props.historyControls}
               activeThreadEnvironmentId={NO_ENVIRONMENT_ID}

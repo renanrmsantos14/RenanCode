@@ -149,6 +149,10 @@ export class HtmlRender extends Context.Service<
   HtmlRender,
   {
     readonly prepare: (html: string) => Effect.Effect<string, HtmlRenderPrepareError>;
+    /** The page's HTML, read from its file when given a path. */
+    readonly readPage: (
+      input: HtmlRenderSource,
+    ) => Effect.Effect<string, HtmlRenderFileError | HtmlRenderFileTooLargeError>;
     readonly publish: (
       input: HtmlRenderSource & {
         readonly threadId: ThreadId;
@@ -663,7 +667,7 @@ const make = Effect.gen(function* () {
     } satisfies HtmlPreview;
   });
 
-  return HtmlRender.of({ prepare, publish, publishVariants, preview });
+  return HtmlRender.of({ prepare, readPage: readSource, publish, publishVariants, preview });
 });
 
 export const layer = Layer.effect(HtmlRender, make);

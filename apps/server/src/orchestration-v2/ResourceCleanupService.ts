@@ -4,10 +4,12 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { resolveAttachmentRelativePath } from "../attachmentPaths.ts";
 import { parseAttachmentFileExtension, resolveAttachmentPathById } from "../attachmentStore.ts";
 import * as ServerConfig from "../config.ts";
+import { deleteThreadCanvas } from "../design/deleteThreadCanvas.ts";
 import * as DeviceService from "../device/DeviceService.ts";
 import * as PreviewManager from "../preview/Manager.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
@@ -24,6 +26,7 @@ export class ResourceCleanupError extends Schema.TaggedError<ResourceCleanupErro
       "attachment",
       "scheduled-tasks",
       "work-modules",
+      "design",
     ]),
     threadId: Schema.optional(Schema.String),
     attachmentId: Schema.optional(Schema.String),
@@ -36,6 +39,7 @@ export class ResourceCleanupService extends Context.Reference<{
   readonly cleanupWorkModuleLinks: (
     threadId: ThreadId,
   ) => Effect.Effect<void, ResourceCleanupError>;
+  readonly cleanupDesign: (threadId: ThreadId) => Effect.Effect<void, ResourceCleanupError>;
   readonly cleanupTerminals: (threadId: string) => Effect.Effect<void, ResourceCleanupError>;
   readonly cleanupPreviews: (threadId: string) => Effect.Effect<void, ResourceCleanupError>;
   /** Releases the thread's device claims, as `device_close` does; the devices stay booted. */
@@ -47,6 +51,7 @@ export class ResourceCleanupService extends Context.Reference<{
   defaultValue: () => ({
     cleanupScheduledTasks: () => Effect.void,
     cleanupWorkModuleLinks: () => Effect.void,
+    cleanupDesign: () => Effect.void,
     cleanupTerminals: () => Effect.void,
     cleanupPreviews: () => Effect.void,
     cleanupDevices: () => Effect.void,
@@ -64,6 +69,7 @@ export const layer = Layer.effect(
     const config = yield* ServerConfig.ServerConfig;
     const scheduledTasks = yield* ScheduledTaskService.ScheduledTaskService;
     const workModules = yield* WorkModuleService.WorkModuleService;
+    const sql = yield* SqlClient.SqlClient;
     return {
       cleanupScheduledTasks: Effect.fn("ResourceCleanupService.cleanupScheduledTasks")(function (
         threadId: ThreadId,
@@ -87,6 +93,16 @@ export const layer = Layer.effect(
               (cause) => new ResourceCleanupError({ operation: "work-modules", threadId, cause }),
             ),
           );
+      }),
+      cleanupDesign: Effect.fn("ResourceCleanupService.cleanupDesign")(function (
+        threadId: ThreadId,
+      ) {
+        return deleteThreadCanvas(threadId).pipe(
+          Effect.provideService(SqlClient.SqlClient, sql),
+          Effect.mapError(
+            (cause) => new ResourceCleanupError({ operation: "design", threadId, cause }),
+          ),
+        );
       }),
       cleanupTerminals: Effect.fn("ResourceCleanupService.cleanupTerminals")(function (
         threadId: string,

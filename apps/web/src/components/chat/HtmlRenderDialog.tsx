@@ -18,6 +18,14 @@ export function HtmlRenderDialog(props: {
   readonly src: string;
   readonly htmlRender: HtmlRenderReference;
   readonly threadRef?: ScopedThreadRef | undefined;
+  /** Switches between sibling pages, such as the variations of one design. */
+  readonly tabs?:
+    | ReadonlyArray<{
+        readonly label: string;
+        readonly active: boolean;
+        readonly onSelect: () => void;
+      }>
+    | undefined;
   readonly onClose: () => void;
 }) {
   const gt = useGT();
@@ -73,6 +81,22 @@ export function HtmlRenderDialog(props: {
             </div>
           </div>
           <div className="mt-2 flex min-w-0 items-center justify-center gap-3 text-xs text-white/80">
+            {props.tabs?.length ? (
+              <div className="flex shrink-0 items-center gap-1">
+                {props.tabs.map((tab) => (
+                  <Button
+                    key={tab.label}
+                    aria-label={gt("Show {variant}", { variant: tab.label })}
+                    aria-pressed={tab.active}
+                    size="icon-sm"
+                    variant="overlay"
+                    onClick={tab.onSelect}
+                  >
+                    {tab.label}
+                  </Button>
+                ))}
+              </div>
+            ) : null}
             <span className="truncate">{title}</span>
             <div className="flex shrink-0 items-center gap-1">
               <Button

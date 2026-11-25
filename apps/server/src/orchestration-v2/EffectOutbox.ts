@@ -120,6 +120,9 @@ export const OrchestrationEffectRequestV2 = Schema.Union([
     type: Schema.Literal("work-modules.cleanup"),
   }),
   Schema.Struct({
+    type: Schema.Literal("design.cleanup"),
+  }),
+  Schema.Struct({
     type: Schema.Literal("terminal.cleanup"),
   }),
   Schema.Struct({
@@ -159,6 +162,7 @@ export const REPLAY_SAFE_EFFECT_TYPES_AFTER_PROCESS_LOSS = [
   "checkpoint.capture",
   "scheduled-tasks.cleanup",
   "work-modules.cleanup",
+  "design.cleanup",
   "terminal.cleanup",
   "preview.cleanup",
   "attachment.cleanup",

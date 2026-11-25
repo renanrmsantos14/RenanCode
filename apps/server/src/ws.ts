@@ -140,6 +140,7 @@ import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts"
 import * as DocumentText from "./provider/DocumentText.ts";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as ProjectChecklist from "./projectChecklist/ProjectChecklistService.ts";
+import * as DesignService from "./design/DesignService.ts";
 import * as WorkModules from "./workModules/WorkModuleService.ts";
 import * as Workflows from "./workflows/Workflows.ts";
 import * as WorkflowRuntime from "./workflows/WorkflowRuntime.ts";
@@ -1529,6 +1530,7 @@ export const layerWsRpc = (
       const providerSessionManager = yield* ProviderSessionManager.ProviderSessionManagerV2;
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
       const workModules = yield* WorkModules.WorkModuleService;
+      const design = yield* DesignService.DesignService;
       const projectChecklist = yield* ProjectChecklist.ProjectChecklistService;
       const workflows = yield* Workflows.Workflows;
       const workflowDefinitions = yield* WorkflowRuntime.WorkflowDefinitions;
@@ -2504,6 +2506,11 @@ export const layerWsRpc = (
         [WS_METHODS.projectChecklistMove]: (input) => projectChecklist.move(input),
         [WS_METHODS.projectChecklistDelete]: (input) =>
           projectChecklist.delete(input.id).pipe(Effect.map((deletedIds) => ({ deletedIds }))),
+        [WS_METHODS.designSubscribeCanvas]: (input) => design.subscribe(input.threadId),
+        [WS_METHODS.designMoveNodes]: (input) => design.moveNodes(input),
+        [WS_METHODS.designSetViewport]: (input) => design.setViewport(input),
+        [WS_METHODS.designRemoveNode]: (input) => design.removeNode(input),
+        [WS_METHODS.designPlaceSketch]: (input) => design.placeSketch(input).pipe(Effect.asVoid),
         [WS_METHODS.workModulesSubscribe]: (_input) => workModules.subscribe(),
         [WS_METHODS.workModulesUpsert]: (input) => workModules.upsert(input),
         [WS_METHODS.workModulesMove]: (input) => workModules.move(input),

@@ -13,9 +13,19 @@ import {
   HTML_VARIANTS_MIN,
   HTML_VARIANTS_TOOL_NAME,
 } from "@t3tools/shared/htmlRender";
+import {
+  DESIGN_SKETCH_DEFAULT_WIDTH,
+  DESIGN_SKETCH_MAX_HEIGHT,
+  DESIGN_SKETCH_MAX_TITLE_LENGTH,
+  DESIGN_SKETCH_MAX_WIDTH,
+  DESIGN_SKETCH_MIN_HEIGHT,
+  DESIGN_SKETCH_MIN_WIDTH,
+  DESIGN_SKETCH_TOOL_NAME,
+} from "@t3tools/shared/design";
 import * as Schema from "effect/Schema";
 import { McpSchema, Tool, Toolkit } from "effect/ai";
 
+import * as DesignService from "../../../design/DesignService.ts";
 import * as HtmlRender from "../../../htmlRender/HtmlRender.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
@@ -78,6 +88,16 @@ export const HtmlPreviewTool = Tool.make("html_preview", {
   .annotate(Tool.Idempotent, true)
   .annotate(Tool.OpenWorld, true)
   .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
+
+const DesignSketchReference = Schema.Struct({
+  sketchId: Schema.String,
+  attachmentId: Schema.String,
+  thumbnailAttachmentId: Schema.NullOr(Schema.String),
+  title: Schema.String,
+  width: Schema.Number,
+  height: Schema.Number,
+  label: Schema.optional(Schema.String),
+});
 
 // This affects only the caller's thread, not its workspace, so read-only sandboxes and plan mode may use it.
 const HtmlRenderTool = Tool.make(HTML_RENDER_TOOL_NAME, {
@@ -147,6 +167,7 @@ const HtmlVariantsTool = Tool.make(HTML_VARIANTS_TOOL_NAME, {
         heights: Schema.optional(Schema.Array(Schema.Tuple([Schema.Int, Schema.Int]))),
       }),
     ),
+    designSketches: Schema.optional(Schema.Array(DesignSketchReference)),
     message: Schema.String,
   }),
   failure: OrchestratorMcpFailure,
@@ -155,6 +176,7 @@ const HtmlVariantsTool = Tool.make(HTML_VARIANTS_TOOL_NAME, {
     McpInvocationContext.McpInvocationContext,
     ThreadManagementService.ThreadManagementService,
     HtmlRender.HtmlRender,
+    DesignService.DesignService,
   ],
 })
   .annotate(Tool.Title, "Render HTML variants")
@@ -164,8 +186,56 @@ const HtmlVariantsTool = Tool.make(HTML_VARIANTS_TOOL_NAME, {
   .annotate(Tool.OpenWorld, true)
   .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
 
+// Like html_render, it only touches the caller's thread and project canvas, so read-only sandboxes may use it.
+const DesignSketchTool = Tool.make(DESIGN_SKETCH_TOOL_NAME, {
+  description: `Explore an idea for an interface or screen as an HTML page. It opens in the thread's Design section, where the user can compare and refine it. For a chart or other data, use html_render. ${PAGE_RULES} Theme and layout rules are in html_render.`,
+  parameters: Schema.Struct({
+    path: Schema.optional(HtmlPath),
+    html: Schema.optional(Html),
+    title: Schema.String.check(
+      Schema.isMinLength(1),
+      Schema.isMaxLength(DESIGN_SKETCH_MAX_TITLE_LENGTH),
+    ),
+    width: Schema.optional(
+      Schema.Int.annotate({
+        description: `CSS pixels, ${DESIGN_SKETCH_MIN_WIDTH} to ${DESIGN_SKETCH_MAX_WIDTH}. Default ${DESIGN_SKETCH_DEFAULT_WIDTH}. Use about 390 for phones.`,
+      }),
+    ),
+    height: Schema.optional(
+      Schema.Int.annotate({
+        description: `CSS pixels, ${DESIGN_SKETCH_MIN_HEIGHT} to ${DESIGN_SKETCH_MAX_HEIGHT}. Default: the page's content height.`,
+      }),
+    ),
+    basedOn: Schema.optional(
+      Schema.String.annotate({
+        description: "sketchId of an earlier sketch this one refines. It is placed beside it.",
+      }),
+    ),
+  }),
+  success: Schema.Struct({ designSketch: DesignSketchReference, message: Schema.String }),
+  failure: OrchestratorMcpFailure,
+  failureMode: "return",
+  dependencies: [
+    McpInvocationContext.McpInvocationContext,
+    ThreadManagementService.ThreadManagementService,
+    HtmlRender.HtmlRender,
+    DesignService.DesignService,
+  ],
+})
+  .annotate(Tool.Title, "Sketch a design")
+  .annotate(Tool.Readonly, true)
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.Idempotent, false)
+  .annotate(Tool.OpenWorld, true)
+  .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
+
 export const HtmlPreviewToolkit = Toolkit.make(HtmlPreviewTool);
 
-export const HtmlRenderToolkit = Toolkit.make(HtmlRenderTool, HtmlVariantsTool);
+export const HtmlRenderToolkit = Toolkit.make(HtmlRenderTool, HtmlVariantsTool, DesignSketchTool);
 
-export const HtmlToolkit = Toolkit.make(HtmlPreviewTool, HtmlRenderTool, HtmlVariantsTool);
+export const HtmlToolkit = Toolkit.make(
+  HtmlPreviewTool,
+  HtmlRenderTool,
+  HtmlVariantsTool,
+  DesignSketchTool,
+);

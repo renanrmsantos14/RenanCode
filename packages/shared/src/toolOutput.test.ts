@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   compactDynamicToolOutput,
   compactT3McpToolOutput,
+  designSketchesFromToolItem,
   htmlVariantsFromToolItem,
   MAX_TOOL_OUTPUT_IMAGES,
   mcpToolResultOutput,
@@ -270,5 +271,44 @@ describe("htmlVariantsFromToolItem", () => {
         output: { isError: true, structuredContent: { htmlRenders } },
       }),
     ).toBe(undefined);
+  });
+});
+
+describe("designSketchesFromToolItem", () => {
+  const sketch = {
+    sketchId: "sketch-1",
+    attachmentId: "design-p-1-html",
+    thumbnailAttachmentId: null,
+    title: "Home",
+    width: 1280,
+    height: 900,
+  };
+
+  it("reads design_sketch and html_variants sketches and ignores other tools and errors", () => {
+    expect(
+      designSketchesFromToolItem({
+        toolName: "mcp__t3-code__design_sketch",
+        output: { structuredContent: { designSketch: sketch, message: "ok" } },
+      }),
+    ).toEqual([sketch]);
+    const designSketches = [sketch, { ...sketch, sketchId: "sketch-2", label: "Airy" }];
+    expect(
+      designSketchesFromToolItem({
+        toolName: "t3-code.html_variants",
+        output: { structuredContent: { designSketches } },
+      }),
+    ).toEqual(designSketches);
+    expect(
+      designSketchesFromToolItem({
+        toolName: "t3-code.html_render",
+        output: { structuredContent: { designSketch: sketch } },
+      }),
+    ).toBeUndefined();
+    expect(
+      designSketchesFromToolItem({
+        toolName: "t3-code.design_sketch",
+        output: { isError: true, structuredContent: { designSketch: sketch } },
+      }),
+    ).toBeUndefined();
   });
 });

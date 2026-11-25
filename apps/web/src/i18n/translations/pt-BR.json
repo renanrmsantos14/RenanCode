@@ -12768,7 +12768,6 @@
   "0553bd16ceaa299e": "Adicionar nota…",
   "d73183da1334caa7": "Sem nota",
   "56e9fabcabc90c46": "Confirmar",
-  "70bdebaa3d291d3b": "Thread indisponível",
   "9e0e71048f2e77ca": "Arquivada",
   "cbc1a331d14cafe8": "Ligar thread existente",
   "e1542c9f4b24f8d5": [
@@ -13371,5 +13370,15 @@
   "201490988858b511": "retirada por {by}",
   "99451a5d2d40440f": "Retirada por {by}.",
   "3ee30a50b70fffab": "Retirada por {by}: {reason}",
-  "92e129bf413a1220": "retirada"
+  "92e129bf413a1220": "retirada",
+  "d9d919faea40ccfd": "Abrir Design",
+  "37311e0add03806b": "Organize em um canvas as telas que o agente esboça.",
+  "d6e524382c619981": "Abrir Design",
+  "3e19afa2072da269": "Abrir esboço {title}",
+  "f0193fc422ae70cd": "Remover do canvas",
+  "43878fb3f7e42f0e": "Ajustar à tela",
+  "bae2ec2de83b8e19": "Tela cheia",
+  "fc5f9903c7a7a997": "Nenhum esboço ainda. Peça ao agente para desenhar uma tela e ele a coloca aqui com design_sketch.",
+  "16e20108e473df2e": "Esboço sem miniatura",
+  "75810a0ab0d14ba4": "O Design não está disponível neste ambiente."
 }

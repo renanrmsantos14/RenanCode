@@ -291,6 +291,7 @@ import {
   ThreadHtmlRender,
   ThreadHtmlVariants,
 } from "./HtmlRenderWebView";
+import { ThreadDesignSketches } from "./DesignSketchCards";
 import { ThreadMcpApp } from "./McpAppWebView";
 import { assetEnvironment, useAssetUrl, useRefreshAssetUrl } from "../../state/assets";
 import { useAtomQueryRunner } from "../../state/use-atom-query-runner";
@@ -2139,6 +2140,18 @@ function renderFeedEntry(
         threadId={props.threadId}
         variants={entry.variants}
         frameWidth={props.contentWidth}
+        iconColor={iconSubtleColor}
+        onFollow={props.onFollowHtmlVariant}
+      />
+    );
+  }
+
+  if (entry.type === "design-sketches") {
+    return (
+      <ThreadDesignSketches
+        environmentId={props.environmentId}
+        threadId={props.threadId}
+        sketches={entry.sketches}
         iconColor={iconSubtleColor}
         onFollow={props.onFollowHtmlVariant}
       />

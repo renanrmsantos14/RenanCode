@@ -72,6 +72,7 @@ import type { ThreadRunSummary } from "@t3tools/client-runtime/state/shell";
 import type { ToolCallVisibility } from "@t3tools/contracts/settings";
 import { resolveT3McpToolDefinition } from "@t3tools/shared/t3McpToolPresentation";
 import { compactDynamicToolOutput } from "@t3tools/shared/toolOutput";
+import type { DesignSketchReference } from "@t3tools/shared/design";
 import {
   htmlRenderReferencesEqual,
   type HtmlRenderReference,
@@ -124,6 +125,7 @@ export function timelineEntryRunId(entry: TimelineEntry): RunId | null {
   if (
     entry.kind === "html-render" ||
     entry.kind === "html-variants" ||
+    entry.kind === "design-sketches" ||
     entry.kind === "mcp-app" ||
     entry.kind === "sent-message"
   ) {
@@ -719,6 +721,12 @@ type MessagesTimelineRowContent =
       htmlVariants: ReadonlyArray<HtmlVariantReference>;
     }
   | {
+      kind: "design-sketches";
+      id: string;
+      createdAt: string;
+      designSketches: ReadonlyArray<DesignSketchReference>;
+    }
+  | {
       kind: "sent-message";
       id: string;
       createdAt: string;
@@ -907,6 +915,7 @@ function deriveSupersededAttemptFolds(
       (entry.kind === "event" && entry.projectedItem.item.type === "handoff") ||
       entry.kind === "html-render" ||
       entry.kind === "html-variants" ||
+      entry.kind === "design-sketches" ||
       entry.kind === "mcp-app" ||
       entry.kind === "sent-message" ||
       timelineEntryIsPersistentResourceCard(entry) ||
@@ -2277,6 +2286,16 @@ export function deriveMessagesTimelineRows(
       continue;
     }
 
+    if (timelineEntry.kind === "design-sketches") {
+      nextRows.push({
+        kind: "design-sketches",
+        id: timelineEntry.id,
+        createdAt: timelineEntry.createdAt,
+        designSketches: timelineEntry.designSketches,
+      });
+      continue;
+    }
+
     if (timelineEntry.kind === "html-variants") {
       nextRows.push({
         kind: "html-variants",
@@ -2905,6 +2924,23 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
       // Tool updates rebuild entries; preserve frames for unchanged pages.
       const bh = b as typeof a;
       return a.createdAt === bh.createdAt && htmlRenderReferencesEqual(a.htmlRender, bh.htmlRender);
+    }
+
+    case "design-sketches": {
+      const bd = b as typeof a;
+      return (
+        a.createdAt === bd.createdAt &&
+        a.designSketches.length === bd.designSketches.length &&
+        a.designSketches.every((sketch, index) => {
+          const other = bd.designSketches[index];
+          return (
+            other !== undefined &&
+            sketch.sketchId === other.sketchId &&
+            sketch.thumbnailAttachmentId === other.thumbnailAttachmentId &&
+            htmlRenderReferencesEqual(sketch, other)
+          );
+        })
+      );
     }
 
     case "html-variants": {

@@ -1,6 +1,8 @@
-import { OrchestratorMcpFailure } from "@t3tools/contracts";
+import { DesignSketchId, OrchestratorMcpFailure } from "@t3tools/contracts";
+import { DESIGN_SKETCH_DEFAULT_WIDTH } from "@t3tools/shared/design";
 import * as Effect from "effect/Effect";
 
+import * as DesignService from "../../../design/DesignService.ts";
 import * as HtmlRender from "../../../htmlRender/HtmlRender.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
@@ -8,6 +10,7 @@ import { loadCaller } from "../../threadAccess.ts";
 import { HtmlPreviewToolkit, HtmlRenderToolkit, type HtmlToolkit } from "./tools.ts";
 
 const INVALID_PAGE_ERRORS = new Set([
+  "DesignError",
   "HtmlRenderFileError",
   "HtmlRenderFileTooLargeError",
   "HtmlRenderImagesNotFoundError",
@@ -88,16 +91,86 @@ const handlers = {
       const scope = yield* McpInvocationContext.McpInvocationContext;
       const { thread } = yield* McpInvocationContext.requireThreadScope(scope, "html_variants");
       const htmlRender = yield* HtmlRender.HtmlRender;
+      const design = yield* DesignService.DesignService;
       const htmlRenders = yield* htmlRender
         .publishVariants({
           threadId: thread.threadId,
           variants: input.variants.map((variant) => ({ ...variant, title: input.title })),
         })
         .pipe(Effect.mapError(toFailure));
+      // The pages are already in the thread, so a canvas that cannot take them costs only the Design copy.
+      const { caller } = yield* loadCaller();
+      const designSketches =
+        caller === undefined
+          ? undefined
+          : yield* design
+              .createSketches({
+                threadId: thread.threadId,
+                projectId: caller.projectId,
+                pages: input.variants.map((variant) => ({
+                  html: variant.html,
+                  title: input.title,
+                  label: variant.label,
+                  width: DESIGN_SKETCH_DEFAULT_WIDTH,
+                  height: variant.height,
+                })),
+              })
+              .pipe(
+                Effect.catch((error) =>
+                  Effect.logWarning("html_variants could not save its Design sketches", error).pipe(
+                    Effect.as(undefined),
+                  ),
+                ),
+              );
       return {
         htmlRenders,
+        ...(designSketches === undefined ? {} : { designSketches }),
+        message: `Shown to the reader side by side above your reply, lettered A, B, C.${
+          designSketches === undefined ? "" : " Also saved to this thread's Design section."
+        } Don't describe them; say only how they differ if the labels don't.`,
+      };
+    }),
+  ),
+  design_sketch: McpToolAccess.actsAsCaller((input) =>
+    Effect.gen(function* () {
+      const scope = yield* McpInvocationContext.McpInvocationContext;
+      const { thread } = yield* McpInvocationContext.requireThreadScope(scope, "design_sketch");
+      const htmlRender = yield* HtmlRender.HtmlRender;
+      const design = yield* DesignService.DesignService;
+      const source = yield* pageSource(input);
+      const { caller } = yield* loadCaller();
+      if (caller === undefined) {
+        return yield* new OrchestratorMcpFailure({
+          code: "target_required",
+          message: "design_sketch needs a T3 thread.",
+        });
+      }
+      const html = yield* htmlRender.readPage(source).pipe(Effect.mapError(toFailure));
+      const [designSketch] = yield* design
+        .createSketches({
+          threadId: thread.threadId,
+          projectId: caller.projectId,
+          ...(input.basedOn === undefined ? {} : { basedOn: DesignSketchId.make(input.basedOn) }),
+          pages: [
+            {
+              html,
+              title: input.title,
+              width: input.width ?? DESIGN_SKETCH_DEFAULT_WIDTH,
+              height: input.height,
+            },
+          ],
+        })
+        .pipe(Effect.mapError(toFailure));
+      if (designSketch === undefined) {
+        return yield* new OrchestratorMcpFailure({
+          code: "orchestration_error",
+          message: "The sketch was not saved.",
+        });
+      }
+      return {
+        designSketch,
         message:
-          "Shown to the reader side by side above your reply, lettered A, B, C. Don't describe them; say only how they differ if the labels don't.",
+          "Saved to this thread's Design section. Don't describe the page; reply with only what it doesn't already say.",
       };
     }),
   ),
@@ -110,4 +183,5 @@ export const layerPreview = McpToolAccess.toLayer(HtmlPreviewToolkit, {
 export const layerRender = McpToolAccess.toLayer(HtmlRenderToolkit, {
   html_render: handlers.html_render,
   html_variants: handlers.html_variants,
+  design_sketch: handlers.design_sketch,
 });

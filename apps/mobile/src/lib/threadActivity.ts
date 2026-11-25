@@ -75,11 +75,13 @@ import {
 import { claudeResumeCompactionAge } from "@t3tools/shared/claudeCompaction";
 import { formatDuration } from "@t3tools/shared/orchestrationTimingCopy";
 import { truncate } from "@t3tools/shared/String";
+import type { DesignSketchReference } from "@t3tools/shared/design";
 import type { HtmlRenderReference, HtmlVariantReference } from "@t3tools/shared/htmlRender";
 import type { McpAppReference } from "@t3tools/shared/mcpApp";
 import {
   compactDynamicToolOutput,
   htmlRenderFromToolItem,
+  designSketchesFromToolItem,
   htmlVariantsFromToolItem,
   sentMessageFromToolItem,
   mcpAppFromToolItem,
@@ -200,6 +202,13 @@ type RawThreadFeedEntry =
       readonly variants: ReadonlyArray<HtmlVariantReference>;
     }
   | {
+      readonly type: "design-sketches";
+      readonly id: string;
+      readonly createdAt: string;
+      readonly runId: RunId | null;
+      readonly sketches: ReadonlyArray<DesignSketchReference>;
+    }
+  | {
       readonly type: "sent-message";
       readonly id: string;
       readonly createdAt: string;
@@ -225,7 +234,15 @@ export type ThreadFeedEntry = ThreadFeedEntryContent & {
 type ThreadFeedEntryContent =
   | Extract<
       RawThreadFeedEntry,
-      { type: "message" | "html-render" | "html-variants" | "sent-message" | "mcp-app" }
+      {
+        type:
+          | "message"
+          | "html-render"
+          | "html-variants"
+          | "design-sketches"
+          | "sent-message"
+          | "mcp-app";
+      }
     >
   | {
       readonly type: "activity-group";
@@ -1222,6 +1239,7 @@ function feedEntryFoldRunId(entry: ThreadFeedEntry, runlessKey: RunId | null): R
   return entry.type === "activity-group" ||
     entry.type === "html-render" ||
     entry.type === "html-variants" ||
+    entry.type === "design-sketches" ||
     entry.type === "sent-message" ||
     entry.type === "mcp-app"
     ? (entry.runId ?? runlessKey)
@@ -1534,6 +1552,7 @@ function staysOutOfFold(entry: ThreadFeedEntry): boolean {
   return (
     entry.type === "html-render" ||
     entry.type === "html-variants" ||
+    entry.type === "design-sketches" ||
     entry.type === "sent-message" ||
     entry.type === "mcp-app" ||
     (entry.type === "activity-group" &&
@@ -2667,6 +2686,23 @@ export function buildThreadFeed(
       continue;
     }
     const createdAt = DateTime.formatIso(item.startedAt ?? item.updatedAt);
+    const sketches =
+      item.type === "dynamic_tool" && item.status === "completed"
+        ? designSketchesFromToolItem(item)
+        : undefined;
+    if (sketches) {
+      const entry: RawThreadFeedEntry = {
+        type: "design-sketches",
+        id: `design-sketches:${row.visibility}:${row.sourceThreadId}:${row.sourceItemId}`,
+        createdAt,
+        runId: item.runId,
+        sketches,
+      };
+      projectedEntriesCache.set(row, { attemptId, locale, entries: [entry] });
+      entries.push(entry);
+      entryRows.push(index);
+      continue;
+    }
     const variants =
       item.type === "dynamic_tool" && item.status === "completed"
         ? htmlVariantsFromToolItem(item)

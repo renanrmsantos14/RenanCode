@@ -12,6 +12,7 @@ import {
   createPendingAttachmentId,
   parseAttachmentUuid,
   planAttachmentClaim,
+  projectDesignSketchAttachmentId,
   parseThreadSegmentFromAttachmentId,
   sweepStalePendingAttachments,
   threadHtmlRenderAttachmentIds,
@@ -229,5 +230,17 @@ describe("threadHtmlRenderAttachmentIds", () => {
         },
       ]),
     ).toEqual([app]);
+  });
+});
+
+describe("projectDesignSketchAttachmentId", () => {
+  it("accepts only a sketch file of the same project", () => {
+    const own = createAttachmentId("design-project-a", "html")!;
+    const other = createAttachmentId("design-project-b", "html")!;
+    const thread = createAttachmentId("thread-a", "html")!;
+    expect(projectDesignSketchAttachmentId("project-a", own)).toBe(own);
+    expect(projectDesignSketchAttachmentId("project-a", other)).toBeUndefined();
+    expect(projectDesignSketchAttachmentId("project-a", thread)).toBeUndefined();
+    expect(projectDesignSketchAttachmentId("project-a", null)).toBeUndefined();
   });
 });

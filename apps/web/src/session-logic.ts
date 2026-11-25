@@ -20,11 +20,13 @@ import {
 import { extractToolActivityPresentation } from "@t3tools/client-runtime/work-log/tool-presentation";
 import { classifyToolActivity, collectToolFilePaths } from "@t3tools/shared/toolActivity";
 import { formatReadToolLabel, formatSearchToolLabel } from "@t3tools/shared/toolActivityCopy";
+import type { DesignSketchReference } from "@t3tools/shared/design";
 import type { HtmlRenderReference, HtmlVariantReference } from "@t3tools/shared/htmlRender";
 import { turnItemDetailRevision } from "@t3tools/client-runtime/work-log/item-detail";
 import type { McpAppReference } from "@t3tools/shared/mcpApp";
 import {
   htmlRenderFromToolItem,
+  designSketchesFromToolItem,
   htmlVariantsFromToolItem,
   mcpAppFromToolItem,
   sentMessageFromToolItem,
@@ -126,6 +128,13 @@ export type TimelineEntry = (
       readonly createdAt: string;
       readonly runId: RunId | null;
       readonly htmlRender: HtmlRenderReference;
+    }
+  | {
+      readonly id: string;
+      readonly kind: "design-sketches";
+      readonly createdAt: string;
+      readonly runId: RunId | null;
+      readonly designSketches: ReadonlyArray<DesignSketchReference>;
     }
   | {
       readonly id: string;
@@ -698,6 +707,22 @@ export function deriveTimelineEntriesFromVisibleTurnItems(
         kind: "proposed-plan",
         createdAt,
         proposedPlan,
+        ...attemptMetadata,
+      });
+      continue;
+    }
+
+    const designSketches =
+      item.type === "dynamic_tool" && item.status === "completed"
+        ? designSketchesFromToolItem(item)
+        : undefined;
+    if (designSketches !== undefined) {
+      entries.push({
+        id: item.id,
+        kind: "design-sketches",
+        createdAt,
+        runId: item.runId,
+        designSketches,
         ...attemptMetadata,
       });
       continue;

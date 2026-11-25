@@ -1470,6 +1470,57 @@ describe("HTML renders in the timeline", () => {
     expect(running.find((entry) => entry.id === "render")?.kind).toBe("work");
   });
 
+  it("shows design_sketch and html_variants sketches as a design-sketches entry ahead of variants", () => {
+    const sketch = (id: string, label?: string) => ({
+      sketchId: id,
+      attachmentId: `${id}.html`,
+      thumbnailAttachmentId: `${id}.png`,
+      title: "Home",
+      width: 390,
+      height: 844,
+      ...(label === undefined ? {} : { label }),
+    });
+    const call = (toolName: string, status: "completed" | "running", output?: unknown) => {
+      const item = renderCall(status, output);
+      return item.type === "dynamic_tool" ? { ...item, toolName } : item;
+    };
+
+    const single = turn(
+      call("mcp__t3-code__design_sketch", "completed", {
+        structuredContent: { designSketch: sketch("a") },
+        content: [],
+      }),
+    );
+    expect(single.find((entry) => entry.kind === "design-sketches")).toMatchObject({
+      id: "render",
+      runId,
+      designSketches: [sketch("a")],
+    });
+    expect(rowsFor(single, false)).toEqual(["message", "turn-fold", "design-sketches", "message"]);
+
+    const variants = [sketch("a", "Dense"), sketch("b", "Airy")];
+    const grouped = turn(
+      call("mcp__t3-code__html_variants", "completed", {
+        structuredContent: {
+          htmlRenders: [
+            { attachmentId: "render-a.html", title: "Home", height: 420 },
+            { attachmentId: "render-b.html", title: "Home", height: 420 },
+          ],
+          designSketches: variants,
+        },
+        content: [],
+      }),
+    );
+    expect(grouped.find((entry) => entry.kind === "design-sketches")).toMatchObject({
+      designSketches: variants,
+    });
+    expect(grouped.some((entry) => entry.kind === "html-variants")).toBe(false);
+
+    const running = turn(call("mcp__t3-code__design_sketch", "running"));
+    expect(running.some((entry) => entry.kind === "design-sketches")).toBe(false);
+    expect(running.find((entry) => entry.id === "render")?.kind).toBe("work");
+  });
+
   it("shows a sent message in place through the turn fold, and only once sent", () => {
     const sentMessage = "Draft reply:\n\n> Thanks, Thursday works.";
     const send = (

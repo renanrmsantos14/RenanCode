@@ -73,6 +73,7 @@ export type EnvironmentSubscriptionRpcTag =
   | typeof WS_METHODS.scheduledTasksSubscribe
   | typeof WS_METHODS.projectChecklistSubscribe
   | typeof WS_METHODS.workModulesSubscribe
+  | typeof WS_METHODS.designSubscribeCanvas
   | typeof WS_METHODS.workflowsSubscribe
   | typeof WS_METHODS.workflowsCounts
   | typeof WS_METHODS.serverGetStorageCleanupReport
