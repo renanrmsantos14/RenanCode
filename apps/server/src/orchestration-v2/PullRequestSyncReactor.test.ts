@@ -16,6 +16,7 @@ import {
   type OrchestrationV2InternalCommand,
   type OrchestrationV2DomainEvent,
   type OrchestrationV2Run,
+  type OrchestrationV2TurnItem,
   type OrchestrationProjectShell,
   type PullRequestRef,
   type PullRequestStack,
@@ -378,6 +379,8 @@ function runUpdated(
     },
   };
 }
+
+type CommandItem = Extract<OrchestrationV2TurnItem, { readonly type: "command_execution" }>;
 
 function commandRan(
   threadId: ThreadId,
@@ -2435,6 +2438,50 @@ describe("PullRequestSyncReactor", () => {
         assert.deepStrictEqual(
           links.map((command) => [command.threadId, command.number, command.source]),
           linked.map((number) => [child, number, "created"]),
+        );
+      }).pipe(Effect.provide(fixture.layer));
+    }),
+  );
+
+  it.effect.each([
+    {
+      name: "GitHub's MCP create tool",
+      toolName: "mcp__github__create_pull_request",
+      output: [
+        { type: "text", text: '{"id":"1","url":"https://github.com/owner/repository/pull/16"}' },
+      ],
+      linked: [16],
+    },
+    {
+      name: "a tool that only reads one",
+      toolName: "mcp__github__pull_request_read",
+      output: [{ type: "text", text: '{"url":"https://github.com/owner/repository/pull/16"}' }],
+      linked: [],
+    },
+    {
+      name: "a create tool whose result is not JSON",
+      toolName: "mcp__github__create_pull_request",
+      output: [{ type: "text", text: "failed: https://github.com/owner/repository/pull/16" }],
+      linked: [],
+    },
+  ])("links what a tool created: $name", ({ toolName, output, linked }) =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(Date.parse(NOW));
+      const fixture = yield* makeHarness({ snapshot: mergingSnapshot() });
+
+      yield* Effect.gen(function* () {
+        const reactor = yield* startAndSweep(fixture);
+        const cloud = ThreadId.make("claude-cloud:session");
+        const ran = commandRan(cloud, "unused");
+        if (ran.type !== "turn-item.updated") return;
+        const { input: _input, output: _output, ...base } = ran.payload as CommandItem;
+        const links = yield* linksFrom(fixture, reactor, [
+          { ...ran, payload: { ...base, type: "dynamic_tool", toolName, input: {}, output } },
+        ]);
+
+        assert.deepStrictEqual(
+          links.map((command) => [command.threadId, command.number, command.source]),
+          linked.map((number) => [cloud, number, "created"]),
         );
       }).pipe(Effect.provide(fixture.layer));
     }),

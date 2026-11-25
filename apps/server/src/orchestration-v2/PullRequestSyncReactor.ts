@@ -155,6 +155,7 @@ const shellCode = (script: string) =>
 const isPushCommand = (input: string) => PUSH_COMMAND.test(shellCode(shellScript(input)));
 
 type CommandExecution = Extract<OrchestrationV2TurnItem, { readonly type: "command_execution" }>;
+type DynamicTool = Extract<OrchestrationV2TurnItem, { readonly type: "dynamic_tool" }>;
 
 /**
  * The change requests a shell command opened: URLs on lines of their own in the output of a
@@ -192,6 +193,42 @@ export function changeRequestsCreatedBy(input: string, output: string) {
     created.set(threadPullRequestKeyOf(key), { ...key, url });
   }
   return created.size > creates ? [] : [...created.values()];
+}
+
+// GitHub's MCP server (`mcp__github__create_pull_request`), which Claude cloud sessions use since
+// their VMs have no `gh`, and GitLab's `create_merge_request`.
+const CREATE_TOOL = /(?:^|__)create_(?:pull|merge)_request$/u;
+const CREATED_URL_FIELDS = ["html_url", "web_url", "url"] as const;
+
+function toolOutputTexts(output: unknown): ReadonlyArray<string> {
+  if (typeof output === "string") return [output];
+  if (Array.isArray(output)) return output.flatMap(toolOutputTexts);
+  if (typeof output === "object" && output !== null && "text" in output) {
+    return toolOutputTexts(output.text);
+  }
+  return [];
+}
+
+/** The change request a host's MCP create tool opened, read from the URL in its JSON result. */
+function changeRequestsCreatedByTool(toolName: string | null, output: unknown) {
+  if (toolName === null || !CREATE_TOOL.test(toolName)) return [];
+  for (const text of toolOutputTexts(output)) {
+    let result: unknown;
+    try {
+      result = JSON.parse(text);
+    } catch {
+      continue;
+    }
+    if (typeof result !== "object" || result === null) continue;
+    for (const field of CREATED_URL_FIELDS) {
+      const url = (result as Record<string, unknown>)[field];
+      if (typeof url !== "string") continue;
+      const parsed = sourceControlDefinitions.parseChangeRequestUrl(url);
+      if (parsed === null) continue;
+      return [{ ...normalizeThreadPullRequestKey(parsed.link), url }];
+    }
+  }
+  return [];
 }
 
 const isPullRequestProviderError = Schema.is(PullRequestProviderError);
@@ -835,12 +872,15 @@ export const make = Effect.gen(function* () {
     Effect.catchCause(logSkipped("pull request refresh after link update skipped", {})),
   );
 
-  // An agent that opens a pull request from a shell gets it linked as link_pull_request would.
+  // An agent that opens a pull request from a shell or a host's MCP tool gets it linked as
+  // link_pull_request would.
   const linkCreatedChangeRequests = Effect.fn("PullRequestSyncReactor.linkCreatedChangeRequests")(
-    function* (threadId: ThreadId, item: CommandExecution) {
+    function* (threadId: ThreadId, item: CommandExecution | DynamicTool) {
       if (isOrchestrationV2WorkActive(item.status)) return;
       yield* Effect.forEach(
-        changeRequestsCreatedBy(item.input, item.output ?? ""),
+        item.type === "command_execution"
+          ? changeRequestsCreatedBy(item.input, item.output ?? "")
+          : changeRequestsCreatedByTool(item.toolName, item.output),
         (created) =>
           engine
             .dispatch({
@@ -931,6 +971,11 @@ export const make = Effect.gen(function* () {
           // ends. Read again when the run ends, since `merge --auto` returns before it merges.
           case "turn-item.updated": {
             const item = event.payload;
+            if (item.type === "dynamic_tool") {
+              return isOrchestrationV2WorkActive(item.status)
+                ? Effect.void
+                : inThreadOrder(event.threadId, linkCreatedChangeRequests(event.threadId, item));
+            }
             if (item.type !== "command_execution") return Effect.void;
             let reaction = Effect.andThen(
               linkCreatedChangeRequests(event.threadId, item),
