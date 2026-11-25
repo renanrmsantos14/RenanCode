@@ -21,6 +21,8 @@ description: "Verifica os Frames do canvas de Design (desktop): criação autom�
    - menu "Adicionar Frame": porta (lista descoberta + digitação livre), rota, tamanho (presets e personalizado); o popover não é cortado;
    - dois Frames: só o focado é ao vivo; ao trocar, o que perdeu o foco mostra o print (`snapshot_attachment_id` preenchido) e recarregar mantém o print;
    - botão de seleção no Frame ao vivo: clicar no elemento coloca no composer a anotação (seletor, HTML limitado, estilos) e a imagem recortada; Esc ou segundo clique cancela;
+   - o chip se chama pelo seletor (`#cta`) ou pela tag, e clicar nele mostra o recorte; escolher o mesmo elemento da mesma página de novo substitui o chip em vez de empilhar;
+   - prova no provider: enviar o chip e ler `payload_json` da última mensagem `user` em `orchestration_v2_projection_messages` (cópia do `statev2.sqlite` do dev): `context.records` com `selector`, `htmlPreview`, `styles` e `screenshotContextId`, e `attachments` com o PNG (a resposta do agente deve descrever o recorte);
    - remover o Frame (nó selecionado + "Remover do canvas") apaga o nó e fecha a sessão;
    - nenhuma aba extra aparece no painel de navegador durante o foco (o Frame é só do canvas).
 4. Entradas: barra do Design, paleta ("Adicionar Frame ao Design") e foco por clique no nó.
@@ -30,6 +32,7 @@ description: "Verifica os Frames do canvas de Design (desktop): criação autom�
 - `wc.capturePage()` não termina num `<webview>` escalado; use `captureStillImage` (já é o fallback da anotação, ~3 s a mais) e `captureSnapshot`.
 - Print do webview para evidência: `import -window <id>` (captura do SO). Screenshot por CDP sai errado nele.
 - `xdotool` não entrega clique ao webview; use CDP `Input.dispatchMouseEvent` no alvo do webview. O modo de anotação abre um popup dentro da página (shadow root fechado) com o botão "Add".
+- Se `capturePage` passar a estourar o tempo em todo Frame (anotação e `captureSnapshot`), recarregar a janela (não só o Frame) restaura a captura; o estado ruim apareceu depois de várias aberturas/fechamentos do Frame com o DevTools aberto e não foi reproduzido em sessão limpa.
 - Recarga forçada da janela deixa a sessão do Frame viva no servidor sem marca (a marca é em memória): ela aparece como aba normal e pode ser fechada à mão.
 
 ## Limites

@@ -26,10 +26,24 @@ export async function commitPickedElement(input: {
   const { annotation: picked, screenshotFailed = false } = input.result;
   const capture = capturePreviewAnnotationScreenshot(picked);
   const cropDropped = screenshotFailed || capture.status === "failed";
-  const annotation = capture.status === "failed" ? { ...picked, screenshot: null } : picked;
   if (capture.status === "captured") await readComposerImageBytes(capture.file);
   const draft = useComposerDraftStore.getState();
-  draft.addPreviewAnnotation(threadRef, annotation);
+  const annotation = capture.status === "failed" ? { ...picked, screenshot: null } : picked;
+  // Picking the same element of the same page again replaces its chip instead of stacking a copy.
+  // The caret handler would write the editor's stale text back, so the new chip goes to the end of the prompt.
+  const selector = annotation.elements[0]?.element.selector;
+  const earlier = (draft.getComposerDraft(threadRef)?.previewAnnotations ?? []).filter(
+    (entry) =>
+      !!selector &&
+      entry.pageUrl === annotation.pageUrl &&
+      entry.elements[0]?.element.selector === selector,
+  );
+  for (const entry of earlier) draft.removePreviewAnnotation(threadRef, entry.id);
+  if (earlier.length > 0) {
+    draft.addPreviewAnnotation(threadRef, annotation, { insertAtCaret: false });
+  } else {
+    draft.addPreviewAnnotation(threadRef, annotation);
+  }
   if (cropDropped) {
     toastManager.add(
       stackedThreadToast({
