@@ -100,7 +100,7 @@ vi.mock(import("../../state/entities"), async (original) => ({
   useServerConfigs: () => new Map([[environmentId, config]]),
 }));
 
-import { LabsSettingsPanel } from "./LabsSettingsPanel";
+import { SidebarSettingsPanel } from "./SidebarSettingsPanel";
 import { SettingsScopeProvider } from "./SettingsScopeContext";
 
 const [group] = buildSidebarProjectSnapshots({
@@ -118,9 +118,9 @@ it("shows Boring sidebar device preferences read-only while a project is selecte
   );
   await using screen = await render(
     <SettingsScopeProvider search={{ project: group!.projectKey }} onChange={() => {}}>
-      <LabsSettingsPanel />
+      <SidebarSettingsPanel />
     </SettingsScopeProvider>,
-    { router: "/settings/labs" },
+    { router: "/settings/sidebar" },
   );
 
   for (const name of ["Boring sidebar (group by project)", "Two-line folder rows"]) {
