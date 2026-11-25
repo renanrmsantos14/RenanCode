@@ -205,4 +205,48 @@ describe("DesignCanvas", () => {
       input: { threadId: threadRef.threadId, nodeId: "node-a" },
     });
   });
+
+  it("hides the React Flow attribution", async () => {
+    using _setup = setup();
+    await using screen = await mount(snapshot(1));
+
+    await expect.element(screen.getByRole("button", { name: "Open sketch Home A" })).toBeVisible();
+    expect(screen.container.querySelector(".react-flow__attribution")).toBeNull();
+  });
+
+  it("fits every node into the view when no viewport was saved", async () => {
+    using _setup = setup();
+    await using screen = await mount({ ...snapshot(2), viewport: null });
+    const pane = screen.container.querySelector<HTMLElement>(".react-flow")!;
+
+    await vi.waitFor(() => {
+      const bounds = pane.getBoundingClientRect();
+      const nodes = [...screen.container.querySelectorAll<HTMLElement>(".react-flow__node")];
+      expect(nodes).toHaveLength(2);
+      for (const node of nodes) {
+        const rect = node.getBoundingClientRect();
+        expect(rect.left).toBeGreaterThanOrEqual(bounds.left + bounds.width * 0.05);
+        expect(rect.right).toBeLessThanOrEqual(bounds.right - bounds.width * 0.05);
+      }
+      const left = Math.min(...nodes.map((node) => node.getBoundingClientRect().left));
+      const right = Math.max(...nodes.map((node) => node.getBoundingClientRect().right));
+      expect(right - left).toBeGreaterThan(bounds.width * 0.7);
+    });
+  });
+
+  it("letters the nodes of a group of variations", async () => {
+    using _setup = setup();
+    const canvas = snapshot(2);
+    await using screen = await mount({
+      ...canvas,
+      sketches: canvas.sketches.map((sketch) => ({ ...sketch, groupId: "group:1" })) as never,
+    });
+
+    const nodes = await vi.waitUntil(() => {
+      const found = screen.container.querySelectorAll<HTMLElement>(".react-flow__node");
+      return found.length === 2 ? [...found] : null;
+    });
+    expect(nodes.map((node) => node.textContent?.startsWith("A"))).toEqual([true, false]);
+    expect(nodes[1]?.textContent?.startsWith("B")).toBe(true);
+  });
 });

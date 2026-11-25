@@ -29,14 +29,10 @@ export function DesignSketchCard(props: {
       onClick={props.onOpen}
     >
       <div
-        className="relative w-full overflow-hidden rounded-md bg-muted/40 ring-1 ring-border/50"
+        className="relative w-full overflow-hidden rounded-md bg-muted ring-1 ring-border/50"
         style={{
           aspectRatio:
-            props.thumbnailSrc === null
-              ? "16 / 6"
-              : props.letter
-                ? "16 / 10"
-                : `${sketch.width} / ${Math.min(sketch.height, sketch.width)}`,
+            props.thumbnailSrc === null ? "16 / 6" : `${sketch.width} / ${sketch.height}`,
           maxHeight: CARD_MAX_THUMBNAIL_HEIGHT,
         }}
       >
@@ -46,7 +42,7 @@ export function DesignSketchCard(props: {
             alt=""
             draggable={false}
             loading="lazy"
-            className={cn("size-full object-top", props.letter ? "object-contain" : "object-cover")}
+            className="size-full object-cover object-top"
           />
         ) : (
           <div

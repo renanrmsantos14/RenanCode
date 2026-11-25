@@ -2,6 +2,7 @@ import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import { type DesignCanvasSnapshot, DesignNodeId, type DesignSketch } from "@t3tools/contracts";
 import { type DesignSketchReference, designSketchReference } from "@t3tools/shared/design";
+import { htmlVariantLetter } from "@t3tools/shared/htmlRender";
 import {
   Background,
   type Node,
@@ -39,8 +40,12 @@ import { useSketchPageUrl, useSketchThumbnailUrl } from "./sketchAssets";
 /** Below this zoom a node is a thumbnail: a live page this small is unreadable and costs a frame each. */
 const LIVE_PAGE_MIN_ZOOM = 0.35;
 const VIEWPORT_SAVE_DELAY_MS = 400;
+const FIT_OPTIONS = { maxZoom: 1, padding: "10%" } as const;
 
-type SketchFlowNode = Node<{ readonly sketch: DesignSketch }, "sketch">;
+type SketchFlowNode = Node<
+  { readonly sketch: DesignSketch; readonly letter: string | undefined },
+  "sketch"
+>;
 
 interface DesignCanvasContextValue {
   readonly environmentId: EnvironmentId;
@@ -54,7 +59,7 @@ function SketchThumbnail(props: { readonly sketch: DesignSketch }) {
   const ctx = use(DesignCanvasContext)!;
   const src = useSketchThumbnailUrl(ctx.environmentId, props.sketch.thumbnailAttachmentId);
   return src === null ? (
-    <div className="flex size-full items-center justify-center text-muted-foreground">
+    <div className="flex size-full items-center justify-center bg-muted text-muted-foreground">
       <FrameIcon className="size-1/6 max-h-24 max-w-24" />
     </div>
   ) : (
@@ -83,15 +88,30 @@ function LiveSketchPage(props: { readonly sketch: DesignSketch }) {
 function SketchNode({ data, selected }: NodeProps<SketchFlowNode>) {
   const gt = useGT();
   const ctx = use(DesignCanvasContext)!;
-  const live = useViewportStore((state) => state.transform[2] >= LIVE_PAGE_MIN_ZOOM);
-  const { sketch } = data;
+  const zoom = useViewportStore((state) => state.transform[2]);
+  const live = zoom >= LIVE_PAGE_MIN_ZOOM;
+  const { sketch, letter } = data;
   return (
     <div
       className={`relative size-full rounded-sm bg-card ring-1 ${selected ? "ring-2 ring-primary" : "ring-border"}`}
     >
-      <div className="absolute inset-x-0 -top-7 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+      <div
+        className="absolute start-0 bottom-full flex min-w-0 items-center gap-1.5 pb-1 text-xs text-foreground/80"
+        style={{
+          width: `${zoom * 100}%`,
+          transform: `scale(${1 / zoom})`,
+          transformOrigin: "bottom left",
+        }}
+      >
+        {letter ? (
+          <span className="shrink-0 rounded bg-muted px-1 font-medium text-muted-foreground">
+            {letter}
+          </span>
+        ) : null}
         {sketch.label ? (
-          <span className="shrink-0 rounded bg-muted px-1 font-medium">{sketch.label}</span>
+          <span className="max-w-[60%] min-w-0 shrink-0 truncate rounded bg-muted px-1 font-medium">
+            {sketch.label}
+          </span>
         ) : null}
         <span className="min-w-0 truncate">{sketch.title}</span>
         <Button
@@ -110,6 +130,12 @@ function SketchNode({ data, selected }: NodeProps<SketchFlowNode>) {
       </div>
     </div>
   );
+}
+
+function variantLetter(sketches: ReadonlyArray<DesignSketch>, sketch: DesignSketch) {
+  if (sketch.groupId === null) return undefined;
+  const siblings = sketches.filter((entry) => entry.groupId === sketch.groupId);
+  return siblings.length > 1 ? htmlVariantLetter(siblings.indexOf(sketch)) : undefined;
 }
 
 const NODE_TYPES = { sketch: SketchNode };
@@ -164,6 +190,14 @@ function DesignCanvasInner(props: {
     readonly index: number;
   } | null>(null);
   const viewportTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const viewportTouched = useRef(snapshot.viewport !== null);
+  const containerWidth = useViewportStore((state) => state.width);
+  const containerHeight = useViewportStore((state) => state.height);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- refits the React Flow viewport, an external system, when the container resizes (full screen) before the user has moved the view
+  useEffect(() => {
+    if (viewportTouched.current || containerWidth === 0 || containerHeight === 0) return;
+    void flow.fitView(FIT_OPTIONS);
+  }, [containerWidth, containerHeight, flow]);
 
   const sketchesById = new Map(snapshot.sketches.map((sketch) => [sketch.id, sketch]));
   const nodes: SketchFlowNode[] = snapshot.nodes.flatMap((node) => {
@@ -179,7 +213,7 @@ function DesignCanvasInner(props: {
         zIndex: node.z,
         selected: node.id === selectedId,
         draggable: props.canWrite,
-        data: { sketch },
+        data: { sketch, letter: variantLetter(snapshot.sketches, sketch) },
       },
     ];
   });
@@ -218,7 +252,13 @@ function DesignCanvasInner(props: {
   useEffect(() => {
     if (focusNodeId === undefined) return;
     useDesignFocusStore.getState().consume(threadRef);
-    void flow.fitView({ nodes: [{ id: focusNodeId }], maxZoom: 1, padding: "25%", duration: 200 });
+    viewportTouched.current = true;
+    void flow.fitView({
+      nodes: [{ id: focusNodeId }],
+      maxZoom: 1.5,
+      padding: "12%",
+      duration: 200,
+    });
   }, [focusNodeId, threadRef, flow]);
 
   const selectedNode = snapshot.nodes.find((node) => node.id === selectedId);
@@ -231,7 +271,8 @@ function DesignCanvasInner(props: {
         nodeTypes={NODE_TYPES}
         defaultViewport={snapshot.viewport ?? { x: 0, y: 0, zoom: 1 }}
         fitView={snapshot.viewport === null}
-        fitViewOptions={{ maxZoom: 1, padding: "20%" }}
+        fitViewOptions={FIT_OPTIONS}
+        proOptions={{ hideAttribution: true }}
         minZoom={0.05}
         maxZoom={2}
         onlyRenderVisibleElements
@@ -251,6 +292,9 @@ function DesignCanvasInner(props: {
             input: { threadId: threadRef.threadId, nodes: moved },
           });
           setDragging({});
+        }}
+        onMoveStart={(event) => {
+          if (event !== null) viewportTouched.current = true;
         }}
         onMoveEnd={(event, viewport) => {
           if (event === null || !props.canWrite) return;
@@ -285,10 +329,7 @@ function DesignCanvasInner(props: {
           <ToolbarButton label={gt("Zoom in")} onClick={() => void flow.zoomIn()}>
             <PlusIcon className="size-3.5" />
           </ToolbarButton>
-          <ToolbarButton
-            label={gt("Fit to screen")}
-            onClick={() => void flow.fitView({ maxZoom: 1, padding: "20%" })}
-          >
+          <ToolbarButton label={gt("Fit to screen")} onClick={() => void flow.fitView(FIT_OPTIONS)}>
             <ScanIcon className="size-3.5" />
           </ToolbarButton>
           <ToolbarButton

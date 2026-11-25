@@ -8,6 +8,8 @@ export const DESIGN_SKETCH_MAX_HEIGHT = 10_000;
 export const DESIGN_SKETCH_DEFAULT_MAX_HEIGHT = 4_000;
 export const DESIGN_SKETCH_MAX_TITLE_LENGTH = 200;
 export const DESIGN_CANVAS_GAP = 80;
+/** A new row leaves room for the screen labels, which keep a fixed size on screen while the frames zoom. */
+export const DESIGN_CANVAS_ROW_GAP = 200;
 
 export interface DesignSketchReference {
   readonly sketchId: string;
@@ -140,7 +142,7 @@ export function placeSketches(
     y = 0;
   } else {
     startX = Math.min(...existing.map((node) => node.x));
-    y = Math.max(...existing.map((node) => node.y + node.height)) + DESIGN_CANVAS_GAP;
+    y = Math.max(...existing.map((node) => node.y + node.height)) + DESIGN_CANVAS_ROW_GAP;
   }
   let x = startX;
   return sizes.map((size) => {

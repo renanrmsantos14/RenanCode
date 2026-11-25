@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   clampDesignSketchWidth,
   DESIGN_CANVAS_GAP,
+  DESIGN_CANVAS_ROW_GAP,
   placeSketches,
   readDesignSketchReference,
   readDesignSketchReferences,
@@ -29,7 +30,7 @@ describe("placeSketches", () => {
   it("puts a new group below everything already there, aligned to the left edge", () => {
     expect(
       placeSketches([node(100, 0), node(1500, 200, 400, 1000)], [{ width: 300, height: 300 }]),
-    ).toEqual([{ x: 100, y: 1200 + DESIGN_CANVAS_GAP }]);
+    ).toEqual([{ x: 100, y: 1200 + DESIGN_CANVAS_ROW_GAP }]);
   });
 
   it("puts a version to the right of the original, on its row", () => {
