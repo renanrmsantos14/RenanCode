@@ -629,6 +629,7 @@ it.effect(
     withService({ chrome: true }, (service) =>
       Effect.gen(function* () {
         assert.isNull(yield* service.readSelection(threadA));
+        yield* service.addFrame(frameInput(threadA, { auto: true }));
         yield* service.setSelection({ threadId: threadA, selection: selection("first") });
         yield* service.setSelection({ threadId: threadA, selection: selection("second") });
         assert.strictEqual((yield* service.readSelection(threadA))!.comment, "second");
@@ -677,6 +678,10 @@ it.effect(
           })
           .pipe(Effect.flip);
         assert.include(notPng.message, "not a PNG");
+        const noFrame = yield* service
+          .setSelection({ threadId: threadB, selection: selection("x") })
+          .pipe(Effect.flip);
+        assert.include(noFrame.message, "no Frame");
         assert.isNull(yield* service.readSelection(threadA));
       }),
     ),

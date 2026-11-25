@@ -76,7 +76,7 @@ export function useDesignFrameLive(input: {
     };
 
     const retire = async (target: FrameLiveSession, reported: boolean) => {
-      if (reported) await report(null);
+      if (reported) void report(null);
       if (canWrite) {
         const snapshot = await bridge.captureSnapshot(target.runtimeTabId).catch(() => null);
         if (snapshot !== null) {

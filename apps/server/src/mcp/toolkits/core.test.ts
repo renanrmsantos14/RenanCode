@@ -2163,6 +2163,7 @@ it.effect("design_selection_read returns the last pick of this thread only", () 
     expect(none.selection).toBeNull();
     expect(none.message).toContain("has not picked");
 
+    yield* design.addFrame({ threadId, url: "http://localhost:5173/", device: "desktop" });
     yield* design.setSelection({
       threadId,
       selection: {

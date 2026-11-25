@@ -1,7 +1,7 @@
 import type { DesignProjectSketch, EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { useGT } from "gt-react";
 import { FrameIcon, PlusIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useAtomCommand } from "~/state/use-atom-command";
 import { designEnvironment } from "~/state/design";
@@ -97,6 +97,7 @@ export function DesignSketchLibrary(props: {
     status: "loading",
   });
   const [reloadKey, setReloadKey] = useState(0);
+  const handledReloadKey = useRef(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const trimmed = query.trim();
 
@@ -113,6 +114,8 @@ export function DesignSketchLibrary(props: {
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- loads the first page from the server, an external system, whenever the search text or the project changes; typing waits for a short pause first
   useEffect(() => {
     let cancelled = false;
+    const retrying = reloadKey !== handledReloadKey.current;
+    handledReloadKey.current = reloadKey;
     const timer = setTimeout(
       () => {
         setPage((current) => ({ ...current, status: "loading" }));
@@ -133,7 +136,7 @@ export function DesignSketchLibrary(props: {
           );
         });
       },
-      trimmed === "" || reloadKey > 0 ? 0 : SEARCH_DELAY_MS,
+      trimmed === "" || retrying ? 0 : SEARCH_DELAY_MS,
     );
     return () => {
       cancelled = true;

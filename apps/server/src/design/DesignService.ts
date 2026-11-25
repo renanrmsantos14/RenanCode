@@ -927,6 +927,11 @@ export const layer = Layer.effect(
       if (input.selection.png !== null && !input.selection.png.startsWith(PNG_BASE64_PREFIX)) {
         return yield* fail("The selection image is not a PNG.");
       }
+      const frames = yield* sql<{ readonly node_id: string }>`
+        SELECT node_id FROM design_canvas_nodes
+        WHERE thread_id = ${input.threadId} AND kind = 'frame' LIMIT 1
+      `.pipe(Effect.mapError(storage));
+      if (frames.length === 0) return yield* fail("The thread has no Frame to pick from.");
       selections.set(input.threadId, input.selection);
     });
     // A removed Frame stops being live, and with no Frame left the picked element is stale.
