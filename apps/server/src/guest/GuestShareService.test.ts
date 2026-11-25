@@ -466,6 +466,9 @@ it.effect("opens each variation of an html_variants item by its index", () =>
       mimeType: "text/html",
     });
     assert.isTrue(Exit.isFailure(yield* Effect.exit(guestShares.render(session, variants, 2))));
+    assert.isTrue(
+      Exit.isFailure(yield* Effect.exit(guestShares.render(session, variants, 1, true))),
+    );
     assert.isTrue(Exit.isFailure(yield* Effect.exit(guestShares.render(session, variants))));
   }).pipe(Effect.provide(layerTest)),
 );
@@ -521,6 +524,22 @@ it.effect("opens a Design sketch's page and thumbnail only from the thread's own
       mimeType: "image/png",
     });
     assert.isTrue(Exit.isFailure(yield* Effect.exit(guestShares.render(session, stolen))));
+
+    const withoutThumbnail = yield* writeItem("item:sketch-no-thumbnail", {
+      type: "dynamic_tool",
+      status: "completed",
+      toolName: "mcp__t3-code__design_sketch",
+      input: {},
+      output: {
+        structuredContent: { designSketch: { ...sketch(page), thumbnailAttachmentId: null } },
+      },
+    });
+    assert.isTrue(
+      Exit.isFailure(
+        yield* Effect.exit(guestShares.render(session, withoutThumbnail, undefined, true)),
+      ),
+    );
+    assert.equal((yield* guestShares.render(session, withoutThumbnail)).mimeType, "text/html");
   }).pipe(Effect.provide(layerTest)),
 );
 

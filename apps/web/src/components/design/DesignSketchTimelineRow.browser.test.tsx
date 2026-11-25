@@ -40,7 +40,10 @@ function setup() {
   return { [Symbol.dispose]: () => useRightPanelStore.setState({ byThreadKey: {} }) };
 }
 
-function mount(sketches: ReadonlyArray<DesignSketchReference>) {
+function mount(
+  sketches: ReadonlyArray<DesignSketchReference>,
+  onFollowHtmlVariant?: (text: string) => boolean,
+) {
   const row = {
     kind: "design-sketches",
     id: "row",
@@ -48,7 +51,9 @@ function mount(sketches: ReadonlyArray<DesignSketchReference>) {
     designSketches: sketches,
   } as unknown as Extract<TimelineRow, { kind: "design-sketches" }>;
   return render(
-    <TimelineRowCtx value={{ activeThreadEnvironmentId: environmentId, threadRef } as never}>
+    <TimelineRowCtx
+      value={{ activeThreadEnvironmentId: environmentId, threadRef, onFollowHtmlVariant } as never}
+    >
       <DesignSketchTimelineRow row={row} />
     </TimelineRowCtx>,
   );
@@ -88,5 +93,25 @@ describe("DesignSketchTimelineRow on the web", () => {
     await expect
       .element(page.getByRole("button", { name: "Show C" }))
       .toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("keeps the Use button of each variation and sends the follow-up for that letter", async () => {
+    using _setup = setup();
+    const follow = vi.fn(() => true);
+    await using screen = await mount([sketch("a", "Dense"), sketch("b", "Airy")], follow);
+
+    await userEvent.click(screen.getByRole("button", { name: "Use B" }));
+
+    expect(follow).toHaveBeenCalledExactlyOnceWith("Continue with variant B (Airy): ");
+    expect(screen.getByRole("button", { name: "Use A" }).elements()).toHaveLength(1);
+  });
+
+  it("offers no Use button for a single sketch or without a follow handler", async () => {
+    using _setup = setup();
+    const follow = vi.fn(() => true);
+    await using single = await mount([sketch("a")], follow);
+    expect(single.container.textContent).not.toContain("Use");
+    await using readOnly = await mount([sketch("a"), sketch("b")]);
+    expect(readOnly.container.textContent).not.toMatch(/\bUse [AB]/);
   });
 });

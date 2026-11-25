@@ -32,7 +32,7 @@ function EnvironmentDesignSketches(props: {
   readonly sketches: ReadonlyArray<DesignSketchReference>;
 }) {
   const ctx = use(TimelineRowCtx);
-  const { activeThreadEnvironmentId: environmentId, threadRef } = ctx;
+  const { activeThreadEnvironmentId: environmentId, threadRef, onFollowHtmlVariant } = ctx;
   const placeSketch = useAtomCommand(designEnvironment.placeSketch, {
     label: "design place sketch",
   });
@@ -62,6 +62,7 @@ function EnvironmentDesignSketches(props: {
     <div className="min-w-0 px-1">
       <DesignSketchCardGrid
         sketches={props.sketches}
+        onFollow={onFollowHtmlVariant}
         renderCard={(sketch, index, letter) => (
           <EnvironmentSketchThumbnailCard
             environmentId={environmentId}

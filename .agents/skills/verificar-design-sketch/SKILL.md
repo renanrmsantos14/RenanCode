@@ -8,7 +8,9 @@ description: "Verifica a ferramenta MCP design_sketch, os sketches de html_varia
 ## Cobre
 
 - Servidor: `DesignService` (`createSketches`, snapshot, limpeza ao apagar a thread), tools `design_sketch` e `html_variants` (`designSketches`), `HtmlRender.readPage`.
-- Convidado: `GuestShareService.render` serve a página do sketch e a miniatura (`?thumbnail=1`) só do próprio projeto.
+- Convidado: `GuestShareService.render` serve a página do sketch e a miniatura (`?thumbnail=1`) só do próprio projeto; `thumbnail=1` sem miniatura de sketch responde "indisponível", nunca o HTML.
+- Variações: o cartão de várias variações mantém o "Usar A/B/C" (`htmlVariantFollowUpText`) onde há `onFollowHtmlVariant` (web, desktop e mobile); o convidado é somente leitura e não tem o botão.
+- Foco pedido pelo cartão: sem nó, o canvas coloca o sketch (`placeSketch`) se ele existir e puder escrever, senão descarta o pedido; o timer de viewport é limpo ao desmontar.
 - Clientes: cartão com miniatura na timeline (`DesignSketchTimelineRow`), visualizador em tela cheia com abas A/B/C (web e convidado), superfície "Design" no painel direito com canvas `@xyflow/react` (só desktop, `isElectron`), cartão simples no feed do mobile (`DesignSketchCards`).
 - Um Design por thread; o canvas não existe na web fora do Electron nem no mobile.
 

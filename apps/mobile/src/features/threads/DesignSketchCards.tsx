@@ -1,8 +1,12 @@
 import { useNavigation } from "@react-navigation/native";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import type { DesignSketchReference } from "@t3tools/shared/design";
-import { htmlRenderFileName, htmlVariantLetter } from "@t3tools/shared/htmlRender";
-import { useGT } from "gt-react-native";
+import {
+  htmlRenderFileName,
+  htmlVariantFollowUpText,
+  htmlVariantLetter,
+} from "@t3tools/shared/htmlRender";
+import { T, useGT, Var } from "gt-react-native";
 import { Image } from "expo-image";
 import { Pressable, View, type ColorValue } from "react-native";
 
@@ -19,6 +23,7 @@ function DesignSketchCard(props: {
   readonly sketch: DesignSketchReference;
   readonly letter: string | undefined;
   readonly iconColor: ColorValue;
+  readonly onFollow?: (() => void) | undefined;
 }) {
   const gt = useGT();
   const navigation = useNavigation();
@@ -37,53 +42,69 @@ function DesignSketchCard(props: {
         },
   );
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={gt("Open sketch {title}", { title: sketch.title })}
-      className="overflow-hidden rounded-lg border border-border/60 bg-card"
-      onPress={() =>
-        navigation.navigate("ThreadAttachment", {
-          environmentId: String(props.environmentId),
-          threadId: String(props.threadId),
-          attachmentId: sketch.attachmentId,
-          name: fileName,
-          mimeType: "text/html",
-          sizeBytes: "0",
-          htmlRender: "1",
-        })
-      }
-    >
-      <View
-        style={{ height: THUMBNAIL_HEIGHT }}
-        className="items-center justify-center bg-muted/40"
+    <View className="gap-1.5">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={gt("Open sketch {title}", { title: sketch.title })}
+        className="overflow-hidden rounded-lg border border-border/60 bg-card"
+        onPress={() =>
+          navigation.navigate("ThreadAttachment", {
+            environmentId: String(props.environmentId),
+            threadId: String(props.threadId),
+            attachmentId: sketch.attachmentId,
+            name: fileName,
+            mimeType: "text/html",
+            sizeBytes: "0",
+            htmlRender: "1",
+          })
+        }
       >
-        {thumbnail !== null ? (
-          <Image
-            source={{ uri: thumbnail }}
-            contentFit="cover"
-            contentPosition="top"
-            style={{ width: "100%", height: "100%" }}
-          />
-        ) : (
-          <SymbolView
-            name="square.on.square"
-            size={28}
-            tintColor={props.iconColor}
-            type="monochrome"
-          />
-        )}
-      </View>
-      <View className="flex-row items-center gap-2 px-3 py-2">
-        {props.letter !== undefined ? (
-          <Text className="rounded bg-muted px-1.5 text-xs font-medium text-foreground-muted">
-            {props.letter}
+        <View
+          style={{ height: THUMBNAIL_HEIGHT }}
+          className="items-center justify-center bg-muted/40"
+        >
+          {thumbnail !== null ? (
+            <Image
+              source={{ uri: thumbnail }}
+              contentFit="cover"
+              contentPosition="top"
+              style={{ width: "100%", height: "100%" }}
+            />
+          ) : (
+            <SymbolView
+              name="square.on.square"
+              size={28}
+              tintColor={props.iconColor}
+              type="monochrome"
+            />
+          )}
+        </View>
+        <View className="flex-row items-center gap-2 px-3 py-2">
+          {props.letter !== undefined ? (
+            <Text className="rounded bg-muted px-1.5 text-xs font-medium text-foreground-muted">
+              {props.letter}
+            </Text>
+          ) : null}
+          <Text className="min-w-0 flex-1 text-sm font-medium text-foreground" numberOfLines={1}>
+            {sketch.title}
           </Text>
-        ) : null}
-        <Text className="min-w-0 flex-1 text-sm font-medium text-foreground" numberOfLines={1}>
-          {sketch.title}
-        </Text>
-      </View>
-    </Pressable>
+        </View>
+      </Pressable>
+      {props.onFollow && props.letter !== undefined ? (
+        <Pressable
+          accessibilityRole="button"
+          hitSlop={4}
+          className="self-start rounded-full bg-foreground px-3 py-1"
+          onPress={props.onFollow}
+        >
+          <Text className="text-xs font-medium text-background">
+            <T>
+              Use <Var>{props.letter}</Var>
+            </T>
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -93,7 +114,9 @@ export function ThreadDesignSketches(props: {
   readonly threadId: ThreadId;
   readonly sketches: ReadonlyArray<DesignSketchReference>;
   readonly iconColor: ColorValue;
+  readonly onFollow?: ((text: string) => void) | undefined;
 }) {
+  const { onFollow } = props;
   const lettered = props.sketches.length > 1;
   return (
     <View className="mb-2 px-1" style={{ gap: CARD_GAP }}>
@@ -105,6 +128,11 @@ export function ThreadDesignSketches(props: {
           sketch={sketch}
           letter={lettered ? htmlVariantLetter(index) : undefined}
           iconColor={props.iconColor}
+          onFollow={
+            onFollow
+              ? () => onFollow(htmlVariantFollowUpText(index, sketch.label ?? sketch.title))
+              : undefined
+          }
         />
       ))}
     </View>

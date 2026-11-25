@@ -2153,6 +2153,7 @@ function renderFeedEntry(
         threadId={props.threadId}
         sketches={entry.sketches}
         iconColor={iconSubtleColor}
+        onFollow={props.onFollowHtmlVariant}
       />
     );
   }

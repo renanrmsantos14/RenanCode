@@ -1,11 +1,13 @@
 import type { EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import type { DesignSketchReference } from "@t3tools/shared/design";
-import { htmlVariantLetter } from "@t3tools/shared/htmlRender";
-import { useGT } from "gt-react";
+import { htmlVariantFollowUpText, htmlVariantLetter } from "@t3tools/shared/htmlRender";
+import { T, useGT, Var } from "gt-react";
 import { FrameIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
 import { cn } from "~/lib/utils";
+
+import { Button } from "../ui/button";
 
 import { HtmlRenderDialog } from "../chat/HtmlRenderDialog";
 import { useSketchPageUrl, useSketchThumbnailUrl } from "./sketchAssets";
@@ -69,8 +71,9 @@ export function DesignSketchCard(props: {
   );
 }
 
-/** Lays out a card per sketch; several sketches from one call read as lettered variations. */
+/** Lays out a card per sketch; several sketches from one call read as lettered variations, each with a "Use" button when `onFollow` is set. */
 export function DesignSketchCardGrid(props: {
+  readonly onFollow?: ((text: string) => boolean) | undefined;
   readonly sketches: ReadonlyArray<DesignSketchReference>;
   readonly renderCard: (
     sketch: DesignSketchReference,
@@ -91,6 +94,20 @@ export function DesignSketchCardGrid(props: {
       {props.sketches.map((sketch, index) => (
         <div key={sketch.sketchId} className="min-w-0">
           {props.renderCard(sketch, index, lettered ? htmlVariantLetter(index) : undefined)}
+          {lettered && props.onFollow ? (
+            <Button
+              size="xs"
+              variant="outline"
+              className="mt-1.5"
+              onClick={() =>
+                props.onFollow?.(htmlVariantFollowUpText(index, sketch.label ?? sketch.title))
+              }
+            >
+              <T>
+                Use <Var>{htmlVariantLetter(index)}</Var>
+              </T>
+            </Button>
+          ) : null}
         </div>
       ))}
     </div>

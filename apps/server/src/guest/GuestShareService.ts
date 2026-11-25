@@ -794,6 +794,8 @@ const make = Effect.gen(function* () {
         mimeType: thumbnail === true ? ("image/png" as const) : ("text/html" as const),
       };
     }
+    // A thumbnail is a sketch's PNG; any other item has none, and must never answer with its HTML.
+    if (thumbnail === true) return yield* unavailable;
     const reference =
       variants === undefined
         ? htmlRenderFromToolItem(item)

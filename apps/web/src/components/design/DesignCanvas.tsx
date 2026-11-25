@@ -1,6 +1,11 @@
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
-import { type DesignCanvasSnapshot, DesignNodeId, type DesignSketch } from "@t3tools/contracts";
+import {
+  type DesignCanvasSnapshot,
+  DesignNodeId,
+  type DesignSketch,
+  DesignSketchId,
+} from "@t3tools/contracts";
 import { type DesignSketchReference, designSketchReference } from "@t3tools/shared/design";
 import { htmlVariantLetter } from "@t3tools/shared/htmlRender";
 import {
@@ -183,6 +188,9 @@ function DesignCanvasInner(props: {
     reportFailure: false,
   });
   const removeNode = useAtomCommand(designEnvironment.removeNode, { label: "design remove node" });
+  const placeSketch = useAtomCommand(designEnvironment.placeSketch, {
+    label: "design place sketch",
+  });
   const [dragging, setDragging] = useState<Readonly<Record<string, { x: number; y: number }>>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [viewing, setViewing] = useState<{
@@ -191,6 +199,8 @@ function DesignCanvasInner(props: {
   } | null>(null);
   const viewportTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const viewportTouched = useRef(snapshot.viewport !== null);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- cancels the pending viewport save, a timer outside React, when the canvas unmounts
+  useEffect(() => () => clearTimeout(viewportTimer.current), []);
   const containerWidth = useViewportStore((state) => state.width);
   const containerHeight = useViewportStore((state) => state.height);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- refits the React Flow viewport, an external system, when the container resizes (full screen) before the user has moved the view
@@ -260,6 +270,30 @@ function DesignCanvasInner(props: {
       duration: 200,
     });
   }, [focusNodeId, threadRef, flow]);
+
+  const focusSketchKnown = snapshot.sketches.some((sketch) => sketch.id === focusSketchId);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a request for a sketch with no node can never focus: place it when it exists and may be placed, otherwise drop the request
+  useEffect(() => {
+    if (focusSketchId === undefined || focusNodeId !== undefined) return;
+    if (!focusSketchKnown || !props.canWrite) {
+      useDesignFocusStore.getState().consume(threadRef);
+      return;
+    }
+    void placeSketch({
+      environmentId: props.environmentId,
+      input: { threadId: threadRef.threadId, sketchId: DesignSketchId.make(focusSketchId) },
+    }).then((result) => {
+      if (result._tag !== "Success") useDesignFocusStore.getState().consume(threadRef);
+    });
+  }, [
+    focusSketchId,
+    focusNodeId,
+    focusSketchKnown,
+    props.canWrite,
+    props.environmentId,
+    threadRef,
+    placeSketch,
+  ]);
 
   const selectedNode = snapshot.nodes.find((node) => node.id === selectedId);
 

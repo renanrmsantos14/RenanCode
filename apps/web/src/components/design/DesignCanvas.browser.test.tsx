@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   moveNodes: vi.fn(),
   setViewport: vi.fn(),
   removeNode: vi.fn(),
+  placeSketch: vi.fn(),
 }));
 
 vi.mock(import("~/state/design"), () => ({
@@ -24,11 +25,12 @@ vi.mock(import("~/state/design"), () => ({
     moveNodes: "moveNodes",
     setViewport: "setViewport",
     removeNode: "removeNode",
+    placeSketch: "placeSketch",
   } as never,
 }));
 vi.mock(import("~/state/use-atom-command"), async (original) => ({
   ...(await original()),
-  useAtomCommand: ((command: "moveNodes" | "setViewport" | "removeNode") =>
+  useAtomCommand: ((command: "moveNodes" | "setViewport" | "removeNode" | "placeSketch") =>
     mocks[command]) as never,
 }));
 vi.mock(import("./sketchAssets"), () => ({
@@ -188,6 +190,61 @@ describe("DesignCanvas", () => {
       expect(selected[0]?.getAttribute("data-id")).toBe("node-b");
     });
     expect(useDesignFocusStore.getState().pending[scopedThreadKey(threadRef)]).toBeUndefined();
+  });
+
+  it("places a known sketch that has no node yet, then focuses it once the node arrives", async () => {
+    using _setup = setup();
+    useDesignFocusStore.getState().request(threadRef, "sketch-b");
+    const full = snapshot(2);
+    const unplaced = { ...full, nodes: full.nodes.slice(0, 1) };
+    await using screen = await mount(unplaced);
+
+    await vi.waitFor(() => expect(mocks.placeSketch).toHaveBeenCalledOnce());
+    expect(mocks.placeSketch.mock.calls[0]?.[0]).toMatchObject({
+      environmentId,
+      input: { threadId: threadRef.threadId, sketchId: "sketch-b" },
+    });
+    expect(useDesignFocusStore.getState().pending[scopedThreadKey(threadRef)]).toBe("sketch-b");
+
+    await screen.rerender(
+      <DesignCanvas
+        environmentId={environmentId}
+        threadRef={threadRef}
+        snapshot={full}
+        canWrite
+        maximized={false}
+        onToggleMaximized={() => {}}
+      />,
+    );
+    await vi.waitFor(() => {
+      expect(
+        screen.container.querySelector(".react-flow__node.selected")?.getAttribute("data-id"),
+      ).toBe("node-b");
+    });
+    expect(useDesignFocusStore.getState().pending[scopedThreadKey(threadRef)]).toBeUndefined();
+  });
+
+  it("drops a focus request for a sketch that is not on the canvas and cannot be placed", async () => {
+    using _setup = setup();
+    useDesignFocusStore.getState().request(threadRef, "sketch-missing");
+    await using _screen = await mount(snapshot(2));
+
+    await vi.waitFor(() =>
+      expect(useDesignFocusStore.getState().pending[scopedThreadKey(threadRef)]).toBeUndefined(),
+    );
+    expect(mocks.placeSketch).not.toHaveBeenCalled();
+  });
+
+  it("drops a focus request for an unplaced sketch when the viewer cannot write", async () => {
+    using _setup = setup();
+    useDesignFocusStore.getState().request(threadRef, "sketch-b");
+    const full = snapshot(2);
+    await using _screen = await mount({ ...full, nodes: full.nodes.slice(0, 1) }, false);
+
+    await vi.waitFor(() =>
+      expect(useDesignFocusStore.getState().pending[scopedThreadKey(threadRef)]).toBeUndefined(),
+    );
+    expect(mocks.placeSketch).not.toHaveBeenCalled();
   });
 
   it("removes the selected node from the canvas", async () => {
