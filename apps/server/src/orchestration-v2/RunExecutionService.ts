@@ -2273,9 +2273,9 @@ export const layer: Layer.Layer<
           }),
         );
         yield* touchMcpCredential;
-        const appContext = [
-          ...(yield* McpAppModelContext.forProvider(mcpAppModelContext, input.run.threadId)),
-        ];
+        const appContext: Array<
+          NonNullable<ProviderAdapter.ProviderAdapterV2TurnInput["appContext"]>[number]
+        > = [...(yield* McpAppModelContext.forProvider(mcpAppModelContext, input.run.threadId))];
         const teamId = input.appThread.teamId;
         const team =
           teamId == null
