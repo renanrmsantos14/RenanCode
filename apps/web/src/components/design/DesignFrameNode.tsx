@@ -9,11 +9,14 @@ import { GlobeIcon, MousePointerClickIcon, RadioIcon } from "lucide-react";
 import { createContext, use, useState } from "react";
 
 import { BrowserSurfaceSlot } from "~/browser/BrowserSurfaceSlot";
+import { useAtomCommand } from "~/state/use-atom-command";
+import { designEnvironment } from "~/state/design";
 
 import { Button } from "../ui/button";
 import { commitPickedElement } from "../preview/commitPickedElement";
 import { focusPreviewWebview } from "../preview/focusPreviewWebview";
 import { previewBridge } from "../preview/previewBridge";
+import { designSelectionFromAnnotation } from "./designSelection";
 import { useSketchThumbnailUrl } from "./sketchAssets";
 import { useDesignFrameLive } from "./useDesignFrameLive";
 
@@ -46,6 +49,10 @@ export function FrameNode({
   const containerWidth = useViewportStore((state) => state.width);
   const containerHeight = useViewportStore((state) => state.height);
   const [picking, setPicking] = useState(false);
+  const setSelection = useAtomCommand(designEnvironment.setSelection, {
+    label: "design selection",
+    reportFailure: false,
+  });
 
   // A desktop webview is a native layer above the page, so it only runs where the canvas shows the whole Frame.
   const left = positionAbsoluteX * zoom + translateX;
@@ -80,9 +87,17 @@ export function FrameNode({
         focusPreviewWebview(runtimeTabId);
         return bridge.pickElement(runtimeTabId);
       })
-      .then((result) =>
-        result === null ? undefined : commitPickedElement({ threadRef: ctx.threadRef, result, gt }),
-      )
+      .then(async (result) => {
+        if (result === null) return;
+        const { annotation } = await commitPickedElement({ threadRef: ctx.threadRef, result, gt });
+        const selection = designSelectionFromAnnotation(annotation);
+        if (selection === null || !ctx.canWrite) return;
+        // The agent reads this back with design_selection_read; a failed save only costs that.
+        await setSelection({
+          environmentId: ctx.threadRef.environmentId,
+          input: { threadId: ctx.threadRef.threadId, selection },
+        });
+      })
       .finally(() => setPicking(false));
   };
 

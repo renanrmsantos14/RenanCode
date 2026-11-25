@@ -146,6 +146,20 @@ describe("DesignCanvas", () => {
     expect(screen.getByText(/No sketches yet/).elements()).toHaveLength(0);
   });
 
+  it("outlines nodes the agent grouped and shows the group label once", async () => {
+    using _setup = setup();
+    const base = snapshot(2);
+    const grouped = {
+      ...base,
+      nodes: base.nodes.map((node) => ({ ...node, groupId: "g1", groupLabel: "Checkout flow" })),
+    } as DesignCanvasSnapshot;
+    await using screen = await mount(grouped);
+
+    await expect.element(screen.getByText("Checkout flow")).toBeVisible();
+    expect(screen.getByText("Checkout flow").elements()).toHaveLength(1);
+    expect(screen.container.querySelectorAll(".react-flow__node")).toHaveLength(3);
+  });
+
   it("saves positions with moveNodes only when the drag ends", async () => {
     using _setup = setup();
     await using screen = await mount(snapshot(1));

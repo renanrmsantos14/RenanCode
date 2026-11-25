@@ -43,5 +43,17 @@ export function createDesignEnvironmentAtoms<R, E>(
       label: "environment-data:design:set-frame-snapshot",
       tag: WS_METHODS.designSetFrameSnapshot,
     }),
+    reportLiveFrame: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:design:report-live-frame",
+      tag: WS_METHODS.designReportLiveFrame,
+    }),
+    setSelection: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:design:set-selection",
+      tag: WS_METHODS.designSetSelection,
+    }),
+    listProjectSketches: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:design:list-project-sketches",
+      tag: WS_METHODS.designListProjectSketches,
+    }),
   };
 }

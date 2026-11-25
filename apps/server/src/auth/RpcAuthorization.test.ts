@@ -74,9 +74,9 @@ describe("RPC authorization scopes", () => {
   });
 
   it("lets readers watch a thread's design canvas but only operators change it", () => {
-    expect(requiredScopeForRpcMethod(WS_METHODS.designSubscribeCanvas)).toBe(
-      AuthOrchestrationReadScope,
-    );
+    for (const method of [WS_METHODS.designSubscribeCanvas, WS_METHODS.designListProjectSketches]) {
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationReadScope);
+    }
     for (const method of [
       WS_METHODS.designMoveNodes,
       WS_METHODS.designSetViewport,
@@ -85,6 +85,8 @@ describe("RPC authorization scopes", () => {
       WS_METHODS.designAddFrame,
       WS_METHODS.designUpdateFrame,
       WS_METHODS.designSetFrameSnapshot,
+      WS_METHODS.designReportLiveFrame,
+      WS_METHODS.designSetSelection,
     ]) {
       expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationOperateScope);
     }

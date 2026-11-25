@@ -2,7 +2,10 @@ import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import {
+  DESIGN_PROJECT_SKETCHES_PAGE_SIZE,
   type DesignFrameNode,
+  type DesignNodeId,
+  type DesignSelection,
   type DesignSketchId,
   type OrchestrationV2ThreadShell,
   ProjectId,
@@ -463,6 +466,199 @@ it.effect("deleting a thread drops its Frames and lets the automatic one be made
       yield* service.cleanupThread(threadA);
       assert.strictEqual((yield* service.snapshot(threadA)).nodes.length, 0);
       assert.isNotNull(yield* service.addFrame(frameInput(threadA, { auto: true })));
+    }),
+  ),
+);
+
+const selection = (comment: string): DesignSelection => ({
+  pageUrl: "http://localhost:5173/",
+  tagName: "button",
+  selector: "main > button",
+  htmlPreview: "<button>Buy</button>",
+  styles: "color: red",
+  comment,
+  png: null,
+  pickedAt: "2026-11-25T12:00:00.000Z",
+});
+
+it.effect("arranges: moves, groups side by side with a label and removes, all or nothing", () =>
+  withService({ chrome: true }, (service) =>
+    Effect.gen(function* () {
+      const created = yield* service.createSketches({
+        threadId: threadA,
+        projectId: app,
+        pages: [page("A", { height: 300 }), page("B", { height: 300 }), page("C", { height: 300 })],
+      });
+      const [a, b, c] = (yield* service.snapshot(threadA)).nodes;
+      const moved = yield* service.arrange({
+        threadId: threadA,
+        moves: [{ nodeId: a!.id, x: 1000, y: 2000 }],
+      });
+      const movedA = moved.find((node) => node.id === a!.id)!;
+      assert.strictEqual(movedA.x, 1000);
+      assert.strictEqual(movedA.y, 2000);
+
+      const grouped = yield* service.arrange({
+        threadId: threadA,
+        group: { nodeIds: [b!.id, c!.id], label: "Checkout" },
+      });
+      const [gb, gc] = [b!.id, c!.id].map((id) => grouped.find((node) => node.id === id)!);
+      assert.strictEqual(gb!.y, gc!.y);
+      assert.isTrue(gc!.x > gb!.x);
+      assert.strictEqual(gb!.groupLabel, "Checkout");
+      assert.strictEqual(gb!.groupId, gc!.groupId);
+      assert.isNotNull(gb!.groupId);
+
+      // A node cannot be moved and removed in the same step, and nothing changes on refusal.
+      const conflict = yield* service
+        .arrange({
+          threadId: threadA,
+          moves: [{ nodeId: a!.id, x: 5, y: 5 }],
+          remove: [a!.id],
+        })
+        .pipe(Effect.flip);
+      assert.include(conflict.message, "moved and removed");
+      assert.strictEqual(
+        (yield* service.snapshot(threadA)).nodes.find((node) => node.id === a!.id)!.x,
+        1000,
+      );
+
+      const missing = yield* service
+        .arrange({ threadId: threadA, remove: ["design-node:missing" as DesignNodeId] })
+        .pipe(Effect.flip);
+      assert.include(missing.message, "is not on th");
+
+      const removed = yield* service.arrange({ threadId: threadA, remove: [a!.id] });
+      assert.isUndefined(removed.find((node) => node.id === a!.id));
+      // The sketch stays in the project library and can come back.
+      const sketchId = created[0]!.sketchId as DesignSketchId;
+      assert.strictEqual((yield* service.snapshot(threadA)).sketches.length, 3);
+      yield* service.placeSketch({ threadId: threadA, sketchId });
+      assert.strictEqual((yield* service.snapshot(threadA)).nodes.length, 3);
+    }),
+  ),
+);
+
+it.effect(
+  "lists the project's sketches with their origin, page by page, even after the thread is gone",
+  () =>
+    withService({ chrome: true }, (service) =>
+      Effect.gen(function* () {
+        yield* service.createSketches({
+          threadId: threadA,
+          projectId: app,
+          pages: [page("Home"), page("Login")],
+        });
+        yield* service.createSketches({
+          threadId: threadB,
+          projectId: app,
+          pages: [page("Settings")],
+        });
+        yield* service.createSketches({
+          threadId: threadSite,
+          projectId: site,
+          pages: [page("Other project")],
+        });
+        const all = yield* service.listProjectSketches({ projectId: app });
+        assert.deepStrictEqual(all.sketches.map((sketch) => sketch.title).toSorted(), [
+          "Home",
+          "Login",
+          "Settings",
+        ]);
+        assert.isNull(all.nextCursor);
+        assert.isTrue(all.sketches.every((sketch) => !sketch.originThreadDeleted));
+
+        const found = yield* service.listProjectSketches({ projectId: app, query: "logIN" });
+        assert.deepStrictEqual(
+          found.sketches.map((sketch) => sketch.title),
+          ["Login"],
+        );
+
+        const original = shells[threadB];
+        shells[threadB] = { projectId: app, deletedAt: "2026-11-25T00:00:00.000Z" } as never;
+        const afterDelete = yield* service.listProjectSketches({ projectId: app });
+        shells[threadB] = original!;
+        const settings = afterDelete.sketches.find((sketch) => sketch.title === "Settings")!;
+        assert.isTrue(settings.originThreadDeleted);
+        assert.isNull(settings.originThreadTitle);
+
+        const first = yield* service.listProjectSketches({ projectId: app });
+        assert.strictEqual(first.sketches.length, 3);
+      }),
+    ),
+);
+
+it.effect("pages the project library without repeating or skipping a sketch", () =>
+  withService({ chrome: false }, (service) =>
+    Effect.gen(function* () {
+      const total = DESIGN_PROJECT_SKETCHES_PAGE_SIZE + 5;
+      for (let index = 0; index < total; index += 1) {
+        yield* service.createSketches({
+          threadId: threadA,
+          projectId: app,
+          pages: [page(`S${index}`, { height: 200 })],
+        });
+      }
+      const first = yield* service.listProjectSketches({ projectId: app });
+      assert.strictEqual(first.sketches.length, DESIGN_PROJECT_SKETCHES_PAGE_SIZE);
+      assert.isNotNull(first.nextCursor);
+      const second = yield* service.listProjectSketches({
+        projectId: app,
+        cursor: first.nextCursor!,
+      });
+      assert.strictEqual(second.sketches.length, 5);
+      assert.isNull(second.nextCursor);
+      const ids = [...first.sketches, ...second.sketches].map((sketch) => sketch.id);
+      assert.strictEqual(new Set(ids).size, total);
+    }),
+  ),
+);
+
+it.effect(
+  "keeps the last selection and the live Frame tab per thread, and forgets them on cleanup",
+  () =>
+    withService({ chrome: true }, (service) =>
+      Effect.gen(function* () {
+        assert.isNull(yield* service.readSelection(threadA));
+        yield* service.setSelection({ threadId: threadA, selection: selection("first") });
+        yield* service.setSelection({ threadId: threadA, selection: selection("second") });
+        assert.strictEqual((yield* service.readSelection(threadA))!.comment, "second");
+        assert.isNull(yield* service.readSelection(threadB));
+
+        const frame = (yield* service.addFrame(frameInput(threadA)))!;
+        assert.isNull(yield* service.liveFrameTab(threadA, frame.id));
+        yield* service.reportLiveFrame({ threadId: threadA, nodeId: frame.id, tabId: "tab-1" });
+        assert.strictEqual(yield* service.liveFrameTab(threadA, frame.id), "tab-1");
+        assert.isNull(yield* service.liveFrameTab(threadB, frame.id));
+        yield* service.reportLiveFrame({ threadId: threadA, nodeId: frame.id, tabId: null });
+        assert.isNull(yield* service.liveFrameTab(threadA, frame.id));
+
+        yield* service.reportLiveFrame({ threadId: threadA, nodeId: frame.id, tabId: "tab-2" });
+        yield* service.cleanupThread(threadA);
+        assert.isNull(yield* service.readSelection(threadA));
+        assert.isNull(yield* service.liveFrameTab(threadA, frame.id));
+      }),
+    ),
+);
+
+it.effect("reads the saved Frame print with its size, and null when there is none", () =>
+  withService({ chrome: true }, (service) =>
+    Effect.gen(function* () {
+      const frame = (yield* service.addFrame(frameInput(threadA)))!;
+      assert.isNull(yield* service.readFramePrint(threadA, frame.id));
+      const header = Buffer.alloc(24);
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(header);
+      header.writeUInt32BE(640, 16);
+      header.writeUInt32BE(480, 20);
+      yield* service.setFrameSnapshot({
+        threadId: threadA,
+        nodeId: frame.id,
+        png: header.toString("base64"),
+      });
+      const print = yield* service.readFramePrint(threadA, frame.id);
+      assert.strictEqual(print!.width, 640);
+      assert.strictEqual(print!.height, 480);
+      assert.strictEqual(print!.png, header.toString("base64"));
     }),
   ),
 );

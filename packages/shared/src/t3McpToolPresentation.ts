@@ -456,6 +456,17 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
   html_render: tool(["Render", "Rendering", "Rendered", "an HTML page"], "html-render"),
   html_variants: tool(["Render", "Rendering", "Rendered", "HTML variants"], "html-render"),
   design_sketch: tool(["Sketch", "Sketching", "Sketched", "a design screen"], "html-render"),
+  design_canvas_read: tool(["Read", "Reading", "Read", "the Design canvas"], "html-preview"),
+  design_frame_add: tool(["Add", "Adding", "Added", "a Design frame"], "html-render"),
+  design_canvas_arrange: tool(
+    ["Arrange", "Arranging", "Arranged", "the Design canvas"],
+    "html-render",
+  ),
+  design_frame_screenshot: tool(
+    ["Capture", "Capturing", "Captured", "a Design frame"],
+    "html-preview",
+  ),
+  design_selection_read: tool(["Read", "Reading", "Read", "the picked element"], "html-preview"),
   send_to_user: tool(["Send", "Sending", "Sent", "a message"], "send-to-user"),
 };
 

@@ -47,6 +47,10 @@ export function useDesignFrameLive(input: {
     label: "design frame snapshot",
     reportFailure: false,
   });
+  const reportLiveFrame = useAtomCommand(designEnvironment.reportLiveFrame, {
+    label: "design frame live report",
+    reportFailure: false,
+  });
   const [session, setSession] = useState<FrameLiveSession | null>(null);
   const frameKey = `${frame.id}|${frame.url}|${frame.width}x${frame.height}`;
 
@@ -57,7 +61,16 @@ export function useDesignFrameLive(input: {
     let cancelled = false;
     let opened: FrameLiveSession | null = null;
 
+    const report = (tabId: string | null) =>
+      canWrite
+        ? reportLiveFrame({
+            environmentId: threadRef.environmentId,
+            input: { threadId: threadRef.threadId, nodeId: DesignNodeId.make(frame.id), tabId },
+          })
+        : Promise.resolve();
+
     const retire = async (target: FrameLiveSession) => {
+      await report(null);
       if (canWrite) {
         const snapshot = await bridge.captureSnapshot(target.runtimeTabId).catch(() => null);
         if (snapshot !== null) {
@@ -109,6 +122,8 @@ export function useDesignFrameLive(input: {
       }
       opened = next;
       setSession(next);
+      // The server tells the agent's screenshot tool which preview tab runs this Frame.
+      void report(tabId);
     })();
 
     return () => {

@@ -136,6 +136,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.projectChecklistMove]: AuthOrchestrationOperateScope,
   [WS_METHODS.projectChecklistDelete]: AuthOrchestrationOperateScope,
   [WS_METHODS.designSubscribeCanvas]: AuthOrchestrationReadScope,
+  [WS_METHODS.designListProjectSketches]: AuthOrchestrationReadScope,
   [WS_METHODS.designMoveNodes]: AuthOrchestrationOperateScope,
   [WS_METHODS.designSetViewport]: AuthOrchestrationOperateScope,
   [WS_METHODS.designRemoveNode]: AuthOrchestrationOperateScope,
