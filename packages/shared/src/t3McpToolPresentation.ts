@@ -92,7 +92,8 @@ export type T3McpToolSummaryAction =
   | "device"
   | "html-preview"
   | "html-render"
-  | "send-to-user";
+  | "send-to-user"
+  | "update-plan";
 
 export interface T3McpToolDefinition {
   readonly displayName: string;
@@ -468,6 +469,7 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
   ),
   design_selection_read: tool(["Read", "Reading", "Read", "the picked element"], "html-preview"),
   send_to_user: tool(["Send", "Sending", "Sent", "a message"], "send-to-user"),
+  update_plan: tool(["Update", "Updating", "Updated", "the plan"], "update-plan"),
 };
 
 export const T3_MCP_TOOL_NAMES: ReadonlySet<string> = new Set(Object.keys(T3_MCP_TOOLS));

@@ -140,6 +140,7 @@ import {
 } from "./TimelineAssistantRows";
 import { DesignSketchTimelineRow } from "../design/DesignSketchTimelineRow";
 import { HtmlVariantsTimelineRow } from "./HtmlVariantsTimelineRow";
+import { TaskPlanCard } from "./TaskPlanCard";
 import { V2EventTimelineRow } from "./TimelineV2EventRow";
 import { startTimelinePositionRestore } from "./useTimelinePositionRestore";
 import {
@@ -1785,6 +1786,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
                   row.kind === "html-variants" ||
                   row.kind === "design-sketches" ||
                   row.kind === "sent-message" ||
+                  row.kind === "task-plan" ||
                   row.kind === "mcp-app" ||
                   row.kind === "viewed-images"
                 ? "pb-2"
@@ -1838,6 +1840,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
       {row.kind === "html-variants" ? <HtmlVariantsTimelineRow row={row} /> : null}
       {row.kind === "design-sketches" ? <DesignSketchTimelineRow row={row} /> : null}
       {row.kind === "sent-message" ? <SentMessageTimelineRow row={row} /> : null}
+      {row.kind === "task-plan" ? <TaskPlanCard steps={row.steps} /> : null}
       {row.kind === "viewed-images" ? <ViewedImagesTimelineRow row={row} /> : null}
       {row.kind === "mcp-app" ? <McpAppTimelineRow row={row} /> : null}
       {row.kind === "working" ? <WorkingTimelineRow row={row} /> : null}

@@ -637,6 +637,45 @@ it.effect("captures send_to_user results for providers that drop MCP outputs", (
   ),
 );
 
+it.effect("update_plan applies advance and done/start to the caller's last plan", () =>
+  Effect.gen(function* () {
+    const server = yield* McpServer.McpServer;
+    const call = (args: Record<string, unknown>) =>
+      server
+        .callTool({ name: "update_plan", arguments: args })
+        .pipe(
+          Effect.provideService(McpInvocationContext.McpInvocationContext, scope),
+          Effect.provideService(McpSchema.McpServerClient, client),
+        );
+    const text = (result: { readonly content: ReadonlyArray<unknown> }) =>
+      JSON.stringify(result.content);
+
+    expect((yield* call({ advance: true })).isError).toBe(true);
+    const first = yield* call({
+      items: [
+        { content: "Ler o código", status: "in_progress" },
+        { content: "Escrever testes", status: "pending" },
+        { content: "Mostrar o print", status: "pending" },
+      ],
+    });
+    expect(first.isError).not.toBe(true);
+    const advanced = yield* call({ advance: true });
+    expect(text(advanced)).toContain("[x] 1. Ler o código");
+    expect(text(advanced)).toContain("[>] 2. Escrever testes");
+    const jumped = yield* call({ done: [2], start: 3 });
+    expect(text(jumped)).toContain("[>] 3. Mostrar o print");
+    expect((yield* call({ start: 1 })).isError).toBe(true);
+  }).pipe(
+    Effect.provide(
+      McpHttpServer.layerMessageToolkit.pipe(
+        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+        Layer.provideMerge(McpProviderSessions.layer),
+        Layer.provide(McpToolAccessTestkit.liveThreadsLayer),
+      ),
+    ),
+  ),
+);
+
 it.effect("records only failed calls of tools that hand off no work", () => {
   // Recording runs detached from the tool response, so the first event is awaited.
   const recorded = Deferred.makeUnsafe<{ event: string; properties: object }>();

@@ -13410,5 +13410,11 @@
   "27d76249d09eb69f": "Granskningsguiden är klar",
   "faa3bb26abb39c93": "Granskningsguiden misslyckades",
   "b7df38b7d8792d78": "Öppna guiden",
-  "9e91e9a77b664e4e": "Kunde inte starta en granskningsguide"
+  "9e91e9a77b664e4e": "Kunde inte starta en granskningsguide",
+  "25330494c8dce669": "Uppdaterade planen",
+  "17f2e06e32e3bc85": "Försökte uppdatera planen",
+  "6d9e50c042a3ee43": "pågår",
+  "bfc188804be1fcaf": "väntar",
+  "257e45dec7297c87": "Uppgiftsplan",
+  "b0d702f9e820900b": "Steg {step} av {total}: {text}, {state}"
 }

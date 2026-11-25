@@ -492,7 +492,7 @@ describe("V2 session presentation", () => {
     });
   });
 
-  it("uses visible turn item order and keeps provider errors in the work log", () => {
+  it("uses visible turn item order, keeps provider errors in the work log, and ends the run with its plan", () => {
     const now = DateTime.makeUnsafe("2026-06-20T00:00:00.000Z");
     const threadId = ThreadId.make("thread-visible");
     const runId = RunId.make("run-visible");
@@ -604,9 +604,9 @@ describe("V2 session presentation", () => {
       ["event", requestItem.id],
       ["work", commandItem.id],
       ["event", resultItem.id],
-      ["work", todoItem.id],
       ["work", errorItem.id],
       ["work", threadCreatedItem.id],
+      ["task-plan", todoItem.id],
     ]);
     const commandEntry = entries[2];
     const userEntry = entries[0];
@@ -624,7 +624,7 @@ describe("V2 session presentation", () => {
       expect(commandEntry.entry.command).toBe(commandItem.input);
       expect(commandEntry.entry.detail).toBeUndefined();
     }
-    const errorEntry = entries[5];
+    const errorEntry = entries[4];
     expect(errorEntry?.kind).toBe("work");
     if (errorEntry?.kind === "work") {
       expect(errorEntry.entry.projectedItem).toBe(visibleTurnItems[5]);
@@ -633,7 +633,7 @@ describe("V2 session presentation", () => {
       expect(errorEntry.entry.tone).toBe("info");
       expect(errorEntry.entry.toolLifecycleStatus).toBe("failed");
     }
-    const threadCreatedEntry = entries[6];
+    const threadCreatedEntry = entries[5];
     expect(threadCreatedEntry?.kind).toBe("work");
     if (threadCreatedEntry?.kind === "work") {
       expect(threadCreatedEntry.entry.projectedItem?.item.type).toBe("thread_created");
@@ -655,7 +655,7 @@ describe("V2 session presentation", () => {
   });
 
   it.each(["pending", "running", "completed"] as const)(
-    "shows a %s todo update in the timeline where the agent wrote it",
+    "shows a %s todo update as the turn's plan card",
     (stepStatus) => {
       const projection = makeThreadProjectionFixture();
       const now = DateTime.makeUnsafe("2026-09-04T00:00:00.000Z");
@@ -708,14 +708,7 @@ describe("V2 session presentation", () => {
           optimisticMessages: [],
           plans,
         }),
-      ).toMatchObject([
-        {
-          kind: "work",
-          entry: {
-            label: stepStatus === "completed" ? "Tasks 1/1" : "Tasks 0/1 · Verify the change",
-          },
-        },
-      ]);
+      ).toMatchObject([{ kind: "task-plan", id: item.id, steps }]);
     },
   );
 
@@ -1542,6 +1535,80 @@ describe("HTML renders in the timeline", () => {
     });
     expect(rowsFor(entries, false)).toEqual(["message", "turn-fold", "sent-message", "message"]);
     expect(turn(send("running")).some((entry) => entry.kind === "sent-message")).toBe(false);
+  });
+
+  it("hides update_plan calls and shows the turn's latest plan once, after its reply", () => {
+    const planCall = (id: string, second: number): OrchestrationV2TurnItem => ({
+      ...base(id, second),
+      type: "dynamic_tool",
+      toolName: "mcp__t3-code__update_plan",
+      input: { advance: true },
+    });
+    const todo = (
+      second: number,
+      steps: ReadonlyArray<{ text: string; status: "pending" | "running" | "completed" }>,
+    ): OrchestrationV2TurnItem => ({
+      ...base("plan", second),
+      type: "todo_list",
+      planId: PlanId.make("plan-turn"),
+      steps: steps.map((step, index) => ({ id: `step-${index}`, ...step })),
+    });
+    const latest = todo(4, [
+      { text: "Read the code", status: "completed" },
+      { text: "Write tests", status: "running" },
+    ]);
+    const items: OrchestrationV2TurnItem[] = [
+      {
+        ...base("prompt", 0),
+        type: "user_message",
+        messageId: MessageId.make("prompt"),
+        inputIntent: "turn_start",
+        text: "Plan it",
+        createdBy: "user",
+        creationSource: "server",
+        attachments: [],
+      },
+      planCall("plan-call-1", 1),
+      todo(1, [
+        { text: "Read the code", status: "running" },
+        { text: "Write tests", status: "pending" },
+      ]),
+      command("work", 2),
+      planCall("plan-call-2", 3),
+      latest,
+      {
+        ...base("reply", 5),
+        type: "assistant_message",
+        messageId: MessageId.make("reply"),
+        text: "Still testing.",
+        streaming: false,
+      },
+    ];
+    const entries = deriveTimelineEntriesFromVisibleTurnItems({
+      visibleTurnItems: items.map(visible),
+      optimisticMessages: [],
+    });
+    expect(entries.map((entry) => entry.id)).toEqual(["prompt", "work", "reply", "plan"]);
+    expect(entries.at(-1)).toMatchObject({
+      kind: "task-plan",
+      steps: latest.type === "todo_list" ? latest.steps : [],
+    });
+    expect(rowsFor(entries, false).slice(-2)).toEqual(["message", "task-plan"]);
+  });
+
+  it("keeps update_plan calls as tool rows when the provider projects no plan", () => {
+    const entries = deriveTimelineEntriesFromVisibleTurnItems({
+      visibleTurnItems: [
+        {
+          ...base("plan-call", 1),
+          type: "dynamic_tool",
+          toolName: "mcp__t3-code__update_plan",
+          input: { advance: true },
+        } satisfies OrchestrationV2TurnItem,
+      ].map(visible),
+      optimisticMessages: [],
+    });
+    expect(entries.map((entry) => [entry.id, entry.kind])).toEqual([["plan-call", "work"]]);
   });
 
   it("hosts a captured MCP app after its tool row, from any provider's tool", () => {

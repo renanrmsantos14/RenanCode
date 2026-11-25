@@ -5760,5 +5760,7 @@
   "3ee30a50b70fffab": "Retirada por {by}: {reason}",
   "201490988858b511": "retirada por {by}",
   "3e19afa2072da269": "Abrir esboço {title}",
-  "46d614fa7b4bf1e5": "Execuções de workflow"
+  "46d614fa7b4bf1e5": "Execuções de workflow",
+  "25330494c8dce669": "Atualizou o plano",
+  "17f2e06e32e3bc85": "Tentou atualizar o plano"
 }

@@ -7,6 +7,7 @@ import {
   type OrchestrationV2ThreadProjection,
   type OrchestrationV2ExecutionNode,
   type OrchestrationV2PlanArtifact,
+  type OrchestrationV2PlanStep,
   type OrchestrationV2ProjectedTurnItem,
   type OrchestrationV2RunAttempt,
   type OrchestrationV2TurnItem,
@@ -29,6 +30,7 @@ import {
   designSketchesFromToolItem,
   htmlVariantsFromToolItem,
   mcpAppFromToolItem,
+  isUpdatePlanToolItem,
   sentMessageFromToolItem,
 } from "@t3tools/shared/toolOutput";
 import {
@@ -149,6 +151,13 @@ export type TimelineEntry = (
       readonly createdAt: string;
       readonly runId: RunId | null;
       readonly text: string;
+    }
+  | {
+      readonly id: string;
+      readonly kind: "task-plan";
+      readonly createdAt: string;
+      readonly runId: RunId | null;
+      readonly steps: ReadonlyArray<OrchestrationV2PlanStep>;
     }
   | {
       readonly id: string;
@@ -575,6 +584,21 @@ export interface TimelineEntriesProjection {
   readonly entries: TimelineEntry[];
 }
 
+function timelineEntryRunId(entry: TimelineEntry): RunId | null {
+  switch (entry.kind) {
+    case "message":
+      return entry.message.runId ?? null;
+    case "proposed-plan":
+      return entry.proposedPlan.runId;
+    case "work":
+      return entry.entry.runId ?? null;
+    case "event":
+      return entry.projectedItem.item.runId;
+    default:
+      return entry.runId;
+  }
+}
+
 export function deriveTimelineEntriesFromVisibleTurnItems(
   input: TimelineEntriesInput,
 ): TimelineEntry[] {
@@ -610,6 +634,12 @@ export function deriveTimelineEntriesFromVisibleTurnItems(
         ? [[`async-answer:${item.questionAnswer.requestId}`, item.runId] as const]
         : [],
     ),
+  );
+  // A turn shows one plan card, its latest, after the turn's other entries.
+  const taskPlanByRunId = new Map<RunId, Extract<TimelineEntry, { kind: "task-plan" }>>();
+  // Providers that do not project update_plan into a plan keep its call as a tool row.
+  const runIdsWithPlan = new Set(
+    input.visibleTurnItems.flatMap(({ item }) => (item.type === "todo_list" ? [item.runId] : [])),
   );
   for (const row of input.visibleTurnItems) {
     const { item } = row;
@@ -760,6 +790,28 @@ export function deriveTimelineEntriesFromVisibleTurnItems(
       continue;
     }
 
+    if (item.type === "todo_list") {
+      const taskPlan = {
+        id: item.id,
+        kind: "task-plan",
+        createdAt,
+        runId: item.runId,
+        steps: item.steps,
+        ...attemptMetadata,
+      } as const;
+      if (item.runId === null) entries.push(taskPlan);
+      else taskPlanByRunId.set(item.runId, taskPlan);
+      continue;
+    }
+    if (
+      item.type === "dynamic_tool" &&
+      item.status !== "failed" &&
+      runIdsWithPlan.has(item.runId) &&
+      isUpdatePlanToolItem(item)
+    ) {
+      continue;
+    }
+
     const sentMessage =
       item.type === "dynamic_tool" && item.status === "completed"
         ? sentMessageFromToolItem(item)
@@ -809,6 +861,12 @@ export function deriveTimelineEntriesFromVisibleTurnItems(
         ...attemptMetadata,
       });
     }
+  }
+
+  for (const [runId, taskPlan] of taskPlanByRunId) {
+    const lastIndex = entries.findLastIndex((entry) => timelineEntryRunId(entry) === runId);
+    if (lastIndex === -1) entries.push(taskPlan);
+    else entries.splice(lastIndex + 1, 0, taskPlan);
   }
 
   const retainedMessageIds = new Set([

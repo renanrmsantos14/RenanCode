@@ -2,8 +2,10 @@ import * as DocumentText from "../../provider/DocumentText.ts";
 import {
   compactDynamicToolOutput,
   mcpToolResultOutput,
+  taskPlanFromToolOutput,
   toolOutputImages,
 } from "@t3tools/shared/toolOutput";
+import { UPDATE_PLAN_TOOL_NAME } from "@t3tools/shared/taskPlan";
 import { makeProviderTextDeltaCoalescer } from "./ProviderTextDeltaCoalescer.ts";
 import { claudeTaskOutputRoot, tailClaudeTaskOutput } from "./ClaudeTaskOutputTail.ts";
 import {
@@ -2917,6 +2919,7 @@ export const CLAUDE_READ_ONLY_T3_MCP_ALLOWED_TOOLS: ReadonlyArray<string> = [
   "mcp__t3-code__design_frame_screenshot",
   "mcp__t3-code__design_selection_read",
   "mcp__t3-code__send_to_user",
+  "mcp__t3-code__update_plan",
   "mcp__t3-code__t3_submit_output",
 ];
 
@@ -6160,6 +6163,7 @@ function claudeCreatedTaskFromText(
 }
 
 const CLAUDE_TASK_TOOL_NAMES = new Set(["TaskCreate", "TaskUpdate", "TaskList"]);
+const CLAUDE_UPDATE_PLAN_TOOL_NAME = `mcp__${CLAUDE_T3_MCP_SERVER}__${UPDATE_PLAN_TOOL_NAME}`;
 const decodeClaudeTaskFile = Schema.decodeUnknownOption(
   Schema.fromJsonString(
     Schema.Struct({
@@ -12549,6 +12553,23 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                 (toolCall.toolName.startsWith("mcp__") ? withoutForgedMcpApp(output) : output),
               completedAt: yield* DateTime.now,
             });
+            const updatedPlan =
+              parentToolUseId === null && toolCall.toolName === CLAUDE_UPDATE_PLAN_TOOL_NAME
+                ? taskPlanFromToolOutput(claudeNativeToolOutputValue(output))
+                : undefined;
+            if (updatedPlan !== undefined) {
+              // One card per turn: later calls update this plan in place.
+              yield* emitClaudePlanProjection({
+                context,
+                nativeItemId: `t3-plan:${context.providerTurnId}`,
+                kind: "todo_list",
+                steps: updatedPlan.map((item, index) => ({
+                  id: `step-${index}`,
+                  text: item.content,
+                  status: item.status === "in_progress" ? "running" : item.status,
+                })),
+              }).pipe(Effect.orDie);
+            }
             // Subagents write to the session's shared task store, so their
             // task tools update the parent turn's list. Failed or never-run
             // calls changed nothing.

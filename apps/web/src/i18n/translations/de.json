@@ -13402,5 +13402,11 @@
   "27d76249d09eb69f": "Review-Leitfaden bereit",
   "faa3bb26abb39c93": "Review-Leitfaden fehlgeschlagen",
   "b7df38b7d8792d78": "Leitfaden öffnen",
-  "9e91e9a77b664e4e": "Review-Leitfaden konnte nicht gestartet werden"
+  "9e91e9a77b664e4e": "Review-Leitfaden konnte nicht gestartet werden",
+  "25330494c8dce669": "Plan aktualisiert",
+  "17f2e06e32e3bc85": "Versuchte, den Plan zu aktualisieren",
+  "6d9e50c042a3ee43": "in Arbeit",
+  "bfc188804be1fcaf": "ausstehend",
+  "257e45dec7297c87": "Aufgabenplan",
+  "b0d702f9e820900b": "Schritt {step} von {total}: {text}, {state}"
 }

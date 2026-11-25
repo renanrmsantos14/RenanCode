@@ -61,6 +61,7 @@ import {
   type MessageId,
   type OrchestrationV2IdleCompaction,
   type WorktreeSetupSnapshot,
+  type OrchestrationV2PlanStep,
   type OrchestrationV2ProjectedTurnItem,
   type RunAttemptId,
   type RuntimeRequestId,
@@ -127,7 +128,8 @@ export function timelineEntryRunId(entry: TimelineEntry): RunId | null {
     entry.kind === "html-variants" ||
     entry.kind === "design-sketches" ||
     entry.kind === "mcp-app" ||
-    entry.kind === "sent-message"
+    entry.kind === "sent-message" ||
+    entry.kind === "task-plan"
   ) {
     return entry.runId;
   }
@@ -723,6 +725,12 @@ type MessagesTimelineRowContent =
       text: string;
     }
   | {
+      kind: "task-plan";
+      id: string;
+      createdAt: string;
+      steps: ReadonlyArray<OrchestrationV2PlanStep>;
+    }
+  | {
       kind: "mcp-app";
       id: string;
       createdAt: string;
@@ -908,6 +916,7 @@ function deriveSupersededAttemptFolds(
       entry.kind === "design-sketches" ||
       entry.kind === "mcp-app" ||
       entry.kind === "sent-message" ||
+      entry.kind === "task-plan" ||
       timelineEntryIsPersistentResourceCard(entry) ||
       liveSubagentEntryIds.has(entry.id) ||
       (entry.kind === "work" && entry.entry.itemType === "system_notice")
@@ -2306,6 +2315,16 @@ export function deriveMessagesTimelineRows(
       continue;
     }
 
+    if (timelineEntry.kind === "task-plan") {
+      nextRows.push({
+        kind: "task-plan",
+        id: timelineEntry.id,
+        createdAt: timelineEntry.createdAt,
+        steps: timelineEntry.steps,
+      });
+      continue;
+    }
+
     if (timelineEntry.kind === "mcp-app") {
       nextRows.push({
         kind: "mcp-app",
@@ -2954,6 +2973,17 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
     case "sent-message": {
       const bs = b as typeof a;
       return a.createdAt === bs.createdAt && a.text === bs.text;
+    }
+
+    case "task-plan": {
+      const bp = b as typeof a;
+      return (
+        a.steps.length === bp.steps.length &&
+        a.steps.every(
+          (step, index) =>
+            step.text === bp.steps[index]?.text && step.status === bp.steps[index]?.status,
+        )
+      );
     }
 
     case "mcp-app": {

@@ -884,6 +884,9 @@ export function summarizeT3ToolCalls(
           );
       break;
     }
+    case "update-plan":
+      label = done ? resolve(msg("Updated the plan")) : resolve(msg("Tried to update the plan"));
+      break;
     case "thread-list": {
       const count = selected.length;
       label = done

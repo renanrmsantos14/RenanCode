@@ -13412,5 +13412,11 @@
   "27d76249d09eb69f": "Review guide ready",
   "faa3bb26abb39c93": "Review guide failed",
   "b7df38b7d8792d78": "Open guide",
-  "9e91e9a77b664e4e": "Could not start a review guide"
+  "9e91e9a77b664e4e": "Could not start a review guide",
+  "25330494c8dce669": "Updated the plan",
+  "17f2e06e32e3bc85": "Tried to update the plan",
+  "6d9e50c042a3ee43": "in progress",
+  "bfc188804be1fcaf": "pending",
+  "257e45dec7297c87": "Task plan",
+  "b0d702f9e820900b": "Step {step} of {total}: {text}, {state}"
 }
