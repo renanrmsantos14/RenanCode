@@ -527,15 +527,6 @@ it.effect("arranges: moves, groups side by side with a label and removes, all or
         .arrange({ threadId: threadA, group: { nodeIds: [b!.id], label: "   " } })
         .pipe(Effect.flip);
       assert.include(blank.message, "needs a label");
-      const both = yield* service
-        .arrange({
-          threadId: threadA,
-          moves: [{ nodeId: b!.id, x: 0, y: 0 }],
-          group: { nodeIds: [b!.id], label: "Again" },
-        })
-        .pipe(Effect.flip);
-      assert.include(both.message, "moved and grouped");
-
       const missing = yield* service
         .arrange({ threadId: threadA, remove: ["design-node:missing" as DesignNodeId] })
         .pipe(Effect.flip);
@@ -657,6 +648,87 @@ it.effect(
         assert.isNull(yield* service.liveFrameTab(threadA, frame.id));
       }),
     ),
+);
+
+it.effect(
+  "refuses live reports and selections for unknown threads, frames and non-PNG images",
+  () =>
+    withService({ chrome: true }, (service) =>
+      Effect.gen(function* () {
+        const frame = (yield* service.addFrame(frameInput(threadA)))!;
+        const ghost = ThreadId.make("thread:missing");
+        const noThread = yield* service
+          .reportLiveFrame({ threadId: ghost, nodeId: frame.id, tabId: "tab" })
+          .pipe(Effect.flip);
+        assert.include(noThread.message, "thread was not found");
+        const otherThread = yield* service
+          .reportLiveFrame({ threadId: threadB, nodeId: frame.id, tabId: "tab" })
+          .pipe(Effect.flip);
+        assert.include(otherThread.message, "frame was not found");
+        assert.isNull(yield* service.liveFrameTab(threadB, frame.id));
+        const selectionNoThread = yield* service
+          .setSelection({ threadId: ghost, selection: selection("x") })
+          .pipe(Effect.flip);
+        assert.include(selectionNoThread.message, "thread was not found");
+        const notPng = yield* service
+          .setSelection({
+            threadId: threadA,
+            selection: { ...selection("x"), png: Buffer.from("not a png").toString("base64") },
+          })
+          .pipe(Effect.flip);
+        assert.include(notPng.message, "not a PNG");
+        assert.isNull(yield* service.readSelection(threadA));
+      }),
+    ),
+);
+
+it.effect("forgets the live tab and the selection when the last Frame is removed", () =>
+  withService({ chrome: true }, (service) =>
+    Effect.gen(function* () {
+      const first = (yield* service.addFrame(frameInput(threadA)))!;
+      const second = (yield* service.addFrame(
+        frameInput(threadA, { url: "http://localhost:5174/" }),
+      ))!;
+      yield* service.reportLiveFrame({ threadId: threadA, nodeId: first.id, tabId: "tab-1" });
+      yield* service.setSelection({ threadId: threadA, selection: selection("picked") });
+      yield* service.removeNode({ threadId: threadA, nodeId: first.id });
+      assert.isNull(yield* service.liveFrameTab(threadA, first.id));
+      assert.isNotNull(yield* service.readSelection(threadA));
+      yield* service.arrange({ threadId: threadA, remove: [second.id] });
+      assert.isNull(yield* service.readSelection(threadA));
+    }),
+  ),
+);
+
+it.effect("arranges: explicit moves win over the group's placement, in one call", () =>
+  withService({ chrome: true }, (service) =>
+    Effect.gen(function* () {
+      yield* service.createSketches({
+        threadId: threadA,
+        projectId: app,
+        pages: [page("A", { height: 300 }), page("B", { height: 300 })],
+      });
+      const frame = (yield* service.addFrame(frameInput(threadA)))!;
+      const [a, b] = (yield* service.snapshot(threadA)).nodes.filter(
+        (node) => node.kind === "sketch",
+      );
+      const nodes = yield* service.arrange({
+        threadId: threadA,
+        moves: [
+          { nodeId: frame.id, x: 800, y: 0 },
+          { nodeId: a!.id, x: 0, y: 0 },
+        ],
+        group: { nodeIds: [a!.id, frame.id, b!.id], label: "Fluxo" },
+      });
+      const at = (id: string) => nodes.find((node) => node.id === id)!;
+      assert.deepStrictEqual([at(frame.id).x, at(frame.id).y], [800, 0]);
+      assert.deepStrictEqual([at(a!.id).x, at(a!.id).y], [0, 0]);
+      // Only the grouped node without a move is placed by the group, below everything else.
+      assert.isTrue(at(b!.id).y >= 300);
+      assert.strictEqual(at(a!.id).groupId, at(b!.id).groupId);
+      assert.strictEqual(at(frame.id).groupLabel, "Fluxo");
+    }),
+  ),
 );
 
 it.effect("reads the saved Frame print with its size, and null when there is none", () =>

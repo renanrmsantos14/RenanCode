@@ -151,15 +151,22 @@ function variantLetter(sketches: ReadonlyArray<DesignSketch>, sketch: DesignSket
 type GroupFlowNode = Node<{ readonly label: string }, "group">;
 
 const GROUP_PADDING = 16;
+/** Screen height of a node's own label row, which sits right above the node. */
+const NODE_LABEL_ROW_PX = 24;
 
-/** A dashed outline behind the nodes the agent grouped, with the group's label above it. */
+/** A dashed outline behind the nodes the agent grouped, with the group's label above the nodes' labels. */
 function GroupNode({ data }: NodeProps<GroupFlowNode>) {
   const zoom = useViewportStore((state) => state.transform[2]);
   return (
     <div className="pointer-events-none relative size-full rounded-md border border-dashed border-border">
       <span
-        className="absolute start-0 bottom-full max-w-full truncate pb-1 font-medium text-muted-foreground text-xs"
-        style={{ transform: `scale(${1 / zoom})`, transformOrigin: "bottom left" }}
+        className="absolute start-0 truncate pb-1 font-medium text-muted-foreground text-xs"
+        style={{
+          bottom: `calc(100% + ${Math.max(0, NODE_LABEL_ROW_PX / zoom - GROUP_PADDING)}px)`,
+          width: `${zoom * 100}%`,
+          transform: `scale(${1 / zoom})`,
+          transformOrigin: "bottom left",
+        }}
       >
         {data.label}
       </span>

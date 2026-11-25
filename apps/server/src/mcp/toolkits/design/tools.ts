@@ -89,7 +89,7 @@ const DesignFrameAddTool = Tool.make("design_frame_add", {
 
 const DesignCanvasArrangeTool = Tool.make("design_canvas_arrange", {
   description:
-    "Organize this thread's Design canvas in one call. `moves` set positions. `group` puts nodes side by side in a new row under one label. `remove` takes nodes off the canvas; sketches stay in the project library.",
+    "Organize this thread's Design canvas in one call. `moves` set positions and always win. `group` labels nodes; those without a move go side by side in a new row. `remove` takes nodes off the canvas; sketches stay in the project library.",
   parameters: Schema.Struct({
     moves: Schema.optional(
       Schema.Array(Schema.Struct({ nodeId: NodeId, x: Coordinate, y: Coordinate })).check(

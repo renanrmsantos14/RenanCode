@@ -49,6 +49,7 @@ import { deleteThreadCanvas } from "./deleteThreadCanvas.ts";
 /** Used when Chrome is missing and the agent gave no height, so the page could not be measured. */
 const FALLBACK_SKETCH_HEIGHT = 800;
 const MAX_VARIANT_LABEL_LENGTH = 40;
+const PNG_BASE64_PREFIX = "iVBORw0KGgo";
 
 export interface DesignSketchPage {
   readonly html: string;
@@ -129,13 +130,15 @@ export class DesignService extends Context.Service<
       input: DesignListProjectSketchesInput,
     ) => Effect.Effect<DesignProjectSketchesPage, DesignError>;
     /** Remembers which preview tab runs a Frame while it is live; null forgets it. */
-    readonly reportLiveFrame: (input: DesignReportLiveFrameInput) => Effect.Effect<void>;
+    readonly reportLiveFrame: (
+      input: DesignReportLiveFrameInput,
+    ) => Effect.Effect<void, DesignError>;
     readonly liveFrameTab: (
       threadId: ThreadId,
       nodeId: DesignNodeId,
     ) => Effect.Effect<string | null>;
     /** The last element the user picked in a Frame of this thread. */
-    readonly setSelection: (input: DesignSetSelectionInput) => Effect.Effect<void>;
+    readonly setSelection: (input: DesignSetSelectionInput) => Effect.Effect<void, DesignError>;
     readonly readSelection: (threadId: ThreadId) => Effect.Effect<DesignSelection | null>;
     /** The saved print of a Frame, or null when it has none. */
     readonly readFramePrint: (
@@ -693,6 +696,7 @@ export const layer = Layer.effect(
         WHERE node_id = ${input.nodeId} AND thread_id = ${input.threadId}
       `.pipe(Effect.mapError(storage));
       yield* removePrint(rows[0]?.snapshot_attachment_id ?? null);
+      yield* forgetFrames(input.threadId, [input.nodeId]);
       yield* notify(input.threadId);
     });
 
@@ -768,10 +772,7 @@ export const layer = Layer.effect(
       if (group !== undefined && group.label.trim() === "") {
         return yield* fail("A group needs a label.");
       }
-      const movedAndGrouped = groupIds.find((id) => moved.has(id));
-      if (movedAndGrouped !== undefined) {
-        return yield* fail(`Node ${movedAndGrouped} cannot be moved and grouped in the same call.`);
-      }
+
       const removed = new Set<string>(remove);
       const clash = [...moved, ...groupIds].find((id) => removed.has(id));
       if (clash !== undefined) return yield* fail(`Node ${clash} cannot be moved and removed.`);
@@ -787,8 +788,10 @@ export const layer = Layer.effect(
             if (missing !== undefined) return { missing } as const;
             const positions = new Map<string, { x: number; y: number }>();
             for (const move of moves) positions.set(move.nodeId, { x: move.x, y: move.y });
-            if (group !== undefined && groupIds.length > 0) {
-              const members = new Set<string>(groupIds);
+            // An explicit move always wins; only grouped nodes without one are placed by the group.
+            const placeable = groupIds.filter((id) => !moved.has(id));
+            if (group !== undefined && placeable.length > 0) {
+              const members = new Set<string>(placeable);
               const others = rows
                 .filter((row) => !members.has(row.node_id) && !removed.has(row.node_id))
                 .map((row) => ({
@@ -798,12 +801,12 @@ export const layer = Layer.effect(
                 }));
               const placed = placeSketches(
                 others,
-                groupIds.map((id) => ({
+                placeable.map((id) => ({
                   width: byId.get(id)!.width,
                   height: byId.get(id)!.height,
                 })),
               );
-              groupIds.forEach((id, index) => positions.set(id, placed[index]!));
+              placeable.forEach((id, index) => positions.set(id, placed[index]!));
             }
             for (const [nodeId, position] of positions) {
               yield* sql`
@@ -838,6 +841,7 @@ export const layer = Layer.effect(
       if ("missing" in outcome)
         return yield* fail(`Node ${outcome.missing} is not on this canvas.`);
       yield* Effect.forEach(outcome.prints, removePrint, { discard: true });
+      yield* forgetFrames(input.threadId, removed);
       yield* notify(input.threadId);
       return yield* readNodes(input.threadId).pipe(Effect.mapError(storage));
     });
@@ -899,20 +903,44 @@ export const layer = Layer.effect(
     // The server cannot see which desktop tab runs a Frame, so the client reports it while live.
     const liveFrames = new Map<string, string>();
     const liveKey = (threadId: string, nodeId: string) => `${threadId}\u0000${nodeId}`;
-    const reportLiveFrame = (input: DesignReportLiveFrameInput) =>
-      Effect.sync(() => {
-        const key = liveKey(input.threadId, input.nodeId);
-        if (input.tabId === null) liveFrames.delete(key);
-        else liveFrames.set(key, input.tabId);
-      });
+    const reportLiveFrame = Effect.fn("DesignService.reportLiveFrame")(function* (
+      input: DesignReportLiveFrameInput,
+    ) {
+      const key = liveKey(input.threadId, input.nodeId);
+      if (input.tabId === null) {
+        liveFrames.delete(key);
+        return;
+      }
+      yield* requireThread(input.threadId);
+      const frame = yield* readFrame(input.threadId, input.nodeId).pipe(Effect.mapError(storage));
+      if (frame === null) return yield* fail("The frame was not found.");
+      liveFrames.set(key, input.tabId);
+    });
     const liveFrameTab = (threadId: ThreadId, nodeId: DesignNodeId) =>
       Effect.sync(() => liveFrames.get(liveKey(threadId, nodeId)) ?? null);
 
     const selections = new Map<string, DesignSelection>();
-    const setSelection = (input: DesignSetSelectionInput) =>
-      Effect.sync(() => {
-        selections.set(input.threadId, input.selection);
-      });
+    const setSelection = Effect.fn("DesignService.setSelection")(function* (
+      input: DesignSetSelectionInput,
+    ) {
+      yield* requireThread(input.threadId);
+      if (input.selection.png !== null && !input.selection.png.startsWith(PNG_BASE64_PREFIX)) {
+        return yield* fail("The selection image is not a PNG.");
+      }
+      selections.set(input.threadId, input.selection);
+    });
+    // A removed Frame stops being live, and with no Frame left the picked element is stale.
+    const forgetFrames = Effect.fn("DesignService.forgetFrames")(function* (
+      threadId: ThreadId,
+      nodeIds: Iterable<string>,
+    ) {
+      for (const nodeId of nodeIds) liveFrames.delete(liveKey(threadId, nodeId));
+      const left = yield* sql<{ readonly node_id: string }>`
+        SELECT node_id FROM design_canvas_nodes
+        WHERE thread_id = ${threadId} AND kind = 'frame' LIMIT 1
+      `.pipe(Effect.mapError(storage));
+      if (left.length === 0) selections.delete(threadId);
+    });
     const readSelection = (threadId: ThreadId) =>
       Effect.sync(() => selections.get(threadId) ?? null);
 
