@@ -780,6 +780,15 @@ export const DesktopPreviewScreenshotArtifactSchema: Schema.Codec<DesktopPreview
     createdAt: Schema.String,
   });
 
+/** A small PNG of the page as it looks now, kept in memory: a Frame print is not a user artifact. */
+export interface DesktopPreviewSnapshot {
+  pngBase64: string;
+}
+
+export const DesktopPreviewSnapshotSchema: Schema.Codec<DesktopPreviewSnapshot> = Schema.Struct({
+  pngBase64: Schema.String,
+});
+
 export interface PickedElementStackFrame {
   functionName: string | null;
   fileName: string | null;
@@ -1404,6 +1413,9 @@ export interface DesktopPreviewBridge {
   captureScreenshot: (
     tabId: string,
   ) => Promise<DesktopPreviewScreenshotArtifact | PreviewCaptureFailureEncoded>;
+  captureSnapshot: (
+    tabId: string,
+  ) => Promise<DesktopPreviewSnapshot | PreviewCaptureFailureEncoded>;
   revealArtifact: (path: string) => Promise<void>;
   copyArtifactToClipboard: (path: string) => Promise<void>;
   pictureInPicture: {

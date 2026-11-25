@@ -22,6 +22,7 @@ import type {
   DesktopPreviewRecordingFrame,
   DesktopPreviewRecordingInputEvent,
   DesktopPreviewScreenshotArtifact,
+  DesktopPreviewSnapshot,
   DesktopPreviewTabDefaults,
   PreviewForwardedShortcut,
   PreviewAutomationLoadError,
@@ -131,6 +132,9 @@ const ZOOM_LEVELS: ReadonlyArray<number> = [
 
 const DEFAULT_ZOOM_FACTOR = 1.0;
 const ZOOM_EPSILON = 0.001;
+/** A Frame print only has to read as a thumbnail; larger PNGs blow the 3 MB wire limit. */
+const SNAPSHOT_MAX_WIDTH = 900;
+const SNAPSHOT_MAX_HEIGHT = 1600;
 const RECORDING_ARM_GRACE_MS = 10_000;
 const PICTURE_IN_PICTURE_FRAME_INTERVAL_MS = Math.ceil(1_000 / 12);
 const PICTURE_IN_PICTURE_JPEG_QUALITY = 80;
@@ -2429,6 +2433,14 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
               tabId,
               wc,
             ).pipe(
+              // A Design Frame's guest is scaled under a transform and never completes a plain capturePage.
+              Effect.catch(() =>
+                captureStillImage(
+                  { operation: "captureAnnotationScreenshot", tabId, webContentsId: wc.id },
+                  tabId,
+                  wc,
+                ),
+              ),
               Effect.map((image) =>
                 cropAnnotationScreenshot(image, cropRect, devicePixelRatio, targetRects),
               ),
@@ -2762,6 +2774,19 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       sizeBytes: data.byteLength,
       createdAt,
     };
+  });
+
+  const captureSnapshot = Effect.fn("PreviewManager.captureSnapshot")(function* (tabId: string) {
+    const wc = yield* requireWebContents(tabId);
+    const image = yield* captureStillImage(
+      { operation: "captureScreenshot.capturePage", tabId, webContentsId: wc.id },
+      tabId,
+      wc,
+    );
+    const size = image.getSize();
+    const factor = Math.min(1, SNAPSHOT_MAX_WIDTH / size.width, SNAPSHOT_MAX_HEIGHT / size.height);
+    const scaled = factor < 1 ? image.resize({ width: Math.round(size.width * factor) }) : image;
+    return { pngBase64: scaled.toPNG().toString("base64") };
   });
 
   const captureStillImage = Effect.fn("PreviewManager.captureStillImage")(function* (
@@ -3751,6 +3776,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
   return {
     cancelPickElement,
     captureScreenshot,
+    captureSnapshot,
     closeTab,
     copyArtifactToClipboard,
     createTab,
@@ -4025,6 +4051,9 @@ export class PreviewManager extends Context.Service<
     readonly captureScreenshot: (
       tabId: string,
     ) => Effect.Effect<DesktopPreviewScreenshotArtifact, PreviewManagerError>;
+    readonly captureSnapshot: (
+      tabId: string,
+    ) => Effect.Effect<DesktopPreviewSnapshot, PreviewManagerError>;
     readonly revealArtifact: (path: string) => Effect.Effect<void, PreviewManagerError>;
     readonly copyArtifactToClipboard: (path: string) => Effect.Effect<void, PreviewManagerError>;
     readonly openPictureInPicture: (tabId: string) => Effect.Effect<void, PreviewManagerError>;
@@ -4192,6 +4221,7 @@ export const make = Effect.gen(function* PreviewManagerMake() {
     updateAnnotationVoice: operations.updateAnnotationVoice,
     cancelPickElement: operations.cancelPickElement,
     captureScreenshot: operations.captureScreenshot,
+    captureSnapshot: operations.captureSnapshot,
     revealArtifact: operations.revealArtifact,
     copyArtifactToClipboard: operations.copyArtifactToClipboard,
     openPictureInPicture: operations.openPictureInPicture,

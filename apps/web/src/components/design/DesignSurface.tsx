@@ -8,6 +8,7 @@ import { useRightPanelStore } from "~/rightPanelStore";
 import { designEnvironment } from "~/state/design";
 
 import { DesignCanvas } from "./DesignCanvas";
+import { useAutoDesignFrame } from "./useAutoDesignFrame";
 
 export default function DesignSurface(props: {
   readonly environmentId: EnvironmentId;
@@ -19,6 +20,7 @@ export default function DesignSurface(props: {
   );
   const snapshot = AsyncResult.getOrElse(result, () => null);
   const canWrite = useAtomValue(designEnvironment.moveNodes.permissionAtom(environmentId));
+  useAutoDesignFrame({ environmentId, threadRef, ready: snapshot !== null, canWrite });
   const maximized = useRightPanelStore(
     (state) => state.byThreadKey[scopedThreadKey(threadRef)]?.maximized === true,
   );

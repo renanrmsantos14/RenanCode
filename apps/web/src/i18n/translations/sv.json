@@ -25,6 +25,7 @@
   "986b0873f913a840": "Policyn för {organization} tillåter inte webhook-uppgifter.",
   "eebc538e25b09fe2": "Policyn för {organization} tillåter inte import av cookies från webbläsare.",
   "7642a133db05f164": "{organization}s policy tillåter inte att den här datorns lokala servrar öppnas på andra enheter.",
+  "e0856d6a402ad821": "Policyn för {organization} tillåter inte projekts layoutkommandon för worktrees.",
   "39f6771b49f9b3b6": "Använd standard",
   "45bb0e90e1c42046": "När du kommer tillbaka",
   "d8fa0a55446bbb0d": "Innan cachen går ut (beta)",
@@ -421,6 +422,7 @@
   "834ca879c14c167b": "Arbetar",
   "582d6df7dfab86fb": "Pausad",
   "ea6583ce92507ee3": "Sover",
+  "7150557773b3818b": "I kö",
   "7ea8cb8af281ce93": "Väntar",
   "1347868f2523140e": "Klar",
   "57d76c4614054271": "Stoppad",
@@ -432,6 +434,7 @@
   "d3890f4eb1508781": "Kör sina egna steg",
   "3e7ced10c9482af0": "{step} arbetar",
   "237e1bcb1cf1bdec": "Sover vid {step}",
+  "efbeb3993ee2c3f5": "Köar för {pool}",
   "3f7b17ac5a20c8d2": "Kör {run}",
   "0306f5f324b8aaa5": "{count} körningar pågår",
   "e8fd779b84a202a2": "Väntar",
@@ -1360,9 +1363,9 @@
   "a9b663922945a4fa": "Den här anslutningen kan inte öppna en redigerare i den här miljön.",
   "868596d482a1a2bd": "Öppna",
   "f58caaa68c09fbeb": "Öppna med",
+  "75b6d7c3bc9c72da": "Kunde inte öppna i {editor}",
   "415d9fed5542d278": "Kunde inte öppna filen",
   "1d1bbe5b700afe63": "Det gick inte att visa filen",
-  "75b6d7c3bc9c72da": "Kunde inte öppna i {editor}",
   "31dc19d033af2774": "Det gick inte att öppna länken.",
   "029d8d0201aed231": "Det gick inte att öppna Systeminställningar.",
   "9af3083226778d3c": "Open VSX returnerade felformaterad temainformation.",
@@ -1542,6 +1545,8 @@
   "4eb599c7f36c99ba": "Temafilen är inte giltig JSON.",
   "29a5ff50ce55c4f9": "VS Code-tema",
   "10348092dfed8b11": "VS Code-temat har ingen ”editor.background”-färg, så det finns inget att bygga en palett från.",
+  "206811f6f441bfc7": "Det här projektet förbereder worktrees med ett eget kommando, som ingen har godkänt som det är skrivet nu. Den här anslutningen kan inte godkänna det: godkänn det från en klient som får använda terminalen.",
+  "b8087c9a70c26da9": "Det gick inte att godkänna layoutkommandot för worktrees.",
   "8cf49e940355b140": "Förbereder fil…",
   "6dff8d487001c6cf": "Responsiv",
   "f5f61c338cc5aeb5": "Enhetsverktygsfält för webbläsaren",
@@ -1879,6 +1884,8 @@
   "a1fcc064a5cece14": "Kopiera tråd",
   "2eb493c9e7a5fe9a": "Länka pull request till tråd",
   "3405c339d5fce935": "Open checklist",
+  "d9d919faea40ccfd": "Öppna Design",
+  "13682e804d1d4ce6": "Lägg till Frame i Design",
   "abbbacfec60327d7": "Visa länkade objekt",
   "67f5b13c3c7bcd40": "Dela med gäst",
   "d3f8a524d30d92fb": "Öppna fortsatt tråd",
@@ -2009,13 +2016,16 @@
   "7af7f00b85cc2930": "Bekräfta åtgärd",
   "8b418a02b73f49b8": "Den här åtgärden kräver din bekräftelse.",
   "e74139c17fab1fa1": "Bekräfta",
+  "4a18481bea4b4ad5": "Ny enhet inloggad på {environmentLabel}",
+  "4144ab6aa487528a": "{device} anslöt via {product}. Inte du? Granska den.",
+  "a10cfdb27152c757": "{count, plural, one {{count} enhet} other {{count} enheter}} anslöt via {product}. Inte du? Granska dem.",
+  "4672f332c89dbcd9": "Granska",
   "775a3e99e2638341": "En enhet vill ansluta till {environmentLabel}",
   "a8befcb9f1c61f60": "{device}. Godkänn bara om den visar koden {code}.",
   "ac48cc297029db41": "Godkänn",
   "c12ca3fea745def0": "Kunde inte godkänna enheten",
   "af63f05ed2f5eeb3": "Neka",
   "b735bab216b27041": "Kunde inte neka enheten",
-  "4672f332c89dbcd9": "Granska",
   "913fc23f62321556": "Välj ett giltigt datum och en giltig tid i framtiden.",
   "9485a52216cfc0d5": "Ange en positiv varaktighet.",
   "9bc551235d78e133": "Schematyp",
@@ -2473,6 +2483,8 @@
   "1354df9fb7278843": "Titta på en iOS-simulator eller Android-emulator.",
   "f76f10942c4a91ed": "Checklist",
   "183de47c219c061e": "Track this project's modules and tasks, with due dates.",
+  "7810d54298dc35ed": "Design",
+  "37311e0add03806b": "Placera de skärmar som agenten skissar på en canvas.",
   "fdcd9643e2e63b15": "Ställ en sidofråga medan tråden fortsätter arbeta.",
   "1944f04b75ddf26d": "Tråd på {label}",
   "314cfeebf191ba0d": "behöver godkännande",
@@ -2734,6 +2746,24 @@
   "a707abf0a4a73ffa": "Stäng terminal ({shortcut})",
   "9206ecf328948f90": "Stäng terminal",
   "9b1326a11cfe3308": "Inga terminalsessioner för den här tråden än.",
+  "49eda70cfd56e621": "Körs när en worktree-tråd startar och när dess mapp återställs",
+  "188ccaa1199f5611": "Körs när en tråds worktree tas bort",
+  "7e8476e7306acabe": "Låta det här projektet köra sina worktree-kommandon?",
+  "8e11914556fd8b13": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " förbereder worktree-trådar med egna kommandon från ",
+    {
+      "t": "code",
+      "i": 2,
+      "c": "t3.json"
+    },
+    ". De körs på den här miljöns dator med dina behörigheter, utanför alla agentsandlådor. Du får frågan igen varje gång deras text ändras."
+  ],
+  "46807acd02a4ff72": "Godkänn och fortsätt",
   "2ac142f34e5dabc2": "Repon i den nya worktreen: {selection}",
   "c514773a8031f00b": "Filtrera repon",
   "e32b730f6d27753f": "Välj vilka repon den här tråden arbetar i",
@@ -3364,9 +3394,6 @@
   "b90e87f4b7125237": "Detaljer",
   "16dc67f5429d8bae": "Bakgrundsarbete",
   "2188eee8f81b0f51": "Öppna subagent",
-  "ec9e0be8ec693302": "Fäll ihop alla mappar",
-  "b791dd86f7991cc0": "Fäll ut alla mappar",
-  "55b936e3014e16c8": "Öppna diff",
   "28bb7ce40dfd349a": "Terminalutdata kan inte läggas till i ett svar på en fråga.",
   "801cb8edea94b8f6": "Svara på eller stäng frågan först och lägg sedan till det i chatten.",
   "aa5507f20d94d5a9": "Uppdatera servern för att skicka filer med svar på frågor",
@@ -3715,6 +3742,7 @@
   "ddb7e6f8ce99e657": "Bara den som kan köra agenter på den här datorn kan skicka eller avböja rapporten.",
   "03c1eb603c112f47": "Skicka inte",
   "653405e4ed498d9f": "Skicka",
+  "76cf478e5674fd12": "{count, plural, one {{count} träff} other {{count} träffar}}",
   "262955d6eb632f9b": "Urklipps-API:t är inte tillgängligt vid kopiering av gästlänken.",
   "f1a4f2b04cdbb4ef": "Kunde inte kopiera gästlänken till urklipp.",
   "cf3490a604e44d31": "Kunde inte skapa en gästlänk.",
@@ -3740,6 +3768,7 @@
   "18d166056c1ab6ff": "Sluta dela",
   "7a2d510eac9e4587": "Gästlänken har gått ut",
   "21888e302219891d": "Expanderad förhandsvisning av {title}",
+  "2f29a7ca348cd2a0": "Visa {variant}",
   "419719298a7acaea": "Zooma ut",
   "ed8d5db95359cff4": "Återställ zoom",
   "8c32e9085e525c19": "Zooma in",
@@ -3754,7 +3783,6 @@
       "v": "v"
     }
   ],
-  "2f29a7ca348cd2a0": "Visa {variant}",
   "f483c3f170663a6e": [
     "Använd ",
     {
@@ -3881,15 +3909,6 @@
     " stängdes"
   ],
   "dff97202cbdaec5b": "Visa app",
-  "705cf2b2ee4e0e42": [
-    "Appen ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " lämnade sin sida och stoppades"
-  ],
   "796b81c4875c4feb": [
     "Appen ",
     {
@@ -3904,6 +3923,15 @@
       "v": "v"
     },
     "-server i den här miljön. Uppdatera servern för att använda den."
+  ],
+  "705cf2b2ee4e0e42": [
+    "Appen ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " lämnade sin sida och stoppades"
   ],
   "5ef18e4d39b398bf": [
     "Det gick inte att läsa in appen ",
@@ -4360,6 +4388,7 @@
   "42f634397f3960aa": "Visa i tråddetaljer",
   "e3738ef0423ddfe7": "Återställ till standard",
   "ae10d34e11064fec": "Versionshantering",
+  "d6e524382c619981": "Öppna Design",
   "8ab1235557b08956": "Välj vad som ska visas",
   "e8f045adbbaf328e": "Tillagd i inmatningsfältet",
   "e7de5d4c3cc68013": "Uppgiften finns i inmatningsfältet. Läs igenom den och skicka sedan.",
@@ -4671,6 +4700,7 @@
       "c": "”"
     }
   ],
+  "91aadfc843c600de": "Verifiera Google-konto",
   "a2aaca7ff8310186": "Öppna chatt",
   "a3048aaa541b7744": "Aktivitet",
   "4a3cbccb2beedeb0": "bild",
@@ -4747,7 +4777,6 @@
   "7f0f9b1ee42892db": "Utdata är inte längre tillgängliga.",
   "e470bb79fa74a6ae": "Bild från verktygsutdata",
   "e8c80b6d40c0944c": "Sökresultat",
-  "76cf478e5674fd12": "{count, plural, one {{count} träff} other {{count} träffar}}",
   "8d1906900b5c95c7": [
     "avslutningskod ",
     {
@@ -4756,6 +4785,7 @@
       "v": "v"
     }
   ],
+  "55b936e3014e16c8": "Öppna diff",
   "83c29850641c8935": "I kö",
   "8402f099f88fd0e0": "Körs",
   "c5f5b73e92221a6a": "Väntar",
@@ -5392,6 +5422,25 @@
   "c752acb0b7088295": "Ansluten",
   "a097631b7acab9d8": "Väntar på godkännande…",
   "aabd9632196ee7e5": "Återansluter…",
+  "de7466f6cf38b24b": "Tablet",
+  "b5702d0b64866b08": "Anpassad",
+  "c8b6f262e6332589": "Lägg till Frame",
+  "257111ae6813a520": "Port eller adress",
+  "84a7c2dc250d3ab5": "Rutt",
+  "ed88e13ccfebe592": "Storlek",
+  "808f947fd1e8c53d": "Bredd",
+  "5312a2a79a6d39cf": "Höjd",
+  "3e19afa2072da269": "Öppna skiss {title}",
+  "f0193fc422ae70cd": "Ta bort från canvas",
+  "43878fb3f7e42f0e": "Anpassa till skärmen",
+  "bae2ec2de83b8e19": "Helskärm",
+  "8cf1da171b68bd91": "Inget här än. Be agenten utforma en skärm med design_sketch eller lägg till en Frame för att se din körande app.",
+  "fc5f9903c7a7a997": "Inga skisser än. Be agenten designa en skärm så placerar den den här med design_sketch.",
+  "425be7ecd878142d": "Live",
+  "fd5affd1025ff33c": "Avbryt val",
+  "003cfb37bb7454a9": "Välj element",
+  "16e20108e473df2e": "Skiss utan miniatyr",
+  "75810a0ab0d14ba4": "Design är inte tillgängligt i den här miljön.",
   "a80895f122d7020f": "Kunde inte öppna länken",
   "2a1758375b2701f3": "Kunde inte lägga till backend",
   "6730fa8ae68fad99": "Det gick inte att lägga till backend.",
@@ -5675,6 +5724,8 @@
   "1601d7e39a52c48f": "Försök läsa in diffen igen",
   "b7b137472adb6989": "Partiell diffförhandsvisning",
   "f0d79aa56f06663f": "Den här filen är för stor för att visas i sin helhet. Antalen inkluderar alla ändringar.",
+  "ec9e0be8ec693302": "Fäll ihop alla mappar",
+  "b791dd86f7991cc0": "Fäll ut alla mappar",
   "7fdde2b893ba1b9d": "Borttagen",
   "e58ce271d835b447": "Tillagd",
   "07b9970b662ab70d": "Visa Mermaid-källa",
@@ -6618,8 +6669,6 @@
   "796eb1e3dbd2359e": "Det gick inte att kopiera skärmbildens sökväg",
   "ae32c462968b0f93": "Det gick inte att kopiera skärmbilden",
   "d96a16d699f1a6df": "Det gick inte att ta en skärmbild",
-  "b18dda39d9585f3e": "Kunde inte fånga det valda elementet",
-  "cd312dae87fc794f": "Anteckningen behölls utan skärmbilden.",
   "4616fb6552fd8875": "Sidan lästes inte in. Välj är inte tillgängligt förrän sidan har renderats",
   "d438fa8b492b6dc1": "Den här fliken är öppen i skrivbordsappen RenanCode.",
   "b252602c8f71d6af": "Det gick inte att bryta ut förhandsvisningen",
@@ -6804,8 +6853,6 @@
   "1b381201aba745c2": "Inga kontroller rapporterade",
   "a6d75a4380173c60": "Öppna kontroller: {summary}",
   "be3d1766bad18693": "Kontroller: {summary}",
-  "425e4a3d6c5c2867": "{count, plural, one {{count} misslyckades} other {{count} misslyckades}}",
-  "fd63b391898889f9": "{count, plural, one {{count} väntar på åtgärd} other {{count} väntar på åtgärd}}",
   "cb116c139cdace98": "Inga kontroller rapporterade",
   "60b56e201607c7ec": "Kontrolldetaljerna är inaktuella. Uppdatera pull requesten för att uppdatera dem.",
   "e74cd4e960cbb5e5": "Oförändrade rader är inte tillgängliga i en fil med bortklippta rader.",
@@ -6820,8 +6867,8 @@
   "e545fcdb83e2c36a": "Lägg till i granskning",
   "2250f241daadd71b": "Lägg till för agent",
   "be9b06fae29cc07a": "Alla commits",
-  "5ef391d5403d7bdd": "{count, plural, one {Visa fler ({count} kvar)} other {Visa fler ({count} kvar)}}",
   "ccd5fc4db08374d7": "{count, plural, one {{count} testfil dold} other {{count} testfiler dolda}}",
+  "5ef391d5403d7bdd": "{count, plural, one {Visa fler ({count} kvar)} other {Visa fler ({count} kvar)}}",
   "c12871955b159db4": "visade i {app}",
   "98b353c208fd7977": "visade",
   "d65b870952bbe4f0": "De här bockarna sparas här, inte på värden",
@@ -7187,19 +7234,27 @@
     }
   ],
   "ce703d4ba40dc9b4": "Mergar stacken...",
+  "8a883c4fbc127b68": "Aktiverar automatisk merge för stacken...",
   "ac7feb9c583b02a0": "Rebasar stacken...",
   "cb0f63bbb0b68d94": "Kunde inte merga stacken",
+  "5fb2a26ae31e8983": "Kunde inte aktivera automatisk merge för stacken",
   "c8a943fa15a56b2b": "Kunde inte rebasa stacken",
   "ec22caeb8b949ed1": "Värden nekade rebasen. En rebase stannar vid den första commit som inte kan tillämpas rent.",
   "ead3e2bac1a8d231": "Merge-begäran för stacken slutfördes",
+  "986d0dcbf4dd0098": "Automatisk merge för stacken aktiverad",
   "d7079b5ac269c65e": "Stacken rebasades",
   "5631b32be0ce48d3": "{host} mergade stacken eller lade till den i sin merge-kö.",
+  "f3ed1f63c8a3eef2": "{host} mergar stacken till och med #{number} när kraven är uppfyllda.",
+  "bd536a0a1754f6cb": "Kunde inte avbryta automatisk merge för stacken",
+  "bb90ac3b2f3a72d5": "Värden vägrade avbryta den automatiska mergen. Uppdatera och försök igen.",
   "2d3b55018a54287e": "Kontrollerar stacken med värden…",
   "eea55205e46d2e3d": "Stack {number}, lager {position} av {size}",
   "b6f729119107a145": "{count, plural, one {Merga stacken till och med '#'{number} in i {base} ({count} {term, select, mr {merge request} cr {ändringsbegäran} other {pull request}})} other {Merga stacken till och med '#'{number} in i {base} ({count} {term, select, mr {merge requests} cr {ändringsbegäranden} other {pull requests}})}}",
   "d4bfcdc6bb7676a3": "{count, plural, one {Merga {count} {term, select, mr {merge request} cr {ändringsbegäran} other {pull request}}?} other {Merga {count} {term, select, mr {merge requests} cr {ändringsbegäranden} other {pull requests}}?}}",
+  "9c28753c777c37b7": "{count, plural, one {Merga {count} {term, select, mr {merge request} cr {ändringsbegäran} other {pull request}} automatiskt?} other {Merga {count} {term, select, mr {merge requests} cr {ändringsbegäranden} other {pull requests}} automatiskt?}}",
   "b9f2a24a3757f6c9": "{count, plural, one {Rebasa {count} {term, select, mr {merge request} cr {ändringsbegäran} other {pull request}}?} other {Rebasa {count} {term, select, mr {merge requests} cr {ändringsbegäranden} other {pull requests}}?}}",
   "d1bcf19eb2753fff": "Merga #{number} och dess omergade lager under in i {base} med {method}. {host} kontrollerar sina regler innan de mergas eller köas och rebasar resten av stacken efter mergen.",
+  "a86b49982e18784d": "Merga #{number} och dess omergade lager under in i {base} med {method} när vart och ett uppfyller kraven på {host}. Det kan ske direkt.",
   "31d2f22f5a282719": "Rebasa fjärrgrenarna nerifrån och upp på {base}. Det här skriver om grenhistoriken och kan starta om kontroller. Om ett lager misslyckas finns tidigare uppdateringar kvar.",
   "a0adf78733c368ae": "Merga stacken",
   "140dc384c58b74f3": "Rebasa stacken",
@@ -7234,8 +7289,19 @@
     },
     ")"
   ],
+  "b1afda5c964deee4": [
+    "Merga stacken automatiskt (",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    ")"
+  ],
+  "33d18dda74f6d7b3": "Avbryt automatisk merge för stacken",
   "30440f98e929440a": "Rebasa stacken",
   "13718a03e3144142": "Alla lager som mergas måste vara öppna och redo för granskning.",
+  "012c67c7f1a99e33": "Merga stacken automatiskt",
   "4aafe1baf113088a": "Merga stacken",
   "0292da19054f2a04": "Läser in stacken…",
   "583869e6df57abeb": "Den här pull requesten ingår inte längre i en stack.",
@@ -7474,6 +7540,9 @@
   "9b0647af63a7d8c1": "Godkände tidigare ändringar",
   "abe99679224fea5e": "Begärde ändringar i tidigare ändringar",
   "6b31ad910278ff72": "Granskning av tidigare ändringar avfärdad",
+  "425e4a3d6c5c2867": "{count, plural, one {{count} misslyckades} other {{count} misslyckades}}",
+  "fd63b391898889f9": "{count, plural, one {{count} väntar på åtgärd} other {{count} väntar på åtgärd}}",
+  "948185631ef288e6": "{count, plural, one {{count} körs} other {{count} körs}}",
   "aaf22207b2f18c45": "{workflows, plural, one {{workflows} arbetsflöde} other {{workflows} arbetsflöden}} och {checks, plural, one {{checks} kontroll} other {{checks} kontroller}} väntar på åtgärd",
   "c51411813ebafcc1": "{count, plural, one {{count} arbetsflöde väntar på godkännande} other {{count} arbetsflöden väntar på godkännande}}",
   "4946778c8e18a1db": "{count, plural, one {{count} kontroll väntar på åtgärd} other {{count} kontroller väntar på åtgärd}}",
@@ -7711,6 +7780,7 @@
   "e4e5b75bba51396c": "Bearer-token (valfritt)",
   "e62cedcbcdbafc75": "Hanteringsnyckel",
   "f1b3d0634ec035cb": "Etikett (valfritt)",
+  "b35256ca61016104": "Lägg till källa",
   "52814dd6f7d0a15c": "Lägg till hubb",
   "27b770d3402abfa2": "Avancerat",
   "584595dfcadab699": "Grafik",
@@ -7720,6 +7790,7 @@
   "d5dc7576fd468be7": "Bekväm",
   "3141408bf3874e64": "Bred",
   "831badd18b64547e": "Full",
+  "6287212fed0deec6": "Samma som chatten",
   "a96255594ebf2ce3": "Ord",
   "1ee44eb65708a8aa": "Staplar",
   "7670f789e0d8672a": "Bara inbyggda teman visar grafik, så det här temat visar versionsetiketten.",
@@ -7737,12 +7808,11 @@
   "03338c6aec8edacd": "Ange hur breda meddelanden och inmatningsfältet kan bli på stora skärmar.",
   "92785adb251da88c": "Återställ chattbredd till standard",
   "4d457bcce0c0e272": "Chattbredd",
-  "7d7f65967cc821e3": "Bredd för HTML-förhandsvisning",
+  "81f3a196537bbee0": "Bekväm (standard)",
   "70ce0af7f78d5957": "Låter HTML-förhandsvisningar i en chatt bli bredare än meddelandena, som förblir centrerade.",
   "f2b119bf02ae2558": "Återställ bredd för HTML-förhandsvisning till standard",
-  "6287212fed0deec6": "Samma som chatten",
+  "7d7f65967cc821e3": "Bredd för HTML-förhandsvisning",
   "dc8e85ea0364649c": "Samma som chatten (standard)",
-  "81f3a196537bbee0": "Bekväm (standard)",
   "e79e5388f669495f": "Visa resonemangsnivån i inmatningsfältet som sitt namn, till exempel Hög, eller som staplar.",
   "7f0365c7e4e8bcbf": "Återställ visning av ansträngning till standard",
   "14bf40f765172a50": "Visning av ansträngning",
@@ -8533,7 +8603,6 @@
   "e6886a7f77b73a8e": "{platform} inte tillgänglig",
   "b0b7610d9860d18d": "Inte konfigurerad på den här datorn.",
   "f5b66c481aa3e4df": "Redigera",
-  "b35256ca61016104": "Lägg till källa",
   "3b20ef0670ae4b0b": "Dator via SSH",
   "121ccffacb6b8c6d": "Expo-simulatorer",
   "130b55a1410a8030": "Simlock-pool (alfa)",
@@ -9101,6 +9170,10 @@
   "f0e853acd2006d53": "Länkade miljöer",
   "ef10c2dff987f3ea": "Kör arbetsflöden i flera steg från filer i mappen workflows i serverns T3-hemkatalog. Öppna dem från kommandopaletten. När det är av körs inget i mappen; körningar väntar tills det slås på igen.",
   "2dadb2359422121c": "Arbetsflöden",
+  "933dabf0700708af": "Hur många överhoppade körningar varje arbetsflöde behåller i sin historik. Äldre överhoppade körningar tas bort; körningar som gjorde något behålls alltid.",
+  "f172d7e5deb24f75": "Återställ antal sparade överhoppade körningar till standard",
+  "ba94015389f327bc": "Sparade överhoppade körningar",
+  "d52b3d6bf9f2a013": "Blandat",
   "13e86eb5d8287a71": "Visa ett förutsagt nästa meddelande i det tomma inmatningsfältet efter en omgång med Claude eller Codex. Tab använder det. Varje förslag är en extra cachad begäran i ditt abonnemang. Kräver Codex 0.165+. Claude-trådar uppdateras vid omstart.",
   "d4b2a2ec812aafb0": "Föreslå nästa prompt",
   "298c7150a7621c80": "Simlock-enhetsvärdar",
@@ -9108,7 +9181,6 @@
   "f9904f78d3003f58": "Snabb utcheckning av worktree",
   "9c2f647882522302": "De valda datorerna använder olika lägen för återkoppling från agenter.",
   "31bbf7bf8c0a5279": "Återkoppling från agenter",
-  "d52b3d6bf9f2a013": "Blandat",
   "ec7623deed751c05": [
     "Dela en tråd med en gäst som följer den live i en webbläsare och skickar meddelanden som du godkänner. Kräver T3 Connect: logga in och länka den här datorn under",
     " ",
@@ -9445,6 +9517,28 @@
   "d2ad2df4c015f417": "Grupperingsregeln avgör hur varje utcheckning ansluter till projektgrupper i sidofältet. Om du ändrar den kan en utcheckning flyttas till ett annat projekt.",
   "0bdf6ae2117b6c23": "Hittar du inte en inställning? Behåll projektet valt ovan och gå till valfri annan inställningssida.",
   "3310e10f1efdc9bd": "Välj ikon",
+  "a9cb97fca6a6576b": "Kommando för att skapa",
+  "90f45a354884ccdd": "Kommando för att ta bort",
+  "0cdc8cdbed3e5eae": "Worktree-layout",
+  "c17b25519e2b194e": "Kunde inte läsa in layoutkommandona för worktrees",
+  "78e308ada516928b": "Det gick inte att godkänna kommandot",
+  "a0c772d32a233da6": "Det gick inte att återkalla godkännandet",
+  "5ccd5614c65f8d1f": "Återkalla godkännandet av kommandot {kind}",
+  "80c3794a5fa12f3a": "Godkänn kommandot {kind}",
+  "f206891e124c77b0": [
+    "Projektets ",
+    {
+      "t": "code",
+      "i": 1,
+      "c": "t3.json"
+    },
+    " förbereder worktree-trådar med egna kommandon. De körs på den här miljöns dator med dina behörigheter, och bara så som de godkänts här: ett kommando vars text ändras behöver godkännas igen."
+  ],
+  "8e73b883d41d4102": "Av",
+  "f6a91589456cca50": "Godkänt",
+  "c92657bb7f2293ff": "Behöver godkännande",
+  "f1e5c1be1ac92361": "Godkänn",
+  "fcb5f3c4d4753326": "Den här anslutningen kan inte godkänna kommandon. Använd en klient som får använda terminalen.",
   "65ccf4f8e049003e": "Välj ett projekt för att hantera dess namn, ikon, utcheckningar och åtgärder.",
   "067beea7d8f6e2c9": "Visa alla miljöer",
   "1bf6da50131340d4": "Accentfärgens nyans",
@@ -9776,7 +9870,6 @@
   "8da6072f5854cc90": "Implementering",
   "1738f499d0c9cf60": "Research",
   "4cd3a0ae6907eec5": "Granskning",
-  "7810d54298dc35ed": "Design",
   "119f85abd1a42c19": "Testning",
   "eb2d10b70802ea9e": "Medlemmens modell",
   "118ac617fe13e248": "Ta bort medlem",
@@ -11369,7 +11462,6 @@
   "4a237f41ce592b7f": "Behåll projektets worktrees tills du tar bort dem manuellt.",
   "00b8ffd8ea6e6a93": "Använd de här reglerna för projektet.",
   "72c279824d15a999": "Använd varje dators inställningar för rensning av worktrees.",
-  "b5702d0b64866b08": "Anpassat",
   "c009c901f3eefe78": "Ta bort worktrees med borttagna trådar",
   "431c7cd6d50102b7": "Ta bort oanvända worktrees när aktiva eller arkiverade trådar tas bort. Worktrees med lokala ändringar behålls.",
   "b70574afdcac8b7e": "Ta bort mergade worktrees",
@@ -11390,7 +11482,6 @@
   "b0d0aebadc521ed1": "Ta bort sparade webbläsarfångster efter så här många dagar. Äldre länkar till fångster öppnas inte längre.",
   "fe4208562792c313": "Ta bort gamla roterade loggar",
   "8debac9c8e9cff47": "Ta bort inaktiva roterade loggfiler efter så här många dagar. Aktuella loggar behålls.",
-  "8e73b883d41d4102": "Av",
   "80d58a3fd4e4212a": "Projekt",
   "de770505be25f1ff": "Mapp",
   "ada7b9a4d96959d2": "Tråd",
@@ -12142,9 +12233,6 @@
   "3b8a7cb01823503d": "beta claude code webb moln fjärr sessioner claude.ai sidofält",
   "6d672d22f3bf5318": "beta claude cloud auto dirigera uppgift lokal dator resurser push",
   "bc0b409d89ce086e": "beta arbetsflöde workflow beständiga körningar automatisering steg schema webhook mapp",
-  "933dabf0700708af": "Hur många överhoppade körningar varje arbetsflöde behåller i sin historik. Äldre överhoppade körningar tas bort; körningar som gjorde något behålls alltid.",
-  "f172d7e5deb24f75": "Återställ antal sparade överhoppade körningar till standard",
-  "ba94015389f327bc": "Sparade överhoppade körningar",
   "4b2669dcdb7d3776": "arbetsflöde historik lagring ta bort gamla överhoppade körningar webhook workflow history retention skipped runs",
   "4a21cf825a2045b0": "beta tabb autokomplettering förutsäg nästa meddelande claude codex spöktext",
   "fea2dc36585c4a20": "Simlock-enhetsvärdar (alfa)",
@@ -12448,7 +12536,6 @@
   "c1a9fe8e24876f1d": "{count, plural, one {{count} pågående tråd avbryts.} other {{count} pågående trådar avbryts.}}",
   "ecdf5f108ecc71d0": "{count, plural, one {{count} kan återupptas efter omstarten.} other {{count} kan återupptas efter omstarten.}}",
   "0576c87870fb6389": "Uppdatera",
-  "948185631ef288e6": "{count, plural, one {{count} körs} other {{count} körs}}",
   "3d9a2f6b9c114039": "Leverantörer",
   "f4baf8deafbb227d": "Överhoppad",
   "f938bb483eb3d189": "startar om sist",
@@ -12458,10 +12545,9 @@
   "2986c81f108d6958": "Ändrade rader",
   "c523c744eaa0855e": "Agent",
   "eae844f05caa42d2": "Fjärrdator",
+  "f13e08bd3614112e": "uppdatera T3 Code på den datorn",
   "9bca02be2b4d612a": "inte ansluten",
   "2dcc418b6a13b83c": "behöver uppdateras manuellt",
-  "f13e08bd3614112e": "uppdatera T3 Code på den datorn",
-  "3c3348c36a2695af": "byt uppdateringsspår på den datorn",
   "fa8faa732a2688ef": "på kanalen {channel}",
   "e65649675cb4cbaa": "avstängd",
   "a1e7c08d9ef315c7": "läses fortfarande in",
@@ -12478,6 +12564,7 @@
   "3ac986d604a2ad62": "Den här appen kan inte byta: dess server är inte ansluten, så dess databas kan inte kontrolleras.",
   "3bbb6e9ade0cf7e1": "kör `{command}` där",
   "e7194946af611278": "kör en förhandsversion",
+  "3c3348c36a2695af": "byt uppdateringsspår på den datorn",
   "f5eac23351c99297": "byt Mac-appen på den Macen",
   "d7444fbde9a80f04": "<1 min",
   "09c1af20e9323765": "Startar om om {seconds} s",
@@ -12904,6 +12991,8 @@
   "b8dcbc93a2ca1861": "Körningen listar det inte längre.",
   "115c69de3202f664": "Öppna",
   "644eafa9048b62df": "{count, plural, =1 {1:a försöket} =2 {2:a försöket} =3 {3:e försöket} other {försök {count}}}",
+  "0398ca6c1d24b92d": "i kö, näst på tur",
+  "0af6d5ffd5166214": "{count, plural, one {i kö, {count} före} other {i kö, {count} före}}",
   "e39f89c909df4db0": "Kunde inte återuppta körningen",
   "865f034346b82f47": "Avbryta {title}? Dess agenter stoppas och körningen kan inte återupptas.",
   "6bc75632fd9c9136": "Kunde inte avbryta körningen",
@@ -12930,11 +13019,17 @@
   "dd7a1e58c2553933": "vaknar om {duration}",
   "95cc952724dd7310": "vaknar strax",
   "3cc34921c0128593": "körs",
-  "e777db2880f53a46": "ingen svarade",
   "dc90739d391a5e67": "Du svarade {choice}",
+  "4e96712d839ccbff": "{who} svarade {choice}",
+  "e777db2880f53a46": "ingen svarade",
+  "201490988858b511": "återkallad av {by}",
   "389f2563b5b763fd": "Snabba steg",
+  "99451a5d2d40440f": "Återkallad av {by}.",
+  "3ee30a50b70fffab": "Återkallad av {by}: {reason}",
+  "92e129bf413a1220": "återkallad",
   "a41c8d758121ad81": "sov",
   "9db248b770096984": "väntade",
+  "49be26a27dcb30e5": "köade",
   "c76124517af28686": "har körts i {duration}",
   "89102905bf09b0e8": "Följ live",
   "bdf338cdff4118f0": "Transkript",
@@ -12968,6 +13063,49 @@
   "8bffb377e2a6a7de": "dess version är inte längre registrerad",
   "f92d9132f7b85d1a": "Läser in steg…",
   "6ebc59f64c761a49": "Inget än.",
+  "19097cfb8f5a79cf": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " svarade",
+    " ",
+    {
+      "t": "span",
+      "i": 2,
+      "c": {
+        "i": 3,
+        "k": "_gt_value_3",
+        "v": "v"
+      }
+    },
+    "."
+  ],
+  "e7bbf693910057bf": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " svarade",
+    " ",
+    {
+      "t": "span",
+      "i": 2,
+      "c": {
+        "i": 3,
+        "k": "_gt_value_3",
+        "v": "v"
+      }
+    },
+    ": ",
+    {
+      "i": 4,
+      "k": "_gt_value_4",
+      "v": "v"
+    }
+  ],
   "a759dccd157d7dae": [
     "Du svarade",
     " ",
@@ -13001,6 +13139,15 @@
       "v": "v"
     }
   ],
+  "3759768c5d342c22": [
+    "besvarad",
+    " ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
   "c98009be9a273b31": "Öppna körning",
   "c8eb9be36d4d51ad": [
     "Tråd på ",
@@ -13026,6 +13173,14 @@
   ],
   "02dfe6c63fd0b8a1": "Lägg till ett skäl",
   "19abd94828a3bdbc": "Fråga agenten först",
+  "e114d37b32ab0dc7": [
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " kräver en anledning."
+  ],
   "a18721fa8f328361": "Behöver dig",
   "bbf24e7920c1e86b": "Körs",
   "8d6e18d2ad832db6": "Alla",
@@ -13040,10 +13195,10 @@
   "b6409289e0c9a4dd": "Arbetsflöde",
   "035cb02ca1ae4952": "Alla arbetsflöden ({count})",
   "8eeb9cb07d7c59e1": "Typ av fråga",
-  "e4d1316c85ed7066": "Inga frågor av den här typen väntar på dig.",
   "e2131cbec8accfe3": "Alla typer",
   "46d614fa7b4bf1e5": "Arbetsflödeskörningar",
   "1c635faa2fb45b8b": "Har inte körts än.",
+  "e4d1316c85ed7066": "Inga frågor av den här typen väntar på dig.",
   "156ff7b625287a1e": "Dölj överhoppade",
   "69b985b97ab45e6b": "Visa överhoppade ({count})",
   "2400254d362de84d": "Läser in arbetsflödeskörningar…",
@@ -13114,6 +13269,16 @@
   "5d18537f82794deb": "Den lokala miljön är inaktiverad.",
   "d5ef094f40aedece": "Terminalinmatning",
   "f7046b10d49caab6": "Terminalens rullningshistorik",
+  "32aebea75c7d222a": "Loading image...",
+  "bf41406a4712f977": "Show image {position} of {total}",
+  "37b84080ae64546b": "Show chat",
+  "0954e04a52635abd": "Hide chat",
+  "054b672ee8b1b99a": "Image review",
+  "9e0b11439d738151": "Close image review",
+  "9684c1071cc5a436": "Previous image",
+  "5858a4971b15faff": "Next image",
+  "67a30c98d0ea438d": "Expand chat",
+  "3d54dd7aa4cd6da0": "Resize chat",
   "92efb7efc26f6f06": "Spelar in diktering",
   "2ddb62c94293eb14": "Avbryt diktering",
   "f47533fed3606ffb": "Avsluta diktering",
@@ -13232,160 +13397,5 @@
   "27d76249d09eb69f": "Granskningsguiden är klar",
   "faa3bb26abb39c93": "Granskningsguiden misslyckades",
   "b7df38b7d8792d78": "Öppna guiden",
-  "9e91e9a77b664e4e": "Kunde inte starta en granskningsguide",
-  "8a883c4fbc127b68": "Aktiverar automatisk merge för stacken...",
-  "5fb2a26ae31e8983": "Kunde inte aktivera automatisk merge för stacken",
-  "986d0dcbf4dd0098": "Automatisk merge för stacken aktiverad",
-  "f3ed1f63c8a3eef2": "{host} mergar stacken till och med #{number} när kraven är uppfyllda.",
-  "bd536a0a1754f6cb": "Kunde inte avbryta automatisk merge för stacken",
-  "bb90ac3b2f3a72d5": "Värden vägrade avbryta den automatiska mergen. Uppdatera och försök igen.",
-  "9c28753c777c37b7": "{count, plural, one {Merga {count} {term, select, mr {merge request} cr {ändringsbegäran} other {pull request}} automatiskt?} other {Merga {count} {term, select, mr {merge requests} cr {ändringsbegäranden} other {pull requests}} automatiskt?}}",
-  "a86b49982e18784d": "Merga #{number} och dess omergade lager under in i {base} med {method} när vart och ett uppfyller kraven på {host}. Det kan ske direkt.",
-  "b1afda5c964deee4": [
-    "Merga stacken automatiskt (",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    ")"
-  ],
-  "33d18dda74f6d7b3": "Avbryt automatisk merge för stacken",
-  "012c67c7f1a99e33": "Merga stacken automatiskt",
-  "32aebea75c7d222a": "Loading image...",
-  "bf41406a4712f977": "Show image {position} of {total}",
-  "37b84080ae64546b": "Show chat",
-  "0954e04a52635abd": "Hide chat",
-  "054b672ee8b1b99a": "Image review",
-  "9e0b11439d738151": "Close image review",
-  "9684c1071cc5a436": "Previous image",
-  "5858a4971b15faff": "Next image",
-  "67a30c98d0ea438d": "Expand chat",
-  "3d54dd7aa4cd6da0": "Resize chat",
-  "4a18481bea4b4ad5": "Ny enhet inloggad på {environmentLabel}",
-  "4144ab6aa487528a": "{device} anslöt via {product}. Inte du? Granska den.",
-  "a10cfdb27152c757": "{count, plural, one {{count} enhet} other {{count} enheter}} anslöt via {product}. Inte du? Granska dem.",
-  "e0856d6a402ad821": "Policyn för {organization} tillåter inte projekts layoutkommandon för worktrees.",
-  "206811f6f441bfc7": "Det här projektet förbereder worktrees med ett eget kommando, som ingen har godkänt som det är skrivet nu. Den här anslutningen kan inte godkänna det: godkänn det från en klient som får använda terminalen.",
-  "b8087c9a70c26da9": "Det gick inte att godkänna layoutkommandot för worktrees.",
-  "49eda70cfd56e621": "Körs när en worktree-tråd startar och när dess mapp återställs",
-  "188ccaa1199f5611": "Körs när en tråds worktree tas bort",
-  "7e8476e7306acabe": "Låta det här projektet köra sina worktree-kommandon?",
-  "8e11914556fd8b13": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " förbereder worktree-trådar med egna kommandon från ",
-    {
-      "t": "code",
-      "i": 2,
-      "c": "t3.json"
-    },
-    ". De körs på den här miljöns dator med dina behörigheter, utanför alla agentsandlådor. Du får frågan igen varje gång deras text ändras."
-  ],
-  "46807acd02a4ff72": "Godkänn och fortsätt",
-  "a9cb97fca6a6576b": "Kommando för att skapa",
-  "90f45a354884ccdd": "Kommando för att ta bort",
-  "78e308ada516928b": "Det gick inte att godkänna kommandot",
-  "a0c772d32a233da6": "Det gick inte att återkalla godkännandet",
-  "0cdc8cdbed3e5eae": "Worktree-layout",
-  "c17b25519e2b194e": "Kunde inte läsa in layoutkommandona för worktrees",
-  "5ccd5614c65f8d1f": "Återkalla godkännandet av kommandot {kind}",
-  "80c3794a5fa12f3a": "Godkänn kommandot {kind}",
-  "f206891e124c77b0": [
-    "Projektets ",
-    {
-      "t": "code",
-      "i": 1,
-      "c": "t3.json"
-    },
-    " förbereder worktree-trådar med egna kommandon. De körs på den här miljöns dator med dina behörigheter, och bara så som de godkänts här: ett kommando vars text ändras behöver godkännas igen."
-  ],
-  "f6a91589456cca50": "Godkänt",
-  "c92657bb7f2293ff": "Behöver godkännande",
-  "f1e5c1be1ac92361": "Godkänn",
-  "fcb5f3c4d4753326": "Den här anslutningen kan inte godkänna kommandon. Använd en klient som får använda terminalen.",
-  "7150557773b3818b": "I kö",
-  "efbeb3993ee2c3f5": "Köar för {pool}",
-  "0398ca6c1d24b92d": "i kö, näst på tur",
-  "0af6d5ffd5166214": "{count, plural, one {i kö, {count} före} other {i kö, {count} före}}",
-  "49be26a27dcb30e5": "köade",
-  "4e96712d839ccbff": "{who} svarade {choice}",
-  "19097cfb8f5a79cf": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " svarade",
-    " ",
-    {
-      "t": "span",
-      "i": 2,
-      "c": {
-        "i": 3,
-        "k": "_gt_value_3",
-        "v": "v"
-      }
-    },
-    "."
-  ],
-  "e7bbf693910057bf": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " svarade",
-    " ",
-    {
-      "t": "span",
-      "i": 2,
-      "c": {
-        "i": 3,
-        "k": "_gt_value_3",
-        "v": "v"
-      }
-    },
-    ": ",
-    {
-      "i": 4,
-      "k": "_gt_value_4",
-      "v": "v"
-    }
-  ],
-  "3759768c5d342c22": [
-    "besvarad",
-    " ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    }
-  ],
-  "e114d37b32ab0dc7": [
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " kräver en anledning."
-  ],
-  "91aadfc843c600de": "Verifiera Google-konto",
-  "201490988858b511": "återkallad av {by}",
-  "99451a5d2d40440f": "Återkallad av {by}.",
-  "3ee30a50b70fffab": "Återkallad av {by}: {reason}",
-  "92e129bf413a1220": "återkallad",
-  "d9d919faea40ccfd": "Öppna Design",
-  "37311e0add03806b": "Placera de skärmar som agenten skissar på en canvas.",
-  "d6e524382c619981": "Öppna Design",
-  "3e19afa2072da269": "Öppna skiss {title}",
-  "f0193fc422ae70cd": "Ta bort från canvas",
-  "43878fb3f7e42f0e": "Anpassa till skärmen",
-  "bae2ec2de83b8e19": "Helskärm",
-  "fc5f9903c7a7a997": "Inga skisser än. Be agenten designa en skärm så placerar den den här med design_sketch.",
-  "16e20108e473df2e": "Skiss utan miniatyr",
-  "75810a0ab0d14ba4": "Design är inte tillgängligt i den här miljön."
+  "9e91e9a77b664e4e": "Kunde inte starta en granskningsguide"
 }

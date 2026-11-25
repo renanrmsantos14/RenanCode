@@ -31,5 +31,17 @@ export function createDesignEnvironmentAtoms<R, E>(
       label: "environment-data:design:place-sketch",
       tag: WS_METHODS.designPlaceSketch,
     }),
+    addFrame: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:design:add-frame",
+      tag: WS_METHODS.designAddFrame,
+    }),
+    updateFrame: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:design:update-frame",
+      tag: WS_METHODS.designUpdateFrame,
+    }),
+    setFrameSnapshot: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:design:set-frame-snapshot",
+      tag: WS_METHODS.designSetFrameSnapshot,
+    }),
   };
 }

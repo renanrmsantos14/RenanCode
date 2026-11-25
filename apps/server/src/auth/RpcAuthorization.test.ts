@@ -82,6 +82,9 @@ describe("RPC authorization scopes", () => {
       WS_METHODS.designSetViewport,
       WS_METHODS.designRemoveNode,
       WS_METHODS.designPlaceSketch,
+      WS_METHODS.designAddFrame,
+      WS_METHODS.designUpdateFrame,
+      WS_METHODS.designSetFrameSnapshot,
     ]) {
       expect(requiredScopeForRpcMethod(method)).toBe(AuthOrchestrationOperateScope);
     }

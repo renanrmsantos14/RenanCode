@@ -140,10 +140,12 @@ const rememberSnapshotUrl = (
 
 const latestSnapshot = (
   sessions: Record<string, PreviewSessionSnapshot>,
-): PreviewSessionSnapshot | null =>
-  Object.values(sessions)
-    .toSorted((a, b) => a.updatedAt.localeCompare(b.updatedAt))
-    .at(-1) ?? null;
+): PreviewSessionSnapshot | null => {
+  const ordered = Object.values(sessions).toSorted((a, b) =>
+    a.updatedAt.localeCompare(b.updatedAt),
+  );
+  return ordered.findLast((session) => !isDesignFrameTab(session.tabId)) ?? ordered.at(-1) ?? null;
+};
 
 const removeSession = (current: ThreadPreviewState, tabId: string): ThreadPreviewState => {
   if (!current.sessions[tabId]) return current;
@@ -176,6 +178,22 @@ export function readActivePreviewSessions(): Record<string, ThreadPreviewState> 
   return appAtomRegistry.get(activePreviewSessionsAtom);
 }
 
+const designFrameTabIds = new Set<string>();
+
+/** A Design Frame's page is a preview session too, but it must never become the thread's browser tab. */
+export function markDesignFrameTab(tabId: string, isFrame: boolean): void {
+  if (isFrame) designFrameTabIds.add(tabId);
+  else designFrameTabIds.delete(tabId);
+}
+
+export const isDesignFrameTab = (tabId: string): boolean => designFrameTabIds.has(tabId);
+
+/** A Frame's page never takes the thread's active tab from a tab that is still open. */
+const tabToFocus = (current: ThreadPreviewState, tabId: string): string =>
+  isDesignFrameTab(tabId) && current.activeTabId !== null && current.sessions[current.activeTabId]
+    ? current.activeTabId
+    : tabId;
+
 export function readThreadPreviewState(ref: ScopedThreadRef): ThreadPreviewState {
   return appAtomRegistry.get(previewStateAtom(scopedThreadKey(ref)));
 }
@@ -196,7 +214,8 @@ export function applyPreviewServerEvent(ref: ScopedThreadRef, event: PreviewEven
               ? current.recentlySeenUrls
               : dedupeRecentUrls(current.recentlySeenUrls, snapshot.navStatus.url);
           const sessions = { ...current.sessions, [snapshot.tabId]: snapshot };
-          const activeTabId = event.type === "opened" ? snapshot.tabId : current.activeTabId;
+          const activeTabId =
+            event.type === "opened" ? tabToFocus(current, snapshot.tabId) : current.activeTabId;
           const activeSnapshot = sessions[activeTabId ?? snapshot.tabId] ?? snapshot;
           return {
             ...current,
@@ -268,12 +287,14 @@ export function applyPreviewServerSnapshot(
     const existing = current.sessions[snapshot.tabId];
     if (existing && existing.updatedAt > snapshot.updatedAt) return current;
     const recentlySeenUrls = rememberSnapshotUrl(current.recentlySeenUrls, snapshot);
+    const sessions = { ...current.sessions, [snapshot.tabId]: snapshot };
+    const activeTabId = tabToFocus(current, snapshot.tabId);
     return {
       ...current,
-      snapshot,
-      sessions: { ...current.sessions, [snapshot.tabId]: snapshot },
-      activeTabId: snapshot.tabId,
-      desktopOverlay: current.desktopByTabId[snapshot.tabId] ?? null,
+      snapshot: sessions[activeTabId] ?? snapshot,
+      sessions,
+      activeTabId,
+      desktopOverlay: current.desktopByTabId[activeTabId] ?? null,
       recentlySeenUrls,
     };
   });

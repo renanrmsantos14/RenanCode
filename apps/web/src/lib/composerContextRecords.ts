@@ -274,6 +274,13 @@ export function previewAnnotationContextLabel(
     if (previous >= 0xd800 && previous <= 0xdbff && next >= 0xdc00 && next <= 0xdfff) end -= 1;
     return `${comment.slice(0, end)}…`;
   }
+  const element = annotation.elements[0]?.element;
+  if (element) {
+    const target = element.selector ?? `<${element.tagName.toLowerCase()}>`;
+    return target.length <= PREVIEW_LABEL_MAX_CHARS
+      ? target
+      : `${target.slice(0, PREVIEW_LABEL_MAX_CHARS - 1)}…`;
+  }
   const fallback = msg("Preview annotation");
   return annotation.pageTitle?.trim() || (resolve ? resolve(fallback) : decodeMsg(fallback));
 }

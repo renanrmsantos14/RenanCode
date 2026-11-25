@@ -480,13 +480,17 @@ import {
   ScheduledTaskMutationResult,
 } from "./scheduledTask.ts";
 import {
+  DesignAddFrameInput,
   DesignCanvasSnapshot,
   DesignError,
+  DesignFrameNode,
   DesignMoveNodesInput,
   DesignPlaceSketchInput,
   DesignRemoveNodeInput,
+  DesignSetFrameSnapshotInput,
   DesignSetViewportInput,
   DesignSubscribeCanvasInput,
+  DesignUpdateFrameInput,
 } from "./design.ts";
 import {
   WorkModule,
@@ -732,6 +736,9 @@ export const WS_METHODS = {
   designSetViewport: "design.setViewport",
   designRemoveNode: "design.removeNode",
   designPlaceSketch: "design.placeSketch",
+  designAddFrame: "design.addFrame",
+  designUpdateFrame: "design.updateFrame",
+  designSetFrameSnapshot: "design.setFrameSnapshot",
   workModulesSubscribe: "workModules.subscribe",
   workModulesUpsert: "workModules.upsert",
   workModulesMove: "workModules.move",
@@ -2609,6 +2616,23 @@ const WsDesignPlaceSketchRpc = Rpc.make(WS_METHODS.designPlaceSketch, {
   error: DesignRpcError,
 });
 
+const WsDesignAddFrameRpc = Rpc.make(WS_METHODS.designAddFrame, {
+  payload: DesignAddFrameInput,
+  // null: an automatic Frame was already made for this thread.
+  success: Schema.NullOr(DesignFrameNode),
+  error: DesignRpcError,
+});
+
+const WsDesignUpdateFrameRpc = Rpc.make(WS_METHODS.designUpdateFrame, {
+  payload: DesignUpdateFrameInput,
+  error: DesignRpcError,
+});
+
+const WsDesignSetFrameSnapshotRpc = Rpc.make(WS_METHODS.designSetFrameSnapshot, {
+  payload: DesignSetFrameSnapshotInput,
+  error: DesignRpcError,
+});
+
 const ProjectChecklistRpcError = Schema.Union([
   ProjectChecklistError,
   EnvironmentAuthorizationError,
@@ -2810,6 +2834,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsDesignSetViewportRpc,
   WsDesignRemoveNodeRpc,
   WsDesignPlaceSketchRpc,
+  WsDesignAddFrameRpc,
+  WsDesignUpdateFrameRpc,
+  WsDesignSetFrameSnapshotRpc,
   WsWorkModulesSubscribeRpc,
   WsWorkModulesUpsertRpc,
   WsWorkModulesMoveRpc,

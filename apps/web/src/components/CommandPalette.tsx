@@ -93,6 +93,7 @@ import {
 import { openThreadFind } from "./chat/threadFindStore";
 import { dispatchPreviewAction } from "./preview/previewActionBus";
 import { previewBridge } from "./preview/previewBridge";
+import { useDesignFrameStore } from "./design/designFrameStore";
 import {
   useDeferredValue,
   useEffect,
@@ -1568,6 +1569,17 @@ function OpenCommandPaletteDialog(props: {
         icon: <FrameIcon className={ITEM_ICON_CLASS} />,
         run: async () => {
           useRightPanelStore.getState().open(threadRef, "design");
+        },
+      });
+      actionItems.push({
+        kind: "action",
+        value: "action:add-design-frame",
+        searchTerms: ["design", "frame", "device", "mobile", "tablet", "page", "app", "preview"],
+        title: gt("Add Frame to Design"),
+        icon: <FrameIcon className={ITEM_ICON_CLASS} />,
+        run: async () => {
+          useRightPanelStore.getState().open(threadRef, "design");
+          useDesignFrameStore.getState().setAddMenuOpen(threadRef, true);
         },
       });
     }

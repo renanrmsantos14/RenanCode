@@ -2006,6 +2006,32 @@ describe("PreviewManager", () => {
     ),
   );
 
+  effectIt.effect(
+    "captures a Design Frame snapshot in memory, narrowed to the snapshot width",
+    () =>
+      withManager((manager) =>
+        Effect.gen(function* () {
+          const resized = Buffer.from("narrow-png");
+          const resize = vi.fn(() => ({ toPNG: () => resized }));
+          const wide = {
+            ...makeStillImage("wide-png"),
+            getSize: () => ({ width: 1440, height: 900 }),
+            resize,
+          };
+          const capturePage = vi.fn(async () => wide);
+          fromId.mockReturnValue(makeTestStillImageWebContents(capturePage));
+          yield* manager.createTab("tab_1");
+          yield* manager.registerWebview("tab_1", 42);
+          yield* manager.setColorScheme("tab_1", "system");
+          const snapshot = yield* manager.captureSnapshot("tab_1");
+
+          expect(resize).toHaveBeenCalledWith({ width: 900 });
+          expect(snapshot).toEqual({ pngBase64: resized.toString("base64") });
+          expect(writeFile).not.toHaveBeenCalled();
+        }),
+      ),
+  );
+
   effectIt.effect("preserves both screenshots of the same site in the same millisecond", () =>
     withManager((manager) =>
       Effect.gen(function* () {

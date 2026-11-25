@@ -1,10 +1,14 @@
 import {
+  type DesignAddFrameInput,
   type DesignCanvasNode,
   type DesignCanvasSnapshot,
   DesignError,
+  type DesignFrameNode,
   DesignNodeId,
+  type DesignSetFrameSnapshotInput,
   type DesignSketch,
   DesignSketchId,
+  type DesignUpdateFrameInput,
   type DesignViewport,
   type ProjectId,
   type ThreadId,
@@ -13,6 +17,7 @@ import {
   clampDesignSketchHeight,
   clampDesignSketchWidth,
   DESIGN_SKETCH_DEFAULT_MAX_HEIGHT,
+  designFrameSize,
   designSketchReference,
   type DesignRect,
   type DesignSketchReference,
@@ -86,6 +91,16 @@ export class DesignService extends Context.Service<
       readonly threadId: ThreadId;
       readonly sketchId: DesignSketchId;
     }) => Effect.Effect<DesignCanvasNode, DesignError>;
+    /** Places a running page on the thread's canvas. Null when `auto` found the automatic Frame already made. */
+    readonly addFrame: (
+      input: DesignAddFrameInput,
+    ) => Effect.Effect<DesignFrameNode | null, DesignError>;
+    /** Changes a Frame's page or size; the saved print is dropped because it no longer matches. */
+    readonly updateFrame: (input: DesignUpdateFrameInput) => Effect.Effect<void, DesignError>;
+    /** Replaces the print a Frame shows while it is not the live one. */
+    readonly setFrameSnapshot: (
+      input: DesignSetFrameSnapshotInput,
+    ) => Effect.Effect<void, DesignError>;
     /** Drops the thread's canvas. Sketches stay: they belong to the project. */
     readonly cleanupThread: (threadId: ThreadId) => Effect.Effect<void, DesignError>;
   }
@@ -116,6 +131,10 @@ interface NodeRow {
   readonly width: number;
   readonly height: number;
   readonly z: number;
+  readonly url: string | null;
+  readonly device: string | null;
+  readonly title: string | null;
+  readonly snapshot_attachment_id: string | null;
 }
 
 const fail = (message: string, cause?: unknown) =>
@@ -141,16 +160,41 @@ const toSketch = (row: SketchRow): DesignSketch =>
   }) as DesignSketch;
 
 const toNode = (row: NodeRow): DesignCanvasNode =>
-  ({
-    id: row.node_id,
-    kind: "sketch",
-    sketchId: row.sketch_id,
-    x: row.x,
-    y: row.y,
-    width: row.width,
-    height: row.height,
-    z: row.z,
-  }) as DesignCanvasNode;
+  row.kind === "frame"
+    ? ({
+        id: row.node_id,
+        kind: "frame",
+        url: row.url,
+        device: row.device,
+        title: row.title,
+        snapshotAttachmentId: row.snapshot_attachment_id,
+        x: row.x,
+        y: row.y,
+        width: row.width,
+        height: row.height,
+        z: row.z,
+      } as DesignCanvasNode)
+    : ({
+        id: row.node_id,
+        kind: "sketch",
+        sketchId: row.sketch_id,
+        x: row.x,
+        y: row.y,
+        width: row.width,
+        height: row.height,
+        z: row.z,
+      } as DesignCanvasNode);
+
+const frameTitle = (url: string) => {
+  try {
+    const { host, pathname } = new URL(url);
+    return `${host}${pathname === "/" ? "" : pathname}`.slice(0, 200);
+  } catch {
+    return url.slice(0, 200);
+  }
+};
+
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
 
 const iso = (value: DateTime.DateTime) => DateTime.formatIso(DateTime.toUtc(value));
 
@@ -176,7 +220,7 @@ export const layer = Layer.effect(
     const snapshot = Effect.fn("DesignService.snapshot")(function* (threadId: ThreadId) {
       const nodes = yield* sql<NodeRow>`
         SELECT * FROM design_canvas_nodes
-        WHERE thread_id = ${threadId} AND kind = 'sketch'
+        WHERE thread_id = ${threadId}
         ORDER BY z, created_at
       `;
       // The thread's own sketches stay listed after their node is removed, so they can be placed again.
@@ -217,7 +261,7 @@ export const layer = Layer.effect(
 
     const readNodes = (threadId: ThreadId) =>
       sql<NodeRow>`
-        SELECT * FROM design_canvas_nodes WHERE thread_id = ${threadId} AND kind = 'sketch'
+        SELECT * FROM design_canvas_nodes WHERE thread_id = ${threadId}
       `.pipe(Effect.map((rows) => rows.map(toNode)));
 
     const readSketch = (sketchId: DesignSketchId) =>
@@ -237,8 +281,9 @@ export const layer = Layer.effect(
       });
 
     // The project prefix keeps thread deletion from sweeping a sketch's files away.
-    const newAttachment = (projectId: ProjectId, extension: "html" | "png") => {
-      const attachmentId = createAttachmentId(`design-${projectId}`, extension);
+    // A Frame print is the thread's own, so it takes the thread prefix and goes with the thread.
+    const newAttachment = (prefix: string, extension: "html" | "png") => {
+      const attachmentId = createAttachmentId(prefix, extension);
       const filePath = attachmentId === null ? null : attachmentPath(attachmentId, extension);
       return attachmentId === null || filePath === null
         ? Effect.fail(fail("The project id cannot name an attachment."))
@@ -252,7 +297,7 @@ export const layer = Layer.effect(
     }) {
       const htmlRender = yield* HtmlRender.HtmlRender;
       const preview = yield* htmlRender.preview({ html: input.page.html, width: input.page.width });
-      const target = yield* newAttachment(input.projectId, "png");
+      const target = yield* newAttachment(`design-${input.projectId}`, "png");
       yield* fileSystem
         .writeFile(target.filePath, Buffer.from(preview.png, "base64"))
         .pipe(Effect.mapError(storage));
@@ -295,7 +340,7 @@ export const layer = Layer.effect(
         const pages = yield* Effect.forEach(input.pages, (page, index) =>
           Effect.gen(function* () {
             const width = clampDesignSketchWidth(page.width);
-            const html = yield* newAttachment(input.projectId, "html");
+            const html = yield* newAttachment(`design-${input.projectId}`, "html");
             yield* fileSystem
               .writeFileString(html.filePath, prepared[index]!)
               .pipe(Effect.mapError(storage));
@@ -343,7 +388,7 @@ export const layer = Layer.effect(
               const original =
                 basedOn === null
                   ? undefined
-                  : existing.find((node) => node.sketchId === basedOn.id);
+                  : existing.find((node) => node.kind === "sketch" && node.sketchId === basedOn.id);
               const positions = placeSketches(
                 existing.map(rect),
                 pages.map((page) => ({ width: page.width, height: page.height })),
@@ -448,14 +493,151 @@ export const layer = Layer.effect(
       `.pipe(Effect.mapError(storage));
     });
 
+    const removePrint = (attachmentId: string | null) => {
+      const filePath = attachmentId === null ? null : attachmentPath(attachmentId, "png");
+      return filePath === null
+        ? Effect.void
+        : fileSystem.remove(filePath, { force: true }).pipe(Effect.ignore);
+    };
+
+    const requireThread = Effect.fn("DesignService.requireThread")(function* (threadId: ThreadId) {
+      const shell = yield* threads.getThreadShell(threadId).pipe(Effect.mapError(storage));
+      if (shell === null || shell.deletedAt !== null)
+        return yield* fail("The thread was not found.");
+      return shell;
+    });
+
+    const readFrame = (threadId: ThreadId, nodeId: DesignNodeId) =>
+      sql<NodeRow>`
+        SELECT * FROM design_canvas_nodes
+        WHERE node_id = ${nodeId} AND thread_id = ${threadId} AND kind = 'frame'
+      `.pipe(Effect.map((rows) => rows[0] ?? null));
+
+    const addFrame = Effect.fn("DesignService.addFrame")(function* (input: DesignAddFrameInput) {
+      yield* requireThread(input.threadId);
+      const uuid = yield* random.uuidV4().pipe(Effect.mapError(storage));
+      const now = iso(yield* DateTime.now);
+      const size = designFrameSize(input.device, input);
+      const created = yield* sql
+        .withTransaction(
+          Effect.gen(function* () {
+            if (input.auto === true) {
+              const done = yield* sql`
+                SELECT 1 FROM design_canvas_auto_frames WHERE thread_id = ${input.threadId}
+              `;
+              if (done.length > 0) return null;
+              yield* sql`
+                INSERT INTO design_canvas_auto_frames (thread_id, created_at)
+                VALUES (${input.threadId}, ${now})
+              `;
+            }
+            const existing = yield* readNodes(input.threadId);
+            const [position] = placeSketches(existing.map(rect), [size]);
+            const row: NodeRow = {
+              node_id: `design-node:${uuid}`,
+              thread_id: input.threadId,
+              kind: "frame",
+              sketch_id: null,
+              x: position!.x,
+              y: position!.y,
+              width: size.width,
+              height: size.height,
+              z: yield* nextZ(input.threadId),
+              url: input.url,
+              device: input.device,
+              title: input.title?.trim().slice(0, 200) || frameTitle(input.url),
+              snapshot_attachment_id: null,
+            };
+            yield* sql`
+              INSERT INTO design_canvas_nodes ${sql.insert({
+                ...row,
+                created_at: now,
+                updated_at: now,
+              })}
+            `;
+            return toNode(row) as DesignFrameNode;
+          }),
+        )
+        .pipe(Effect.mapError(storage));
+      if (created !== null) yield* notify(input.threadId);
+      return created;
+    });
+
+    const updateFrame = Effect.fn("DesignService.updateFrame")(function* (
+      input: DesignUpdateFrameInput,
+    ) {
+      const frame = yield* readFrame(input.threadId, input.nodeId).pipe(Effect.mapError(storage));
+      if (frame === null) return yield* fail("The frame was not found.");
+      const device = (input.device ?? frame.device) as DesignFrameNode["device"];
+      const resized =
+        input.device !== undefined || input.width !== undefined || input.height !== undefined;
+      const size = resized
+        ? designFrameSize(device, {
+            width: input.width ?? frame.width,
+            height: input.height ?? frame.height,
+          })
+        : { width: frame.width, height: frame.height };
+      const url = input.url ?? frame.url;
+      const changedPage =
+        url !== frame.url || size.width !== frame.width || size.height !== frame.height;
+      const now = iso(yield* DateTime.now);
+      yield* sql`
+        UPDATE design_canvas_nodes SET
+          url = ${url}, device = ${device}, width = ${size.width}, height = ${size.height},
+          title = ${input.title?.trim().slice(0, 200) || frame.title},
+          snapshot_attachment_id = ${changedPage ? null : frame.snapshot_attachment_id},
+          updated_at = ${now}
+        WHERE node_id = ${input.nodeId} AND thread_id = ${input.threadId}
+      `.pipe(Effect.mapError(storage));
+      if (changedPage) yield* removePrint(frame.snapshot_attachment_id);
+      yield* notify(input.threadId);
+    });
+
+    const setFrameSnapshot = Effect.fn("DesignService.setFrameSnapshot")(function* (
+      input: DesignSetFrameSnapshotInput,
+    ) {
+      const png = Buffer.from(input.png, "base64");
+      if (png.length < PNG_SIGNATURE.length || !png.subarray(0, 4).equals(PNG_SIGNATURE)) {
+        return yield* fail("The frame print is not a PNG.");
+      }
+      const frame = yield* readFrame(input.threadId, input.nodeId).pipe(Effect.mapError(storage));
+      if (frame === null) return yield* fail("The frame was not found.");
+      const target = yield* newAttachment(input.threadId, "png");
+      yield* fileSystem
+        .makeDirectory(config.attachmentsDir, { recursive: true })
+        .pipe(Effect.mapError(storage));
+      yield* fileSystem.writeFile(target.filePath, png).pipe(Effect.mapError(storage));
+      const now = iso(yield* DateTime.now);
+      const updated = yield* sql`
+        UPDATE design_canvas_nodes
+        SET snapshot_attachment_id = ${target.attachmentId}, updated_at = ${now}
+        WHERE node_id = ${input.nodeId} AND thread_id = ${input.threadId} AND kind = 'frame'
+        RETURNING node_id
+      `.pipe(
+        Effect.mapError(storage),
+        Effect.onError(() => removePrint(target.attachmentId)),
+      );
+      if (updated.length === 0) {
+        yield* removePrint(target.attachmentId);
+        return yield* fail("The frame was not found.");
+      }
+      yield* removePrint(frame.snapshot_attachment_id);
+      yield* notify(input.threadId);
+    });
+
     const removeNode = Effect.fn("DesignService.removeNode")(function* (input: {
       readonly threadId: ThreadId;
       readonly nodeId: DesignNodeId;
     }) {
+      const rows = yield* sql<{ snapshot_attachment_id: string | null }>`
+        SELECT snapshot_attachment_id FROM design_canvas_nodes
+        WHERE node_id = ${input.nodeId} AND thread_id = ${input.threadId}
+      `.pipe(Effect.mapError(storage));
       yield* sql`
         DELETE FROM design_canvas_nodes
         WHERE node_id = ${input.nodeId} AND thread_id = ${input.threadId}
       `.pipe(Effect.mapError(storage));
+      yield* removePrint(rows[0]?.snapshot_attachment_id ?? null);
       yield* notify(input.threadId);
     });
 
@@ -477,7 +659,9 @@ export const layer = Layer.effect(
         .withTransaction(
           Effect.gen(function* () {
             const existing = yield* readNodes(input.threadId);
-            const placed = existing.find((node) => node.sketchId === sketch.id);
+            const placed = existing.find(
+              (node) => node.kind === "sketch" && node.sketchId === sketch.id,
+            );
             if (placed !== undefined) return { node: placed, created: false };
             const [position] = placeSketches(existing.map(rect), [
               { width: sketch.width, height: sketch.height },
@@ -493,6 +677,10 @@ export const layer = Layer.effect(
               width: sketch.width,
               height: sketch.height,
               z,
+              url: null,
+              device: null,
+              title: null,
+              snapshot_attachment_id: null,
             };
             yield* sql`
               INSERT INTO design_canvas_nodes ${sql.insert({
@@ -525,6 +713,9 @@ export const layer = Layer.effect(
       setViewport,
       removeNode,
       placeSketch,
+      addFrame,
+      updateFrame,
+      setFrameSnapshot,
       cleanupThread,
     });
   }),
