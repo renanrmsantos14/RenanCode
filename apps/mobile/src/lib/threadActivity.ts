@@ -32,8 +32,8 @@ import {
   toolGroupSummaryKind,
   workEntriesViewedImages,
   workEntrySendsImages,
-  type ViewedImageRef,
   type ToolGroupSummaryKind,
+  type ViewedImage,
   type WorkLogPresentationEntry,
   type WorkLogToolLifecycleStatus,
   workEntryHiddenByToolCallVisibility,
@@ -275,7 +275,7 @@ type ThreadFeedEntryContent =
       readonly id: string;
       readonly createdAt: string;
       readonly runId: RunId | null;
-      readonly images: ReadonlyArray<ViewedImageRef>;
+      readonly images: ReadonlyArray<ViewedImage>;
     }
   | {
       readonly type: "run-fold";

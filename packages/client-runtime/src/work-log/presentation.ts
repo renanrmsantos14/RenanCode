@@ -467,10 +467,14 @@ function computeToolGroupAction(entry: WorkLogPresentationEntry): ToolGroupActio
   return workLogEntryIsToolLike(entry) ? "other" : "update";
 }
 
-function workEntryViewedImagePath(entry: WorkLogPresentationEntry): string | null {
-  if (entry.toolLifecycleStatus === "failed") {
-    return null;
-  }
+export function workEntryViewedImagePath(entry: WorkLogPresentationEntry): string | null {
+  // The file may not exist until the call runs, and an open row never retries a failed asset URL.
+  return entry.toolLifecycleStatus === "failed" || entry.toolLifecycleStatus === "inProgress"
+    ? null
+    : viewedImagePathOf(entry);
+}
+
+function viewedImagePathOf(entry: WorkLogPresentationEntry): string | null {
   const viewedImagePath = entry.viewedImagePath?.trim();
   if (
     viewedImagePath !== undefined &&
@@ -520,28 +524,49 @@ export function workEntrySendsImages(entry: WorkLogPresentationEntry): boolean {
 /** The entry's viewed image, with the item id when its output holds the bytes. */
 export function workEntryViewedImage(entry: WorkLogPresentationEntry): ViewedImageRef | null {
   const path = workEntryViewedImagePath(entry);
-  if (path === null) return null;
+  return path === null ? null : viewedImageRef(entry, path);
+}
+
+function viewedImageRef(entry: WorkLogPresentationEntry, path: string): ViewedImageRef {
   const item = entry.structuredPayload;
   return item?.type === "dynamic_tool" && item.outputHasImage === true
     ? { path, itemId: item.id }
     : { path };
 }
 
+export interface ViewedImage extends ViewedImageRef {
+  /** Only running Reads opened it, so its file may not exist yet; show a placeholder, not a request. */
+  readonly pending: boolean;
+}
+
 /** Distinct images the agent opened across a tool group, in viewing order. */
 export function workEntriesViewedImages(
   entries: ReadonlyArray<WorkLogPresentationEntry>,
-): ViewedImageRef[] {
-  const images = new Map<string, ViewedImageRef>();
+): ViewedImage[] {
+  const images = new Map<string, ViewedImage>();
   for (const entry of entries) {
-    const viewed = workEntryViewedImage(entry);
-    for (const image of viewed === null ? workEntrySentImages(entry) : [viewed]) {
+    const pending = entry.toolLifecycleStatus === "inProgress";
+    const path = entry.toolLifecycleStatus === "failed" ? null : viewedImagePathOf(entry);
+    for (const image of path === null
+      ? workEntrySentImages(entry)
+      : [viewedImageRef(entry, path)]) {
       const known = images.get(image.path);
-      if (known === undefined || (known.itemId === undefined && image.itemId !== undefined)) {
-        images.set(image.path, image);
+      if (known === undefined) {
+        images.set(image.path, { ...image, pending });
+        continue;
       }
+      const preferred = known.itemId === undefined && image.itemId !== undefined ? image : known;
+      images.set(image.path, { ...preferred, pending: known.pending && pending });
     }
   }
   return [...images.values()];
+}
+
+/** {@link workEntriesViewedImages} without the ones only a running Read has opened. */
+export function workEntriesViewedImagePaths(
+  entries: ReadonlyArray<WorkLogPresentationEntry>,
+): string[] {
+  return workEntriesViewedImages(entries).flatMap(({ path, pending }) => (pending ? [] : path));
 }
 
 export interface ViewedImageAsset {

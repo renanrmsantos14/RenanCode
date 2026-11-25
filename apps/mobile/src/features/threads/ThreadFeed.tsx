@@ -2182,7 +2182,18 @@ function renderFeedEntry(
       <View className="flex-row flex-wrap pb-2" style={{ gap: VIEWED_IMAGE_GAP }}>
         {entry.images.map((image) => (
           <View key={image.path} style={{ width: thumbnailWidth }}>
-            {props.renderViewedImage(image)}
+            {image.pending ? (
+              // The running Read may not have written the file yet, so hold its frame unrequested.
+              <ThreadMarkdownImageView
+                uri={null}
+                sourceKey={image.path}
+                unavailable={false}
+                alt={null}
+                onPressPreview={props.onPressPreview}
+              />
+            ) : (
+              props.renderViewedImage(image)
+            )}
           </View>
         ))}
       </View>

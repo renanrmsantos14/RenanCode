@@ -3,6 +3,7 @@ import { AuthOrchestrationOperateScope, type ScopedThreadRef } from "@t3tools/co
 import type { ChildThreadApproval } from "@t3tools/client-runtime/state/thread-requests";
 import {
   fullAccessOverrideExplanation,
+  PUSH_HOOKS_APPROVAL_QUESTION,
   respondFailureMessage,
 } from "@t3tools/client-runtime/state/thread-requests";
 import { T, useGT, useMessages, Var } from "gt-react";
@@ -17,6 +18,7 @@ import {
 import { useAtomCommand } from "../../state/use-atom-command";
 import { toastManager } from "../ui/toast";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
+import { PushHooksApprovalDetails } from "./PushHooksApprovalDetails";
 
 function ChildApproval({ entry }: { entry: ChildThreadApproval }) {
   const canRespond = useEnvironmentScope(entry.thread.environmentId, AuthOrchestrationOperateScope);
@@ -35,9 +37,16 @@ function ChildApproval({ entry }: { entry: ChildThreadApproval }) {
           Approval needed from <Var>{entry.title}</Var>
         </T>
       </p>
-      <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono">
-        {approval.detail || approval.requestKind}
-      </pre>
+      {approval.pushHooks ? (
+        <>
+          <p className="mb-1">{messages(PUSH_HOOKS_APPROVAL_QUESTION)}</p>
+          <PushHooksApprovalDetails pushHooks={approval.pushHooks} />
+        </>
+      ) : (
+        <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono">
+          {approval.detail || approval.requestKind}
+        </pre>
+      )}
       {approval.appName ? <p className="mt-2 text-muted-foreground">{approval.appName}</p> : null}
       {approval.responseCapability !== "live" ? (
         <p className="mt-2 text-warning">
