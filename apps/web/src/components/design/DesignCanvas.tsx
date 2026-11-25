@@ -23,6 +23,7 @@ import "@xyflow/react/dist/base.css";
 import { T, useGT } from "gt-react";
 import {
   FrameIcon,
+  LibraryIcon,
   Maximize2Icon,
   Minimize2Icon,
   MinusIcon,
@@ -147,7 +148,77 @@ function variantLetter(sketches: ReadonlyArray<DesignSketch>, sketch: DesignSket
   return siblings.length > 1 ? htmlVariantLetter(siblings.indexOf(sketch)) : undefined;
 }
 
-const NODE_TYPES = { sketch: SketchNode, frame: FrameNode };
+type GroupFlowNode = Node<{ readonly label: string }, "group">;
+
+const GROUP_PADDING = 16;
+/** Screen height of a node's own label row, which sits right above the node. */
+const NODE_LABEL_ROW_PX = 24;
+
+/** A dashed outline behind the nodes the agent grouped, with the group's label above the nodes' labels. */
+function GroupNode({ data }: NodeProps<GroupFlowNode>) {
+  const zoom = useViewportStore((state) => state.transform[2]);
+  return (
+    <div className="pointer-events-none relative size-full rounded-md border border-dashed border-border">
+      <span
+        className="absolute start-0 truncate pb-1 font-medium text-muted-foreground text-xs"
+        style={{
+          bottom: `calc(100% + ${Math.max(0, NODE_LABEL_ROW_PX / zoom - GROUP_PADDING)}px)`,
+          width: `${zoom * 100}%`,
+          transform: `scale(${1 / zoom})`,
+          transformOrigin: "bottom left",
+        }}
+      >
+        {data.label}
+      </span>
+    </div>
+  );
+}
+
+const NODE_TYPES = { sketch: SketchNode, frame: FrameNode, group: GroupNode };
+
+/** One outline per group id, around its nodes as they are now (a node being dragged included). */
+function groupOutlines(
+  nodes: ReadonlyArray<{
+    readonly id: string;
+    readonly position: { readonly x: number; readonly y: number };
+    readonly width: number;
+    readonly height: number;
+    readonly groupId?: string | undefined;
+    readonly groupLabel?: string | undefined;
+  }>,
+): Array<GroupFlowNode> {
+  const boxes = new Map<
+    string,
+    { label: string; left: number; top: number; right: number; bottom: number }
+  >();
+  for (const node of nodes) {
+    if (node.groupId === undefined || node.groupLabel === undefined) continue;
+    const box = boxes.get(node.groupId) ?? {
+      label: node.groupLabel,
+      left: Infinity,
+      top: Infinity,
+      right: -Infinity,
+      bottom: -Infinity,
+    };
+    box.left = Math.min(box.left, node.position.x);
+    box.top = Math.min(box.top, node.position.y);
+    box.right = Math.max(box.right, node.position.x + node.width);
+    box.bottom = Math.max(box.bottom, node.position.y + node.height);
+    boxes.set(node.groupId, box);
+  }
+  return [...boxes].map(([groupId, box]) => ({
+    id: `group:${groupId}`,
+    type: "group" as const,
+    position: { x: box.left - GROUP_PADDING, y: box.top - GROUP_PADDING },
+    width: box.right - box.left + GROUP_PADDING * 2,
+    height: box.bottom - box.top + GROUP_PADDING * 2,
+    zIndex: -1,
+    selectable: false,
+    draggable: false,
+    focusable: false,
+    data: { label: box.label },
+  }));
+}
 
 function ToolbarButton(props: {
   readonly label: string;
@@ -182,6 +253,8 @@ function DesignCanvasInner(props: {
   readonly canWrite: boolean;
   readonly maximized: boolean;
   readonly onToggleMaximized: () => void;
+  /** Only where the project's sketch library can be shown (desktop). */
+  readonly library?: { readonly open: boolean; readonly onToggle: () => void };
 }) {
   const gt = useGT();
   const flow = useReactFlow();
@@ -214,7 +287,7 @@ function DesignCanvasInner(props: {
   }, [containerWidth, containerHeight, flow]);
 
   const sketchesById = new Map(snapshot.sketches.map((sketch) => [sketch.id, sketch]));
-  const nodes: Array<SketchFlowNode | FrameFlowNode> = snapshot.nodes.flatMap<
+  const flowNodes: Array<SketchFlowNode | FrameFlowNode> = snapshot.nodes.flatMap<
     SketchFlowNode | FrameFlowNode
   >((node) => {
     const base = {
@@ -243,7 +316,29 @@ function DesignCanvasInner(props: {
     ];
   });
 
-  const onNodesChange: OnNodesChange<SketchFlowNode | FrameFlowNode> = (changes) => {
+  const groupIds = new Map<string, (typeof snapshot.nodes)[number]>(
+    snapshot.nodes.map((node) => [node.id, node]),
+  );
+  const nodes: Array<SketchFlowNode | FrameFlowNode | GroupFlowNode> = [
+    ...groupOutlines(
+      flowNodes.map((node) => {
+        const source = groupIds.get(node.id);
+        return {
+          id: node.id,
+          position: node.position,
+          width: node.width ?? 0,
+          height: node.height ?? 0,
+          groupId: source?.groupId,
+          groupLabel: source?.groupLabel,
+        };
+      }),
+    ),
+    ...flowNodes,
+  ];
+
+  const onNodesChange: OnNodesChange<SketchFlowNode | FrameFlowNode | GroupFlowNode> = (
+    changes,
+  ) => {
     for (const change of changes.getByType("position")) {
       if (change.dragging === true && change.position) {
         const { id, position } = change;
@@ -316,7 +411,9 @@ function DesignCanvasInner(props: {
 
   const threadKey = scopedThreadKey(threadRef);
   const storedFrameId = useDesignFrameStore((state) => state.focusedByThread[threadKey]);
-  const focusedFrameId = nodes.some((node) => node.type === "frame" && node.id === storedFrameId)
+  const focusedFrameId = flowNodes.some(
+    (node) => node.type === "frame" && node.id === storedFrameId,
+  )
     ? storedFrameId
     : undefined;
   const addMenuOpen = useDesignFrameStore((state) => state.addMenuOpen[threadKey] === true);
@@ -390,6 +487,14 @@ function DesignCanvasInner(props: {
         >
           <Background />
           <Panel position="top-right" className="flex gap-1">
+            {props.library !== undefined ? (
+              <ToolbarButton
+                label={props.library.open ? gt("Hide project sketches") : gt("Project sketches")}
+                onClick={props.library.onToggle}
+              >
+                <LibraryIcon className="size-3.5" />
+              </ToolbarButton>
+            ) : null}
             {previewBridge !== null ? (
               <AddFrameMenu
                 environmentId={props.environmentId}
@@ -444,7 +549,7 @@ function DesignCanvasInner(props: {
           </Panel>
         </ReactFlow>
       </DesignFrameContext>
-      {nodes.length === 0 ? (
+      {flowNodes.length === 0 ? (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 px-8 text-center text-muted-foreground">
           <FrameIcon className="size-7" />
           <p className="max-w-xs text-sm">

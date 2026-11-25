@@ -56,7 +56,9 @@ import * as GitVcsDriver from "../../vcs/GitVcsDriver.ts";
 import * as ThreadManagement from "../../orchestration-v2/ThreadManagementService.ts";
 import type * as ProjectionStore from "../../orchestration-v2/ProjectionStore.ts";
 import * as ThreadSearch from "../../orchestration-v2/ThreadSearch.ts";
+import * as HtmlRender from "../../htmlRender/HtmlRender.ts";
 import * as PreviewBrowser from "../../preview/PreviewBrowser.ts";
+import * as PreviewAutomationBroker from "../PreviewAutomationBroker.ts";
 import * as ProjectService from "../../project/ProjectService.ts";
 import * as ProviderRegistry from "../../provider/ProviderRegistry.ts";
 import * as SecretRequests from "../../secrets/SecretRequests.ts";
@@ -1957,4 +1959,248 @@ it.effect(
       ),
     );
   },
+);
+
+const otherThreadId = ThreadId.make("mcp-core-other-thread");
+const PNG_HEADER = (() => {
+  const header = Buffer.alloc(24);
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(header);
+  header.writeUInt32BE(320, 16);
+  header.writeUInt32BE(200, 20);
+  return header.toString("base64");
+})();
+
+const designToolkitLayer = (
+  broker: Partial<PreviewAutomationBroker.PreviewAutomationBroker["Service"]> = {},
+) =>
+  McpHttpServer.layerDesignToolkit.pipe(
+    Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+    Layer.provide(McpProviderSessions.layer),
+    Layer.provideMerge(DesignService.layer),
+    Layer.provide(
+      Layer.mock(HtmlRender.HtmlRender)({
+        prepare: (html) => Effect.succeed(html),
+        preview: () => Effect.fail(new HtmlRender.HtmlRenderFileError({ path: "no-chrome" })),
+      }),
+    ),
+    Layer.provide(Layer.mock(PreviewAutomationBroker.PreviewAutomationBroker)(broker)),
+    Layer.provide(
+      Layer.mock(ThreadManagement.ThreadManagementService)({
+        getThreadShell: (id) =>
+          Effect.succeed({
+            id,
+            projectId: designProjectId,
+            deletedAt: null,
+            archivedAt: null,
+            activeRunId: RunId.make("mcp-core-run"),
+            providerInstanceId: ProviderInstanceId.make("codex"),
+            runtimeMode: "approval-required",
+            interactionMode: "default",
+          } as OrchestrationV2ThreadShell),
+      }),
+    ),
+    Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-design-" })),
+    Layer.provide(SqlitePersistence.layerMemory),
+    Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+  );
+
+const callDesignTool = (
+  name: string,
+  args: Record<string, unknown> = {},
+  caller: McpInvocationContext.McpInvocationScope = scope,
+) => callHtmlTool(name, args, caller);
+
+const structured = (result: McpSchema.CallToolResult) =>
+  result.structuredContent as Record<string, any>;
+
+it.effect("design_frame_add and design_canvas_read list the thread's Frames without HTML", () =>
+  Effect.gen(function* () {
+    const added = yield* callDesignTool("design_frame_add", {
+      port: 5173,
+      path: "login",
+      device: "mobile",
+      title: "Login",
+    });
+    expect(added.isError).not.toBe(true);
+    expect(structured(added).frame).toMatchObject({
+      kind: "frame",
+      url: "http://localhost:5173/login",
+      device: "mobile",
+      title: "Login",
+      hasPrint: false,
+    });
+    const read = structured(yield* callDesignTool("design_canvas_read"));
+    expect(read.nodes).toHaveLength(1);
+    expect(JSON.stringify(read)).not.toContain("<html");
+
+    const both = yield* callDesignTool("design_frame_add", {
+      url: "http://localhost:3000/",
+      port: 3000,
+    });
+    expect(JSON.stringify(both.content)).toContain("exactly one of url or port");
+    const none = yield* callDesignTool("design_frame_add", {});
+    expect(JSON.stringify(none.content)).toContain("exactly one of url or port");
+    const badUrl = yield* callDesignTool("design_frame_add", { url: "file:///etc/passwd" });
+    expect(JSON.stringify(badUrl.content)).toContain("http(s)");
+  }).pipe(Effect.provide(designToolkitLayer())),
+);
+
+it.effect("design_canvas_arrange moves, groups and removes, and refuses an empty call", () =>
+  Effect.gen(function* () {
+    const design = yield* DesignService.DesignService;
+    const [one, two] = yield* Effect.all([
+      callDesignTool("design_frame_add", { url: "http://localhost:1/" }),
+      callDesignTool("design_frame_add", { url: "http://localhost:2/" }),
+    ]).pipe(Effect.map((results) => results.map((result) => structured(result).frame.nodeId)));
+
+    const empty = yield* callDesignTool("design_canvas_arrange", {});
+    expect(empty.isError).toBe(true);
+
+    const moved = structured(
+      yield* callDesignTool("design_canvas_arrange", { moves: [{ nodeId: one, x: 500, y: 700 }] }),
+    );
+    expect(moved.nodes.find((node: any) => node.nodeId === one)).toMatchObject({ x: 500, y: 700 });
+
+    const grouped = structured(
+      yield* callDesignTool("design_canvas_arrange", {
+        group: { nodeIds: [one, two], label: "Flow" },
+      }),
+    );
+    expect(grouped.nodes.map((node: any) => node.group)).toEqual(["Flow", "Flow"]);
+
+    const removed = structured(yield* callDesignTool("design_canvas_arrange", { remove: [two] }));
+    expect(removed.nodes.map((node: any) => node.nodeId)).toEqual([one]);
+    expect((yield* design.snapshot(threadId)).nodes).toHaveLength(1);
+
+    const unknown = yield* callDesignTool("design_canvas_arrange", {
+      remove: ["design-node:nope"],
+    });
+    expect(unknown.isError).toBe(true);
+  }).pipe(Effect.provide(designToolkitLayer())),
+);
+
+it.effect(
+  "design_frame_screenshot returns the saved print, refuses a missing or foreign Frame",
+  () =>
+    Effect.gen(function* () {
+      const design = yield* DesignService.DesignService;
+      const frame = structured(
+        yield* callDesignTool("design_frame_add", { url: "http://localhost:1/" }),
+      ).frame.nodeId;
+      const noPrint = yield* callDesignTool("design_frame_screenshot", { nodeId: frame });
+      expect(noPrint.isError).toBe(true);
+      expect(JSON.stringify(noPrint.content)).toContain("no print yet");
+
+      yield* design.setFrameSnapshot({ threadId, nodeId: frame, png: PNG_HEADER });
+      const saved = yield* callDesignTool("design_frame_screenshot", { nodeId: frame });
+      expect(saved.isError).not.toBe(true);
+      expect(saved.content.some((part) => part.type === "image")).toBe(true);
+      expect(structured(saved)).toMatchObject({ source: "saved" });
+      expect(JSON.stringify(structured(saved))).toContain("may be out of date");
+
+      const missing = yield* callDesignTool("design_frame_screenshot", {
+        nodeId: "design-node:missing",
+      });
+      expect(missing.isError).toBe(true);
+      expect(JSON.stringify(missing.content)).toContain("not on this thread's canvas");
+
+      // A Frame of another thread is as good as missing.
+      const foreign = (yield* design.addFrame({
+        threadId: otherThreadId,
+        url: "http://localhost:9/",
+        device: "desktop",
+      }))!;
+      const denied = yield* callDesignTool("design_frame_screenshot", { nodeId: foreign.id });
+      expect(denied.isError).toBe(true);
+      expect(JSON.stringify(denied.content)).toContain("not on this thread's canvas");
+    }).pipe(Effect.provide(designToolkitLayer())),
+);
+
+it.effect(
+  "design_frame_screenshot takes a fresh print when the Frame is live, else falls back",
+  () =>
+    Effect.gen(function* () {
+      const design = yield* DesignService.DesignService;
+      const frame = structured(
+        yield* callDesignTool("design_frame_add", { url: "http://localhost:1/" }),
+      ).frame.nodeId;
+      yield* design.setFrameSnapshot({ threadId, nodeId: frame, png: PNG_HEADER });
+      yield* design.reportLiveFrame({ threadId, nodeId: frame, tabId: "tab-live" });
+      const withPreview: McpInvocationContext.McpInvocationScope = {
+        ...scope,
+        capabilities: new Set(["orchestration", "preview"]),
+      };
+
+      const live = yield* callDesignTool("design_frame_screenshot", { nodeId: frame }, withPreview);
+      expect(structured(live)).toMatchObject({ source: "live" });
+
+      // Without a desktop answering, the saved print is still there, with a warning.
+      yield* design.reportLiveFrame({ threadId, nodeId: frame, tabId: "tab-gone" });
+      const fallback = yield* callDesignTool(
+        "design_frame_screenshot",
+        { nodeId: frame },
+        withPreview,
+      );
+      expect(structured(fallback)).toMatchObject({ source: "saved" });
+    }).pipe(
+      Effect.provide(
+        designToolkitLayer({
+          invoke: ((input: { readonly tabId?: string }) =>
+            input.tabId === "tab-live"
+              ? Effect.succeed({
+                  screenshot: { mimeType: "image/png", data: PNG_HEADER, width: 320, height: 200 },
+                })
+              : Effect.fail("no desktop" as never)) as never,
+        }),
+      ),
+    ),
+);
+
+it.effect("design_selection_read returns the last pick of this thread only", () =>
+  Effect.gen(function* () {
+    const design = yield* DesignService.DesignService;
+    const none = structured(yield* callDesignTool("design_selection_read"));
+    expect(none.selection).toBeNull();
+    expect(none.message).toContain("has not picked");
+
+    yield* design.addFrame({ threadId, url: "http://localhost:5173/", device: "desktop" });
+    yield* design.setSelection({
+      threadId,
+      selection: {
+        pageUrl: "http://localhost:5173/",
+        tagName: "button",
+        selector: "main > button",
+        htmlPreview: "<button>Buy</button>",
+        styles: "color: red",
+        comment: "make it bigger",
+        png: PNG_HEADER,
+        pickedAt: "2026-11-25T12:00:00.000Z",
+      },
+    });
+    const picked = yield* callDesignTool("design_selection_read");
+    expect(structured(picked).selection).toMatchObject({
+      selector: "main > button",
+      comment: "make it bigger",
+    });
+    expect(picked.content.some((part) => part.type === "image")).toBe(true);
+
+    const otherCaller = {
+      ...scope,
+      thread: { ...scope.thread!, threadId: otherThreadId },
+    };
+    expect(
+      structured(yield* callDesignTool("design_selection_read", {}, otherCaller)).selection,
+    ).toBeNull();
+  }).pipe(Effect.provide(designToolkitLayer())),
+);
+
+it.effect("the design tools are hidden from a caller that is not a T3 thread", () =>
+  Effect.gen(function* () {
+    const error = yield* callDesignTool(
+      "design_canvas_read",
+      {},
+      { ...scope, thread: undefined },
+    ).pipe(Effect.flip);
+    expect(String(error)).toContain("not found");
+  }).pipe(Effect.provide(designToolkitLayer())),
 );

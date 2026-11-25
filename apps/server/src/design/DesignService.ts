@@ -4,8 +4,14 @@ import {
   type DesignCanvasSnapshot,
   DesignError,
   type DesignFrameNode,
+  type DesignListProjectSketchesInput,
   DesignNodeId,
+  DESIGN_PROJECT_SKETCHES_PAGE_SIZE,
+  type DesignProjectSketchesPage,
+  type DesignReportLiveFrameInput,
+  type DesignSelection,
   type DesignSetFrameSnapshotInput,
+  type DesignSetSelectionInput,
   type DesignSketch,
   DesignSketchId,
   type DesignUpdateFrameInput,
@@ -43,6 +49,7 @@ import { deleteThreadCanvas } from "./deleteThreadCanvas.ts";
 /** Used when Chrome is missing and the agent gave no height, so the page could not be measured. */
 const FALLBACK_SKETCH_HEIGHT = 800;
 const MAX_VARIANT_LABEL_LENGTH = 40;
+const PNG_BASE64_PREFIX = "iVBORw0KGgo";
 
 export interface DesignSketchPage {
   readonly html: string;
@@ -50,6 +57,19 @@ export interface DesignSketchPage {
   readonly label?: string | undefined;
   readonly width: number;
   readonly height?: number | undefined;
+}
+
+export interface DesignArrangeInput {
+  readonly threadId: ThreadId;
+  readonly moves?: ReadonlyArray<{
+    readonly nodeId: DesignNodeId;
+    readonly x: number;
+    readonly y: number;
+  }>;
+  /** Placed side by side in a new row below the rest, under one label. */
+  readonly group?: { readonly nodeIds: ReadonlyArray<DesignNodeId>; readonly label: string };
+  /** Taken off the canvas; sketches stay in the project library. */
+  readonly remove?: ReadonlyArray<DesignNodeId>;
 }
 
 export class DesignService extends Context.Service<
@@ -101,6 +121,33 @@ export class DesignService extends Context.Service<
     readonly setFrameSnapshot: (
       input: DesignSetFrameSnapshotInput,
     ) => Effect.Effect<void, DesignError>;
+    /** Moves, groups and removes several nodes of the thread's canvas in one step. */
+    readonly arrange: (
+      input: DesignArrangeInput,
+    ) => Effect.Effect<ReadonlyArray<DesignCanvasNode>, DesignError>;
+    /** Every sketch of the project, newest first, with where it came from. No HTML. */
+    readonly listProjectSketches: (
+      input: DesignListProjectSketchesInput,
+    ) => Effect.Effect<DesignProjectSketchesPage, DesignError>;
+    /** Remembers which preview tab runs a Frame while it is live; null forgets it. */
+    readonly reportLiveFrame: (
+      input: DesignReportLiveFrameInput,
+    ) => Effect.Effect<void, DesignError>;
+    readonly liveFrameTab: (
+      threadId: ThreadId,
+      nodeId: DesignNodeId,
+    ) => Effect.Effect<string | null>;
+    /** The last element the user picked in a Frame of this thread. */
+    readonly setSelection: (input: DesignSetSelectionInput) => Effect.Effect<void, DesignError>;
+    readonly readSelection: (threadId: ThreadId) => Effect.Effect<DesignSelection | null>;
+    /** The saved print of a Frame, or null when it has none. */
+    readonly readFramePrint: (
+      threadId: ThreadId,
+      nodeId: DesignNodeId,
+    ) => Effect.Effect<
+      { readonly png: string; readonly width: number; readonly height: number } | null,
+      DesignError
+    >;
     /** Drops the thread's canvas. Sketches stay: they belong to the project. */
     readonly cleanupThread: (threadId: ThreadId) => Effect.Effect<void, DesignError>;
   }
@@ -135,6 +182,8 @@ interface NodeRow {
   readonly device: string | null;
   readonly title: string | null;
   readonly snapshot_attachment_id: string | null;
+  readonly group_id: string | null;
+  readonly group_label: string | null;
 }
 
 const fail = (message: string, cause?: unknown) =>
@@ -159,6 +208,11 @@ const toSketch = (row: SketchRow): DesignSketch =>
     createdAt: row.created_at,
   }) as DesignSketch;
 
+const grouping = (row: NodeRow) => ({
+  ...(row.group_id === null ? {} : { groupId: row.group_id }),
+  ...(row.group_label === null ? {} : { groupLabel: row.group_label }),
+});
+
 const toNode = (row: NodeRow): DesignCanvasNode =>
   row.kind === "frame"
     ? ({
@@ -173,6 +227,7 @@ const toNode = (row: NodeRow): DesignCanvasNode =>
         width: row.width,
         height: row.height,
         z: row.z,
+        ...grouping(row),
       } as DesignCanvasNode)
     : ({
         id: row.node_id,
@@ -183,6 +238,7 @@ const toNode = (row: NodeRow): DesignCanvasNode =>
         width: row.width,
         height: row.height,
         z: row.z,
+        ...grouping(row),
       } as DesignCanvasNode);
 
 const frameTitle = (url: string) => {
@@ -547,6 +603,8 @@ export const layer = Layer.effect(
               device: input.device,
               title: input.title?.trim().slice(0, 200) || frameTitle(input.url),
               snapshot_attachment_id: null,
+              group_id: null,
+              group_label: null,
             };
             yield* sql`
               INSERT INTO design_canvas_nodes ${sql.insert({
@@ -638,6 +696,7 @@ export const layer = Layer.effect(
         WHERE node_id = ${input.nodeId} AND thread_id = ${input.threadId}
       `.pipe(Effect.mapError(storage));
       yield* removePrint(rows[0]?.snapshot_attachment_id ?? null);
+      yield* forgetFrames(input.threadId, [input.nodeId]);
       yield* notify(input.threadId);
     });
 
@@ -681,6 +740,8 @@ export const layer = Layer.effect(
               device: null,
               title: null,
               snapshot_attachment_id: null,
+              group_id: null,
+              group_label: null,
             };
             yield* sql`
               INSERT INTO design_canvas_nodes ${sql.insert({
@@ -697,7 +758,223 @@ export const layer = Layer.effect(
       return node.node;
     });
 
+    const arrange = Effect.fn("DesignService.arrange")(function* (input: DesignArrangeInput) {
+      yield* requireThread(input.threadId);
+      const moves = input.moves ?? [];
+      const remove = input.remove ?? [];
+      const group = input.group;
+      const groupIds = group?.nodeIds ?? [];
+      if (new Set(groupIds).size !== groupIds.length || new Set(remove).size !== remove.length) {
+        return yield* fail("A node can be listed only once per list.");
+      }
+      const moved = new Set(moves.map((move) => move.nodeId));
+      if (moved.size !== moves.length) return yield* fail("A node can be moved only once.");
+      if (group !== undefined && group.label.trim() === "") {
+        return yield* fail("A group needs a label.");
+      }
+
+      const removed = new Set<string>(remove);
+      const clash = [...moved, ...groupIds].find((id) => removed.has(id));
+      if (clash !== undefined) return yield* fail(`Node ${clash} cannot be moved and removed.`);
+      const now = iso(yield* DateTime.now);
+      const outcome = yield* sql
+        .withTransaction(
+          Effect.gen(function* () {
+            const rows = yield* sql<NodeRow>`
+              SELECT * FROM design_canvas_nodes WHERE thread_id = ${input.threadId}
+            `;
+            const byId = new Map(rows.map((row) => [row.node_id, row]));
+            const missing = [...moved, ...groupIds, ...removed].find((id) => !byId.has(id));
+            if (missing !== undefined) return { missing } as const;
+            const positions = new Map<string, { x: number; y: number }>();
+            for (const move of moves) positions.set(move.nodeId, { x: move.x, y: move.y });
+            // An explicit move always wins; only grouped nodes without one are placed by the group.
+            const placeable = groupIds.filter((id) => !moved.has(id));
+            if (group !== undefined && placeable.length > 0) {
+              const members = new Set<string>(placeable);
+              const others = rows
+                .filter((row) => !members.has(row.node_id) && !removed.has(row.node_id))
+                .map((row) => ({
+                  ...(positions.get(row.node_id) ?? { x: row.x, y: row.y }),
+                  width: row.width,
+                  height: row.height,
+                }));
+              const placed = placeSketches(
+                others,
+                placeable.map((id) => ({
+                  width: byId.get(id)!.width,
+                  height: byId.get(id)!.height,
+                })),
+              );
+              placeable.forEach((id, index) => positions.set(id, placed[index]!));
+            }
+            for (const [nodeId, position] of positions) {
+              yield* sql`
+                UPDATE design_canvas_nodes SET
+                  x = ${position.x}, y = ${position.y}, updated_at = ${now}
+                WHERE node_id = ${nodeId} AND thread_id = ${input.threadId}
+              `;
+            }
+            if (group !== undefined && groupIds.length > 0) {
+              const uuid = yield* random.uuidV4();
+              const label = group.label.trim().slice(0, 200);
+              for (const id of groupIds) {
+                yield* sql`
+                  UPDATE design_canvas_nodes SET
+                    group_id = ${`group:${uuid}`}, group_label = ${label}, updated_at = ${now}
+                  WHERE node_id = ${id} AND thread_id = ${input.threadId}
+                `;
+              }
+            }
+            for (const id of removed) {
+              yield* sql`
+                DELETE FROM design_canvas_nodes
+                WHERE node_id = ${id} AND thread_id = ${input.threadId}
+              `;
+            }
+            return {
+              prints: [...removed].map((id) => byId.get(id)!.snapshot_attachment_id),
+            } as const;
+          }),
+        )
+        .pipe(Effect.mapError(storage));
+      if ("missing" in outcome)
+        return yield* fail(`Node ${outcome.missing} is not on this canvas.`);
+      yield* Effect.forEach(outcome.prints, removePrint, { discard: true });
+      yield* forgetFrames(input.threadId, removed);
+      yield* notify(input.threadId);
+      return yield* readNodes(input.threadId).pipe(Effect.mapError(storage));
+    });
+
+    const listProjectSketches = Effect.fn("DesignService.listProjectSketches")(function* (
+      input: DesignListProjectSketchesInput,
+    ) {
+      const [cursorAt, cursorRowid] = (input.cursor ?? "").split("|");
+      const hasCursor = cursorAt !== undefined && cursorAt !== "" && cursorRowid !== undefined;
+      const query = input.query?.trim() ?? "";
+      const rows = yield* sql<SketchRow & { readonly rid: number }>`
+        SELECT s.*, s.rowid AS rid FROM design_sketches s
+        WHERE s.project_id = ${input.projectId}
+          AND (
+            ${query} = ''
+            OR instr(lower(s.title), lower(${query})) > 0
+            OR instr(lower(coalesce(s.label, '')), lower(${query})) > 0
+          )
+          AND (
+            ${hasCursor ? 1 : 0} = 0
+            OR s.created_at < ${cursorAt ?? ""}
+            OR (s.created_at = ${cursorAt ?? ""} AND s.rowid < ${Number(cursorRowid ?? 0)})
+          )
+        ORDER BY s.created_at DESC, s.rowid DESC
+        LIMIT ${DESIGN_PROJECT_SKETCHES_PAGE_SIZE + 1}
+      `.pipe(Effect.mapError(storage));
+      const page = rows.slice(0, DESIGN_PROJECT_SKETCHES_PAGE_SIZE);
+      const last = page.at(-1);
+      const origins = new Map<string, { title: string | null; deleted: boolean }>();
+      yield* Effect.forEach(
+        new Set(page.map((row) => row.origin_thread_id)),
+        (threadId) =>
+          threads.getThreadShell(threadId as ThreadId).pipe(
+            Effect.orElseSucceed(() => null),
+            Effect.map((shell) =>
+              origins.set(
+                threadId,
+                shell === null || shell.deletedAt !== null
+                  ? { title: null, deleted: true }
+                  : { title: shell.title, deleted: false },
+              ),
+            ),
+          ),
+        { discard: true },
+      );
+      return {
+        sketches: page.map((row) => {
+          const origin = origins.get(row.origin_thread_id);
+          return {
+            ...toSketch(row),
+            originThreadTitle: origin?.title ?? null,
+            originThreadDeleted: origin?.deleted ?? true,
+          };
+        }),
+        nextCursor: rows.length > page.length && last ? `${last.created_at}|${last.rid}` : null,
+      } as DesignProjectSketchesPage;
+    });
+
+    // The server cannot see which desktop tab runs a Frame, so the client reports it while live.
+    const liveFrames = new Map<string, string>();
+    const liveKey = (threadId: string, nodeId: string) => `${threadId}\u0000${nodeId}`;
+    const reportLiveFrame = Effect.fn("DesignService.reportLiveFrame")(function* (
+      input: DesignReportLiveFrameInput,
+    ) {
+      const key = liveKey(input.threadId, input.nodeId);
+      if (input.tabId === null) {
+        liveFrames.delete(key);
+        return;
+      }
+      yield* requireThread(input.threadId);
+      const frame = yield* readFrame(input.threadId, input.nodeId).pipe(Effect.mapError(storage));
+      if (frame === null) return yield* fail("The frame was not found.");
+      liveFrames.set(key, input.tabId);
+    });
+    const liveFrameTab = (threadId: ThreadId, nodeId: DesignNodeId) =>
+      Effect.sync(() => liveFrames.get(liveKey(threadId, nodeId)) ?? null);
+
+    const selections = new Map<string, DesignSelection>();
+    const setSelection = Effect.fn("DesignService.setSelection")(function* (
+      input: DesignSetSelectionInput,
+    ) {
+      yield* requireThread(input.threadId);
+      if (input.selection.png !== null && !input.selection.png.startsWith(PNG_BASE64_PREFIX)) {
+        return yield* fail("The selection image is not a PNG.");
+      }
+      const frames = yield* sql<{ readonly node_id: string }>`
+        SELECT node_id FROM design_canvas_nodes
+        WHERE thread_id = ${input.threadId} AND kind = 'frame' LIMIT 1
+      `.pipe(Effect.mapError(storage));
+      if (frames.length === 0) return yield* fail("The thread has no Frame to pick from.");
+      selections.set(input.threadId, input.selection);
+    });
+    // A removed Frame stops being live, and with no Frame left the picked element is stale.
+    const forgetFrames = Effect.fn("DesignService.forgetFrames")(function* (
+      threadId: ThreadId,
+      nodeIds: Iterable<string>,
+    ) {
+      for (const nodeId of nodeIds) liveFrames.delete(liveKey(threadId, nodeId));
+      const left = yield* sql<{ readonly node_id: string }>`
+        SELECT node_id FROM design_canvas_nodes
+        WHERE thread_id = ${threadId} AND kind = 'frame' LIMIT 1
+      `.pipe(Effect.mapError(storage));
+      if (left.length === 0) selections.delete(threadId);
+    });
+    const readSelection = (threadId: ThreadId) =>
+      Effect.sync(() => selections.get(threadId) ?? null);
+
+    const readFramePrint = Effect.fn("DesignService.readFramePrint")(function* (
+      threadId: ThreadId,
+      nodeId: DesignNodeId,
+    ) {
+      const frame = yield* readFrame(threadId, nodeId).pipe(Effect.mapError(storage));
+      if (frame === null) return yield* fail("The frame was not found.");
+      const filePath =
+        frame.snapshot_attachment_id === null
+          ? null
+          : attachmentPath(frame.snapshot_attachment_id, "png");
+      if (filePath === null) return null;
+      const bytes = yield* fileSystem.readFile(filePath).pipe(Effect.orElseSucceed(() => null));
+      if (bytes === null || bytes.length < 24) return null;
+      const view = Buffer.from(bytes);
+      return {
+        png: view.toString("base64"),
+        width: view.readUInt32BE(16),
+        height: view.readUInt32BE(20),
+      };
+    });
+
     const cleanupThread = Effect.fn("DesignService.cleanupThread")(function* (threadId: ThreadId) {
+      selections.delete(threadId);
+      for (const key of liveFrames.keys()) {
+        if (key.startsWith(`${threadId}\u0000`)) liveFrames.delete(key);
+      }
       yield* deleteThreadCanvas(threadId).pipe(
         Effect.provideService(SqlClient.SqlClient, sql),
         Effect.mapError(storage),
@@ -716,6 +993,13 @@ export const layer = Layer.effect(
       addFrame,
       updateFrame,
       setFrameSnapshot,
+      arrange,
+      listProjectSketches,
+      reportLiveFrame,
+      liveFrameTab,
+      setSelection,
+      readSelection,
+      readFramePrint,
       cleanupThread,
     });
   }),

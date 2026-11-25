@@ -484,7 +484,11 @@ import {
   DesignCanvasSnapshot,
   DesignError,
   DesignFrameNode,
+  DesignListProjectSketchesInput,
   DesignMoveNodesInput,
+  DesignProjectSketchesPage,
+  DesignReportLiveFrameInput,
+  DesignSetSelectionInput,
   DesignPlaceSketchInput,
   DesignRemoveNodeInput,
   DesignSetFrameSnapshotInput,
@@ -739,6 +743,9 @@ export const WS_METHODS = {
   designAddFrame: "design.addFrame",
   designUpdateFrame: "design.updateFrame",
   designSetFrameSnapshot: "design.setFrameSnapshot",
+  designListProjectSketches: "design.listProjectSketches",
+  designReportLiveFrame: "design.reportLiveFrame",
+  designSetSelection: "design.setSelection",
   workModulesSubscribe: "workModules.subscribe",
   workModulesUpsert: "workModules.upsert",
   workModulesMove: "workModules.move",
@@ -2633,6 +2640,22 @@ const WsDesignSetFrameSnapshotRpc = Rpc.make(WS_METHODS.designSetFrameSnapshot, 
   error: DesignRpcError,
 });
 
+const WsDesignListProjectSketchesRpc = Rpc.make(WS_METHODS.designListProjectSketches, {
+  payload: DesignListProjectSketchesInput,
+  success: DesignProjectSketchesPage,
+  error: DesignRpcError,
+});
+
+const WsDesignReportLiveFrameRpc = Rpc.make(WS_METHODS.designReportLiveFrame, {
+  payload: DesignReportLiveFrameInput,
+  error: DesignRpcError,
+});
+
+const WsDesignSetSelectionRpc = Rpc.make(WS_METHODS.designSetSelection, {
+  payload: DesignSetSelectionInput,
+  error: DesignRpcError,
+});
+
 const ProjectChecklistRpcError = Schema.Union([
   ProjectChecklistError,
   EnvironmentAuthorizationError,
@@ -2837,6 +2860,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsDesignAddFrameRpc,
   WsDesignUpdateFrameRpc,
   WsDesignSetFrameSnapshotRpc,
+  WsDesignListProjectSketchesRpc,
+  WsDesignReportLiveFrameRpc,
+  WsDesignSetSelectionRpc,
   WsWorkModulesSubscribeRpc,
   WsWorkModulesUpsertRpc,
   WsWorkModulesMoveRpc,

@@ -133,6 +133,7 @@ import Migration0119 from "./Migrations/119_WorkflowMailSender.ts";
 import Migration0120 from "./Migrations/120_WorkflowPools.ts";
 import Migration0121 from "./Migrations/121_DesignCanvas.ts";
 import Migration0122 from "./Migrations/122_DesignFrames.ts";
+import Migration0123 from "./Migrations/123_DesignNodeGroups.ts";
 
 const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
@@ -258,6 +259,7 @@ const migrationEntries = [
   [120, "WorkflowPools", Migration0120],
   [121, "DesignCanvas", Migration0121],
   [122, "DesignFrames", Migration0122],
+  [123, "DesignNodeGroups", Migration0123],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

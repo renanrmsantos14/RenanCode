@@ -42,6 +42,9 @@ export const DesignSketchNode = Schema.Struct({
   width: DesignLength,
   height: DesignLength,
   z: Schema.Int,
+  /** Nodes the agent grouped share an id; the label is shown once above the group. */
+  groupId: Schema.optionalKey(TrimmedNonEmptyString),
+  groupLabel: Schema.optionalKey(DesignTitle),
 });
 export type DesignSketchNode = typeof DesignSketchNode.Type;
 
@@ -66,6 +69,8 @@ export const DesignFrameNode = Schema.Struct({
   width: DesignLength,
   height: DesignLength,
   z: Schema.Int,
+  groupId: Schema.optionalKey(TrimmedNonEmptyString),
+  groupLabel: Schema.optionalKey(DesignTitle),
 });
 export type DesignFrameNode = typeof DesignFrameNode.Type;
 
@@ -152,6 +157,62 @@ export const DesignSetFrameSnapshotInput = Schema.Struct({
   png: Schema.String.check(Schema.isMaxLength(DESIGN_FRAME_SNAPSHOT_MAX_BASE64_LENGTH)),
 });
 export type DesignSetFrameSnapshotInput = typeof DesignSetFrameSnapshotInput.Type;
+
+/** Sketches per page of the project library; a page carries no HTML, only references. */
+export const DESIGN_PROJECT_SKETCHES_PAGE_SIZE = 40;
+
+export const DesignListProjectSketchesInput = Schema.Struct({
+  projectId: ProjectId,
+  /** The `nextCursor` of the previous page. */
+  cursor: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(256))),
+  /** Matches the sketch's title or label, ignoring case. */
+  query: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(200))),
+});
+export type DesignListProjectSketchesInput = typeof DesignListProjectSketchesInput.Type;
+
+/** A sketch of the project library with where it came from; a deleted thread keeps its sketches. */
+export const DesignProjectSketch = Schema.Struct({
+  ...DesignSketch.fields,
+  originThreadTitle: Schema.NullOr(Schema.String),
+  originThreadDeleted: Schema.Boolean,
+});
+export type DesignProjectSketch = typeof DesignProjectSketch.Type;
+
+export const DesignProjectSketchesPage = Schema.Struct({
+  sketches: ForwardCompatibleArray(DesignProjectSketch),
+  nextCursor: Schema.NullOr(Schema.String),
+});
+export type DesignProjectSketchesPage = typeof DesignProjectSketchesPage.Type;
+
+export const DesignReportLiveFrameInput = Schema.Struct({
+  threadId: ThreadId,
+  nodeId: DesignNodeId,
+  /** The preview tab the Frame runs in, or null once it stopped being live. */
+  tabId: Schema.NullOr(TrimmedNonEmptyString.check(Schema.isMaxLength(256))),
+});
+export type DesignReportLiveFrameInput = typeof DesignReportLiveFrameInput.Type;
+
+const DESIGN_SELECTION_MAX_BASE64_LENGTH = 3_000_000;
+
+/** The element the user last picked in a Frame, kept for the agent's `design_selection_read`. */
+export const DesignSelection = Schema.Struct({
+  pageUrl: Schema.String.check(Schema.isMaxLength(2048)),
+  tagName: Schema.String.check(Schema.isMaxLength(64)),
+  selector: Schema.NullOr(Schema.String.check(Schema.isMaxLength(2000))),
+  htmlPreview: Schema.String.check(Schema.isMaxLength(20_000)),
+  styles: Schema.String.check(Schema.isMaxLength(20_000)),
+  comment: Schema.String.check(Schema.isMaxLength(4000)),
+  /** PNG crop of the element, base64 without a data: prefix. */
+  png: Schema.NullOr(Schema.String.check(Schema.isMaxLength(DESIGN_SELECTION_MAX_BASE64_LENGTH))),
+  pickedAt: Schema.String,
+});
+export type DesignSelection = typeof DesignSelection.Type;
+
+export const DesignSetSelectionInput = Schema.Struct({
+  threadId: ThreadId,
+  selection: DesignSelection,
+});
+export type DesignSetSelectionInput = typeof DesignSetSelectionInput.Type;
 
 export class DesignError extends Schema.TaggedError<DesignError>()("DesignError", {
   message: Schema.String,

@@ -106,10 +106,18 @@ import {
   DeviceScreenshotToolkit,
   DeviceStandardToolkit,
 } from "./toolkits/device/tools.ts";
+import * as DesignService from "../design/DesignService.ts";
+import * as DesignHandlers from "./toolkits/design/handlers.ts";
 import * as HtmlHandlers from "./toolkits/html/handlers.ts";
 import { MessageToolkit } from "./toolkits/message/tools.ts";
 import * as MessageHandlers from "./toolkits/message/handlers.ts";
 import { HtmlPreviewTool, HtmlPreviewToolkit, HtmlRenderToolkit } from "./toolkits/html/tools.ts";
+import {
+  DesignCanvasToolkit,
+  DesignFrameScreenshotTool,
+  DesignImageToolkit,
+  DesignSelectionReadTool,
+} from "./toolkits/design/tools.ts";
 import { MCP_HTTP_PATH } from "../httpCors.ts";
 import { requestUrl } from "../requestUrl.ts";
 
@@ -832,7 +840,7 @@ const registerPreviewSnapshot = Effect.fn("McpHttpServer.registerPreviewSnapshot
 });
 
 interface ImageToolResult {
-  readonly screenshot: {
+  readonly screenshot?: {
     readonly mimeType: "image/png";
     readonly data: string;
     readonly width: number;
@@ -937,25 +945,32 @@ const registerImageTool = Effect.fn("McpHttpServer.registerImageTool")(function*
             onFailure: imageToolFailure(tool.name, operation, failureText),
             onSuccess: ({ encodedResult }) => {
               const { screenshot, ...rest } = encodedResult as ImageToolResult;
-              const metadata = {
-                ...rest,
-                screenshot: {
-                  mimeType: screenshot.mimeType,
-                  width: screenshot.width,
-                  height: screenshot.height,
-                },
-              };
+              const metadata =
+                screenshot === undefined
+                  ? rest
+                  : {
+                      ...rest,
+                      screenshot: {
+                        mimeType: screenshot.mimeType,
+                        width: screenshot.width,
+                        height: screenshot.height,
+                      },
+                    };
               return Effect.succeed(
                 new McpSchema.CallToolResult({
                   isError: false,
                   structuredContent: metadata,
                   content: [
                     { type: "text", text: JSON.stringify(metadata) },
-                    {
-                      type: "image" as const,
-                      data: new Uint8Array(Buffer.from(screenshot.data, "base64")),
-                      mimeType: screenshot.mimeType,
-                    },
+                    ...(screenshot === undefined
+                      ? []
+                      : [
+                          {
+                            type: "image" as const,
+                            data: new Uint8Array(Buffer.from(screenshot.data, "base64")),
+                            mimeType: screenshot.mimeType,
+                          },
+                        ]),
                   ],
                 }),
               );
@@ -1019,6 +1034,50 @@ const registerHtmlPreview = Effect.fn("McpHttpServer.registerHtmlPreview")(funct
       isOrchestratorMcpFailure(error) || AiError.isAiError(error)
         ? error.message
         : "HTML preview failed.",
+  );
+});
+
+const registerDesignImages = Effect.fn("McpHttpServer.registerDesignImages")(function* () {
+  const design = yield* DesignService.DesignService;
+  const broker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
+  const threads = yield* ThreadManagementService.ThreadManagementService;
+  const built = yield* decodeAsAdvertised(DesignImageToolkit);
+  const provide = <A, E>(
+    effect: Effect.Effect<
+      A,
+      E,
+      | DesignService.DesignService
+      | PreviewAutomationBroker.PreviewAutomationBroker
+      | ThreadManagementService.ThreadManagementService
+      | McpInvocationContext.McpInvocationContext
+    >,
+  ) =>
+    effect.pipe(
+      Effect.provideService(DesignService.DesignService, design),
+      Effect.provideService(PreviewAutomationBroker.PreviewAutomationBroker, broker),
+      Effect.provideService(ThreadManagementService.ThreadManagementService, threads),
+    );
+  const failureText = (fallback: string) => (error: unknown) =>
+    isOrchestratorMcpFailure(error) || AiError.isAiError(error) ? error.message : fallback;
+  yield* registerImageTool(
+    DesignFrameScreenshotTool,
+    (payload) =>
+      built
+        .handle("design_frame_screenshot", payload)
+        .pipe(Stream.unwrap, Stream.run(Sink.last()), Effect.flatMap(Effect.fromOption)),
+    provide,
+    "frameScreenshot",
+    failureText("Frame screenshot failed."),
+  );
+  yield* registerImageTool(
+    DesignSelectionReadTool,
+    (payload) =>
+      built
+        .handle("design_selection_read", payload)
+        .pipe(Stream.unwrap, Stream.run(Sink.last()), Effect.flatMap(Effect.fromOption)),
+    provide,
+    "selectionRead",
+    failureText("Reading the selection failed."),
   );
 });
 
@@ -1395,6 +1454,19 @@ export const layerHtmlToolkit = Layer.mergeAll(
   imageToolRegistration(registerHtmlPreview(), HtmlHandlers.layerPreview),
 ).pipe(Layer.provide(HtmlRender.layer));
 
+const layerDesignCanvasRegistration = toolkitRegistration(
+  DesignCanvasToolkit,
+  DesignHandlers.layerCanvas,
+);
+const layerDesignImagesRegistration = imageToolRegistration(
+  registerDesignImages(),
+  DesignHandlers.layerImages,
+);
+export const layerDesignToolkit = Layer.mergeAll(
+  layerDesignCanvasRegistration,
+  layerDesignImagesRegistration,
+);
+
 const layerPreviewStandardToolkitRegistration = toolkitRegistration(
   PreviewStandardToolkit,
   PreviewHandlers.layerStandard,
@@ -1531,6 +1603,7 @@ export const layerTools = Layer.mergeAll(
   layerIssuesToolkit,
   layerDeviceToolkit,
   layerHtmlToolkit,
+  layerDesignToolkit,
   layerMessageToolkit,
 );
 

@@ -103,6 +103,8 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.designAddFrame]: AuthOrchestrationOperateScope,
   [WS_METHODS.designUpdateFrame]: AuthOrchestrationOperateScope,
   [WS_METHODS.designSetFrameSnapshot]: AuthOrchestrationOperateScope,
+  [WS_METHODS.designReportLiveFrame]: AuthOrchestrationOperateScope,
+  [WS_METHODS.designSetSelection]: AuthOrchestrationOperateScope,
   [WS_METHODS.workModulesUpsert]: AuthOrchestrationOperateScope,
   [WS_METHODS.workModulesMove]: AuthOrchestrationOperateScope,
   [WS_METHODS.workModulesDelete]: AuthOrchestrationOperateScope,

@@ -2908,6 +2908,11 @@ export const CLAUDE_READ_ONLY_T3_MCP_ALLOWED_TOOLS: ReadonlyArray<string> = [
   "mcp__t3-code__html_render",
   "mcp__t3-code__html_variants",
   "mcp__t3-code__design_sketch",
+  "mcp__t3-code__design_canvas_read",
+  "mcp__t3-code__design_frame_add",
+  "mcp__t3-code__design_canvas_arrange",
+  "mcp__t3-code__design_frame_screenshot",
+  "mcp__t3-code__design_selection_read",
   "mcp__t3-code__send_to_user",
   "mcp__t3-code__t3_submit_output",
 ];
