@@ -5,7 +5,7 @@ import * as SqlClient from "effect/sql/SqlClient";
 
 import { runMigrations } from "../Migrations.ts";
 
-it.layer(NodeSqliteClient.layer({ filename: ":memory:" }))("120_DesignCanvas", (it) => {
+it.layer(NodeSqliteClient.layer({ filename: ":memory:" }))("121_DesignCanvas", (it) => {
   it.effect("creates the sketch, node and viewport tables with their indexes", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;

@@ -31,6 +31,7 @@ import {
   summarizeToolGroup,
   toolGroupSummaryKind,
   workEntriesViewedImages,
+  workEntrySendsImages,
   type ViewedImageRef,
   type ToolGroupSummaryKind,
   type WorkLogPresentationEntry,
@@ -1559,6 +1560,7 @@ function staysOutOfFold(entry: ThreadFeedEntry): boolean {
         (activity) =>
           activity.prominent ||
           activity.workEntry.questionAnswer !== undefined ||
+          workEntrySendsImages(activity.workEntry) ||
           activity.projectedItem.item.type === "notification" ||
           activity.projectedItem.item.type === "handoff" ||
           // A child still working outlives its settled launching run;
