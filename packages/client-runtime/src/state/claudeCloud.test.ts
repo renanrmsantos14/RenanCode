@@ -44,4 +44,30 @@ describe("dedupeClaudeCloudThreads", () => {
       dedupeClaudeCloudThreads([withActive, mirror], new Set([local]), { preferredFirst: true }),
     ).toEqual([mirror]);
   });
+
+  it("keeps showing the copy triaged last, whatever order the environments load in", () => {
+    const local = EnvironmentId.make("local");
+    const other = EnvironmentId.make("other");
+    const base = {
+      id: "claude-cloud:s1",
+      activeRunId: null,
+      latestRunId: null,
+      settledAt: null,
+      unsettledAt: null,
+      snoozedAt: null,
+      pinnedAt: null,
+    };
+    const settled = {
+      ...base,
+      environmentId: other,
+      settledOverride: "settled",
+      settledAt: "2026-11-20T10:00:00.000Z",
+    };
+    const untouched = { ...base, environmentId: local, settledOverride: null };
+    expect(dedupeClaudeCloudThreads([untouched, settled], local)).toEqual([settled]);
+    expect(dedupeClaudeCloudThreads([settled, untouched], local)).toEqual([settled]);
+
+    const reopened = { ...untouched, unsettledAt: "2026-11-21T10:00:00.000Z" };
+    expect(dedupeClaudeCloudThreads([settled, reopened], null)).toEqual([reopened]);
+  });
 });
