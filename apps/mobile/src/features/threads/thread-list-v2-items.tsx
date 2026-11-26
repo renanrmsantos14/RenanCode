@@ -1689,6 +1689,16 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             </Text>
           </Pressable>
         ) : null}
+        {thread.interactionMode === "design" ? (
+          <View accessibilityLabel={gt("Design mode")}>
+            <SymbolView
+              name="paintbrush"
+              size={12}
+              tintColorClassName={rowAppearance.mutedIconTintClassName}
+              type="monochrome"
+            />
+          </View>
+        ) : null}
         {providerInstance ? (
           <View className="flex-row items-center">
             {providerDrivers.slice(0, -1).map(

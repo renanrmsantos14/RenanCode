@@ -117,11 +117,20 @@ export interface ThreadSettingsSnapshot {
   readonly interactionMode: ProviderInteractionModeType;
 }
 
-// Providers without a Build/Plan toggle always run in build mode.
+/** Mobile offers Build and Design only: Plan is never exposed, so plan threads keep sending Build. */
+export function resolveComposerInteractionMode(
+  threadMode: ProviderInteractionModeType | undefined,
+): ProviderInteractionModeType {
+  return threadMode === "design" ? "design" : DEFAULT_PROVIDER_INTERACTION_MODE;
+}
+
+// Design is server-side instructions, so it applies to every provider. Providers without a
+// Build/Plan toggle otherwise always run in build mode.
 function resolveProviderInteractionMode(
   provider: Pick<ServerProvider, "showInteractionModeToggle"> | undefined,
   interactionMode: ProviderInteractionModeType,
 ): ProviderInteractionModeType {
+  if (interactionMode === "design") return interactionMode;
   return provider?.showInteractionModeToggle === false
     ? DEFAULT_PROVIDER_INTERACTION_MODE
     : interactionMode;

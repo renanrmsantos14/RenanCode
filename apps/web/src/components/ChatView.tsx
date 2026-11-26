@@ -1172,6 +1172,11 @@ export default function ChatView(props: ChatViewProps) {
     composerRuntimeMode ??
     (isServerThread ? activeThread?.runtimeMode : undefined) ??
     defaultRuntimeMode;
+  // Web has no Plan toggle, so a send only keeps Design.
+  const interactionMode =
+    (isServerThread ? serverThread.interactionMode : localDraftThread?.interactionMode) === "design"
+      ? "design"
+      : DEFAULT_INTERACTION_MODE;
   const isLocalDraftThread = !isServerThread && localDraftThread !== undefined;
   const canCheckoutPullRequestIntoThread = canWriteSourceControl && isLocalDraftThread;
   const activeThreadId = activeThread?.id ?? null;
@@ -2153,7 +2158,7 @@ export default function ChatView(props: ChatViewProps) {
         threadId: activeThreadId,
         message: { messageId: newMessageId(), role: "user", text, attachments: [] },
         runtimeMode,
-        interactionMode: DEFAULT_INTERACTION_MODE,
+        interactionMode,
         dispatchMode: "queue",
       },
     });
@@ -2722,6 +2727,34 @@ export default function ChatView(props: ChatViewProps) {
     onDiffPanelOpen,
     closeRightPanelSurface,
   });
+  const onDesignModeChange = async (enabled: boolean) => {
+    if (!activeThread) return;
+    const nextMode: ProviderInteractionMode = enabled ? "design" : DEFAULT_INTERACTION_MODE;
+    if (nextMode === interactionMode) return;
+    if (enabled) addDesignSurfaceStable();
+    if (!isServerThread) {
+      useComposerDraftStore
+        .getState()
+        .setDraftThreadContext(composerDraftTarget, { interactionMode: nextMode });
+      return;
+    }
+    const result = await setThreadInteractionMode({
+      environmentId,
+      input: {
+        threadId: activeThread.id,
+        interactionMode: nextMode,
+        createdAt: new Date().toISOString(),
+      },
+    });
+    if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+      const error = squashAtomCommandFailure(result);
+      setThreadError(
+        activeThread.id,
+        thrownErrorMessage(error, m) ?? gt("Could not change Design mode."),
+      );
+    }
+  };
+  const onDesignModeChangeStable = useStableCallback(onDesignModeChange);
   const pullRequestSurfaceAvailable = supportsPullRequests && pullRequestPanelTarget !== null;
   const {
     acknowledgeActiveThreadWoke,
@@ -2756,6 +2789,7 @@ export default function ChatView(props: ChatViewProps) {
     activeProjectCwd,
     serverConfig,
     runtimeMode,
+    interactionMode,
     isWorking,
     // A waiting run is checkpoint drain; Stop there reaches its background work.
     runIsLive: (isWorking && activeRuntime?.status !== "waiting") || phase === "connecting",
@@ -3268,6 +3302,7 @@ export default function ChatView(props: ChatViewProps) {
     threadDetailLoading,
     activeEnvironmentUnavailable,
     runtimeMode,
+    interactionMode,
     localCheckoutBranchMismatch,
     composerRef,
     persistThreadSettingsForNextTurn,
@@ -3307,6 +3342,7 @@ export default function ChatView(props: ChatViewProps) {
     isGitRepo,
     phase,
     runtimeMode,
+    interactionMode,
     sendEnvMode,
     worktreeRepositories,
     startFromOrigin,
@@ -4218,6 +4254,8 @@ export default function ChatView(props: ChatViewProps) {
                                 onOpenProviderSetup={openProviderSetupStable}
                                 getModelDisabledReason={getModelDisabledReason}
                                 handleRuntimeModeChange={handleRuntimeModeChangeStable}
+                                designMode={interactionMode === "design"}
+                                onDesignModeChange={onDesignModeChangeStable}
                                 focusComposer={focusComposerStable}
                                 scheduleComposerFocus={scheduleComposerFocusStable}
                                 setThreadError={setThreadError}
@@ -4496,7 +4534,7 @@ export default function ChatView(props: ChatViewProps) {
           onAddPullRequests={addPullRequestsSurfaceStable}
           onAddDevice={addDeviceSurfaceStable}
           onAddChecklist={activeProject === null ? undefined : addChecklistSurfaceStable}
-          onAddDesign={isElectron ? addDesignSurfaceStable : undefined}
+          onAddDesign={addDesignSurfaceStable}
           onAddSideChat={sideChatsOffered ? openSideChatStable : undefined}
           browserAvailable={canOperatePreview && browserAvailable}
           terminalAvailable={activeProject !== null && canOperateTerminal}

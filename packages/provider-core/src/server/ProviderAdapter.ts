@@ -21,7 +21,7 @@ import {
   OrchestrationV2Subagent,
   OrchestrationV2TurnItem,
   ProviderApprovalDecision,
-  ProviderInteractionMode,
+  ProviderNativeInteractionMode,
   ProviderDriverKind,
   ProviderInstanceId,
   ProviderMcpSignInError,
@@ -64,7 +64,7 @@ export type ProviderAdapterV2RuntimeWorkspace = typeof ProviderAdapterV2RuntimeW
 
 export const ProviderAdapterV2RuntimePolicy = Schema.Struct({
   runtimeMode: RuntimeMode,
-  interactionMode: ProviderInteractionMode,
+  interactionMode: ProviderNativeInteractionMode,
   cwd: Schema.NullOr(Schema.String),
   approvalPolicy: Schema.optional(Schema.Unknown),
   sandboxPolicy: Schema.optional(Schema.Unknown),

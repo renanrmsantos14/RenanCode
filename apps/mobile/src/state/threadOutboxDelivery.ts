@@ -910,7 +910,12 @@ export function createThreadOutboxDelivery(): {
       }
     }
 
-    if (settings.interactionMode !== thread.interactionMode) {
+    // Design is toggled on the thread itself; a queued message must not undo that toggle.
+    if (
+      settings.interactionMode !== thread.interactionMode &&
+      settings.interactionMode !== "design" &&
+      thread.interactionMode !== "design"
+    ) {
       if (!hasAccess()) return;
       const interactionResult = yield* deliveryCommand(threadEnvironment.setInteractionMode, {
         environmentId: queuedMessage.environmentId,

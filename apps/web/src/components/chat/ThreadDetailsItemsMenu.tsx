@@ -1,5 +1,4 @@
 import { T, useMessages } from "gt-react";
-import { isElectron } from "../../env";
 import {
   getClientSettings,
   updateClientSettings,
@@ -24,7 +23,7 @@ export function ThreadDetailsItemsMenuItems() {
         <MenuGroupLabel>
           <T>Show in thread details</T>
         </MenuGroupLabel>
-        {THREAD_DETAILS_ITEMS.filter((item) => isElectron || item.id !== "design").map((item) => (
+        {THREAD_DETAILS_ITEMS.map((item) => (
           <MenuCheckboxItem
             key={item.id}
             checked={visibility[item.id]}

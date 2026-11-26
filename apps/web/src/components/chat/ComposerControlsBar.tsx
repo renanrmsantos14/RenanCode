@@ -7,6 +7,7 @@ import { CircleAlertIcon } from "lucide-react";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
 import { ComposerControl } from "./ComposerControl";
 import {
+  ComposerDesignToggle,
   ComposerFooterModeControls,
   ComposerModelPicker,
   type RuntimeModeOption,
@@ -61,6 +62,8 @@ export function ComposerControlsBar(props: {
   defaultRuntimeMode: RuntimeMode | undefined;
   compatibleRuntimeModeOptions: ReadonlyArray<RuntimeModeOption>;
   handleRuntimeModeChange: (mode: RuntimeMode) => void;
+  designMode: boolean;
+  onDesignModeChange: (enabled: boolean) => void;
   composerControlsCollapsed: boolean;
   composerControlsHidden: boolean;
   restingHiddenBlockCount: number;
@@ -105,6 +108,8 @@ export function ComposerControlsBar(props: {
     defaultRuntimeMode,
     compatibleRuntimeModeOptions,
     handleRuntimeModeChange,
+    designMode,
+    onDesignModeChange,
     composerControlsCollapsed,
     composerControlsHidden,
     restingHiddenBlockCount: measuredHiddenBlockCount,
@@ -266,6 +271,11 @@ export function ComposerControlsBar(props: {
   ) : (
     <>
       {composerModelPicker}
+      <ComposerDesignToggle
+        size={controlSize}
+        pressed={designMode}
+        onPressedChange={onDesignModeChange}
+      />
 
       <>
         {restingBlockDefs.map((def, index) => {
@@ -306,6 +316,8 @@ export function ComposerControlsBar(props: {
             hidden={composerControlsHidden || hiddenRestingBlockIds.length === 0}
             // Permissions join the overflow only when their normal home is in it.
             showPermissions={overflowShowsPermissions}
+            designMode={designMode}
+            onDesignModeChange={onDesignModeChange}
             onRuntimeModeChange={handleRuntimeModeChange}
           />
         </div>

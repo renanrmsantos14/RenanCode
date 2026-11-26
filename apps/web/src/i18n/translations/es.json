@@ -13405,5 +13405,9 @@
   "bfc188804be1fcaf": "pendiente",
   "257e45dec7297c87": "Plan de la tarea",
   "b0d702f9e820900b": "Paso {step} de {total}: {text}, {state}",
-  "d54888b51c70f50a": "Plan completado"
+  "d54888b51c70f50a": "Plan completado",
+  "366a0b63c228e964": "Modo Design",
+  "800a26b3337b2a1f": "El modo Design está activado. El agente dibuja en el lienzo de Design.",
+  "e351383cb1cbd4f9": "Activa el modo Design para que el agente dibuje en el lienzo de Design",
+  "40d22229ae81e753": "No se pudo cambiar el modo Design."
 }

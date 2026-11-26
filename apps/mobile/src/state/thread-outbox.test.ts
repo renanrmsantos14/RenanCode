@@ -82,6 +82,7 @@ import {
   resolveThreadOutboxDeliveryAction,
   resolveThreadOutboxDispatchStep,
   resolveThreadOutboxFailureAction,
+  resolveComposerInteractionMode,
   resolveQueuedThreadSettings,
   shouldRetryThreadOutboxDelivery,
   type QueuedThreadMessage,
@@ -389,6 +390,39 @@ describe("thread outbox", () => {
         providers,
       ).interactionMode,
     ).toBe("plan");
+  });
+
+  it("keeps design mode on send for every provider and never exposes plan", () => {
+    const codex = {
+      instanceId: ProviderInstanceId.make("codex"),
+      model: "gpt-test",
+    };
+    const antigravity = {
+      instanceId: ProviderInstanceId.make("google-personal"),
+      model: "gemini-test",
+    };
+    const providers = [
+      { instanceId: codex.instanceId, showInteractionModeToggle: true, models: [] },
+      { instanceId: antigravity.instanceId, showInteractionModeToggle: false, models: [] },
+    ];
+    expect(resolveComposerInteractionMode("design")).toBe("design");
+    expect(resolveComposerInteractionMode("plan")).toBe("default");
+    expect(resolveComposerInteractionMode("default")).toBe("default");
+    expect(resolveComposerInteractionMode(undefined)).toBe("default");
+    for (const modelSelection of [codex, antigravity]) {
+      const message = {
+        ...queuedMessage({ messageId: "queued-design", createdAt: "2026-09-02T10:00:00.000Z" }),
+        modelSelection,
+        interactionMode: "design",
+      } satisfies QueuedThreadMessage;
+      expect(
+        resolveQueuedThreadSettings(
+          message,
+          { modelSelection, runtimeMode: "approval-required", interactionMode: "design" },
+          providers,
+        ).interactionMode,
+      ).toBe("design");
+    }
   });
 
   // regression: #29729 Cursor runs its own Fast default when the turn carries no fastMode

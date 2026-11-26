@@ -13409,5 +13409,9 @@
   "bfc188804be1fcaf": "ausstehend",
   "257e45dec7297c87": "Aufgabenplan",
   "b0d702f9e820900b": "Schritt {step} von {total}: {text}, {state}",
-  "d54888b51c70f50a": "Plan abgeschlossen"
+  "d54888b51c70f50a": "Plan abgeschlossen",
+  "366a0b63c228e964": "Design-Modus",
+  "800a26b3337b2a1f": "Der Design-Modus ist aktiv. Der Agent skizziert auf der Design-Leinwand.",
+  "e351383cb1cbd4f9": "Design-Modus aktivieren, damit der Agent auf der Design-Leinwand skizziert",
+  "40d22229ae81e753": "Der Design-Modus konnte nicht geändert werden."
 }

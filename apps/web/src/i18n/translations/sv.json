@@ -13417,5 +13417,9 @@
   "bfc188804be1fcaf": "väntar",
   "257e45dec7297c87": "Uppgiftsplan",
   "b0d702f9e820900b": "Steg {step} av {total}: {text}, {state}",
-  "d54888b51c70f50a": "Planen klar"
+  "d54888b51c70f50a": "Planen klar",
+  "366a0b63c228e964": "Designläge",
+  "800a26b3337b2a1f": "Designläget är på. Agenten skissar på Design-canvasen.",
+  "e351383cb1cbd4f9": "Aktivera designläget så att agenten skissar på Design-canvasen",
+  "40d22229ae81e753": "Det gick inte att ändra designläget."
 }

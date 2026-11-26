@@ -67,6 +67,11 @@ const T3_CODE_ACP_PLAN_MODE_INSTRUCTIONS = `## RenanCode interaction mode: Plan
 
 Investigate with read-only actions and do not edit files or otherwise execute the implementation. Resolve discoverable facts before asking questions. When the requirements are decision complete, return a concrete implementation plan and do not start implementing it. Treat this mode as active until RenanCode supplies a different interaction-mode instruction.`;
 
+/** Appended to each turn the user sends in RenanCode's Design mode. */
+export const T3_CODE_DESIGN_MODE_INSTRUCTIONS = `<t3_design_mode>
+Design mode is on: show visual work as sketches on this thread's Design canvas with \`design_sketch\`, one per screen or option, not as code or text descriptions. To change a sketch, pass its sketchId to \`design_sketch\` so the new version sits beside it; read what the user picked with \`design_selection_read\` first. Reply in chat with a short note on what changed.
+</t3_design_mode>`;
+
 export interface T3AcpInstructionState {
   readonly interactionMode: ProviderInteractionMode;
   readonly hasT3Mcp: boolean;

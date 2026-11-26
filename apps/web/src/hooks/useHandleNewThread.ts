@@ -190,11 +190,13 @@ export function createNewThreadHandler(router: AnyRouter) {
       ? (carrySourceComposer?.modelSelectionByProvider[composerActiveProvider] ?? null)
       : null;
     const carryModelSelection = composerModelSelection ?? carrySourceShell?.modelSelection ?? null;
-    const carryInteractionMode =
+    const carriedInteractionMode =
       carrySourceComposer?.interactionMode ??
       carrySourceShell?.interactionMode ??
       carrySourceDraft?.interactionMode ??
       null;
+    const carryInteractionMode =
+      carriedInteractionMode === "design" ? null : carriedInteractionMode;
     const project = projects.find(
       (candidate) =>
         candidate.id === projectRef.projectId &&

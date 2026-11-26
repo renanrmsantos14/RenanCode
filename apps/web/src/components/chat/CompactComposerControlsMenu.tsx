@@ -1,8 +1,8 @@
 import type { RuntimeMode } from "@t3tools/contracts";
 import { useGT } from "gt-react";
 import { memo, useRef } from "react";
-import { EllipsisIcon } from "lucide-react";
-import { Menu, MenuPopup, MenuTrigger } from "../ui/menu";
+import { EllipsisIcon, SquareDashedIcon } from "lucide-react";
+import { Menu, MenuCheckboxItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { ComposerControl, ComposerControlIcon } from "./ComposerControl";
 import { focusRequestedPermission, useComposerMenuProps } from "./composerEventScope";
 import { useComposerMenuState } from "./useComposerMenuState";
@@ -15,6 +15,8 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
   size?: "sm" | "xs";
   /** Close the portaled popup when its trigger hides. */
   hidden?: boolean;
+  designMode: boolean;
+  onDesignModeChange: (enabled: boolean) => void;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
 }) {
   const gt = useGT();
@@ -50,6 +52,10 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
             onRuntimeModeChange={props.onRuntimeModeChange}
           />
         ) : null}
+        <MenuCheckboxItem checked={props.designMode} onCheckedChange={props.onDesignModeChange}>
+          <SquareDashedIcon aria-hidden />
+          {gt("Design mode")}
+        </MenuCheckboxItem>
       </MenuPopup>
     </Menu>
   );
