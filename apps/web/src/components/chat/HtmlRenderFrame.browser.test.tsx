@@ -25,11 +25,20 @@ function setup() {
   assetUrl.current = "about:blank";
 }
 
-const sizeChanged = (height: number) => ({
+const sizeChanged = (height: number, width?: number) => ({
   jsonrpc: "2.0",
   method: "ui/notifications/size-changed",
-  params: { height },
+  params: { height, width },
 });
+
+function pageUrl(message: ReturnType<typeof sizeChanged>) {
+  const html = `<script>parent.postMessage(${JSON.stringify(message)}, "*");</script>`;
+  const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+  return { url, [Symbol.dispose]: () => URL.revokeObjectURL(url) };
+}
+
+const pageTransform = (screen: Screen) =>
+  screen.getByTitle("Mockup").element().closest<HTMLElement>(".origin-top-left")?.style.transform;
 
 describe("HtmlRenderFrame", () => {
   it("reports leaving full screen when it unmounts while expanded", async () => {
@@ -98,5 +107,43 @@ describe("HtmlRenderFrame", () => {
     assetUrl.current = "about:blank";
     await using second = await render(frame());
     expect(frameHeight(second)).toBe("1500px");
+  });
+
+  it("shrinks a page wider than its frame to fit", async () => {
+    setup();
+    using page = pageUrl(sizeChanged(200, 440));
+    assetUrl.current = page.url;
+    await using screen = await render(
+      <div style={{ width: 300 }}>
+        <HtmlRenderFrame
+          environmentId={EnvironmentId.make("environment")}
+          htmlRender={{ attachmentId: "fixed", title: "Mockup", height: 200 }}
+          threadRef={undefined}
+        />
+      </div>,
+    );
+    await vi.waitFor(() => expect(pageTransform(screen)).toMatch(/^scale\(0\.68/));
+  });
+
+  it("keeps a fluid page unscaled after its column narrows", async () => {
+    setup();
+    using page = pageUrl(sizeChanged(321, 700));
+    assetUrl.current = page.url;
+    const frame = (width: number) => (
+      <div style={{ width }}>
+        <HtmlRenderFrame
+          environmentId={EnvironmentId.make("environment")}
+          htmlRender={{ attachmentId: "fluid", title: "Mockup", height: 200 }}
+          threadRef={undefined}
+        />
+      </div>
+    );
+    const box = (screen: Screen) =>
+      screen.getByTitle("Mockup").element().closest<HTMLElement>(".group\\/html-render");
+    await using screen = await render(frame(700));
+    await vi.waitFor(() => expect(box(screen)?.style.height).toBe("321px"));
+    await screen.rerender(frame(500));
+    await vi.waitFor(() => expect(box(screen)?.clientWidth).toBe(500));
+    expect(pageTransform(screen)).toBe("");
   });
 });

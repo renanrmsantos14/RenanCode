@@ -56,9 +56,9 @@ export function HtmlRenderFrame(props: {
   const [contentHeight, setContentHeight] = useState(() =>
     measuredContentHeights.get(attachmentId),
   );
-  const [contentWidth, setContentWidth] = useState<number>();
-  // Fixed-width pages are shrunk to fit instead of cut off; fluid pages never report a wider scroll width.
-  const scale = contentWidth !== undefined && contentWidth > width + 1 ? width / contentWidth : 1;
+  // Only a page that overflowed its frame counts as fixed width; a fluid page tracks the frame.
+  const [fixedWidth, setFixedWidth] = useState<number>();
+  const scale = fixedWidth !== undefined && fixedWidth > width + 1 ? width / fixedWidth : 1;
   const innerWidth = width / scale;
   const height = Math.max(
     props.minHeight ?? 0,
@@ -114,7 +114,9 @@ export function HtmlRenderFrame(props: {
               onContentHeight={(height, contentWidth) => {
                 rememberContentHeight(attachmentId, height);
                 setContentHeight(height);
-                setContentWidth(contentWidth);
+                if (contentWidth === undefined) return;
+                if (contentWidth > innerWidth + 1) setFixedWidth(contentWidth);
+                else if (Math.abs(contentWidth - (fixedWidth ?? -1)) > 1) setFixedWidth(undefined);
               }}
               onFullscreenChange={onFullscreenChange}
             />

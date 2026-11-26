@@ -3935,7 +3935,9 @@ export default function ChatView(props: ChatViewProps) {
                   citationHistory={citationHistory}
                   onCiteAssistantText={citeAssistantTextStable}
                   onFollowHtmlVariant={followHtmlVariantStable}
-                  {...(embedded ? {} : { onOpenHtmlRender: openHtmlRenderFullscreenStable })}
+                  {...(embedded || review.active
+                    ? {}
+                    : { onOpenHtmlRender: openHtmlRenderFullscreenStable })}
                   onReplyToResponse={replyToResponseStable}
                   {...(activeProject && !runsOutsideHostCheckout
                     ? { onRunShellCommand: parentPanel?.runShellCommand ?? runShellCommandStable }
