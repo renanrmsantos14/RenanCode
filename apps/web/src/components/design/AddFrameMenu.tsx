@@ -1,7 +1,7 @@
 import type { DesignFrameDevice, EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import { designFrameSize } from "@t3tools/shared/design";
 import { useGT } from "gt-react";
-import { PlusIcon } from "lucide-react";
+import { FrameIcon } from "lucide-react";
 import { useState } from "react";
 
 import { useDiscoveredPortsState } from "~/portDiscoveryState";
@@ -71,19 +71,19 @@ export function AddFrameMenu(props: {
               render={
                 <Button
                   aria-label={gt("Add Frame")}
-                  size="icon-xs"
-                  variant="glass"
+                  size="icon-sm"
+                  variant="ghost"
                   disabled={!props.canWrite}
                 />
               }
             />
           }
         >
-          <PlusIcon className="size-3.5" />
+          <FrameIcon className="size-4" />
         </TooltipTrigger>
-        <TooltipPopup side="bottom">{gt("Add Frame")}</TooltipPopup>
+        <TooltipPopup side="top">{gt("Add Frame")} · B</TooltipPopup>
       </Tooltip>
-      <PopoverPopup align="end" width="md" data-design-add-frame>
+      <PopoverPopup side="top" sideOffset={8} width="md" data-design-add-frame>
         <form
           className="flex flex-col gap-3"
           onSubmit={(event) => {

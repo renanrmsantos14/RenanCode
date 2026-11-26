@@ -492,7 +492,9 @@ import {
   DesignReportLiveFrameInput,
   DesignSetSelectionInput,
   DesignPlaceSketchInput,
+  DesignCanvasNode,
   DesignRemoveNodeInput,
+  DesignSetNodeZInput,
   DesignSetFrameSnapshotInput,
   DesignSetViewportInput,
   DesignSubscribeCanvasInput,
@@ -742,6 +744,7 @@ export const WS_METHODS = {
   designMoveNodes: "design.moveNodes",
   designSetViewport: "design.setViewport",
   designRemoveNode: "design.removeNode",
+  designSetNodeZ: "design.setNodeZ",
   designPlaceSketch: "design.placeSketch",
   designAddFrame: "design.addFrame",
   designUpdateFrame: "design.updateFrame",
@@ -2627,8 +2630,14 @@ const WsDesignRemoveNodeRpc = Rpc.make(WS_METHODS.designRemoveNode, {
   error: DesignRpcError,
 });
 
+const WsDesignSetNodeZRpc = Rpc.make(WS_METHODS.designSetNodeZ, {
+  payload: DesignSetNodeZInput,
+  error: DesignRpcError,
+});
+
 const WsDesignPlaceSketchRpc = Rpc.make(WS_METHODS.designPlaceSketch, {
   payload: DesignPlaceSketchInput,
+  success: DesignCanvasNode,
   error: DesignRpcError,
 });
 
@@ -2866,6 +2875,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsDesignMoveNodesRpc,
   WsDesignSetViewportRpc,
   WsDesignRemoveNodeRpc,
+  WsDesignSetNodeZRpc,
   WsDesignPlaceSketchRpc,
   WsDesignAddFrameRpc,
   WsDesignUpdateFrameRpc,

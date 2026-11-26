@@ -204,6 +204,26 @@ it.effect("places a variant to the right of the sketch it builds on", () =>
   ),
 );
 
+it.effect("restacks a node and refuses a node of another thread", () =>
+  withService({ chrome: true }, (service) =>
+    Effect.gen(function* () {
+      yield* service.createSketches({
+        threadId: threadA,
+        projectId: app,
+        pages: [page("A"), page("B")],
+      });
+      const [first, second] = (yield* service.snapshot(threadA)).nodes;
+      yield* service.setNodeZ({ threadId: threadA, nodeId: first!.id, z: second!.z + 1 });
+      const order = (yield* service.snapshot(threadA)).nodes.map((node) => node.id);
+      assert.deepStrictEqual(order, [second!.id, first!.id]);
+      const missing = yield* service
+        .setNodeZ({ threadId: threadB, nodeId: first!.id, z: 0 })
+        .pipe(Effect.flip);
+      assert.include(missing.message, "not found");
+    }),
+  ),
+);
+
 it.effect("moves nodes, stores the viewport, removes and places a sketch again", () =>
   withService({ chrome: true }, (service) =>
     Effect.gen(function* () {

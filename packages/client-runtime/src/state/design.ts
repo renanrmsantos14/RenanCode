@@ -27,6 +27,10 @@ export function createDesignEnvironmentAtoms<R, E>(
       label: "environment-data:design:remove-node",
       tag: WS_METHODS.designRemoveNode,
     }),
+    setNodeZ: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:design:set-node-z",
+      tag: WS_METHODS.designSetNodeZ,
+    }),
     placeSketch: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:design:place-sketch",
       tag: WS_METHODS.designPlaceSketch,

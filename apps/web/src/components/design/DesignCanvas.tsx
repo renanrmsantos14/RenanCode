@@ -1,5 +1,6 @@
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
-import type { EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
+import { settlePromise } from "@t3tools/client-runtime/state/runtime";
+import type { ContextMenuItem, EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import {
   type DesignCanvasSnapshot,
   DesignNodeId,
@@ -16,22 +17,28 @@ import {
   Panel,
   ReactFlow,
   ReactFlowProvider,
+  SelectionMode,
   useReactFlow,
   useViewportStore,
+  type Viewport,
 } from "@xyflow/react";
 import "@xyflow/react/dist/base.css";
 import { T, useGT } from "gt-react";
+import { FrameIcon, KeyboardIcon, LibraryIcon, Maximize2Icon, Minimize2Icon } from "lucide-react";
 import {
-  FrameIcon,
-  LibraryIcon,
-  Maximize2Icon,
-  Minimize2Icon,
-  MinusIcon,
-  PlusIcon,
-  ScanIcon,
-  Trash2Icon,
-} from "lucide-react";
-import { createContext, type ReactNode, use, useEffect, useRef, useState } from "react";
+  createContext,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+  use,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
+import { contextMenuSourceOf } from "~/contextMenuSource";
+import { readLocalApi } from "~/localApi";
+import { isMacPlatform } from "~/lib/utils";
 
 import { useAtomCommand } from "~/state/use-atom-command";
 import { designEnvironment } from "~/state/design";
@@ -41,6 +48,29 @@ import { previewBridge } from "../preview/previewBridge";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { AddFrameMenu } from "./AddFrameMenu";
+import {
+  DesignCanvasModeSwitch,
+  DesignCanvasToolbar,
+  DesignRecenterButton,
+  DesignShortcutsDialog,
+} from "./DesignCanvasChrome";
+import {
+  type DesignCanvasAction,
+  type DesignCanvasMode,
+  type DesignCanvasTool,
+  resolveDesignCanvasKey,
+} from "./designCanvasControls";
+import {
+  type DesignHistory,
+  type DesignHistoryEntry,
+  type DesignPlacedNode,
+  EMPTY_DESIGN_HISTORY,
+  placedNode,
+  recordDesignHistory,
+  stepDesignHistory,
+} from "./designCanvasHistory";
+import { useDesignCanvasNavigation } from "./designCanvasNavigation";
+import { isEditableFocused } from "~/lib/editableFocus";
 import { DesignFrameContext, FrameNode, type FrameFlowNode } from "./DesignFrameNode";
 import { EnvironmentSketchViewer } from "./DesignSketchCard";
 import { useDesignFocusStore } from "./designFocusStore";
@@ -222,7 +252,6 @@ function groupOutlines(
 
 function ToolbarButton(props: {
   readonly label: string;
-  readonly disabled?: boolean;
   readonly onClick: () => void;
   readonly children: ReactNode;
 }) {
@@ -230,13 +259,7 @@ function ToolbarButton(props: {
     <Tooltip>
       <TooltipTrigger
         render={
-          <Button
-            aria-label={props.label}
-            size="icon-xs"
-            variant="glass"
-            disabled={props.disabled ?? false}
-            onClick={props.onClick}
-          />
+          <Button aria-label={props.label} size="icon-xs" variant="glass" onClick={props.onClick} />
         }
       >
         {props.children}
@@ -245,6 +268,21 @@ function ToolbarButton(props: {
     </Tooltip>
   );
 }
+
+interface Point {
+  readonly x: number;
+  readonly y: number;
+}
+
+type CanvasNode = DesignCanvasSnapshot["nodes"][number];
+
+const ZOOM_DURATION_MS = 250;
+const NUDGE_SAVE_DELAY_MS = 400;
+const DUPLICATE_GAP = 40;
+// ⌘ stays: this prop replaces React Flow's default; Ctrl is the hand, as in RenanDesign.
+const MULTI_SELECTION_KEYS = ["Shift", "Meta"];
+const NO_SELECTION: ReadonlySet<string> = new Set();
+const clampFrameSize = (value: number) => Math.min(2400, Math.max(240, Math.round(value)));
 
 function DesignCanvasInner(props: {
   readonly environmentId: EnvironmentId;
@@ -258,7 +296,8 @@ function DesignCanvasInner(props: {
 }) {
   const gt = useGT();
   const flow = useReactFlow();
-  const { snapshot, threadRef } = props;
+  const { snapshot, threadRef, environmentId } = props;
+  const threadId = threadRef.threadId;
   const moveNodes = useAtomCommand(designEnvironment.moveNodes, { label: "design move nodes" });
   const setViewport = useAtomCommand(designEnvironment.setViewport, {
     label: "design set viewport",
@@ -268,16 +307,50 @@ function DesignCanvasInner(props: {
   const placeSketch = useAtomCommand(designEnvironment.placeSketch, {
     label: "design place sketch",
   });
-  const [dragging, setDragging] = useState<Readonly<Record<string, { x: number; y: number }>>>({});
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const addFrame = useAtomCommand(designEnvironment.addFrame, { label: "design add frame" });
+  const setNodeZ = useAtomCommand(designEnvironment.setNodeZ, { label: "design set node z" });
+  const [dragging, setDragging] = useState<Readonly<Record<string, Point>>>({});
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(NO_SELECTION);
+  const [tool, setTool] = useState<DesignCanvasTool>("select");
+  const [mode, setMode] = useState<DesignCanvasMode>("design");
+  const [history, setHistory] = useState<DesignHistory>(EMPTY_DESIGN_HISTORY);
+  const historyBusy = useRef(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const nudge = useRef<{
+    readonly from: Map<string, Point>;
+    readonly to: Map<string, Point>;
+  } | null>(null);
+  const nudgeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [viewing, setViewing] = useState<{
     readonly sketches: ReadonlyArray<DesignSketchReference>;
     readonly index: number;
   } | null>(null);
   const viewportTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const viewportTouched = useRef(snapshot.viewport !== null);
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- cancels the pending viewport save, a timer outside React, when the canvas unmounts
-  useEffect(() => () => clearTimeout(viewportTimer.current), []);
+  const saveViewportSoon = (viewport: Viewport) => {
+    if (!props.canWrite) return;
+    clearTimeout(viewportTimer.current);
+    viewportTimer.current = setTimeout(() => {
+      void setViewport({
+        environmentId: props.environmentId,
+        input: { threadId: threadRef.threadId, viewport },
+      });
+    }, VIEWPORT_SAVE_DELAY_MS);
+  };
+  // A Ctrl-drag pan moves the viewport programmatically, which React Flow's move events skip.
+  const { panHeld, zoomHeld } = useDesignCanvasNavigation(wrapperRef, () => {
+    viewportTouched.current = true;
+    saveViewportSoon(flow.getViewport());
+  });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- cancels the pending viewport and nudge saves, timers outside React, when the canvas unmounts
+  useEffect(
+    () => () => {
+      clearTimeout(viewportTimer.current);
+      clearTimeout(nudgeTimer.current);
+    },
+    [],
+  );
   const containerWidth = useViewportStore((state) => state.width);
   const containerHeight = useViewportStore((state) => state.height);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- refits the React Flow viewport, an external system, when the container resizes (full screen) before the user has moved the view
@@ -286,6 +359,10 @@ function DesignCanvasInner(props: {
     void flow.fitView(FIT_OPTIONS);
   }, [containerWidth, containerHeight, flow]);
 
+  const designing = mode === "design";
+  const editable = props.canWrite && designing;
+  // Not while panning: d3-drag would take the press the pan needs (RenanDesign ONL-1864).
+  const movable = editable && tool !== "pan" && !panHeld;
   const sketchesById = new Map(snapshot.sketches.map((sketch) => [sketch.id, sketch]));
   const flowNodes: Array<SketchFlowNode | FrameFlowNode> = snapshot.nodes.flatMap<
     SketchFlowNode | FrameFlowNode
@@ -296,8 +373,8 @@ function DesignCanvasInner(props: {
       width: node.width,
       height: node.height,
       zIndex: node.z,
-      selected: node.id === selectedId,
-      draggable: props.canWrite,
+      selected: selectedIds.has(node.id),
+      draggable: movable,
     };
     if (node.kind === "frame") {
       // Frames run in a desktop webview; every other client leaves them out.
@@ -316,13 +393,13 @@ function DesignCanvasInner(props: {
     ];
   });
 
-  const groupIds = new Map<string, (typeof snapshot.nodes)[number]>(
+  const nodesById = new Map<string, (typeof snapshot.nodes)[number]>(
     snapshot.nodes.map((node) => [node.id, node]),
   );
   const nodes: Array<SketchFlowNode | FrameFlowNode | GroupFlowNode> = [
     ...groupOutlines(
       flowNodes.map((node) => {
-        const source = groupIds.get(node.id);
+        const source = nodesById.get(node.id);
         return {
           id: node.id,
           position: node.position,
@@ -335,6 +412,291 @@ function DesignCanvasInner(props: {
     ),
     ...flowNodes,
   ];
+  const visibleIds = new Set(flowNodes.map((node) => node.id));
+  const selectedNodes = snapshot.nodes.filter(
+    (node) => selectedIds.has(node.id) && visibleIds.has(node.id),
+  );
+
+  const record = (entry: DesignHistoryEntry) =>
+    setHistory((current) => recordDesignHistory(current, entry));
+
+  const move = async (moves: ReadonlyArray<{ readonly id: string } & Point>) => {
+    const result = await moveNodes({
+      environmentId,
+      input: {
+        threadId,
+        nodes: moves.map((entry) => ({
+          nodeId: DesignNodeId.make(entry.id),
+          x: entry.x,
+          y: entry.y,
+        })),
+      },
+    });
+    return result._tag === "Success";
+  };
+
+  const restack = async (id: string, z: number) => {
+    const result = await setNodeZ({
+      environmentId,
+      input: { threadId, nodeId: DesignNodeId.make(id), z },
+    });
+    return result._tag === "Success";
+  };
+
+  const recreate = async (node: DesignPlacedNode): Promise<string | null> => {
+    let id: string;
+    if (node.kind === "frame") {
+      const result = await addFrame({
+        environmentId,
+        input: {
+          threadId,
+          url: node.url,
+          device: node.device,
+          ...(node.title.length > 0 ? { title: node.title } : {}),
+          ...(node.device === "custom"
+            ? { width: clampFrameSize(node.width), height: clampFrameSize(node.height) }
+            : {}),
+        },
+      });
+      if (result._tag !== "Success" || result.value === null) return null;
+      id = result.value.id;
+    } else {
+      const result = await placeSketch({
+        environmentId,
+        input: { threadId, sketchId: DesignSketchId.make(node.sketchId) },
+      });
+      if (result._tag !== "Success") return null;
+      id = result.value.id;
+    }
+    const placed = (await move([{ id, x: node.x, y: node.y }])) && (await restack(id, node.z));
+    return placed ? id : null;
+  };
+
+  const remove = async (ids: ReadonlyArray<string>) => {
+    for (const id of ids) {
+      const result = await removeNode({
+        environmentId,
+        input: { threadId, nodeId: DesignNodeId.make(id) },
+      });
+      if (result._tag !== "Success") return false;
+    }
+    return true;
+  };
+
+  const applyHistoryEntry = async (
+    entry: DesignHistoryEntry,
+  ): Promise<ReadonlyMap<string, string> | null> => {
+    switch (entry.type) {
+      case "move":
+        return (await move(entry.moves.map((m) => ({ id: m.id, ...m.to })))) ? new Map() : null;
+      case "z":
+        return (await restack(entry.id, entry.to)) ? new Map() : null;
+      case "remove":
+        return (await remove(entry.nodes.map((node) => node.id))) ? new Map() : null;
+      case "add": {
+        const ids = new Map<string, string>();
+        for (const { id, node } of entry.nodes) {
+          const next = await recreate(node);
+          if (next === null) return null;
+          ids.set(id, next);
+        }
+        return ids;
+      }
+    }
+  };
+
+  const stepHistory = async (direction: "undo" | "redo") => {
+    if (historyBusy.current) return;
+    historyBusy.current = true;
+    // Commands resolve to a result instead of throwing, so the flag always clears.
+    const next = await stepDesignHistory(history, direction, applyHistoryEntry);
+    historyBusy.current = false;
+    // A step that no longer applies (the agent changed the canvas) is dropped, not retried forever.
+    setHistory(
+      next ??
+        (direction === "undo"
+          ? { ...history, undo: history.undo.slice(0, -1) }
+          : { ...history, redo: history.redo.slice(0, -1) }),
+    );
+  };
+
+  const removeSelection = async (targets: ReadonlyArray<CanvasNode> = selectedNodes) => {
+    if (targets.length === 0) return;
+    setSelectedIds(NO_SELECTION);
+    record({
+      type: "remove",
+      nodes: targets.map((node) => ({
+        id: node.id,
+        node: { ...placedNode(node), ...dragging[node.id] },
+      })),
+    });
+    await remove(targets.map((node) => node.id));
+  };
+
+  const maxZ = Math.max(0, ...snapshot.nodes.map((node) => node.z));
+  const minZ = Math.min(0, ...snapshot.nodes.map((node) => node.z));
+
+  const duplicateSelection = async (targets: ReadonlyArray<CanvasNode> = selectedNodes) => {
+    const frames = targets.filter((node) => node.kind === "frame");
+    const added: Array<{ id: string; node: DesignPlacedNode }> = [];
+    for (const [index, frame] of frames.entries()) {
+      const node = {
+        ...placedNode(frame),
+        x: frame.x + frame.width + DUPLICATE_GAP,
+        z: maxZ + 1 + index,
+      };
+      const id = await recreate(node);
+      if (id === null) break;
+      added.push({ id, node });
+    }
+    if (added.length === 0) return;
+    record({ type: "add", nodes: added });
+    setSelectedIds(new Set(added.map((entry) => entry.id)));
+  };
+
+  const restackSelection = async (
+    edge: "front" | "back",
+    targets: ReadonlyArray<CanvasNode> = selectedNodes,
+  ) => {
+    const [node] = targets;
+    if (node === undefined || targets.length !== 1) return;
+    const z = edge === "front" ? maxZ + 1 : minZ - 1;
+    if ((edge === "front" && node.z === maxZ) || (edge === "back" && node.z === minZ)) {
+      if (snapshot.nodes.filter((entry) => entry.z === node.z).length === 1) return;
+    }
+    record({ type: "z", id: node.id, from: node.z, to: z });
+    await restack(node.id, z);
+  };
+
+  const commitNudge = async () => {
+    const burst = nudge.current;
+    if (burst === null) return;
+    nudge.current = null;
+    const moves = [...burst.to].map(([id, to]) => ({ id, from: burst.from.get(id)!, to }));
+    record({ type: "move", moves });
+    await move(moves.map((entry) => ({ id: entry.id, ...entry.to })));
+    setDragging({});
+  };
+
+  const nudgeSelection = (dx: number, dy: number) => {
+    if (selectedNodes.length === 0) return;
+    const burst = nudge.current ?? { from: new Map<string, Point>(), to: new Map<string, Point>() };
+    for (const node of selectedNodes) {
+      const at = burst.to.get(node.id) ?? { x: node.x, y: node.y };
+      if (!burst.from.has(node.id)) burst.from.set(node.id, { x: node.x, y: node.y });
+      burst.to.set(node.id, { x: at.x + dx, y: at.y + dy });
+    }
+    setDragging(Object.fromEntries(burst.to));
+    clearTimeout(nudgeTimer.current);
+    nudgeTimer.current = setTimeout(() => void commitNudge(), NUDGE_SAVE_DELAY_MS);
+    nudge.current = burst;
+  };
+
+  const fitAll = () => {
+    viewportTouched.current = true;
+    void flow.fitView({ ...FIT_OPTIONS, duration: ZOOM_DURATION_MS });
+  };
+  const fitSelection = () => {
+    if (selectedNodes.length === 0) return fitAll();
+    viewportTouched.current = true;
+    void flow.fitView({
+      nodes: selectedNodes.map((node) => ({ id: node.id })),
+      maxZoom: 4,
+      padding: "10%",
+      duration: ZOOM_DURATION_MS,
+    });
+  };
+  const zoom = (how: "in" | "out" | "actual") => {
+    viewportTouched.current = true;
+    const options = { duration: ZOOM_DURATION_MS };
+    if (how === "in") void flow.zoomIn(options);
+    else if (how === "out") void flow.zoomOut(options);
+    else void flow.zoomTo(1, options);
+  };
+
+  const changeMode = (next: DesignCanvasMode) => {
+    setMode(next);
+    if (next === "preview") {
+      setTool("select");
+      setSelectedIds(NO_SELECTION);
+    }
+  };
+
+  const threadKey = scopedThreadKey(threadRef);
+  const canAddFrame = previewBridge !== null && editable;
+  const openAddFrame = () => {
+    if (canAddFrame) useDesignFrameStore.getState().setAddMenuOpen(threadRef, true);
+  };
+
+  // `targets` is for a menu that picked its own nodes: its selection update has not rendered yet.
+  const run = (action: DesignCanvasAction, targets: ReadonlyArray<CanvasNode> = selectedNodes) => {
+    switch (action.type) {
+      case "tool":
+        if (designing || action.tool === "select") setTool(action.tool);
+        return;
+      case "mode":
+        return changeMode(action.mode);
+      case "addFrame":
+        return openAddFrame();
+      case "zoomIn":
+        return zoom("in");
+      case "zoomOut":
+        return zoom("out");
+      case "actualSize":
+        return zoom("actual");
+      case "fitAll":
+        return fitAll();
+      case "fitSelection":
+        return fitSelection();
+      case "selectAll":
+        if (designing) setSelectedIds(visibleIds);
+        return;
+      case "escape":
+        if (tool === "pan") setTool("select");
+        else setSelectedIds(NO_SELECTION);
+        return;
+      case "toggleFullScreen":
+        return props.onToggleMaximized();
+      case "shortcuts":
+        return setShortcutsOpen(true);
+    }
+    if (!editable) return;
+    // A nudge saves after a pause; any other edit first settles it so history stays in order.
+    if (nudge.current !== null && action.type !== "nudge") {
+      if (action.type === "redo") return;
+      clearTimeout(nudgeTimer.current);
+      if (action.type === "undo") {
+        nudge.current = null;
+        setDragging({});
+        return;
+      }
+      void commitNudge();
+    }
+    switch (action.type) {
+      case "remove":
+        return void removeSelection(targets);
+      case "duplicate":
+        return void duplicateSelection(targets);
+      case "front":
+      case "back":
+        return void restackSelection(action.type, targets);
+      case "undo":
+      case "redo":
+        return void stepHistory(action.type);
+      case "nudge":
+        return nudgeSelection(action.dx, action.dy);
+    }
+  };
+
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    // Keys from portalled popups (the shortcut list, the Add Frame form) bubble through React too.
+    if (!(event.target instanceof Element) || !event.currentTarget.contains(event.target)) return;
+    if (isEditableFocused(event.target)) return;
+    const action = resolveDesignCanvasKey(event.nativeEvent, isMacPlatform(navigator.platform));
+    if (action === null) return;
+    event.preventDefault();
+    run(action);
+  };
 
   const onNodesChange: OnNodesChange<SketchFlowNode | FrameFlowNode | GroupFlowNode> = (
     changes,
@@ -345,6 +707,75 @@ function DesignCanvasInner(props: {
         setDragging((current) => ({ ...current, [id]: position }));
       }
     }
+    const selects = changes.getByType("select");
+    if (selects.length === 0) return;
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      for (const change of selects) {
+        if (change.selected) next.add(change.id);
+        else next.delete(change.id);
+      }
+      return next;
+    });
+  };
+
+  const showMenu = async (
+    event: ReactMouseEvent,
+    items: ReadonlyArray<ContextMenuItem<string>>,
+  ): Promise<string | null> => {
+    event.preventDefault();
+    const api = readLocalApi();
+    if (!api) return null;
+    const clicked = await settlePromise(() =>
+      api.contextMenu.show(
+        items,
+        { x: event.clientX, y: event.clientY },
+        contextMenuSourceOf(event),
+      ),
+    );
+    return clicked._tag === "Success" ? clicked.value : null;
+  };
+
+  const onNodeContextMenu = async (event: ReactMouseEvent, node: { readonly id: string }) => {
+    if (!designing || !visibleIds.has(node.id)) return event.preventDefault();
+    if (!selectedIds.has(node.id)) setSelectedIds(new Set([node.id]));
+    const targets = selectedIds.has(node.id)
+      ? selectedNodes
+      : snapshot.nodes.filter((entry) => entry.id === node.id);
+    const hasFrame = targets.some((entry) => entry.kind === "frame");
+    const single = targets.length === 1;
+    const clicked = await showMenu(event, [
+      {
+        id: "duplicate",
+        label: gt("Duplicate Frame"),
+        disabled: !props.canWrite || !hasFrame,
+      },
+      { id: "front", label: gt("Bring to front"), disabled: !props.canWrite || !single },
+      { id: "back", label: gt("Send to back"), disabled: !props.canWrite || !single },
+      {
+        id: "remove",
+        label: gt("Remove from canvas"),
+        destructive: true,
+        separatorBefore: true,
+        disabled: !props.canWrite,
+      },
+    ]);
+    if (
+      clicked === "duplicate" ||
+      clicked === "front" ||
+      clicked === "back" ||
+      clicked === "remove"
+    )
+      run({ type: clicked }, targets);
+  };
+
+  const onPaneContextMenu = async (event: ReactMouseEvent | MouseEvent) => {
+    if (!("nativeEvent" in event)) return;
+    const clicked = await showMenu(event, [
+      { id: "selectAll", label: gt("Select all"), disabled: !designing || visibleIds.size === 0 },
+      { id: "fitAll", label: gt("Zoom to fit") },
+    ]);
+    if (clicked === "selectAll" || clicked === "fitAll") run({ type: clicked });
   };
 
   const onOpenSketch = (sketch: DesignSketch) => {
@@ -368,7 +799,7 @@ function DesignCanvasInner(props: {
   const [handledFocusId, setHandledFocusId] = useState<string | undefined>(undefined);
   if (focusNodeId !== handledFocusId) {
     setHandledFocusId(focusNodeId);
-    if (focusNodeId !== undefined) setSelectedId(focusNodeId);
+    if (focusNodeId !== undefined) setSelectedIds(new Set([focusNodeId]));
   }
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- moves the React Flow viewport, an external system, to the node a chat card asked for
   useEffect(() => {
@@ -407,9 +838,6 @@ function DesignCanvasInner(props: {
     placeSketch,
   ]);
 
-  const selectedNode = snapshot.nodes.find((node) => node.id === selectedId);
-
-  const threadKey = scopedThreadKey(threadRef);
   const storedFrameId = useDesignFrameStore((state) => state.focusedByThread[threadKey]);
   const focusedFrameId = flowNodes.some(
     (node) => node.type === "frame" && node.id === storedFrameId,
@@ -430,6 +858,7 @@ function DesignCanvasInner(props: {
     });
   }, [focusedFrameId, flow]);
 
+  const panning = tool === "pan";
   return (
     <DesignCanvasContext value={{ environmentId: props.environmentId, threadRef, onOpenSketch }}>
       <DesignFrameContext
@@ -440,114 +869,124 @@ function DesignCanvasInner(props: {
           focusedId: focusedFrameId,
         }}
       >
-        <ReactFlow
-          nodes={nodes}
-          edges={[]}
-          nodeTypes={NODE_TYPES}
-          defaultViewport={snapshot.viewport ?? { x: 0, y: 0, zoom: 1 }}
-          fitView={snapshot.viewport === null}
-          fitViewOptions={FIT_OPTIONS}
-          proOptions={{ hideAttribution: true }}
-          minZoom={0.05}
-          maxZoom={2}
-          onlyRenderVisibleElements
-          nodesConnectable={false}
-          deleteKeyCode={null}
-          onNodesChange={onNodesChange}
-          onNodeClick={(_, node) => {
-            setSelectedId(node.id);
-            if (node.type === "frame" && node.id !== focusedFrameId) focusFrame(node.id);
-          }}
-          onPaneClick={() => setSelectedId(null)}
-          onNodeDragStop={async (_, __, dragged) => {
-            const moved = dragged.map((node) => ({
-              nodeId: DesignNodeId.make(node.id),
-              x: node.position.x,
-              y: node.position.y,
-            }));
-            await moveNodes({
-              environmentId: props.environmentId,
-              input: { threadId: threadRef.threadId, nodes: moved },
-            });
-            setDragging({});
-          }}
-          onMoveStart={(event) => {
-            if (event !== null) viewportTouched.current = true;
-          }}
-          onMoveEnd={(event, viewport) => {
-            if (event === null || !props.canWrite) return;
-            clearTimeout(viewportTimer.current);
-            viewportTimer.current = setTimeout(() => {
-              void setViewport({
-                environmentId: props.environmentId,
-                input: { threadId: threadRef.threadId, viewport },
-              });
-            }, VIEWPORT_SAVE_DELAY_MS);
+        <div
+          ref={wrapperRef}
+          tabIndex={-1}
+          aria-label={gt("Design canvas")}
+          className="size-full outline-none"
+          data-design-canvas
+          onKeyDown={onKeyDown}
+          onPointerDownCapture={(event) => {
+            if (isEditableFocused(event.target)) return;
+            wrapperRef.current?.focus({ preventScroll: true });
           }}
         >
-          <Background />
-          <Panel position="top-right" className="flex gap-1">
-            {props.library !== undefined ? (
-              <ToolbarButton
-                label={props.library.open ? gt("Hide project sketches") : gt("Project sketches")}
-                onClick={props.library.onToggle}
-              >
-                <LibraryIcon className="size-3.5" />
+          <ReactFlow
+            nodes={nodes}
+            edges={[]}
+            nodeTypes={NODE_TYPES}
+            defaultViewport={snapshot.viewport ?? { x: 0, y: 0, zoom: 1 }}
+            fitView={snapshot.viewport === null}
+            fitViewOptions={FIT_OPTIONS}
+            proOptions={{ hideAttribution: true }}
+            minZoom={0.05}
+            maxZoom={4}
+            onlyRenderVisibleElements
+            nodesConnectable={false}
+            nodesDraggable={movable}
+            elementsSelectable={designing}
+            deleteKeyCode={null}
+            selectionKeyCode={designing && panning ? "Shift" : null}
+            multiSelectionKeyCode={MULTI_SELECTION_KEYS}
+            panOnScroll={!zoomHeld}
+            zoomOnScroll={zoomHeld}
+            zoomActivationKeyCode={null}
+            panOnDrag={panning}
+            selectionOnDrag={designing && !panning}
+            selectionMode={SelectionMode.Partial}
+            className={panning || panHeld ? "cursor-grab" : undefined}
+            onNodesChange={onNodesChange}
+            onNodeClick={(_, node) => {
+              if (node.type === "frame" && node.id !== focusedFrameId) focusFrame(node.id);
+            }}
+            onNodeContextMenu={(event, node) => void onNodeContextMenu(event, node)}
+            onPaneContextMenu={(event) => void onPaneContextMenu(event)}
+            onNodeDragStop={async (_, __, dragged) => {
+              const moves = dragged.flatMap((node) => {
+                const from = nodesById.get(node.id);
+                if (
+                  from === undefined ||
+                  (from.x === node.position.x && from.y === node.position.y)
+                )
+                  return [];
+                return [{ id: node.id, from: { x: from.x, y: from.y }, to: node.position }];
+              });
+              if (moves.length > 0) {
+                record({ type: "move", moves });
+                await move(moves.map((entry) => ({ id: entry.id, ...entry.to })));
+              }
+              setDragging({});
+            }}
+            onMoveStart={(event) => {
+              if (event !== null) viewportTouched.current = true;
+            }}
+            onMoveEnd={(event, viewport) => {
+              if (event !== null) saveViewportSoon(viewport);
+            }}
+          >
+            <Background />
+            <Panel position="top-center">
+              <DesignCanvasModeSwitch mode={mode} onModeChange={changeMode} />
+            </Panel>
+            <Panel position="top-right" className="flex gap-1">
+              {props.library !== undefined ? (
+                <ToolbarButton
+                  label={props.library.open ? gt("Hide project sketches") : gt("Project sketches")}
+                  onClick={props.library.onToggle}
+                >
+                  <LibraryIcon className="size-3.5" />
+                </ToolbarButton>
+              ) : null}
+              <ToolbarButton label={gt("Canvas shortcuts")} onClick={() => setShortcutsOpen(true)}>
+                <KeyboardIcon className="size-3.5" />
               </ToolbarButton>
-            ) : null}
-            {previewBridge !== null ? (
-              <AddFrameMenu
-                environmentId={props.environmentId}
-                threadRef={threadRef}
-                canWrite={props.canWrite}
-                open={addMenuOpen && props.canWrite}
-                onOpenChange={(open) =>
-                  useDesignFrameStore.getState().setAddMenuOpen(threadRef, open)
-                }
-                onAdded={(nodeId) => {
-                  setSelectedId(nodeId);
-                  focusFrame(nodeId);
-                }}
-              />
-            ) : null}
-            <ToolbarButton
-              label={gt("Remove from canvas")}
-              disabled={!props.canWrite || selectedNode === undefined}
-              onClick={async () => {
-                if (selectedNode === undefined) return;
-                setSelectedId(null);
-                await removeNode({
-                  environmentId: props.environmentId,
-                  input: { threadId: threadRef.threadId, nodeId: selectedNode.id },
-                });
-              }}
-            >
-              <Trash2Icon className="size-3.5" />
-            </ToolbarButton>
-            <ToolbarButton label={gt("Zoom out")} onClick={() => void flow.zoomOut()}>
-              <MinusIcon className="size-3.5" />
-            </ToolbarButton>
-            <ToolbarButton label={gt("Zoom in")} onClick={() => void flow.zoomIn()}>
-              <PlusIcon className="size-3.5" />
-            </ToolbarButton>
-            <ToolbarButton
-              label={gt("Fit to screen")}
-              onClick={() => void flow.fitView(FIT_OPTIONS)}
-            >
-              <ScanIcon className="size-3.5" />
-            </ToolbarButton>
-            <ToolbarButton
-              label={props.maximized ? gt("Exit full screen") : gt("Full screen")}
-              onClick={props.onToggleMaximized}
-            >
-              {props.maximized ? (
-                <Minimize2Icon className="size-3.5" />
-              ) : (
-                <Maximize2Icon className="size-3.5" />
-              )}
-            </ToolbarButton>
-          </Panel>
-        </ReactFlow>
+              <ToolbarButton
+                label={props.maximized ? gt("Exit full screen") : gt("Full screen")}
+                onClick={props.onToggleMaximized}
+              >
+                {props.maximized ? (
+                  <Minimize2Icon className="size-3.5" />
+                ) : (
+                  <Maximize2Icon className="size-3.5" />
+                )}
+              </ToolbarButton>
+            </Panel>
+            <Panel position="bottom-center">
+              <DesignCanvasToolbar
+                tool={tool}
+                panHeld={panHeld}
+                onToolChange={(next) => run({ type: "tool", tool: next })}
+              >
+                {previewBridge !== null && designing ? (
+                  <AddFrameMenu
+                    environmentId={props.environmentId}
+                    threadRef={threadRef}
+                    canWrite={props.canWrite}
+                    open={addMenuOpen && props.canWrite}
+                    onOpenChange={(open) =>
+                      useDesignFrameStore.getState().setAddMenuOpen(threadRef, open)
+                    }
+                    onAdded={(nodeId) => {
+                      setSelectedIds(new Set([nodeId]));
+                      focusFrame(nodeId);
+                    }}
+                  />
+                ) : undefined}
+              </DesignCanvasToolbar>
+            </Panel>
+          </ReactFlow>
+        </div>
+        <DesignRecenterButton rects={flowNodes.map(nodeRect)} onRecenter={fitAll} />
       </DesignFrameContext>
       {flowNodes.length === 0 ? (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 px-8 text-center text-muted-foreground">
@@ -567,6 +1006,7 @@ function DesignCanvasInner(props: {
           </p>
         </div>
       ) : null}
+      <DesignShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
       {viewing !== null ? (
         <EnvironmentSketchViewer
           environmentId={props.environmentId}
@@ -578,6 +1018,10 @@ function DesignCanvasInner(props: {
       ) : null}
     </DesignCanvasContext>
   );
+}
+
+function nodeRect(node: SketchFlowNode | FrameFlowNode) {
+  return { ...node.position, width: node.width ?? 0, height: node.height ?? 0 };
 }
 
 export function DesignCanvas(props: Parameters<typeof DesignCanvasInner>[0]) {

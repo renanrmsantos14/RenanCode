@@ -140,6 +140,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.designMoveNodes]: AuthOrchestrationOperateScope,
   [WS_METHODS.designSetViewport]: AuthOrchestrationOperateScope,
   [WS_METHODS.designRemoveNode]: AuthOrchestrationOperateScope,
+  [WS_METHODS.designSetNodeZ]: AuthOrchestrationOperateScope,
   [WS_METHODS.designPlaceSketch]: AuthOrchestrationOperateScope,
   [WS_METHODS.workModulesSubscribe]: AuthOrchestrationReadScope,
   [WS_METHODS.workModulesUpsert]: AuthOrchestrationOperateScope,

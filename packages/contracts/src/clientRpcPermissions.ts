@@ -99,6 +99,7 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.designMoveNodes]: AuthOrchestrationOperateScope,
   [WS_METHODS.designSetViewport]: AuthOrchestrationOperateScope,
   [WS_METHODS.designRemoveNode]: AuthOrchestrationOperateScope,
+  [WS_METHODS.designSetNodeZ]: AuthOrchestrationOperateScope,
   [WS_METHODS.designPlaceSketch]: AuthOrchestrationOperateScope,
   [WS_METHODS.designAddFrame]: AuthOrchestrationOperateScope,
   [WS_METHODS.designUpdateFrame]: AuthOrchestrationOperateScope,

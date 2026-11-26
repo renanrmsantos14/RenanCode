@@ -106,6 +106,11 @@ export class DesignService extends Context.Service<
       readonly threadId: ThreadId;
       readonly nodeId: DesignNodeId;
     }) => Effect.Effect<void, DesignError>;
+    readonly setNodeZ: (input: {
+      readonly threadId: ThreadId;
+      readonly nodeId: DesignNodeId;
+      readonly z: number;
+    }) => Effect.Effect<void, DesignError>;
     /** Puts a saved sketch of the thread's project back on its canvas; a no-op when already there. */
     readonly placeSketch: (input: {
       readonly threadId: ThreadId;
@@ -700,6 +705,21 @@ export const layer = Layer.effect(
       yield* notify(input.threadId);
     });
 
+    const setNodeZ = Effect.fn("DesignService.setNodeZ")(function* (input: {
+      readonly threadId: ThreadId;
+      readonly nodeId: DesignNodeId;
+      readonly z: number;
+    }) {
+      const now = iso(yield* DateTime.now);
+      const updated = yield* sql<{ node_id: string }>`
+        UPDATE design_canvas_nodes SET z = ${input.z}, updated_at = ${now}
+        WHERE node_id = ${input.nodeId} AND thread_id = ${input.threadId}
+        RETURNING node_id
+      `.pipe(Effect.mapError(storage));
+      if (updated.length === 0) return yield* fail("The node was not found.");
+      yield* notify(input.threadId);
+    });
+
     const placeSketch = Effect.fn("DesignService.placeSketch")(function* (input: {
       readonly threadId: ThreadId;
       readonly sketchId: DesignSketchId;
@@ -989,6 +1009,7 @@ export const layer = Layer.effect(
       moveNodes,
       setViewport,
       removeNode,
+      setNodeZ,
       placeSketch,
       addFrame,
       updateFrame,
