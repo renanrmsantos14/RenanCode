@@ -1008,7 +1008,7 @@ export const OrchestratorMcpMcpServerRequestResult = Schema.Union([
   Schema.Struct({
     status: Schema.Literal("enabled").annotate({
       description:
-        "The server is on for this thread. If its tools are not listed yet, they arrive with the next turn: end your turn and a message wakes you.",
+        "The server is on for this thread. If its tools are not listed yet, they arrive with the next turn.",
     }),
   }),
   Schema.Struct({
