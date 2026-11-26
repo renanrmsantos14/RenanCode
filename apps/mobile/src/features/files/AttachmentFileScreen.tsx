@@ -253,9 +253,30 @@ export function AttachmentFileScreen(props: AttachmentFileScreenProps) {
     );
   }
 
+  const chatAction =
+    params.htmlRender === "1" && params.environmentId && params.threadId
+      ? ([
+          {
+            accessibilityLabel: gt("Chat"),
+            icon: "bubble.left",
+            onPress: () =>
+              navigation.navigate("ThreadInspectorFullscreen", {
+                environmentId: params.environmentId,
+                threadId: params.threadId,
+              }),
+          },
+        ] as const)
+      : undefined;
+
   return (
     <View className="flex-1 bg-sheet">
-      <AppBar title={params.name} subtitle={subtitle} onBack={handleBack} menus={[fileMenu]} />
+      <AppBar
+        title={params.name}
+        subtitle={subtitle}
+        onBack={handleBack}
+        actions={chatAction}
+        menus={[fileMenu]}
+      />
       <AttachmentDocumentBody
         document={document}
         name={params.name}
