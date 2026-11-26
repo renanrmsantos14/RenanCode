@@ -1,6 +1,9 @@
 import type { ThreadStructureRuntime } from "@t3tools/client-runtime/state/shell";
 import { msg } from "gt-react";
-import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
+import {
+  resolveThreadWorkingStartedAt,
+  type ThreadStructureTurnItem,
+} from "@t3tools/client-runtime/state/models";
 import {
   type AssetResource,
   type OrchestrationV2Checkpoint,
@@ -151,13 +154,6 @@ export type TimelineEntry = (
       readonly createdAt: string;
       readonly runId: RunId | null;
       readonly text: string;
-    }
-  | {
-      readonly id: string;
-      readonly kind: "task-plan";
-      readonly createdAt: string;
-      readonly runId: RunId | null;
-      readonly steps: ReadonlyArray<OrchestrationV2PlanStep>;
     }
   | {
       readonly id: string;
@@ -584,19 +580,17 @@ export interface TimelineEntriesProjection {
   readonly entries: TimelineEntry[];
 }
 
-function timelineEntryRunId(entry: TimelineEntry): RunId | null {
-  switch (entry.kind) {
-    case "message":
-      return entry.message.runId ?? null;
-    case "proposed-plan":
-      return entry.proposedPlan.runId;
-    case "work":
-      return entry.entry.runId ?? null;
-    case "event":
-      return entry.projectedItem.item.runId;
-    default:
-      return entry.runId;
-  }
+/** The plan pinned to the composer: the latest one, until a later run starts without one. */
+export function deriveComposerTaskPlan(
+  rows: ReadonlyArray<{ readonly item: ThreadStructureTurnItem }>,
+): ReadonlyArray<OrchestrationV2PlanStep> | null {
+  const index = rows.findLastIndex(({ item }) => item.type === "todo_list");
+  const plan = rows[index]?.item;
+  if (plan?.type !== "todo_list") return null;
+  const laterRun = rows.findLastIndex(
+    ({ item }) => item.runId !== null && item.runId !== plan.runId,
+  );
+  return laterRun > index ? null : plan.steps;
 }
 
 export function deriveTimelineEntriesFromVisibleTurnItems(
@@ -635,8 +629,6 @@ export function deriveTimelineEntriesFromVisibleTurnItems(
         : [],
     ),
   );
-  // A turn shows one plan card, its latest, after the turn's other entries.
-  const taskPlanByRunId = new Map<RunId, Extract<TimelineEntry, { kind: "task-plan" }>>();
   // Providers that do not project update_plan into a plan keep its call as a tool row.
   const runIdsWithPlan = new Set(
     input.visibleTurnItems.flatMap(({ item }) => (item.type === "todo_list" ? [item.runId] : [])),
@@ -790,19 +782,8 @@ export function deriveTimelineEntriesFromVisibleTurnItems(
       continue;
     }
 
-    if (item.type === "todo_list") {
-      const taskPlan = {
-        id: item.id,
-        kind: "task-plan",
-        createdAt,
-        runId: item.runId,
-        steps: item.steps,
-        ...attemptMetadata,
-      } as const;
-      if (item.runId === null) entries.push(taskPlan);
-      else taskPlanByRunId.set(item.runId, taskPlan);
-      continue;
-    }
+    // The plan is pinned to the composer (deriveComposerTaskPlan), not placed in the timeline.
+    if (item.type === "todo_list") continue;
     if (
       item.type === "dynamic_tool" &&
       item.status !== "failed" &&
@@ -861,12 +842,6 @@ export function deriveTimelineEntriesFromVisibleTurnItems(
         ...attemptMetadata,
       });
     }
-  }
-
-  for (const [runId, taskPlan] of taskPlanByRunId) {
-    const lastIndex = entries.findLastIndex((entry) => timelineEntryRunId(entry) === runId);
-    if (lastIndex === -1) entries.push(taskPlan);
-    else entries.splice(lastIndex + 1, 0, taskPlan);
   }
 
   const retainedMessageIds = new Set([

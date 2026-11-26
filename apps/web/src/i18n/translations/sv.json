@@ -13416,5 +13416,6 @@
   "6d9e50c042a3ee43": "pågår",
   "bfc188804be1fcaf": "väntar",
   "257e45dec7297c87": "Uppgiftsplan",
-  "b0d702f9e820900b": "Steg {step} av {total}: {text}, {state}"
+  "b0d702f9e820900b": "Steg {step} av {total}: {text}, {state}",
+  "d54888b51c70f50a": "Planen klar"
 }

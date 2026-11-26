@@ -50,7 +50,7 @@ const StepNumber = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1));
 // One object with optional fields: Claude requires an object at the top of a tool's input schema.
 const UpdatePlanTool = Tool.make(UPDATE_PLAN_TOOL_NAME, {
   description:
-    "Every task that edits files or runs more than one command has a plan. Send the full plan with the FIRST tool call of the turn (in parallel, never alone). Use advance: true with the call that starts the next step. If the plan changes, send items again. Don't repeat the plan in text. Send exactly one form: items (replaces the plan), advance: true (completes the in_progress step and starts the next pending one), or done/start (1-based step numbers, any order). At most one step is in_progress.",
+    "Pins the task plan in T3 Code's chat. If you also have a built-in update_plan tool, use that one instead. Every task that edits files or runs more than one command has a plan. Send the full plan with the FIRST tool call of the turn (in parallel, never alone). Use advance: true with the call that starts the next step. If the plan changes, send items again. Don't repeat the plan in text. Send exactly one form: items (replaces the plan), advance: true (completes the in_progress step and starts the next pending one), or done/start (1-based step numbers, any order). At most one step is in_progress.",
   parameters: Schema.Struct({
     items: Schema.optional(
       Schema.Array(TaskPlanItem).check(

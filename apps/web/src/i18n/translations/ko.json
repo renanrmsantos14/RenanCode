@@ -13340,5 +13340,6 @@
   "6d9e50c042a3ee43": "진행 중",
   "bfc188804be1fcaf": "대기 중",
   "257e45dec7297c87": "작업 계획",
-  "b0d702f9e820900b": "{total}단계 중 {step}단계: {text}, {state}"
+  "b0d702f9e820900b": "{total}단계 중 {step}단계: {text}, {state}",
+  "d54888b51c70f50a": "계획 완료"
 }

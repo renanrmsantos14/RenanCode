@@ -13409,5 +13409,6 @@
   "6d9e50c042a3ee43": "en cours",
   "bfc188804be1fcaf": "en attente",
   "257e45dec7297c87": "Plan de la tâche",
-  "b0d702f9e820900b": "Étape {step} sur {total} : {text}, {state}"
+  "b0d702f9e820900b": "Étape {step} sur {total} : {text}, {state}",
+  "d54888b51c70f50a": "Plan terminé"
 }

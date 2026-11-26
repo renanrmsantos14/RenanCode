@@ -26,6 +26,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   deriveCanInterruptRunningThread,
+  deriveComposerTaskPlan,
   deriveTimelineEntriesFromVisibleTurnItems,
   deriveTimelineEntriesFromVisibleTurnItemsWithState,
   deriveRevertTurnCountByUserMessageId,
@@ -492,7 +493,7 @@ describe("V2 session presentation", () => {
     });
   });
 
-  it("uses visible turn item order, keeps provider errors in the work log, and ends the run with its plan", () => {
+  it("uses visible turn item order, keeps provider errors in the work log, and leaves the plan to the composer", () => {
     const now = DateTime.makeUnsafe("2026-06-20T00:00:00.000Z");
     const threadId = ThreadId.make("thread-visible");
     const runId = RunId.make("run-visible");
@@ -606,7 +607,6 @@ describe("V2 session presentation", () => {
       ["event", resultItem.id],
       ["work", errorItem.id],
       ["work", threadCreatedItem.id],
-      ["task-plan", todoItem.id],
     ]);
     const commandEntry = entries[2];
     const userEntry = entries[0];
@@ -655,7 +655,7 @@ describe("V2 session presentation", () => {
   });
 
   it.each(["pending", "running", "completed"] as const)(
-    "shows a %s todo update as the turn's plan card",
+    "pins a %s todo update to the composer instead of the timeline",
     (stepStatus) => {
       const projection = makeThreadProjectionFixture();
       const now = DateTime.makeUnsafe("2026-09-04T00:00:00.000Z");
@@ -694,21 +694,24 @@ describe("V2 session presentation", () => {
         },
       ];
 
+      const visibleTurnItems = [
+        {
+          position: 0,
+          visibility: "local" as const,
+          sourceThreadId: projection.thread.id,
+          sourceItemId: item.id,
+          item,
+        },
+      ];
+
       expect(
         deriveTimelineEntriesFromVisibleTurnItems({
-          visibleTurnItems: [
-            {
-              position: 0,
-              visibility: "local",
-              sourceThreadId: projection.thread.id,
-              sourceItemId: item.id,
-              item,
-            },
-          ],
+          visibleTurnItems,
           optimisticMessages: [],
           plans,
         }),
-      ).toMatchObject([{ kind: "task-plan", id: item.id, steps }]);
+      ).toEqual([]);
+      expect(deriveComposerTaskPlan(visibleTurnItems)).toEqual(steps);
     },
   );
 
@@ -1537,7 +1540,7 @@ describe("HTML renders in the timeline", () => {
     expect(turn(send("running")).some((entry) => entry.kind === "sent-message")).toBe(false);
   });
 
-  it("hides update_plan calls and shows the turn's latest plan once, after its reply", () => {
+  it("hides update_plan calls and pins the latest plan to the composer", () => {
     const planCall = (id: string, second: number): OrchestrationV2TurnItem => ({
       ...base(id, second),
       type: "dynamic_tool",
@@ -1584,16 +1587,26 @@ describe("HTML renders in the timeline", () => {
         streaming: false,
       },
     ];
+    const rows = items.map(visible);
     const entries = deriveTimelineEntriesFromVisibleTurnItems({
-      visibleTurnItems: items.map(visible),
+      visibleTurnItems: rows,
       optimisticMessages: [],
     });
-    expect(entries.map((entry) => entry.id)).toEqual(["prompt", "work", "reply", "plan"]);
-    expect(entries.at(-1)).toMatchObject({
-      kind: "task-plan",
-      steps: latest.type === "todo_list" ? latest.steps : [],
+    expect(entries.map((entry) => entry.id)).toEqual(["prompt", "work", "reply"]);
+    expect(deriveComposerTaskPlan(rows)).toEqual(latest.type === "todo_list" ? latest.steps : []);
+
+    const nextTurn = visible({
+      ...base("next", 6),
+      runId: RunId.make("run-next"),
+      type: "user_message",
+      messageId: MessageId.make("next"),
+      inputIntent: "turn_start",
+      text: "Something else",
+      createdBy: "user",
+      creationSource: "server",
+      attachments: [],
     });
-    expect(rowsFor(entries, false).slice(-2)).toEqual(["message", "task-plan"]);
+    expect(deriveComposerTaskPlan([...rows, nextTurn])).toBeNull();
   });
 
   it("keeps update_plan calls as tool rows when the provider projects no plan", () => {

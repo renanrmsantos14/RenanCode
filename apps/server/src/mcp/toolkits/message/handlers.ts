@@ -9,6 +9,8 @@ import { MessageToolkit } from "./tools.ts";
 // The plan the caller last sent, so advance and done/start apply to it. The client's copy
 // comes from the adapter's plan events; after a restart the model resends items.
 const plans = new Map<ThreadId, ReadonlyArray<TaskPlanItem>>();
+// Nothing tells this module a thread was deleted, so the oldest entries go first.
+const MAX_TRACKED_PLANS = 256;
 
 const handlers = {
   send_to_user: McpToolAccess.actsAsCaller((input) =>
@@ -32,7 +34,12 @@ const handlers = {
           message: result.error,
         });
       }
+      plans.delete(threadId);
       plans.set(threadId, result.items);
+      if (plans.size > MAX_TRACKED_PLANS) {
+        const oldest = plans.keys().next();
+        if (!oldest.done) plans.delete(oldest.value);
+      }
       return { plan: result.items, message: formatTaskPlan(result.items) };
     }),
   ),
