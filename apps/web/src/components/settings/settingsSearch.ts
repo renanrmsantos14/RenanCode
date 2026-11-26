@@ -878,6 +878,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
+    id: "question-placement",
+    title: msg("Agent questions"),
+    to: "/settings/chat",
+    searchTerms: [msg("ask user question pending input side panel composer right panel placement")],
+  },
+  {
     id: "skills-in-slash-menu",
     title: msg("Show skills in slash menu"),
     to: "/settings/chat",

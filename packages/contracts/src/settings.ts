@@ -71,6 +71,9 @@ const DEFAULT_TIMESTAMP_FORMAT: TimestampFormat = "locale";
 export const TerminalPlacement = Schema.Literals(["bottom", "side"]);
 export type TerminalPlacement = typeof TerminalPlacement.Type;
 
+export const QuestionPlacement = Schema.Literals(["composer", "side"]);
+export type QuestionPlacement = typeof QuestionPlacement.Type;
+
 export const DiffLayout = Schema.Literals(["stacked", "split"]);
 export type DiffLayout = typeof DiffLayout.Type;
 const DEFAULT_DIFF_LAYOUT: DiffLayout = "stacked";
@@ -631,6 +634,9 @@ export const ClientSettingsSchema = Schema.Struct({
   wordWrap: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   terminalPlacement: TerminalPlacement.pipe(
     Schema.withDecodingDefault(Effect.succeed<TerminalPlacement>("bottom")),
+  ),
+  questionPlacement: QuestionPlacement.pipe(
+    Schema.withDecodingDefault(Effect.succeed<QuestionPlacement>("composer")),
   ),
   // Opt-in TeX typesetting in rendered Markdown. Off keeps math parsing and
   // KaTeX out of the render path entirely.
@@ -2388,6 +2394,7 @@ export const ClientSettingsPatch = Schema.Struct({
   snapShotAnimations: Schema.optionalKey(Schema.Boolean),
   wordWrap: Schema.optionalKey(Schema.Boolean),
   terminalPlacement: Schema.optionalKey(TerminalPlacement),
+  questionPlacement: Schema.optionalKey(QuestionPlacement),
   mathRenderingEnabled: Schema.optionalKey(Schema.Boolean),
 });
 export type ClientSettingsPatch = typeof ClientSettingsPatch.Type;

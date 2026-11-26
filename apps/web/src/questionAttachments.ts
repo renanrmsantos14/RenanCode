@@ -8,6 +8,7 @@ import {
 } from "@t3tools/client-runtime/state/thread-requests";
 import type {
   EnvironmentId,
+  QuestionPlacement,
   RuntimeRequestId,
   ScopedThreadRef,
   ThreadContextRecord,
@@ -31,6 +32,8 @@ export const usePendingUserInputAnswers = create<
   Record<string, Record<string, PendingUserInputDraftAnswer>>
 >(() => ({}));
 export const usePendingUserInputQuestionIndex = create<Record<string, number>>(() => ({}));
+/** Questions moved away from the placement setting, keyed by request id. */
+export const useQuestionPlacementOverrides = create<Record<string, QuestionPlacement>>(() => ({}));
 
 export function questionAttachmentDraftPrefix(
   environmentId: EnvironmentId,

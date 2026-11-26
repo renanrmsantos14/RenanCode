@@ -5,6 +5,7 @@ import {
   ThreadId,
   TurnItemId,
   type OrchestrationV2ThreadProjection,
+  type QuestionPlacement,
 } from "@t3tools/contracts";
 import { makeThreadRequestsResolvedAnnouncer } from "@t3tools/client-runtime/state/thread-requests";
 import { useLayoutEffect, useRef, type ComponentProps } from "react";
@@ -18,6 +19,7 @@ vi.mock(import("../ChatMarkdown"), async (importOriginal) => ({
 
 import { act, fakeTimers, render } from "../../../test/render";
 import { DraftId, useComposerDraftStore } from "../../composerDraftStore";
+import { useQuestionPlacementOverrides } from "../../questionAttachments";
 import { makeThreadProjectionFixture } from "../../test-fixtures";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import { toastManager } from "../ui/toast";
@@ -82,9 +84,16 @@ interface ProbeProps {
   projection: OrchestrationV2ThreadProjection;
   loading?: boolean;
   draftTarget?: DraftId;
+  questionPlacement?: QuestionPlacement;
 }
 
-function useProbeRequests({ environmentId, projection, loading = false, draftTarget }: ProbeProps) {
+function useProbeRequests({
+  environmentId,
+  projection,
+  loading = false,
+  draftTarget,
+  questionPlacement = "composer",
+}: ProbeProps) {
   const promptRef = useRef("");
   const composerRef = useRef(null);
   const requests = usePendingThreadRequests({
@@ -98,6 +107,7 @@ function useProbeRequests({ environmentId, projection, loading = false, draftTar
     promptRef,
     composerRef,
     setThreadError: () => {},
+    questionPlacement,
   });
   const draft = usePendingUserInputDraft({
     environmentId,
@@ -211,6 +221,36 @@ it("tells the user when an option click moves their typed answer into the hidden
   useComposerDraftStore.getState().setPrompt(draftTarget, "foo");
   await act(() => requests.onChangeActivePendingUserInputCustomAnswer("question-0", "foo"));
   expect(draftPrompt()).toBe("foo");
+});
+
+it("leaves the composer draft alone while the question is answered in the side panel", async () => {
+  using _timers = fakeTimers();
+  const environmentId = EnvironmentId.make("side-panel-environment");
+  const draftTarget = { environmentId, threadId: threadRef.threadId };
+  using toast = vi.spyOn(toastManager, "add");
+  const probe = (questionPlacement: QuestionPlacement) => (
+    <PendingRequestsProbe
+      environmentId={environmentId}
+      projection={questionProjection(threadRef.threadId)}
+      questionPlacement={questionPlacement}
+    />
+  );
+  await using screen = await render(probe("side"));
+  expect(requests.activeQuestionInSidePanel).toBe(true);
+
+  await act(() => requests.onChangeActivePendingUserInputCustomAnswer("question-0", "typed here"));
+  await act(() => requests.onSelectActivePendingUserInputOption("question-0", "Incremental"));
+  expect(useComposerDraftStore.getState().getComposerDraft(draftTarget)?.prompt ?? "").toBe("");
+  expect(toast).not.toHaveBeenCalled();
+
+  // The header's move button overrides the setting for that one question.
+  const requestId = requests.activePendingUserInput!.requestId;
+  await act(() => useQuestionPlacementOverrides.setState({ [requestId]: "composer" }));
+  expect(requests.activeQuestionInSidePanel).toBe(false);
+  await screen.rerender(probe("composer"));
+  await act(() => useQuestionPlacementOverrides.setState({ [requestId]: "side" }));
+  expect(requests.activeQuestionInSidePanel).toBe(true);
+  useQuestionPlacementOverrides.setState({}, true);
 });
 
 function QuestionPositionProbe(props: ProbeProps) {

@@ -71,7 +71,7 @@ interface ComposerPrimaryActionsProps {
   onToggleKeepFullHistory?: () => void;
 }
 
-const formatPendingPrimaryActionLabel = (
+export const formatPendingPrimaryActionLabel = (
   input: {
     compact: boolean;
     isLastQuestion: boolean;

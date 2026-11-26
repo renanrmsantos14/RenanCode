@@ -60,11 +60,15 @@ import { useStableCallback } from "../hooks/useStableCallback";
 import { useProjectScriptEditing } from "./chat/useProjectScriptEditing";
 import { RightPanelSurfaceContent } from "./chat/RightPanelSurfaceContent";
 import { usePendingThreadRequests } from "./chat/usePendingThreadRequests";
+import { QuestionsSidePanel } from "./chat/QuestionsSidePanel";
+import { useQuestionPlacementOverrides } from "../questionAttachments";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import { resolveWorktreeRepositorySelection } from "@t3tools/client-runtime/state/thread-repositories";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
 import type {
   OrchestrationV2ProviderMcpServer,
+  QuestionPlacement,
+  RuntimeRequestId,
   UsageLimitSourceSnapshots,
 } from "@t3tools/contracts";
 import { feedbackBannerItem } from "./chat/ComposerFeedback";
@@ -1595,6 +1599,7 @@ export default function ChatView(props: ChatViewProps) {
     activePendingApproval,
     activePendingUserInput,
     activePendingIsResponding,
+    activeQuestionInSidePanel,
     respondingRequestIds,
     onRespondToApproval: onRespondToApprovalStable,
     onDismissUserInput: onDismissUserInputStable,
@@ -1613,7 +1618,25 @@ export default function ChatView(props: ChatViewProps) {
     promptRef,
     composerRef,
     setThreadError,
+    // A side chat lives in the right panel already, so its questions stay in its composer.
+    questionPlacement: embedded ? "composer" : settings.questionPlacement,
   });
+  const openQuestionsPanel = useStableCallback(() => {
+    if (activeThreadRef) useRightPanelStore.getState().open(activeThreadRef, "questions");
+  });
+  const movePendingUserInput = useStableCallback(
+    (requestId: RuntimeRequestId, placement: QuestionPlacement) => {
+      useQuestionPlacementOverrides.setState({ [requestId]: placement });
+      if (placement === "side") openQuestionsPanel();
+    },
+  );
+  const sidePanelQuestionRequestId = activeQuestionInSidePanel
+    ? (activePendingUserInput?.requestId ?? null)
+    : null;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a question arriving from the server opens its panel tab once
+  useEffect(() => {
+    if (sidePanelQuestionRequestId !== null) openQuestionsPanel();
+  }, [openQuestionsPanel, sidePanelQuestionRequestId]);
   const [heldApprovalRequestIds, setHeldApprovalRequestIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -3668,6 +3691,25 @@ export default function ChatView(props: ChatViewProps) {
       onSendAnnotation={sendPreviewAnnotationStable}
       onCloseSurface={closeRightPanelSurface}
       sideChatParentPanel={sideChatParentPanel}
+      questions={
+        <QuestionsSidePanel
+          environmentId={activeThread.environmentId}
+          threadId={activeThread.id}
+          threadRef={activeThreadRef}
+          cwd={gitCwd ?? undefined}
+          pendingUserInputs={activeQuestionInSidePanel ? pendingUserInputs : []}
+          supportsQuestionAttachments={supportsQuestionAttachments}
+          disabled={!canOperateThread}
+          isResponding={activePendingIsResponding}
+          respondingRequestIds={respondingRequestIds}
+          onToggleOption={onSelectActivePendingUserInputOptionStable}
+          onChangeCustomAnswer={onChangeActivePendingUserInputCustomAnswer}
+          onAdvance={onAdvanceActivePendingUserInputStable}
+          onPrevious={onPreviousActivePendingUserInputQuestionStable}
+          onDismiss={onDismissUserInputStable}
+          onMove={movePendingUserInput}
+        />
+      }
       terminal={{
         launchContext: activeTerminalLaunchContext ?? null,
         keybindings,
@@ -4171,6 +4213,11 @@ export default function ChatView(props: ChatViewProps) {
                                 pendingApprovals={pendingApprovals}
                                 onHeldRequestIdsChange={onHeldRequestIdsChange}
                                 pendingUserInputs={pendingUserInputs}
+                                pendingUserInputInSidePanel={activeQuestionInSidePanel}
+                                onOpenQuestionsPanel={openQuestionsPanel}
+                                {...(embedded
+                                  ? {}
+                                  : { onMovePendingUserInput: movePendingUserInput })}
                                 activePendingIsResponding={activePendingIsResponding}
                                 respondingRequestIds={respondingRequestIds}
                                 runtimeMode={runtimeMode}

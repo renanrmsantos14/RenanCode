@@ -5,6 +5,7 @@ import {
   AuthOrchestrationOperateScope,
   type EnvironmentId,
   type ProviderApprovalDecision,
+  type QuestionPlacement,
   type RuntimeRequestId,
   type ScopedThreadRef,
   type ThreadId,
@@ -50,6 +51,7 @@ import {
   usePendingUserInputAnswers,
   usePendingUserInputQuestionIndex,
   useQuestionAttachmentPreparation,
+  useQuestionPlacementOverrides,
 } from "../../questionAttachments";
 import {
   derivePendingApprovals,
@@ -293,6 +295,8 @@ export function usePendingThreadRequests(input: {
   readonly promptRef: { current: string };
   readonly composerRef: RefObject<ChatComposerHandle | null>;
   readonly setThreadError: (threadId: ThreadId, error: string | null) => void;
+  /** The placement setting; a question moved from its header overrides it. */
+  readonly questionPlacement: QuestionPlacement;
 }) {
   const {
     environmentId,
@@ -304,6 +308,7 @@ export function usePendingThreadRequests(input: {
     promptRef,
     composerRef,
     setThreadError,
+    questionPlacement,
   } = input;
   const respondToThreadApproval = useOrchestrationCommand(threadEnvironment.respondToApproval, {
     reportFailure: false,
@@ -345,6 +350,13 @@ export function usePendingThreadRequests(input: {
       ? NO_PENDING_USER_INPUTS
       : derivePendingUserInputs(pendingRequests.userInputs);
   const activePendingUserInput = pendingUserInputs[0] ?? null;
+  const activeQuestionPlacementOverride = useQuestionPlacementOverrides((state) =>
+    activePendingUserInput ? state[activePendingUserInput.requestId] : undefined,
+  );
+  // Answered beside the composer, the question must leave the thread draft and its cursor alone.
+  const activeQuestionInSidePanel =
+    activePendingUserInput !== null &&
+    (activeQuestionPlacementOverride ?? questionPlacement) === "side";
   const activePendingRequestKey = userInputDraftKey(
     environmentId,
     activeThreadId,
@@ -548,8 +560,9 @@ export function usePendingThreadRequests(input: {
     }
     // The option replaces the custom answer. Anything typed there is the
     // user's text, so it goes back to the thread draft instead of vanishing.
-    const displacedAnswer =
-      readPendingUserInputDraft(draftScope).activePendingDraftAnswers[questionId]?.customAnswer;
+    const displacedAnswer = activeQuestionInSidePanel
+      ? undefined
+      : readPendingUserInputDraft(draftScope).activePendingDraftAnswers[questionId]?.customAnswer;
     const currentPrompt =
       useComposerDraftStore.getState().getComposerDraft(composerDraftTarget)?.prompt ?? "";
     const nextPrompt = carryDisplacedCustomAnswerIntoPrompt(currentPrompt, displacedAnswer);
@@ -602,6 +615,7 @@ export function usePendingThreadRequests(input: {
         },
       };
     });
+    if (activeQuestionInSidePanel) return;
     promptRef.current = "";
     composerRef.current?.resetCursorState({ cursor: 0 });
   };
@@ -610,7 +624,7 @@ export function usePendingThreadRequests(input: {
   );
 
   const writePrompt = useStableCallback((prompt: string) => {
-    promptRef.current = prompt;
+    if (!activeQuestionInSidePanel) promptRef.current = prompt;
   });
   // Undo can put set-aside text back into the answer; left in the draft too, it is sent twice.
   const withdrawRestoredAnswer = useStableCallback((questionId: string, value: string) => {
@@ -681,6 +695,7 @@ export function usePendingThreadRequests(input: {
     activePendingApproval,
     activePendingUserInput,
     activePendingIsResponding,
+    activeQuestionInSidePanel,
     respondingRequestIds,
     onRespondToApproval: onRespondToApprovalStable,
     onDismissUserInput: onDismissUserInputStable,

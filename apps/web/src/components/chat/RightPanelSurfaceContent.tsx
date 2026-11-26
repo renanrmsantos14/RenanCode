@@ -11,7 +11,7 @@ import type {
   ThreadPullRequestLink,
 } from "@t3tools/contracts";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
-import { lazy, Suspense } from "react";
+import { lazy, type ReactNode, Suspense } from "react";
 import { LinkedThreadPane } from "./LinkedThreadPane";
 import SideThreadPane from "./SideThreadPane";
 import type { ComposerImageAttachment, DraftId } from "../../composerDraftStore";
@@ -88,6 +88,7 @@ export function RightPanelSurfaceContent(props: {
   readonly issuesSupported: boolean;
   readonly files: RightPanelFileProps;
   readonly sideChatParentPanel: SideChatParentPanel;
+  readonly questions: ReactNode;
 }) {
   const { surface, threadRef, visible, onCloseSurface } = props;
   const gt = useGT();
@@ -241,6 +242,8 @@ export function RightPanelSurfaceContent(props: {
           projectId={props.files.projectId}
         />
       );
+    case "questions":
+      return props.questions;
     case "design":
       return (
         <Suspense fallback={null}>

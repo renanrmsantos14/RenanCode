@@ -159,6 +159,11 @@ const TIMESTAMP_FORMAT_LABELS = {
   "24-hour": msg("24-hour"),
 };
 
+const QUESTION_PLACEMENT_LABELS = {
+  composer: msg("Above the composer", { $context: "agent question placement" }),
+  side: msg("Side panel", { $context: "agent question placement" }),
+};
+
 const TERMINAL_PLACEMENT_LABELS = {
   bottom: msg("Bottom", { $context: "terminal placement" }),
   side: msg("Side panel", { $context: "terminal placement" }),
@@ -593,6 +598,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.proactivePanelsEnabled !== DEFAULT_UNIFIED_SETTINGS.proactivePanelsEnabled
       ? [gt("Open pull requests and changes panels proactively")]
       : []),
+    ...(settings.questionPlacement !== DEFAULT_UNIFIED_SETTINGS.questionPlacement
+      ? [gt("Agent questions")]
+      : []),
     ...(settings.showSkillsInSlashMenu !== DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu
       ? [gt("Show skills in slash menu")]
       : []),
@@ -745,6 +753,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       diffLayout: DEFAULT_UNIFIED_SETTINGS.diffLayout,
       proactivePanelsEnabled: DEFAULT_UNIFIED_SETTINGS.proactivePanelsEnabled,
       showSkillsInSlashMenu: DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu,
+      questionPlacement: DEFAULT_UNIFIED_SETTINGS.questionPlacement,
       composerRichTextEnabled: DEFAULT_UNIFIED_SETTINGS.composerRichTextEnabled,
       nextActionSuggestionsEnabled: DEFAULT_UNIFIED_SETTINGS.nextActionSuggestionsEnabled,
       sendShortcut: DEFAULT_UNIFIED_SETTINGS.sendShortcut,
@@ -1323,6 +1332,7 @@ export function GeneralSettingsPanel() {
 export function ChatSettingsPanel() {
   const setting = useSearchableSetting();
   const gt = useGT();
+  const m = useMessages();
   const modifierLabel = isMacPlatform(navigator.platform) ? "⌘" : "Ctrl";
   const sendShortcutOptions = [
     { value: "enter", label: "Enter" },
@@ -1435,6 +1445,52 @@ export function ChatSettingsPanel() {
                     </span>
                   </SelectItem>
                 ))}
+              </SelectPopup>
+            </Select>
+          }
+        />
+        <SettingsRow
+          {...setting("question-placement")}
+          description={gt(
+            "Where questions from the agent open. Each question can also be moved from its header.",
+          )}
+          resetAction={
+            settings.questionPlacement !== DEFAULT_UNIFIED_SETTINGS.questionPlacement ? (
+              <SettingResetButton
+                ariaLabel={gt("Reset agent question placement to default")}
+                onClick={() =>
+                  updateSettings({
+                    questionPlacement: DEFAULT_UNIFIED_SETTINGS.questionPlacement,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={settings.questionPlacement}
+              onValueChange={(value) => {
+                if (value === "composer" || value === "side") {
+                  updateSettings({ questionPlacement: value });
+                }
+              }}
+            >
+              <SelectTrigger
+                size="sm"
+                className="w-full sm:w-48"
+                aria-label={gt("Agent questions")}
+              >
+                <SelectValue>
+                  {m(QUESTION_PLACEMENT_LABELS[settings.questionPlacement])}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                <SelectItem hideIndicator value="composer">
+                  {m(QUESTION_PLACEMENT_LABELS.composer)}
+                </SelectItem>
+                <SelectItem hideIndicator value="side">
+                  {m(QUESTION_PLACEMENT_LABELS.side)}
+                </SelectItem>
               </SelectPopup>
             </Select>
           }
