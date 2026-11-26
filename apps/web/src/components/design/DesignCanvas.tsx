@@ -525,7 +525,10 @@ function DesignCanvasInner(props: {
     setSelectedIds(NO_SELECTION);
     record({
       type: "remove",
-      nodes: targets.map((node) => ({ id: node.id, node: placedNode(node) })),
+      nodes: targets.map((node) => ({
+        id: node.id,
+        node: { ...placedNode(node), ...dragging[node.id] },
+      })),
     });
     await remove(targets.map((node) => node.id));
   };
@@ -658,6 +661,17 @@ function DesignCanvasInner(props: {
         return setShortcutsOpen(true);
     }
     if (!editable) return;
+    // A nudge saves after a pause; any other edit first settles it so history stays in order.
+    if (nudge.current !== null && action.type !== "nudge") {
+      if (action.type === "redo") return;
+      clearTimeout(nudgeTimer.current);
+      if (action.type === "undo") {
+        nudge.current = null;
+        setDragging({});
+        return;
+      }
+      void commitNudge();
+    }
     switch (action.type) {
       case "remove":
         return void removeSelection(targets);

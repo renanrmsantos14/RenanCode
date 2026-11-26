@@ -308,6 +308,46 @@ describe("DesignCanvas", () => {
     });
   });
 
+  it("restores a node removed right after a nudge on undo", async () => {
+    using _setup = setup();
+    mocks.placeSketch.mockResolvedValue({ _tag: "Success", value: { id: "node-new" } });
+    await using screen = await mount(snapshot(2));
+    const node = await vi.waitUntil(() =>
+      screen.container.querySelector<HTMLElement>('.react-flow__node[data-id="node-a"]'),
+    );
+    const placed = snapshot(2).nodes[0]!;
+
+    await userEvent.click(page.elementLocator(node), { position: { x: 80, y: 200 } });
+    await userEvent.keyboard("{ArrowRight}{Delete}");
+    await userEvent.keyboard("{Control>}z{/Control}");
+
+    await vi.waitFor(() => expect(mocks.setNodeZ).toHaveBeenCalledOnce());
+    expect(mocks.placeSketch.mock.calls[0]?.[0]).toMatchObject({
+      input: { sketchId: "sketch-a" },
+    });
+    expect(mocks.moveNodes.mock.calls.at(-1)?.[0]).toMatchObject({
+      input: { nodes: [{ nodeId: "node-new", x: placed.x + 1, y: placed.y }] },
+    });
+  });
+
+  it("drops a nudge that has not saved yet on undo", async () => {
+    using _setup = setup();
+    await using screen = await mount(snapshot(1));
+    const node = await vi.waitUntil(() =>
+      screen.container.querySelector<HTMLElement>(".react-flow__node"),
+    );
+
+    const before = node.style.transform;
+
+    await userEvent.click(page.elementLocator(node), { position: { x: 80, y: 200 } });
+    await userEvent.keyboard("{ArrowRight}");
+    await vi.waitFor(() => expect(node.style.transform).not.toBe(before));
+    await userEvent.keyboard("{Control>}z{/Control}");
+
+    await vi.waitFor(() => expect(node.style.transform).toBe(before));
+    expect(mocks.moveNodes).not.toHaveBeenCalled();
+  });
+
   it("nudges the selection with the arrow keys and saves once", async () => {
     using _setup = setup();
     await using screen = await mount(snapshot(1));
