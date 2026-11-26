@@ -131,6 +131,7 @@ import {
   type SelectTimelinePageResult,
   type ThreadHistoryPrefix,
 } from "./threadHistoryPaging.ts";
+import { routineSpan } from "@t3tools/shared/observability";
 
 export class ProjectionStoreApplyEventError extends Schema.TaggedError<ProjectionStoreApplyEventError>()(
   "ProjectionStoreApplyEventError",
@@ -999,6 +1000,9 @@ function preserveRunRecordedFields(
     ...(next.restartCancelledBackgroundWork === undefined &&
     current.restartCancelledBackgroundWork !== undefined
       ? { restartCancelledBackgroundWork: current.restartCancelledBackgroundWork }
+      : {}),
+    ...(next.explicitQueue === undefined && current.explicitQueue !== undefined
+      ? { explicitQueue: current.explicitQueue }
       : {}),
     // Only run.next-action-suggestion-updated changes it, so a stale run snapshot cannot regress it.
     ...(current.nextActionSuggestion === undefined
@@ -2493,7 +2497,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
         THEN json_set(
           ${payload},
           ${path},
-          json_extract(orchestration_v2_projection_runs.payload_json, ${path})
+          orchestration_v2_projection_runs.payload_json -> ${path}
         )
         ELSE ${payload}
       END
@@ -2727,8 +2731,11 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 payload_json = ${pinRecordedRunField(
                   pinRecordedRunField(
                     keepRecordedRunField(
-                      keepRecordedRunField(sql`excluded.payload_json`, "$.delegatedCompletion"),
-                      "$.restartCancelledBackgroundWork",
+                      keepRecordedRunField(
+                        keepRecordedRunField(sql`excluded.payload_json`, "$.delegatedCompletion"),
+                        "$.restartCancelledBackgroundWork",
+                      ),
+                      "$.explicitQueue",
                     ),
                     "$.nextActionSuggestion",
                   ),
@@ -4072,9 +4079,9 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 SELECT payload_json
                 FROM orchestration_v2_projection_turn_items
                 ${
-                  filter?.turnItemTypes === undefined
+                  filter?.turnItemTypes === undefined && filter?.turnItemStatuses === undefined
                     ? sql`WHERE ${turnItemMatch(threadId, filter)}`
-                    : // Seeks the type index. Sorted, SQLite would walk the thread by ordinal instead.
+                    : // Matches on the type/status index and fetches only those payloads. Sorted, SQLite would walk the thread by ordinal instead.
                       sql`WHERE rowid IN (
                     SELECT rowid FROM orchestration_v2_projection_turn_items
                     WHERE ${turnItemMatch(threadId, filter)}
@@ -6237,6 +6244,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
 
     const isNodeStored: ProjectionStoreV2Shape["isNodeStored"] = Effect.fn(
       "ProjectionStore.isNodeStored",
+      { attributes: routineSpan },
     )(
       function* (node) {
         const payloadJson = yield* encodeNodePayload(node);
@@ -9068,6 +9076,29 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                     AND parent.deleted_at IS NULL
                     AND json_extract(parent.payload_json, '$.archivedAt') IS NULL
                     AND json_extract(parent.payload_json, '$.settledOverride') IS NOT 'settled'
+                )
+                -- A pinned or long-lived parent may never settle, so a child also settles once
+                -- its own run has ended and its parent holds every result it produced. A
+                -- provider-native child has no run of its own; its task record carries its state.
+                OR (
+                  (
+                    r.status IN ('completed', 'interrupted', 'failed', 'cancelled', 'rolled_back')
+                    OR (
+                      r.run_id IS NULL
+                      AND EXISTS (
+                        SELECT 1 FROM orchestration_v2_projection_subagents task
+                        WHERE task.child_thread_id = t.thread_id
+                      )
+                    )
+                  )
+                  AND NOT EXISTS (
+                    SELECT 1 FROM orchestration_v2_projection_subagents task
+                    WHERE task.child_thread_id = t.thread_id
+                      AND (
+                        task.status NOT IN ('completed', 'failed', 'cancelled', 'interrupted')
+                        OR task.completion_delivery_state IN ('pending', 'claimed')
+                      )
+                  )
                 )
               )
               AND NOT EXISTS (

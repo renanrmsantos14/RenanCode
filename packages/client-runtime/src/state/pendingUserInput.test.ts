@@ -224,6 +224,39 @@ describe("buildPendingUserInputAnswers", () => {
       }),
     ).toBeNull();
   });
+
+  it("omits an unselected optional single choice and keeps explicit false and empty choices", () => {
+    const extras = {
+      id: "extras",
+      options: [
+        { label: "true", value: "true" },
+        { label: "false", value: "false" },
+      ],
+      allowCustomAnswer: false,
+      required: false,
+    };
+    const mode = {
+      id: "mode",
+      options: [
+        { label: '""', value: "" },
+        { label: "fast", value: "fast" },
+      ],
+      allowCustomAnswer: false,
+      required: false,
+    };
+
+    expect(buildPendingUserInputAnswers([extras, mode], {})).toEqual({});
+    expect(
+      buildPendingUserInputAnswers([extras, mode], {
+        extras: { selectedOptionValues: ["false"] },
+        mode: { selectedOptionValues: [""] },
+      }),
+    ).toEqual({ extras: "false", mode: "" });
+    expect(
+      buildPendingUserInputAnswers([extras, mode], { extras: { attachmentsBlocked: true } }),
+    ).toBeNull();
+    expect(buildPendingUserInputAnswers([{ ...extras, required: undefined }, mode], {})).toBeNull();
+  });
 });
 
 describe("pending user input question progress", () => {
@@ -276,6 +309,37 @@ describe("pending user input question progress", () => {
       isComplete: false,
       canAdvance: true,
     });
+  });
+
+  it("advances past an unselected optional single choice", () => {
+    const optionalChoice = {
+      id: "extras",
+      header: "Extras",
+      question: "Include extras?",
+      options: [
+        { label: "true", description: "Yes", value: "true" },
+        { label: "false", description: "No", value: "false" },
+      ],
+      allowCustomAnswer: false,
+      required: false,
+    } as const;
+    const mixed = [optionalChoice, singleSelectQuestion] as const;
+
+    expect(derivePendingUserInputProgress(mixed, {}, 0)).toMatchObject({
+      canAdvance: true,
+      isComplete: false,
+    });
+    expect(
+      derivePendingUserInputProgress(mixed, { extras: { attachmentsBlocked: true } }, 0),
+    ).toMatchObject({ canAdvance: false });
+    expect(derivePendingUserInputProgress(mixed, {}, 1)).toMatchObject({ canAdvance: false });
+    expect(
+      derivePendingUserInputProgress(
+        mixed,
+        { scope: { selectedOptionValues: ["Orchestration-first"] } },
+        1,
+      ),
+    ).toMatchObject({ canAdvance: true, isComplete: true });
   });
 });
 

@@ -122,6 +122,7 @@ import {
 } from "./toolkits/design/tools.ts";
 import { MCP_HTTP_PATH } from "../httpCors.ts";
 import { requestUrl } from "../requestUrl.ts";
+import { routineSpan } from "@t3tools/shared/observability";
 
 const mcpResourceMetadataUrl = (request: HttpServerRequest.HttpServerRequest) =>
   requestUrl(request).pipe(
@@ -1255,7 +1256,7 @@ const withToolAnalytics =
       );
     const recordingServer = McpServer.McpServer.of({
       ...server,
-      addTool: Effect.fn("McpServer.addTool")(function (options) {
+      addTool: Effect.fn("McpServer.addTool", { attributes: routineSpan })(function (options) {
         return server.addTool({
           ...options,
           handle:
@@ -1299,7 +1300,7 @@ const withToolResultCapture = Effect.fn("McpHttpServer.withToolResultCapture")(f
   }
   const capturingServer = McpServer.McpServer.of({
     ...server,
-    addTool: Effect.fn("McpServer.addTool")(function (options) {
+    addTool: Effect.fn("McpServer.addTool", { attributes: routineSpan })(function (options) {
       const toolName = options.tool.name;
       // html_render tracks its own path/hash recovery with publish cleanup in HtmlRender.
       if (toolName === HTML_RENDER_TOOL_NAME) {
@@ -1352,7 +1353,7 @@ const withToolSpans = Effect.fn("McpHttpServer.withToolSpans")(function* <A, E, 
   const server = yield* McpServer.McpServer;
   const tracingServer = McpServer.McpServer.of({
     ...server,
-    addTool: Effect.fn("McpServer.addTool")(function (options) {
+    addTool: Effect.fn("McpServer.addTool", { attributes: routineSpan })(function (options) {
       const name = options.tool.name;
       return server.addTool({
         ...options,
@@ -1388,7 +1389,7 @@ const withClientInput = Effect.fn("McpHttpServer.withClientInput")(function* <A,
   );
   const askingServer = McpServer.McpServer.of({
     ...server,
-    addTool: Effect.fn("McpServer.addTool")(function (options) {
+    addTool: Effect.fn("McpServer.addTool", { attributes: routineSpan })(function (options) {
       return server.addTool({
         ...options,
         handle: Effect.fnUntraced(function* (payload) {
@@ -1418,7 +1419,7 @@ const withAdvertisedSchemas = Effect.fn("McpHttpServer.withAdvertisedSchemas")(f
   const tools: Record<string, Tool.Any> = toolkit.tools;
   const advertisingServer = McpServer.McpServer.of({
     ...server,
-    addTool: Effect.fn("McpServer.addTool")(function (options) {
+    addTool: Effect.fn("McpServer.addTool", { attributes: routineSpan })(function (options) {
       const tool = tools[options.tool.name];
       return server.addTool(
         tool === undefined

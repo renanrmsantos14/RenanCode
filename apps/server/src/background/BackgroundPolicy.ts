@@ -39,6 +39,8 @@ export class BackgroundPolicy extends Context.Service<
     /** Who is watching a scope, for work that slows down rather than stops without focus. */
     readonly scopeDemand: (scope: BackgroundScope) => Effect.Effect<BackgroundDemand>;
     readonly shouldRunOpportunisticWork: Effect.Effect<boolean>;
+    /** Host power and lock state only, for server-owned work that no client lease asks for. */
+    readonly shouldRunHostWork: Effect.Effect<boolean>;
   }
 >()("t3/background/BackgroundPolicy") {}
 
@@ -293,6 +295,10 @@ export const make = Effect.fn("background.policy.make")(function* () {
     });
     return demand;
   });
+  const shouldRunHostWork = Effect.all([
+    hostPowerMonitor.snapshot,
+    backgroundActivitySettings,
+  ]).pipe(Effect.map(([hostPower, settings]) => !isHostConstrained(hostPower, settings)));
 
   const shouldRunOpportunisticWork = Effect.map(
     snapshot,
@@ -325,6 +331,7 @@ export const make = Effect.fn("background.policy.make")(function* () {
     shouldRunScopeWork,
     scopeDemand,
     shouldRunOpportunisticWork,
+    shouldRunHostWork,
   });
 });
 

@@ -128,6 +128,7 @@ import { useVoiceInputController } from "../voice-input/useVoiceInputController"
 import { resolveVoiceComposerPresentation } from "../voice-input/voiceInputPresentation";
 import { ClaudeUsageIndicator } from "../usage/ClaudeUsageIndicator";
 import type { ExistingThreadSettingsRouteParams } from "./ThreadSettingsSheet";
+import { perfProbe } from "../development/perf-probe-hooks";
 import {
   useThreadSettingsSheetPresentation,
   type NavigationWithFinishTransitioning,
@@ -977,6 +978,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                   skills={composerMenu.skills}
                   selection={composerMenu.selection}
                   onChangeText={(text) => {
+                    perfProbe?.key();
                     if (!isSubmissionLocked) props.onChangeDraftMessage(text);
                   }}
                   onSelectionChange={composerMenu.onSelectionChange}

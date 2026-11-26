@@ -11,7 +11,6 @@ import { msg, T, useGT, useMessages } from "gt-react";
 
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import {
   Select,
   SelectGroup,
@@ -30,6 +29,7 @@ import {
 } from "./browserDeviceFrameLayout";
 import { commitViewportAndAspectRatio } from "./browserDeviceToolbarState";
 import { ScreenRotationIcon } from "./ScreenRotationIcon";
+import { SharedTooltipTrigger } from "~/components/ui/shared-tooltip";
 
 const RESPONSIVE_VALUE = "responsive";
 const SELECT_ITEMS = [
@@ -300,35 +300,31 @@ export function BrowserDeviceToolbar({
         />
       </form>
 
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              variant={aspectRatio === null ? "ghost" : "secondary"}
-              size="icon-xs"
-              type="button"
-              aria-label={
-                aspectRatio === null
-                  ? gt("Lock viewport aspect ratio")
-                  : gt("Unlock viewport aspect ratio")
-              }
-              aria-pressed={aspectRatio !== null}
-              disabled={pending || !customValid}
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={toggleAspectRatio}
-            />
-          }
-        >
-          {aspectRatio === null ? (
-            <Unlink2 className={cn(aspectRatio !== null && "text-foreground")} />
-          ) : (
-            <Link2 className={cn(aspectRatio !== null && "text-foreground")} />
-          )}
-        </TooltipTrigger>
-        <TooltipPopup side="top">
-          {aspectRatio === null ? <T>Lock aspect ratio</T> : <T>Unlock aspect ratio</T>}
-        </TooltipPopup>
-      </Tooltip>
+      <SharedTooltipTrigger
+        render={
+          <Button
+            variant={aspectRatio === null ? "ghost" : "secondary"}
+            size="icon-xs"
+            type="button"
+            aria-label={
+              aspectRatio === null
+                ? gt("Lock viewport aspect ratio")
+                : gt("Unlock viewport aspect ratio")
+            }
+            aria-pressed={aspectRatio !== null}
+            disabled={pending || !customValid}
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={toggleAspectRatio}
+          />
+        }
+        label={aspectRatio === null ? <T>Lock aspect ratio</T> : <T>Unlock aspect ratio</T>}
+      >
+        {aspectRatio === null ? (
+          <Unlink2 className={cn(aspectRatio !== null && "text-foreground")} />
+        ) : (
+          <Link2 className={cn(aspectRatio !== null && "text-foreground")} />
+        )}
+      </SharedTooltipTrigger>
       <Button
         variant="ghost"
         size="icon-xs"
@@ -340,23 +336,22 @@ export function BrowserDeviceToolbar({
         <ScreenRotationIcon />
       </Button>
       {deviceFrameAvailable ? (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant={deviceFrameEnabled ? "secondary" : "ghost"}
-                size="icon-xs"
-                type="button"
-                aria-label={deviceFrameLabel}
-                aria-pressed={deviceFrameEnabled}
-                onClick={() => setDeviceFrameEnabled(!deviceFrameEnabled)}
-              />
-            }
-          >
-            <Smartphone />
-          </TooltipTrigger>
-          <TooltipPopup side="top">{deviceFrameLabel}</TooltipPopup>
-        </Tooltip>
+        <SharedTooltipTrigger
+          render={
+            <Button
+              variant={deviceFrameEnabled ? "secondary" : "ghost"}
+              size="icon-xs"
+              type="button"
+              aria-label={deviceFrameLabel}
+              aria-pressed={deviceFrameEnabled}
+              onClick={() => setDeviceFrameEnabled(!deviceFrameEnabled)}
+            />
+          }
+          label={deviceFrameLabel}
+          side="top"
+        >
+          <Smartphone />
+        </SharedTooltipTrigger>
       ) : null}
       <span className="sticky right-0 ml-auto flex bg-background/95">
         <Button
