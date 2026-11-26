@@ -93,7 +93,9 @@ const scope: McpInvocationContext.McpInvocationScope = {
   issuedAt: 1,
 };
 
-const makeHere = Effect.gen(function* () {
+const makeHere = Effect.fnUntraced(function* (
+  settings: Parameters<typeof ServerSettings.layerTest>[0] = {},
+) {
   // The toolkit's link tools need a linking environment, unused here.
   const linking = yield* layerLinkingEnvironment(environment).pipe(Layer.build);
   const database = yield* SqlitePersistence.layerMemory.pipe(Layer.build);
@@ -119,6 +121,8 @@ const makeHere = Effect.gen(function* () {
     Layer.provideMerge(Layer.merge(layerOrchestrator, ServerSettings.layerTest())),
   );
   const layerHere = McpHttpServer.layerOrchestratorToolkit.pipe(
+    // The replay harness brings its own settings; the toolkit reads these.
+    Layer.provide(ServerSettings.layerTest(settings)),
     Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
     Layer.provide(PeerLinkRequests.layer),
     Layer.provide(Layer.mock(PeerForwarding.PeerForwarding)({})),
@@ -155,7 +159,7 @@ const makeHere = Effect.gen(function* () {
         ),
   };
 });
-type Here = Effect.Success<typeof makeHere>;
+type Here = Effect.Success<ReturnType<typeof makeHere>>;
 
 /** The thread, mid-turn, on a provider thread with one server off and one always on. */
 const seedThread = (a: Here) =>
@@ -313,8 +317,11 @@ const errorOf = (result: McpSchema.CallToolResult) => {
   return result.isError === true && text?.type === "text" ? JSON.parse(text.text) : undefined;
 };
 
-const withHere = <A, E, R>(body: (a: Here) => Effect.Effect<A, E, R>) =>
-  Effect.scoped(Effect.flatMap(makeHere, (a) => Effect.andThen(seedThread(a), body(a))));
+const withHere = <A, E, R>(
+  body: (a: Here) => Effect.Effect<A, E, R>,
+  settings?: Parameters<typeof ServerSettings.layerTest>[0],
+) =>
+  Effect.scoped(Effect.flatMap(makeHere(settings), (a) => Effect.andThen(seedThread(a), body(a))));
 
 it.effect("lists only the servers that are off, and shows no card for one already on", () =>
   withHere((a) =>
@@ -427,5 +434,31 @@ it.effect("a delegated task starts with the servers its parent switched on", () 
       const child = yield* a.orchestrator.getThreadProjection(childThreadId!);
       expect(child.thread.enabledMcpServers).toEqual([spotify]);
     }),
+  ),
+);
+
+it.effect("when the agent may switch servers on, asking turns it on and wakes the agent", () =>
+  withHere(
+    (a) =>
+      Effect.gen(function* () {
+        expect(
+          (yield* a.call({ server: spotify, reason: "Play the focus playlist." }))
+            .structuredContent,
+        ).toEqual({ status: "enabled" });
+        expect(yield* cardsOf(a)).toMatchObject([
+          { status: "completed", mcpServerStatus: "enabled", server: spotify },
+        ]);
+        const projection = yield* a.orchestrator.getThreadProjection(threadId);
+        expect(projection.thread.enabledMcpServers).toContain(spotify);
+        const messages = yield* notifications(a);
+        expect(messages).toHaveLength(1);
+        expect(messages[0]).toMatchObject({ notification: { outcome: "completed" } });
+        // A retry hears it is on and wakes the agent no second time.
+        expect((yield* a.call({ server: spotify })).structuredContent).toEqual({
+          status: "enabled",
+        });
+        expect(yield* notifications(a)).toHaveLength(1);
+      }),
+    { providerInstances: { [instanceId]: { driver, config: { mcpAtStart: "agent" } } } },
   ),
 );

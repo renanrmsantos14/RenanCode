@@ -31,7 +31,8 @@ description: 'Verifica os MCP servers sob demanda nas threads do Claude: sessão
 4. Mandar a mesma pergunta. Esperado: só as 5 ferramentas `mcp__claude_ai_Spotify__*`. Reabrir o menu: Spotify ligado e sem nota.
 5. Desligar o Spotify e perguntar `Quantas ferramentas com prefixo mcp__claude_ai_ você tem disponíveis agora? Responda só "TOTAL=" seguido do número.` Esperado: `TOTAL=0`.
 6. Trocar **MCP servers at session start** para **Load all servers**. A sessão já aberta mantém as configurações antigas: reinicie o servidor de dev para abrir sessão nova. Perguntar a contagem do Spotify. Esperado: 5, botão de plug some e `disabledMcpServers` da pasta fica vazio.
-7. Voltar a configuração para **Off until switched on** ao terminar.
+7. Trocar para **Off, the agent switches them on** (sessão nova) e pedir algo que precise do Spotify. Esperado: o agente chama `t3_mcp_server_request`, recebe `enabled` sem card pendente, o card aparece já como "Turned on", o turno termina e uma mensagem acorda o agente com as 5 ferramentas. Teste rápido: `vp test run src/mcp/McpServerRequest.test.ts -t "agent may"`.
+8. Voltar a configuração para **Off until switched on** ao terminar.
 
 ## Fixar servidores (favoritos)
 

@@ -830,6 +830,7 @@ const InstanceIdleCompaction = Schema.Literals(
 
 const CLAUDE_MCP_AT_START_MODES = [
   { value: "none", label: "Off until switched on" },
+  { value: "agent", label: "Off, the agent switches them on" },
   { value: "all", label: "Load all servers" },
 ] as const;
 const ClaudeMcpAtStart = Schema.Literals(CLAUDE_MCP_AT_START_MODES.map((mode) => mode.value));
@@ -903,7 +904,7 @@ export const ClaudeSettings = makeProviderSettingsSchema(
       Schema.annotateKey({
         title: "MCP servers at session start",
         description:
-          "Start sessions with MCP servers off and switch them on per thread from the composer, or load every configured server.",
+          "Start sessions with MCP servers off and switch them on per thread from the composer, let the agent switch on the ones a task needs without asking, or load every configured server.",
         providerSettingsForm: {
           control: "select",
           options: CLAUDE_MCP_AT_START_MODES,
@@ -1941,6 +1942,20 @@ export const resolveIdleCompaction = (
     Option.getOrElse(() => "default" as const),
   );
   return override === "default" ? globalIdleCompaction(settings) : override;
+};
+
+/** The instance's MCP start mode; servers default to off until switched on. */
+export const resolveClaudeMcpAtStart = (
+  settings: Pick<ServerSettings, "providerInstances">,
+  instanceId: ProviderInstanceId,
+) => {
+  const instance = Object.hasOwn(settings.providerInstances, instanceId)
+    ? settings.providerInstances[instanceId]
+    : undefined;
+  return decodeClaudeSettings(instance?.config ?? {}).pipe(
+    Option.map((config) => config.mcpAtStart),
+    Option.getOrElse(() => "none" as const),
+  );
 };
 
 export const ServerSettingsOperation = Schema.Literals([

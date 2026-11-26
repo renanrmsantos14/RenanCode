@@ -225,7 +225,7 @@ const RequestSecretTool = Tool.make("request_secret", {
 
 const McpServerRequestTool = Tool.make("t3_mcp_server_request", {
   description:
-    "Ask the user to switch on an MCP server this thread has off; Claude threads start with them off. Call without `server` to list them. Returns `pending`: the user's answer arrives as a message, so end your turn instead of waiting or calling again.",
+    "Switch on an MCP server this thread has off; Claude threads start with them off. Call without `server` to list them. Returns `pending` (user decides) or `enabled`. Then end your turn instead of waiting or calling again: a message wakes you.",
   parameters: OrchestratorMcpMcpServerRequestInput,
   success: OrchestratorMcpMcpServerRequestResult,
   failure: OrchestratorMcpFailure,
