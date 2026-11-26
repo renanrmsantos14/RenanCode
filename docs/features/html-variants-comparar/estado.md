@@ -1,12 +1,12 @@
 # html_variants: comparar e decidir + chat ao lado da tela cheia
 
 - Nível: 2 (várias telas/superfícies: bloco de variações, composer, painel maximizado com chat; web, desktop e mobile)
-- Etapa: 4 de 7 Go
-- Próximo passo: card do Go · com você
+- Etapa: 5 de 7 Construir
+- Próximo passo: tarefa 1 (shared) · sozinho
 - Branch e PR: t3/html-variants-comparar · ainda não
 - Protótipo: C · Comparar e decidir (branch prototype/html-render-ui, commit eb89c8b1f0)
-- Go: pendente
-- Atualizado: 26/11/2026 10:56
+- Go: 26/11/2026 11:03 por Renan (card AskUserQuestion)
+- Atualizado: 26/11/2026 11:03
 
 ## Decisões
 | Data | Decisão | Por quê | Quem decidiu |
