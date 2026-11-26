@@ -119,6 +119,7 @@ import { resolvePullRequestState } from "./pullRequest/pullRequestPresentation";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import { observeResize } from "~/lib/observeResize";
 import { surfaceShortcutKey } from "~/lib/surfaceShortcutKey";
+import { AttentionDot } from "./chat/AttentionDot";
 
 export interface RightPanelTabsProps {
   mode: PreviewPanelMode;
@@ -134,6 +135,8 @@ export interface RightPanelTabsProps {
   environmentId: EnvironmentId | null;
   activeSurfaceId: string | null;
   pendingSurfaceIds: ReadonlySet<string>;
+  /** Request id of a question waiting in the Questions tab; it marks that tab. */
+  waitingQuestionKey?: string | null;
   previewSessions: Readonly<Record<string, PreviewSessionSnapshot>>;
   desktopByTabId: Readonly<Record<string, DesktopPreviewOverlay>>;
   /** Maps server-local session ids to desktop runtime ids; session ids cannot address desktop operations. */
@@ -999,6 +1002,7 @@ function RightPanelTab(
     dragDisabled: boolean;
     active: boolean;
     pending: boolean;
+    attentionKey: string | null;
     title: string;
     audio: TabAudioState;
     audioRuntimeTabId: string | null;
@@ -1057,6 +1061,9 @@ function RightPanelTab(
             className="absolute -right-0.5 -bottom-0.5 size-1.5 rounded-full bg-current"
             aria-hidden
           />
+        ) : null}
+        {props.attentionKey ? (
+          <AttentionDot key={props.attentionKey} className="-top-0.5 -right-0.5" />
         ) : null}
       </PanelTabCloseButton>
       {audio === "none" || !audioRuntimeTabId ? null : (
@@ -1595,6 +1602,9 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                     dragDisabled={!props.onMoveSurface || renamingDevice === surface.id}
                     active={surface.id === props.activeSurfaceId}
                     pending={props.pendingSurfaceIds.has(surface.id)}
+                    attentionKey={
+                      surface.kind === "questions" ? (props.waitingQuestionKey ?? null) : null
+                    }
                     title={surfaceTitle(
                       surface,
                       props.previewSessions,

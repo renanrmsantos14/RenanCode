@@ -16,6 +16,7 @@ import { PopoverCreateHandle, PopoverTrigger } from "../ui/popover";
 import { useMobileSidebarSheetMounted } from "../ui/sidebar";
 import { Toggle } from "../ui/toggle";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { AttentionDot } from "./AttentionDot";
 
 /** Matches the right inset of `ThreadPanelHeaderControl`. */
 const THREAD_PANEL_HEADER_INSET_PX = 12;
@@ -35,6 +36,8 @@ export interface PanelLayoutControlsProps {
   rightPanelOpen: boolean;
   rightPanelShortcutLabel: string | null;
   rightPanelUnavailableLabel?: string;
+  /** Request id of a question waiting in the closed right panel; it marks the toggle. */
+  rightPanelAttentionKey?: string | null;
   onToggleTerminal: () => void;
   onToggleThreadPanel: () => void;
   onToggleRightPanel: () => void;
@@ -55,6 +58,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
   rightPanelOpen,
   rightPanelShortcutLabel,
   rightPanelUnavailableLabel,
+  rightPanelAttentionKey,
   onToggleTerminal,
   onToggleThreadPanel,
   onToggleRightPanel,
@@ -123,7 +127,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
         <Tooltip>
           <TooltipTrigger render={<span className="flex shrink-0" />}>
             <Toggle
-              className="shrink-0 [-webkit-app-region:no-drag]"
+              className="relative shrink-0 [-webkit-app-region:no-drag]"
               pressed={rightPanelOpen}
               onPressedChange={onToggleRightPanel}
               aria-label={gt("Toggle right panel")}
@@ -133,6 +137,9 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
               disabled={!rightPanelAvailable}
             >
               <PanelRightIcon className="size-4" />
+              {rightPanelAttentionKey && !rightPanelOpen ? (
+                <AttentionDot key={rightPanelAttentionKey} className="top-0.5 right-0.5" />
+              ) : null}
             </Toggle>
           </TooltipTrigger>
           <TooltipPopup side="bottom">

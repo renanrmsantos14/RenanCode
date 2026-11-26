@@ -129,6 +129,7 @@ import {
   reconcileAttachmentContextReferences,
   useRetainedContextPayloads,
 } from "./composerContextUndo";
+import { AttentionDot } from "./AttentionDot";
 import { ComposerBanner } from "./ComposerBanner";
 import { ComposerSurface } from "./ComposerSurface";
 import { CollapsedComposerPromptPreview } from "./CollapsedComposerPromptPreview";
@@ -3815,7 +3816,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           ) : null}
           {showComposerTopDrawer ? (
             <ComposerBanner.Attachment>
-              <ComposerBanner.Root data-chat-composer-top-drawer="true" variant="info">
+              <ComposerBanner.Root
+                data-chat-composer-top-drawer="true"
+                variant={pendingUserInputs.length === 0 && questionInSidePanel ? "warning" : "info"}
+              >
                 {pendingUserInputs.length > 0 ? (
                   <ComposerPendingUserInputPanel
                     pendingUserInputs={pendingUserInputs}
@@ -3844,13 +3848,19 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     onClick={onOpenQuestionsPanel}
                   >
                     <ComposerBanner.Content>
-                      <Mascot state="needsYou" size={24} />
-                      <span className="min-w-0 truncate text-muted-foreground">
+                      <span className="relative flex shrink-0">
+                        <Mascot state="needsYou" size={24} />
+                        <AttentionDot
+                          key={incomingPendingUserInputs[0]?.requestId}
+                          className="-top-0.5 -right-0.5"
+                        />
+                      </span>
+                      <span className="min-w-0 truncate font-medium text-foreground">
                         {gt("Question waiting in the side panel")}
                       </span>
                     </ComposerBanner.Content>
                     <ComposerBanner.Actions>
-                      <span className="px-2 font-medium text-foreground">
+                      <span className="px-2 font-medium text-warning-foreground">
                         {gt("Open", { $context: "opens the side panel question" })}
                       </span>
                     </ComposerBanner.Actions>
