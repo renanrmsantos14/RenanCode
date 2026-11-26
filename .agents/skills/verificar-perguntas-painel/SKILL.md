@@ -9,7 +9,7 @@ description: "Verifica as perguntas do agente no painel lateral: a configuraçã
 
 - `questionPlacement` ("composer" padrão, "side") no `ClientSettingsSchema`; `useQuestionPlacementOverrides` troca o lugar só de um `requestId`.
 - No modo painel, a resposta livre fica no painel: o rascunho do composer, o cursor e `promptRef` não mudam, e o composer envia mensagem normal.
-- A aba `questions` abre sozinha quando chega uma pergunta nova no painel; fechada, a faixa acima do composer reabre.
+- A aba `questions` abre sozinha quando chega uma pergunta nova no painel (`showQuestions`, guarda `questionsReturnTo`); fechada, a faixa acima do composer reabre. Respondida (ou movida ao composer), `settleQuestions` fecha a aba que ela criou e devolve o painel como estava (fechado, ou na aba anterior), salvo se o usuário trocou de aba no meio.
 - Aviso de pergunta no painel: faixa em `variant="warning"`, `AttentionDot` (âmbar, `animate-attention-ping` 3 vezes e para) no mascote da faixa, na aba Questions e no botão "Toggle right panel" quando o painel está fechado.
 - Visualização embutida (`embedded`) sempre usa o composer. Mobile não tem painel: as perguntas seguem no composer.
 
@@ -22,10 +22,11 @@ description: "Verifica as perguntas do agente no painel lateral: a configuraçã
 
 1. `vp run dev`, parear o navegador, `window.t3dev.replay("question")`.
 2. Padrão "Above the composer": a pergunta aparece no composer com um botão de painel no cabeçalho. Clicar: a aba Questions abre com a pergunta, o composer volta ao normal e mostra a faixa "Question waiting in the side panel · Open".
-3. Escolher uma opção e "Submit answer" no painel: a pergunta some, a faixa some e a aba mostra "No questions here".
+3. Escolher uma opção e "Submit answer" no painel: a pergunta some, a faixa some, a aba Questions fecha e o painel volta ao que era antes (aqui, fechado).
 4. Configurações › Chat › Agent questions → "Side panel". Nova thread com `replay("question")`: a aba abre sozinha.
 5. Fechar a aba (X): a faixa continua; clicar nela reabre a aba.
-6. Botão "Move question to composer" no painel: a pergunta volta ao composer, a faixa some e a aba fica vazia.
+6. Botão "Move question to composer" no painel: a pergunta volta ao composer, a faixa some e a aba Questions fecha.
+   6b. Painel aberto na aba Design, mandar outra mensagem na mesma thread Replay: a pergunta assume a aba Questions; respondida, volta à Design.
 7. Com a pergunta no painel: faixa âmbar, ponto na aba Questions; fechar o painel mostra o ponto no botão do painel. `getComputedStyle` do anel interno do ponto: `0.9s ease-out 3 step-ping` (nunca `infinite`).
 8. Com o chat estreito (~360px) a faixa trunca o texto; o nome acessível do botão tem o texto inteiro.
 

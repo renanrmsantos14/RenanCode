@@ -1393,4 +1393,38 @@ describe("rightPanelStore", () => {
     expect(surfaceIds()).toEqual(["browser:tab-a", "terminal:term-1", "diff", "browser:tab-b"]);
     expect(store.getUserActionRevision(refA)).toBe(revision);
   });
+
+  it("hands the panel back as a waiting question found it", () => {
+    const store = useRightPanelStore.getState();
+    const panel = () =>
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA);
+    const revision = store.getUserActionRevision(refA);
+
+    store.showQuestions(refA);
+    expect(panel()).toMatchObject({ isOpen: true, activeSurfaceId: "questions" });
+    store.settleQuestions(refA);
+    expect(panel()).toMatchObject({ isOpen: false, surfaces: [] });
+    expect(store.getUserActionRevision(refA)).toBe(revision);
+
+    store.open(refA, "diff");
+    store.showQuestions(refA);
+    store.showQuestions(refA);
+    store.settleQuestions(refA);
+    expect(panel()).toMatchObject({ isOpen: true, activeSurfaceId: "diff" });
+    expect(panel().surfaces.map((surface) => surface.id)).toEqual(["diff"]);
+  });
+
+  it("keeps the tab the user moved to while a question waited", () => {
+    const store = useRightPanelStore.getState();
+    const panel = () =>
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA);
+    store.open(refA, "diff");
+    store.close(refA);
+    store.showQuestions(refA);
+    store.open(refA, "preview");
+    const previewId = panel().activeSurfaceId;
+    store.settleQuestions(refA);
+    expect(panel()).toMatchObject({ isOpen: true, activeSurfaceId: previewId });
+    expect(panel().surfaces.some((surface) => surface.kind === "questions")).toBe(false);
+  });
 });
