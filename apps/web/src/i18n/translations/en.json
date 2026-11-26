@@ -3806,6 +3806,22 @@
   "b65db58454f4bcfe": "I chose {choice}",
   "c84f818fa86012dc": "Choose",
   "f47ea846b6b2f9f1": "Choose {letter}",
+  "2418e32afde270c2": "Collapse",
+  "ed0bf743f6ae71ac": [
+    "You chose ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " · ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    }
+  ],
+  "6bc7d41e095831d3": "Show all",
   "63fd02d55f0e4417": "Link a machine to this environment",
   "4136b6bb217cc0b8": "Link {target} to this environment",
   "0986757d94229f8f": "Choose machine…",

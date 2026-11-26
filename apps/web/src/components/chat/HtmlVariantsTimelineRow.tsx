@@ -6,7 +6,7 @@ import {
   type HtmlVariantReference,
 } from "@t3tools/shared/htmlRender";
 import { RadioGroup } from "@base-ui/react/radio-group";
-import { useGT } from "gt-react";
+import { T, useGT, Var } from "gt-react";
 import { type ReactNode, use, useRef, useState } from "react";
 
 import { observeResize } from "~/lib/observeResize";
@@ -53,14 +53,10 @@ export function HtmlVariantsGrid(props: {
               aria-label={gt("Show {variant}", { variant: variant.label })}
               size="xs"
               variant="outline"
-              onClick={() =>
-                scrollerRef.current
-                  ?.querySelectorAll("[data-variant-cell]")
-                  [index]?.scrollIntoView({
-                    inline: "start",
-                    block: "nearest",
-                  })
-              }
+              onClick={() => {
+                const cells = scrollerRef.current?.querySelectorAll("[data-variant-cell]");
+                cells?.[index]?.scrollIntoView({ inline: "start", block: "nearest" });
+              }}
             >
               {htmlVariantLetter(index)}
             </Button>
@@ -132,24 +128,90 @@ export function HtmlVariantsTimelineRow({
 }) {
   const ctx = use(TimelineRowCtx);
   const { onAppFullscreenChange } = ctx;
+  const [showAll, setShowAll] = useState(false);
+  const renderFrame = (variant: HtmlVariantReference, index: number, minHeight: number) =>
+    ctx.renderHtmlVariant?.(row, index, minHeight) ?? (
+      <HtmlRenderFrame
+        key={variant.attachmentId}
+        environmentId={ctx.activeThreadEnvironmentId}
+        htmlRender={variant}
+        minHeight={minHeight}
+        threadRef={ctx.threadRef ?? undefined}
+        onFullscreenChange={(fullscreen) => onAppFullscreenChange(row.id, fullscreen)}
+      />
+    );
+  const chosen = row.choice === null ? undefined : row.htmlVariants[row.choice.index];
+  if (row.choice !== null && chosen !== undefined && !showAll) {
+    return (
+      <div className="min-w-0 px-1">
+        <HtmlVariantChoiceSummary
+          letter={htmlVariantLetter(row.choice.index)}
+          label={chosen.label}
+          note={row.choice.note}
+          thumbnail={renderFrame(chosen, row.choice.index, THUMBNAIL_SOURCE_HEIGHT)}
+          onShowAll={() => setShowAll(true)}
+        />
+      </div>
+    );
+  }
   return (
-    <div className="min-w-0 px-1">
+    <div className="flex min-w-0 flex-col gap-1 px-1">
       <HtmlVariantsGrid
         variants={row.htmlVariants}
         onFollow={ctx.onFollowHtmlVariant}
-        renderVariant={(variant, index, minHeight) =>
-          ctx.renderHtmlVariant?.(row, index, minHeight) ?? (
-            <HtmlRenderFrame
-              key={variant.attachmentId}
-              environmentId={ctx.activeThreadEnvironmentId}
-              htmlRender={variant}
-              minHeight={minHeight}
-              threadRef={ctx.threadRef ?? undefined}
-              onFullscreenChange={(fullscreen) => onAppFullscreenChange(row.id, fullscreen)}
-            />
-          )
-        }
+        renderVariant={renderFrame}
       />
+      {row.choice !== null ? (
+        <Button className="self-start" size="xs" variant="ghost" onClick={() => setShowAll(false)}>
+          <T>Collapse</T>
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+const THUMBNAIL_SOURCE_WIDTH = 480;
+const THUMBNAIL_SOURCE_HEIGHT = 300;
+const THUMBNAIL_SCALE = 0.2;
+
+function HtmlVariantChoiceSummary(props: {
+  readonly letter: string;
+  readonly label: string;
+  readonly note: string;
+  readonly thumbnail: ReactNode;
+  readonly onShowAll: () => void;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-3 rounded-lg border bg-card px-2 py-1.5">
+      <div
+        aria-hidden
+        className="relative shrink-0 overflow-hidden rounded border bg-background"
+        style={{
+          width: THUMBNAIL_SOURCE_WIDTH * THUMBNAIL_SCALE,
+          height: THUMBNAIL_SOURCE_HEIGHT * THUMBNAIL_SCALE,
+        }}
+      >
+        <div
+          className="pointer-events-none origin-top-left"
+          inert
+          style={{ width: THUMBNAIL_SOURCE_WIDTH, transform: `scale(${THUMBNAIL_SCALE})` }}
+        >
+          {props.thumbnail}
+        </div>
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate font-medium text-sm">
+          <T>
+            You chose <Var>{props.letter}</Var> · <Var>{props.label}</Var>
+          </T>
+        </span>
+        {props.note === "" ? null : (
+          <span className="truncate text-muted-foreground text-xs">{props.note}</span>
+        )}
+      </div>
+      <Button size="xs" variant="outline" onClick={props.onShowAll}>
+        <T>Show all</T>
+      </Button>
     </div>
   );
 }

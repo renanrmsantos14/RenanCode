@@ -76,6 +76,45 @@ describe("resolveAssistantMessageCopyState", () => {
 });
 
 describe("deriveMessagesTimelineRows", () => {
+  it("collapses a variants block once a later user message picks one", () => {
+    const at = "2026-11-26T10:00:00Z";
+    const user = (id: string, text: string): TimelineEntry => ({
+      kind: "message",
+      id,
+      createdAt: at,
+      message: {
+        id: MessageId.make(id),
+        role: "user",
+        text,
+        runId: RunId.make(`run-${id}`),
+        streaming: false,
+        createdAt: at,
+        updatedAt: at,
+      },
+    });
+    const variants: TimelineEntry = {
+      kind: "html-variants",
+      id: "variants",
+      createdAt: at,
+      runId: null,
+      htmlVariants: [
+        { attachmentId: "a", title: "Home", height: 300, label: "Dense" },
+        { attachmentId: "b", title: "Home", height: 300, label: "Airy" },
+      ],
+    };
+    const choiceOf = (entries: TimelineEntry[]) =>
+      deriveMessagesTimelineRows({
+        timelineEntries: entries,
+        isWorking: false,
+        turnDiffSummaries: [],
+        supportsConversationRollback: false,
+      }).flatMap((row) => (row.kind === "html-variants" ? [row.choice] : []));
+
+    expect(choiceOf([user("u0", "Escolhi A (Dense): before"), variants])).toEqual([null]);
+    expect(choiceOf([variants, user("u1", "Escolhi B (Airy): menos espaço")])).toEqual([
+      { index: 1, note: "menos espaço" },
+    ]);
+  });
   it("hides keep-warm ping turns but keeps ordinary turns", () => {
     const at = "2026-10-01T06:19:10Z";
     const message = (

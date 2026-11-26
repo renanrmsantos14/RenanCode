@@ -74,6 +74,7 @@ import { resolveT3McpToolDefinition } from "@t3tools/shared/t3McpToolPresentatio
 import { compactDynamicToolOutput } from "@t3tools/shared/toolOutput";
 import type { DesignSketchReference } from "@t3tools/shared/design";
 import {
+  findHtmlVariantChoice,
   htmlRenderReferencesEqual,
   type HtmlRenderReference,
   type HtmlVariantReference,
@@ -709,6 +710,8 @@ type MessagesTimelineRowContent =
       id: string;
       createdAt: string;
       htmlVariants: ReadonlyArray<HtmlVariantReference>;
+      /** The variant a later user message picked, which collapses the block. */
+      choice: { readonly index: number; readonly note: string } | null;
     }
   | {
       kind: "design-sketches";
@@ -2287,11 +2290,17 @@ export function deriveMessagesTimelineRows(
     }
 
     if (timelineEntry.kind === "html-variants") {
+      const laterUserTexts = timelineEntries
+        .slice(index + 1)
+        .flatMap((entry) =>
+          entry.kind === "message" && entry.message.role === "user" ? [entry.message.text] : [],
+        );
       nextRows.push({
         kind: "html-variants",
         id: timelineEntry.id,
         createdAt: timelineEntry.createdAt,
         htmlVariants: timelineEntry.htmlVariants,
+        choice: findHtmlVariantChoice(timelineEntry.htmlVariants, laterUserTexts),
       });
       continue;
     }
@@ -2939,6 +2948,8 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
       const bv = b as typeof a;
       return (
         a.createdAt === bv.createdAt &&
+        a.choice?.index === bv.choice?.index &&
+        a.choice?.note === bv.choice?.note &&
         a.htmlVariants.length === bv.htmlVariants.length &&
         a.htmlVariants.every((variant, index) => {
           const other = bv.htmlVariants[index];

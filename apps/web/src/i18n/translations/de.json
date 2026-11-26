@@ -3807,6 +3807,22 @@
   "b65db58454f4bcfe": "Ich wähle {choice}",
   "c84f818fa86012dc": "Wählen",
   "f47ea846b6b2f9f1": "{letter} wählen",
+  "2418e32afde270c2": "Einklappen",
+  "ed0bf743f6ae71ac": [
+    "Gewählt: ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " · ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    }
+  ],
+  "6bc7d41e095831d3": "Show all",
   "63fd02d55f0e4417": "Einen Rechner mit dieser Umgebung verknüpfen",
   "4136b6bb217cc0b8": "{target} mit dieser Umgebung verknüpfen",
   "0986757d94229f8f": "Rechner wählen…",
