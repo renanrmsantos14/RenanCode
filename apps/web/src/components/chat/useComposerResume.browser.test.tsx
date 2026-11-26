@@ -43,7 +43,10 @@ function composerShowing(selectedModelSelection: typeof threadAModel) {
 
 function ResumeButton(props: {
   readonly composerRef: ComposerHandleRef;
-  readonly persistSettings: () => Promise<AtomCommandResult<void, unknown>>;
+  readonly persistSettings: (input: {
+    readonly interactionMode: string;
+  }) => Promise<AtomCommandResult<void, unknown>>;
+  readonly interactionMode?: "default" | "design";
 }) {
   const { onResume } = useComposerResume({
     environmentId: EnvironmentId.make("environment:test"),
@@ -58,6 +61,7 @@ function ResumeButton(props: {
     threadDetailLoading: false,
     activeEnvironmentUnavailable: false,
     runtimeMode: "full-access",
+    interactionMode: props.interactionMode ?? "default",
     localCheckoutBranchMismatch: null,
     composerRef: props.composerRef,
     persistThreadSettingsForNextTurn: props.persistSettings,
@@ -89,4 +93,23 @@ it("continues on the resumed thread's model after the composer moves to another 
     manualContinuationOfRunId: "run:interrupted",
     modelSelection: threadAModel,
   });
+});
+
+it("keeps Design mode when it resumes a run", async () => {
+  const { startedTurn } = setup();
+  const persistSettings = vi.fn(async () => AsyncResult.success(undefined));
+  await using screen = await render(
+    <ResumeButton
+      composerRef={{ current: composerShowing(threadAModel) }}
+      persistSettings={persistSettings}
+      interactionMode="design"
+    />,
+  );
+
+  await screen.getByRole("button", { name: "Resume" }).click();
+
+  expect(await startedTurn.promise).toMatchObject({ interactionMode: "design" });
+  expect(persistSettings).toHaveBeenCalledWith(
+    expect.objectContaining({ interactionMode: "design" }),
+  );
 });

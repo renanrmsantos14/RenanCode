@@ -750,7 +750,14 @@ const make = Effect.gen(function* () {
       ? ((Option.isSome(existing) ? existing.value.thread.cloudWorkStartedAt : null) ??
         (yield* DateTime.now))
       : null;
-    const threadEvent: OrchestrationV2DomainEvent = Option.isSome(existing)
+    // Re-read after the cloud fetch: a settle, snooze or pin made meanwhile must not be overwritten.
+    const current = Option.isSome(existing)
+      ? Option.getOrElse(
+          yield* Effect.option(orchestrator.getThreadRecords(threadId, [])),
+          () => existing.value,
+        ).thread
+      : null;
+    const threadEvent: OrchestrationV2DomainEvent = current
       ? {
           id: EventId.make(
             `${EVENT_ID_PREFIX}:thread:${threadId}:updated:${lastSequence}:${DateTime.toEpochMillis(updatedAt)}:${branch ?? ""}:${cloudWorkStartedAt === null ? "idle" : "working"}`,
@@ -758,7 +765,7 @@ const make = Effect.gen(function* () {
           type: "thread.metadata-updated",
           threadId,
           occurredAt: updatedAt,
-          payload: { ...existing.value.thread, title, branch, updatedAt, cloudWorkStartedAt },
+          payload: { ...current, title, branch, updatedAt, cloudWorkStartedAt },
         }
       : {
           id: EventId.make(`${EVENT_ID_PREFIX}:thread:${threadId}:created`),

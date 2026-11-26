@@ -42,9 +42,17 @@ const RUNTIME_MODE_RANK: Record<RuntimeMode, number> = {
 export const isRuntimeModeAbove = (mode: RuntimeMode, ceiling: RuntimeMode | undefined): boolean =>
   ceiling !== undefined && RUNTIME_MODE_RANK[mode] > RUNTIME_MODE_RANK[ceiling];
 
-export const ProviderInteractionMode = Schema.Literals(["default", "plan"]);
+/** `design` is RenanCode's own: the provider runs its default mode and the turn asks for sketches. */
+export const ProviderInteractionMode = Schema.Literals(["default", "plan", "design"]);
 export type ProviderInteractionMode = typeof ProviderInteractionMode.Type;
 export const DEFAULT_PROVIDER_INTERACTION_MODE: ProviderInteractionMode = "default";
+
+/** What a provider's own plan/default switch receives. */
+export const ProviderNativeInteractionMode = Schema.Literals(["default", "plan"]);
+export type ProviderNativeInteractionMode = typeof ProviderNativeInteractionMode.Type;
+export const nativeInteractionMode = (
+  mode: ProviderInteractionMode,
+): ProviderNativeInteractionMode => (mode === "plan" ? "plan" : "default");
 
 export const ProviderRequestKind = Schema.Literals([
   "command",
@@ -75,6 +83,19 @@ export const ProviderApprovalOption = Schema.Struct({
   warning: Schema.optional(TrimmedNonEmptyString),
 });
 export type ProviderApprovalOption = typeof ProviderApprovalOption.Type;
+
+/**
+ * What an approval to run a repository's push hooks names. Clients show it as the request's
+ * details; the item's `prompt` stays the whole question in one sentence.
+ */
+export const ProviderApprovalPushHooks = Schema.Struct({
+  branch: Schema.String,
+  /** Hook files, relative to the checkout when they are in it. */
+  files: Schema.Array(Schema.String),
+  /** Hooks Git's configuration defines. */
+  commands: Schema.Array(Schema.Struct({ name: Schema.String, command: Schema.String })),
+});
+export type ProviderApprovalPushHooks = typeof ProviderApprovalPushHooks.Type;
 
 export const ProviderUserInputAnswers = Schema.Record(Schema.String, Schema.Unknown);
 export type ProviderUserInputAnswers = typeof ProviderUserInputAnswers.Type;

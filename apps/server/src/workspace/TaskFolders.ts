@@ -251,7 +251,7 @@ export const projectCommandsForAgent = (
   if (link !== "permitted") return link;
   return modes.runtimeMode === "full-access" &&
     !isRuntimeModeAbove(modes.runtimeMode, maxRuntimeMode) &&
-    modes.interactionMode === "default"
+    modes.interactionMode !== "plan"
     ? "permitted"
     : "agent-below-full-access";
 };

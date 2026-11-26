@@ -20,6 +20,19 @@ export function createClaudeCloudEnvironmentAtoms<R, E>(
   };
 }
 
+const triagedAtMs = (thread: {
+  readonly settledAt?: string | null;
+  readonly unsettledAt?: string | null;
+  readonly snoozedAt?: string | null;
+  readonly pinnedAt?: string | null;
+}) =>
+  Math.max(
+    0,
+    ...[thread.settledAt, thread.unsettledAt, thread.snoozedAt, thread.pinnedAt].map(
+      (at) => (at ? Date.parse(at) : 0) || 0,
+    ),
+  );
+
 /** Every environment logged into the same Claude account mirrors the same cloud session; show it once, preferring the copy that owns the run, then a preferred environment. */
 export function dedupeClaudeCloudThreads<
   T extends {
@@ -27,6 +40,10 @@ export function dedupeClaudeCloudThreads<
     readonly environmentId: EnvironmentId;
     readonly activeRunId?: unknown;
     readonly latestRunId?: unknown;
+    readonly settledAt?: string | null;
+    readonly unsettledAt?: string | null;
+    readonly snoozedAt?: string | null;
+    readonly pinnedAt?: string | null;
   },
 >(
   threads: readonly T[],
@@ -38,10 +55,20 @@ export function dedupeClaudeCloudThreads<
     typeof preferred === "string"
       ? environmentId === preferred
       : preferred?.has(environmentId) === true;
-  const rank = (thread: T) =>
-    (thread.activeRunId != null ? 4 : 0) +
-    (thread.latestRunId != null ? 2 : 0) +
-    (isPreferred(thread.environmentId) ? (options?.preferredFirst ? 8 : 1) : 0);
+  // Each copy keeps its own settle/snooze/pin state, so the copy triaged last wins over the
+  // remaining tie-breaks; otherwise connection order decides and a settled session reopens.
+  const rank = (thread: T) => [
+    (isPreferred(thread.environmentId) && options?.preferredFirst ? 2 : 0) +
+      (thread.activeRunId != null ? 1 : 0),
+    triagedAtMs(thread),
+    (thread.latestRunId != null ? 2 : 0) + (isPreferred(thread.environmentId) ? 1 : 0),
+  ];
+  const outranks = (left: T, right: T) => {
+    const a = rank(left);
+    const b = rank(right);
+    const index = a.findIndex((value, i) => value !== b[i]);
+    return index !== -1 && a[index]! > b[index]!;
+  };
   const chosen = new Map<string, T>();
   let hasDuplicate = false;
   for (const thread of threads) {
@@ -52,7 +79,7 @@ export function dedupeClaudeCloudThreads<
       continue;
     }
     hasDuplicate = true;
-    if (rank(thread) > rank(current)) chosen.set(thread.id, thread);
+    if (outranks(thread, current)) chosen.set(thread.id, thread);
   }
   if (!hasDuplicate) return threads;
   return threads.filter(

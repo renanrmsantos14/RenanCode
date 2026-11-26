@@ -76,7 +76,9 @@ export function resolveInteractionMode(
   parentMode: ProviderInteractionMode,
   requested: OrchestratorMcpInteractionMode | undefined,
 ): Effect.Effect<ProviderInteractionMode, OrchestratorMcpFailure> {
-  const resolved = requested === undefined || requested === "inherit" ? parentMode : requested;
+  // A child does its task; only an explicit request puts it in Design.
+  const inherited = parentMode === "design" ? "default" : parentMode;
+  const resolved = requested === undefined || requested === "inherit" ? inherited : requested;
   return interactionModeRank(resolved) > interactionModeRank(parentMode)
     ? Effect.fail(
         new OrchestratorMcpFailure({

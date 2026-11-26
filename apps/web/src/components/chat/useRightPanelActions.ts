@@ -24,7 +24,6 @@ import {
   type RightPanelSurface,
   useRightPanelStore,
 } from "../../rightPanelStore";
-import { isElectron } from "../../env";
 import { requestWorkspaceContentFocus, requestWorkspaceFocus } from "../../lib/workspaceFocus";
 import { isDesignFrameTab, setActivePreviewTab } from "../../previewStateStore";
 import { isBrowserSettingsReadError } from "../../browser/openFileInPreview";
@@ -169,7 +168,7 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
   };
   const addChecklistSurfaceStable = useStableCallback(addChecklistSurface);
   const addDesignSurface = () => {
-    if (!activeThreadRef || !isElectron) return;
+    if (!activeThreadRef) return;
     useRightPanelStore.getState().open(activeThreadRef, "design");
   };
   const addDesignSurfaceStable = useStableCallback(addDesignSurface);

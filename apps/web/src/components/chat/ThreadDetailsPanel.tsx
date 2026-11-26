@@ -47,7 +47,6 @@ import {
 } from "./threadDetailsPanelStyles";
 import { Menu, MenuPopup } from "../ui/menu";
 import { Button } from "../ui/button";
-import { isElectron } from "../../env";
 import { useRightPanelStore } from "../../rightPanelStore";
 
 interface ThreadDetailsPanelProps extends Pick<
@@ -332,7 +331,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                 <ThreadDetailsContext usage={props.contextWindow} />
               ) : null}
 
-              {isElectron && !props.draftId && visible.design ? (
+              {!props.draftId && visible.design ? (
                 <ThreadDetailsSection
                   headingId="thread-details-design-heading"
                   title={gt("Design")}
