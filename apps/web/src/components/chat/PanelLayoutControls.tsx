@@ -4,6 +4,7 @@ import {
   SquareMenuIcon,
   Maximize2Icon,
   Minimize2Icon,
+  MessageSquareIcon,
 } from "lucide-react";
 import { useGT } from "gt-react";
 import { memo, type ReactNode, useLayoutEffect, useRef } from "react";
@@ -146,6 +147,37 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
     </div>
   );
 });
+
+/** Shows or hides the chat kept beside an HTML render opened full screen. */
+export function FullscreenChatToggleControl({
+  chatHidden,
+  onToggle,
+}: {
+  chatHidden: boolean;
+  onToggle: () => void;
+}) {
+  const gt = useGT();
+  const label = chatHidden ? gt("Show chat") : gt("Hide chat");
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Toggle
+            className="shrink-0 [-webkit-app-region:no-drag]"
+            pressed={!chatHidden}
+            onPressedChange={onToggle}
+            aria-label={label}
+            variant="ghost"
+            size="sm"
+          >
+            <MessageSquareIcon className="size-4" />
+          </Toggle>
+        }
+      />
+      <TooltipPopup side="bottom">{label}</TooltipPopup>
+    </Tooltip>
+  );
+}
 
 export const RightPanelMaximizeControl = memo(function RightPanelMaximizeControl({
   maximized,

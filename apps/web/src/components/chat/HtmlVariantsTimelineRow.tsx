@@ -138,6 +138,7 @@ export function HtmlVariantsTimelineRow({
         minHeight={minHeight}
         threadRef={ctx.threadRef ?? undefined}
         onFullscreenChange={(fullscreen) => onAppFullscreenChange(row.id, fullscreen)}
+        onOpenFullscreen={ctx.onOpenHtmlRender}
       />
     );
   const chosen = row.choice === null ? undefined : row.htmlVariants[row.choice.index];

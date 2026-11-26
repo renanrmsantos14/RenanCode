@@ -52,6 +52,24 @@ describe("HtmlRenderFrame", () => {
     expect(onFullscreenChange).toHaveBeenLastCalledWith(false);
   });
 
+  it("hands full screen to the panel opener instead of a dialog when one is given", async () => {
+    setup();
+    const onOpenFullscreen = vi.fn();
+    const htmlRender = { attachmentId: "panel", title: "Mockup", height: 200 };
+    await using screen = await render(
+      <HtmlRenderFrame
+        environmentId={EnvironmentId.make("environment")}
+        htmlRender={htmlRender}
+        threadRef={undefined}
+        onOpenFullscreen={onOpenFullscreen}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Open full screen" }));
+    expect(onOpenFullscreen).toHaveBeenCalledWith(htmlRender);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
   it("reopens at the page height it last measured", async () => {
     setup();
     using page = (() => {
@@ -67,7 +85,8 @@ describe("HtmlRenderFrame", () => {
       />
     );
     const frameHeight = (screen: Screen) =>
-      screen.getByTitle("Mockup").element().parentElement?.style.height;
+      screen.getByTitle("Mockup").element().closest<HTMLElement>(".group\\/html-render")?.style
+        .height;
 
     assetUrl.current = page.url;
     {

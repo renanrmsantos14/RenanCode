@@ -316,7 +316,12 @@ import { useEnvironmentShellHasSnapshot } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
 import { ReviewViewer } from "./chat/review/ReviewViewer";
-import { ReviewSheetHandle, reviewChatColumnClassName } from "./chat/review/reviewLayout";
+import {
+  htmlFullscreenChatColumnClassName,
+  ReviewSheetHandle,
+  reviewChatColumnClassName,
+} from "./chat/review/reviewLayout";
+import { useHtmlFullscreenChat } from "./chat/review/useHtmlFullscreenChat";
 import { useReviewMode } from "./chat/review/useReviewMode";
 import { ExpandedImageDialogHost, openExpandedImagePreview } from "./chat/ExpandedImageDialog";
 import {
@@ -346,6 +351,7 @@ import { useOpenFavoriteEditorShortcut } from "./chat/OpenInPickerShortcut";
 import {
   PanelLayoutControls,
   type PanelLayoutControlsProps,
+  FullscreenChatToggleControl,
   RightPanelMaximizeControl,
   ThreadPanelHeaderControl,
   WorkspaceTitlebarControls,
@@ -449,6 +455,7 @@ const ACTIVE_RUN_STATUSES: ReadonlySet<string> = new Set([
 const EMPTY_PROVIDER_MODELS: ServerProvider["models"] = [];
 const EMPTY_USAGE_LIMIT_SOURCES: UsageLimitSourceSnapshots = [];
 import type { CodexArtifactTemplate } from "@t3tools/shared/codexArtifactTemplates";
+import { htmlRenderFileName, type HtmlRenderReference } from "@t3tools/shared/htmlRender";
 
 const EMPTY_FEEDBACK_SUBMISSIONS: ReadonlyArray<CodexFeedbackSubmission> = [];
 const EMPTY_PROVIDER_SKILLS: ServerProvider["skills"] = [];
@@ -1766,6 +1773,21 @@ export default function ChatView(props: ChatViewProps) {
     }
   };
   const openFileAttachmentStable = useStableCallback(openFileAttachment);
+  const openHtmlRenderFullscreen = (htmlRender: HtmlRenderReference) => {
+    if (!activeThreadRef) return;
+    const panels = useRightPanelStore.getState();
+    panels.openAttachment(activeThreadRef, {
+      type: "file",
+      id: htmlRender.attachmentId,
+      name: htmlRenderFileName(htmlRender.title),
+      mimeType: "text/html",
+      // Unknown on the client; zero hides the size label and HTML never streams as text.
+      sizeBytes: 0,
+      htmlRender: true,
+    });
+    panels.setMaximized(activeThreadRef, true);
+  };
+  const openHtmlRenderFullscreenStable = useStableCallback(openHtmlRenderFullscreen);
   const { timelineAttachmentUrlById } = useAttachmentPreviewHandoff({
     environmentId,
     threadId,
@@ -3458,7 +3480,18 @@ export default function ChatView(props: ChatViewProps) {
   });
   // Review mode takes the right panel's place without changing what the panel store remembers.
   const rightPanelShown = rightPanelOpen && !review.active;
-  const chatColumnMaximizedAway = rightPanelMaximized && !review.active;
+  const htmlFullscreenChat = useHtmlFullscreenChat(
+    rightPanelMaximized &&
+      !review.active &&
+      renderedRightPanelSurface?.kind === "file" &&
+      renderedRightPanelSurface.attachment?.htmlRender === true,
+    () => {
+      if (activeThreadRef) useRightPanelStore.getState().setMaximized(activeThreadRef, false);
+    },
+  );
+  const chatColumnMaximizedAway =
+    rightPanelMaximized && !review.active && !htmlFullscreenChat.shown;
+  const htmlFullscreenSheet = htmlFullscreenChat.shown && htmlFullscreenChat.narrow;
   const onExpandTimelineImage = (
     preview: ExpandedImagePreview,
     entries?: ReadonlyArray<TimelineEntry>,
@@ -3765,7 +3798,8 @@ export default function ChatView(props: ChatViewProps) {
         className={cn(
           "flex min-h-0 min-w-0 flex-col overflow-x-hidden",
           chatColumnMaximizedAway ? "w-0 flex-none" : "flex-1",
-          reviewChatColumnClassName(review),
+          reviewChatColumnClassName(review) ??
+            htmlFullscreenChatColumnClassName(htmlFullscreenChat),
         )}
         data-chat-column-maximized-away={chatColumnMaximizedAway ? "true" : "false"}
         data-chat-column
@@ -3778,10 +3812,10 @@ export default function ChatView(props: ChatViewProps) {
         onMouseUp={preventMiddleClickPasteOutsideEditable}
       >
         <ReviewSheetHandle
-          review={review}
+          review={review.active ? review : { ...htmlFullscreenChat, active: htmlFullscreenSheet }}
           peekLabel={activePendingUserInput?.questions[0]?.question ?? null}
         />
-        {embedded || review.active ? null : (
+        {embedded || review.active || htmlFullscreenSheet ? null : (
           <header
             ref={threadPanelPopoverAnchorRef}
             data-chat-header
@@ -3895,6 +3929,7 @@ export default function ChatView(props: ChatViewProps) {
                   citationHistory={citationHistory}
                   onCiteAssistantText={citeAssistantTextStable}
                   onFollowHtmlVariant={followHtmlVariantStable}
+                  {...(embedded ? {} : { onOpenHtmlRender: openHtmlRenderFullscreenStable })}
                   onReplyToResponse={replyToResponseStable}
                   {...(activeProject && !runsOutsideHostCheckout
                     ? { onRunShellCommand: parentPanel?.runShellCommand ?? runShellCommandStable }
@@ -4496,6 +4531,12 @@ export default function ChatView(props: ChatViewProps) {
           layoutControls={
             rightPanelShown ? (
               <div className="mr-px flex items-center gap-1">
+                {htmlFullscreenChat.active && !htmlFullscreenChat.narrow ? (
+                  <FullscreenChatToggleControl
+                    chatHidden={htmlFullscreenChat.chatHidden}
+                    onToggle={htmlFullscreenChat.toggleChat}
+                  />
+                ) : null}
                 <RightPanelMaximizeControl
                   maximized={rightPanelMaximized}
                   onToggle={toggleRightPanelMaximizedStable}

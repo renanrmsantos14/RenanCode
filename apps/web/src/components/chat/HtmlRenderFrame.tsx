@@ -40,6 +40,8 @@ export function HtmlRenderFrame(props: {
   readonly threadRef: ScopedThreadRef | undefined;
   readonly minHeight?: number;
   readonly onFullscreenChange?: (fullscreen: boolean) => void;
+  /** Opens the render full screen elsewhere (the right panel); unset, it opens in a dialog. */
+  readonly onOpenFullscreen?: ((htmlRender: HtmlRenderReference) => void) | undefined;
 }) {
   const gt = useGT();
   const { attachmentId, title } = props.htmlRender;
@@ -126,6 +128,10 @@ export function HtmlRenderFrame(props: {
                     size="icon-xs"
                     variant="glass"
                     onClick={async () => {
+                      if (props.onOpenFullscreen) {
+                        props.onOpenFullscreen(props.htmlRender);
+                        return;
+                      }
                       const url =
                         loaded !== null && loaded.expiresAt - Date.now() > MIN_URL_LIFE_MS
                           ? src
