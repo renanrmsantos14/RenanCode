@@ -1634,16 +1634,29 @@ export default function ChatView(props: ChatViewProps) {
   const movePendingUserInput = useStableCallback(
     (requestId: RuntimeRequestId, placement: QuestionPlacement) => {
       useQuestionPlacementOverrides.setState({ [requestId]: placement });
-      if (placement === "side") openQuestionsPanel();
     },
   );
   const sidePanelQuestionRequestId = activeQuestionInSidePanel
     ? (activePendingUserInput?.requestId ?? null)
     : null;
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a question arriving from the server opens its panel tab once
+  const shownQuestionRef = useRef<{ threadKey: string | null; requestId: string | null }>({
+    threadKey: null,
+    requestId: null,
+  });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a server question takes the panel over and hands it back once answered
   useEffect(() => {
-    if (sidePanelQuestionRequestId !== null) openQuestionsPanel();
-  }, [openQuestionsPanel, sidePanelQuestionRequestId]);
+    const shown = shownQuestionRef.current;
+    shownQuestionRef.current = {
+      threadKey: activeThreadKey,
+      requestId: sidePanelQuestionRequestId,
+    };
+    if (!activeThreadRef) return;
+    if (sidePanelQuestionRequestId !== null) {
+      useRightPanelStore.getState().showQuestions(activeThreadRef);
+    } else if (shown.threadKey === activeThreadKey && shown.requestId !== null) {
+      useRightPanelStore.getState().settleQuestions(activeThreadRef);
+    }
+  }, [activeThreadKey, activeThreadRef, sidePanelQuestionRequestId]);
   const [heldApprovalRequestIds, setHeldApprovalRequestIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );

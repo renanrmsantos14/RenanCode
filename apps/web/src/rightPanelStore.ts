@@ -163,6 +163,8 @@ export interface ThreadRightPanelState {
   dismissedDeviceSurfaceIds?: string[];
   maximized?: true;
   proactiveDiffTurnId?: RunId;
+  /** Where the panel stood before a waiting question took it over; restored once it settles. */
+  questionsReturnTo?: { isOpen: boolean; activeSurfaceId: string | null; addedTab: boolean };
 }
 
 export interface ThreadPanelVisibility {
@@ -196,6 +198,10 @@ interface RightPanelStoreState {
       "file" | "terminal" | "pull-request" | "issue" | "thread" | "linked-thread"
     >,
   ) => void;
+  /** A waiting question takes the panel over without counting as a user choice. */
+  showQuestions: (ref: ScopedThreadRef) => void;
+  /** Hands the panel back as `showQuestions` found it, unless the user already moved on. */
+  settleQuestions: (ref: ScopedThreadRef) => void;
   /** Opens a side chat or subagent of `ref`'s environment as a tab; `ref` itself has no tab. */
   openThread: (ref: ScopedThreadRef, threadId: ThreadId) => void;
   openLinkedThread: (ref: ScopedThreadRef, target: LinkedThreadTarget) => void;
@@ -859,6 +865,39 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
               return upsertSurface(current, existing ?? browserSurface(null));
             }
             return upsertSurface(current, singletonSurface(kind));
+          }),
+        ),
+      showQuestions: (ref) =>
+        set((state) =>
+          automaticUpdate(state, scopedThreadKey(ref), (current) => ({
+            ...upsertSurface(current, singletonSurface("questions")),
+            questionsReturnTo: current.questionsReturnTo ?? {
+              isOpen: current.isOpen,
+              activeSurfaceId: current.activeSurfaceId,
+              addedTab: !current.surfaces.some((surface) => surface.kind === "questions"),
+            },
+          })),
+        ),
+      settleQuestions: (ref) =>
+        set((state) =>
+          automaticUpdate(state, scopedThreadKey(ref), (current) => {
+            const { questionsReturnTo: returnTo, ...rest } = current;
+            if (returnTo === undefined) return current;
+            const surfaces = returnTo.addedTab
+              ? rest.surfaces.filter((surface) => surface.kind !== "questions")
+              : rest.surfaces;
+            const onQuestions = rest.activeSurfaceId === "questions";
+            const previous = surfaces.some((surface) => surface.id === returnTo.activeSurfaceId)
+              ? returnTo.activeSurfaceId
+              : (surfaces[0]?.id ?? null);
+            const isOpen =
+              (onQuestions && rest.isOpen ? returnTo.isOpen : rest.isOpen) && surfaces.length > 0;
+            return {
+              ...rest,
+              surfaces,
+              isOpen,
+              activeSurfaceId: onQuestions ? previous : rest.activeSurfaceId,
+            };
           }),
         ),
       openDevice: (ref, target, automatic = false) =>
