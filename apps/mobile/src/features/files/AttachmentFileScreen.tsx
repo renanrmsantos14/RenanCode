@@ -253,16 +253,17 @@ export function AttachmentFileScreen(props: AttachmentFileScreenProps) {
     );
   }
 
+  const { environmentId: chatEnvironmentId, threadId: chatThreadId } = params;
   const chatAction =
-    params.htmlRender === "1" && params.environmentId && params.threadId
+    params.htmlRender === "1" && chatEnvironmentId && chatThreadId
       ? ([
           {
             accessibilityLabel: gt("Chat"),
             icon: "bubble.left",
             onPress: () =>
               navigation.navigate("ThreadInspectorFullscreen", {
-                environmentId: params.environmentId,
-                threadId: params.threadId,
+                environmentId: chatEnvironmentId,
+                threadId: chatThreadId,
               }),
           },
         ] as const)
