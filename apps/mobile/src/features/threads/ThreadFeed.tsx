@@ -251,6 +251,7 @@ import {
   threadFeedCompactionLabels,
   failedFeedRunIds,
   deriveThreadFeedPresentation,
+  htmlVariantChoices,
   threadFeedRunIsUnsettled,
   isContextCompactionActivityGroup,
   isContextHandoffActivityGroup,
@@ -287,6 +288,7 @@ import { resolveThreadFeedFixedItemSize } from "./thread-feed-item-size";
 import { htmlRenderFrameHeight, htmlVariantsFrameHeight } from "@t3tools/shared/htmlRender";
 import {
   htmlRenderRowHeight,
+  htmlVariantsCollapsedRowHeight,
   htmlVariantsRowHeight,
   ThreadHtmlRender,
   ThreadHtmlVariants,
@@ -2000,6 +2002,7 @@ function renderFeedEntry(
     readonly formatMessageTime: (input: string) => string;
     readonly copiedRowId: string | null;
     readonly expandedWorkRows: Record<string, boolean>;
+    readonly htmlVariantChoices: ReturnType<typeof htmlVariantChoices>;
     readonly workRowSizing: ReturnType<typeof deriveThreadWorkLogSizing>;
     readonly workGroupScrollPositions: Map<string, ThreadWorkGroupScrollPosition>;
     readonly terminalAssistantMessageIds: ReadonlySet<string>;
@@ -2141,6 +2144,9 @@ function renderFeedEntry(
         variants={entry.variants}
         frameWidth={props.contentWidth}
         iconColor={iconSubtleColor}
+        choice={props.htmlVariantChoices.get(entry.id) ?? null}
+        expanded={props.expandedWorkRows[entry.id] ?? false}
+        onToggleExpanded={() => props.onToggleWorkRow(entry.id, entry.id)}
         onFollow={props.onFollowHtmlVariant}
       />
     );
@@ -4221,6 +4227,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
   // Without this, every row above the viewport is assumed to be
   // estimatedItemSize tall, and scrolling up through unmeasured content
   // corrects each row's height as it mounts — the feed visibly jumps.
+  const htmlChoices = htmlVariantChoices(presentedFeed);
   const getFixedItemSize = (entry: ThreadFeedRow) => {
     if (entry.type === "guest-pending") return undefined;
     if (entry.type === "pending-fold") {
@@ -4232,7 +4239,10 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       return htmlRenderRowHeight(htmlRenderFrameHeight(entry.render, contentWidth));
     }
     if (entry.type === "html-variants") {
-      return htmlVariantsRowHeight(htmlVariantsFrameHeight(entry.variants, contentWidth));
+      if (!htmlChoices.has(entry.id)) {
+        return htmlVariantsRowHeight(htmlVariantsFrameHeight(entry.variants, contentWidth));
+      }
+      return expandedWorkRows[entry.id] ? undefined : htmlVariantsCollapsedRowHeight();
     }
     if (workRowSizing.fixedRowHeight === undefined) {
       return undefined;
@@ -4336,6 +4346,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             threadId: props.threadId,
             copiedRowId,
             expandedWorkRows,
+            htmlVariantChoices: htmlChoices,
             workRowSizing,
             workGroupScrollPositions,
             terminalAssistantMessageIds,

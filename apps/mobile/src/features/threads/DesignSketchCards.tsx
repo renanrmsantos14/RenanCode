@@ -1,17 +1,14 @@
 import { useNavigation } from "@react-navigation/native";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import type { DesignSketchReference } from "@t3tools/shared/design";
-import {
-  htmlRenderFileName,
-  htmlVariantFollowUpText,
-  htmlVariantLetter,
-} from "@t3tools/shared/htmlRender";
-import { T, useGT, Var } from "gt-react-native";
+import { htmlRenderFileName, htmlVariantLetter } from "@t3tools/shared/htmlRender";
+import { T, useGT, useMessages, Var } from "gt-react-native";
 import { Image } from "expo-image";
 import { Pressable, View, type ColorValue } from "react-native";
 
 import { SymbolView } from "../../components/ui/AppSymbol";
 import { AppText as Text } from "../../components/ui/AppText";
+import { htmlVariantChoiceText } from "../../lib/htmlVariantChoice";
 import { useAssetUrl } from "../../state/assets";
 
 const THUMBNAIL_HEIGHT = 160;
@@ -117,6 +114,7 @@ export function ThreadDesignSketches(props: {
   readonly onFollow?: ((text: string) => void) | undefined;
 }) {
   const { onFollow } = props;
+  const m = useMessages();
   const lettered = props.sketches.length > 1;
   return (
     <View className="mb-2 px-1" style={{ gap: CARD_GAP }}>
@@ -130,7 +128,7 @@ export function ThreadDesignSketches(props: {
           iconColor={props.iconColor}
           onFollow={
             onFollow
-              ? () => onFollow(htmlVariantFollowUpText(index, sketch.label ?? sketch.title))
+              ? () => onFollow(htmlVariantChoiceText(index, sketch.label ?? sketch.title, m))
               : undefined
           }
         />

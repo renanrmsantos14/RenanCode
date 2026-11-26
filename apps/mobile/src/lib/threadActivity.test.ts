@@ -25,6 +25,7 @@ import {
   createThreadFeedCache,
   deriveThreadFeedPresentation,
   messageFoldRunId,
+  htmlVariantChoices,
   type ThreadFeedCache,
   type ThreadFeedEntry,
   type ThreadFeedLatestRun,
@@ -120,7 +121,7 @@ it("shows completed html_variants as one side-by-side entry", () => {
   ]);
 });
 
-it("shows a completed design_sketch as one card entry, and html_variants with sketches as the same", () => {
+it("shows a completed design_sketch as one card entry, and html_variants with sketches as the variants block", () => {
   const sketch = {
     sketchId: "sketch-1",
     attachmentId: "s-1-html",
@@ -145,14 +146,17 @@ it("shows a completed design_sketch as one card entry, and html_variants with sk
     input: {},
     output: {
       structuredContent: {
-        htmlRenders: [{ attachmentId: "s-1-html", title: "Home", height: 400 }],
+        htmlRenders: [
+          { attachmentId: "s-1-html", title: "Home", height: 400, label: "Dense" },
+          { attachmentId: "s-2-html", title: "Home", height: 400, label: "Airy" },
+        ],
         designSketches: [sketch],
       },
     },
   };
   expect(buildThreadFeed([projected(item, 0), projected(variants, 1)])).toMatchObject([
     { type: "design-sketches", sketches: [sketch] },
-    { type: "design-sketches", sketches: [sketch] },
+    { type: "html-variants", variants: [{ label: "Dense" }, { label: "Airy" }] },
   ]);
 });
 
@@ -2335,4 +2339,50 @@ it("caps live thought previews while preserving reasoning detail", () => {
   expect(activity.detail).toBe(text);
   expect(JSON.parse(activity.getFullDetail()!).item).toMatchObject({ text });
   expect(activity.getCopyText()).toContain(text);
+});
+
+describe("htmlVariantChoices", () => {
+  const variants = [
+    { label: "Dense" },
+    { label: "Airy (soft)" },
+    { label: "Bold" },
+    { label: "Plain" },
+  ];
+  const variantsEntry = { type: "html-variants", id: "variants", variants };
+  const user = (id: string, text: string) => ({
+    type: "message",
+    id,
+    message: { role: "user", text },
+  });
+
+  it("recognizes a localized choice and keeps the note", () => {
+    expect(
+      htmlVariantChoices([variantsEntry, user("u", "Escolhi B (Airy (soft)): mais respiro")]).get(
+        "variants",
+      ),
+    ).toEqual({ index: 1, note: "mais respiro" });
+  });
+
+  it("recognizes the legacy English prefix and the fourth variant", () => {
+    expect(
+      htmlVariantChoices([variantsEntry, user("u", "Continue with variant D (Plain): ")]).get(
+        "variants",
+      ),
+    ).toEqual({ index: 3, note: "" });
+  });
+
+  it("leaves the block open without a later choice", () => {
+    expect(htmlVariantChoices([variantsEntry]).size).toBe(0);
+    expect(htmlVariantChoices([user("u", "B (Dense): antes"), variantsEntry]).size).toBe(0);
+  });
+
+  it("ignores a mention mid-sentence and assistant messages", () => {
+    expect(
+      htmlVariantChoices([
+        variantsEntry,
+        user("u", "Acho que no fim das contas a opção B (Airy (soft)): ficou melhor"),
+        { type: "message", id: "a", message: { role: "assistant", text: "Escolhi B (Dense): x" } },
+      ]).size,
+    ).toBe(0);
+  });
 });
