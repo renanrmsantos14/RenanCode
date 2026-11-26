@@ -350,7 +350,8 @@ describe("pull request summary decoding", () => {
   const summary = (input: {
     readonly state: "OPEN" | "MERGED";
     readonly mergeCommit: string | null;
-    readonly baseHead: string | null;
+    /** Base branch commits pushed after the merge, newest first. */
+    readonly after: ReadonlyArray<string | null>;
   }) =>
     toPullRequestSummary(
       decodeSummarizedPullRequest({
@@ -373,46 +374,76 @@ describe("pull request summary decoding", () => {
         latestReviews: { nodes: [] },
         commits: { nodes: [] },
         mergeCommit:
-          input.state === "MERGED" ? { statusCheckRollup: rollup(input.mergeCommit) } : null,
+          input.state === "MERGED"
+            ? { oid: "merge", statusCheckRollup: rollup(input.mergeCommit) }
+            : null,
         baseRef: {
-          target: { __typename: "Commit", statusCheckRollup: rollup(input.baseHead) },
+          target: {
+            __typename: "Commit",
+            history: {
+              nodes: [
+                ...input.after.map((state, index) => ({
+                  oid: `after-${index}`,
+                  statusCheckRollup: rollup(state),
+                })),
+                { oid: "merge", statusCheckRollup: rollup(input.mergeCommit) },
+                // Older than the merge, so it does not carry it.
+                { oid: "before", statusCheckRollup: rollup("SUCCESS") },
+              ],
+            },
+          },
         },
       }),
     ).mergeCommitChecksState;
 
   it.each([
-    ["open, before any merge", { state: "OPEN", mergeCommit: null, baseHead: "SUCCESS" }, null],
+    ["open, before any merge", { state: "OPEN", mergeCommit: null, after: ["SUCCESS"] }, null],
     [
       "its own run passed",
-      { state: "MERGED", mergeCommit: "SUCCESS", baseHead: "FAILURE" },
+      { state: "MERGED", mergeCommit: "SUCCESS", after: ["FAILURE"] },
       "passing",
     ],
     [
       "its own run is going",
-      { state: "MERGED", mergeCommit: "PENDING", baseHead: "PENDING" },
+      { state: "MERGED", mergeCommit: "PENDING", after: ["PENDING"] },
       "pending",
     ],
     [
       "a later run that carries it passed after its own was cancelled",
-      { state: "MERGED", mergeCommit: "FAILURE", baseHead: "SUCCESS" },
+      { state: "MERGED", mergeCommit: "FAILURE", after: ["SUCCESS"] },
       "passing",
     ],
     [
       "a later run that carries it is going",
-      { state: "MERGED", mergeCommit: "FAILURE", baseHead: "PENDING" },
+      { state: "MERGED", mergeCommit: "FAILURE", after: ["PENDING"] },
       "pending",
     ],
     [
       "its own run and the latest both failed",
-      { state: "MERGED", mergeCommit: "FAILURE", baseHead: "FAILURE" },
+      { state: "MERGED", mergeCommit: "FAILURE", after: ["FAILURE"] },
       "failing",
     ],
     [
       "a later push took over before its own checks registered",
-      { state: "MERGED", mergeCommit: null, baseHead: "SUCCESS" },
+      { state: "MERGED", mergeCommit: null, after: ["SUCCESS"] },
       "passing",
     ],
-    ["neither has checks yet", { state: "MERGED", mergeCommit: null, baseHead: null }, null],
+    ["neither has checks yet", { state: "MERGED", mergeCommit: null, after: [null] }, null],
+    [
+      "the latest push skipped checks, and the run before it passed",
+      { state: "MERGED", mergeCommit: "FAILURE", after: [null, "SUCCESS"] },
+      "passing",
+    ],
+    [
+      "no push after it has checks",
+      { state: "MERGED", mergeCommit: "FAILURE", after: [null, null] },
+      "failing",
+    ],
+    [
+      "only commits before the merge have checks",
+      { state: "MERGED", mergeCommit: null, after: [] },
+      null,
+    ],
   ] as const)("%s", (_name, input, expected) => {
     expect(summary(input)).toBe(expected);
   });

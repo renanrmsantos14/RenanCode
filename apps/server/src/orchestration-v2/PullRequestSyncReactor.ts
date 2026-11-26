@@ -60,9 +60,10 @@ const MERGE_CHECKS_WINDOW_MS = 2 * 60 * 60 * 1_000;
 // A push to the base branch takes a moment to register its checks, so none yet is not final.
 const MERGE_CHECKS_GRACE_MS = 3 * 60 * 1_000;
 // Failed checks after a merge are often redone by the next push's run, which carries the merge
-// and may have cancelled them, so they are reread each sweep, then slowly, until this long.
-const FAILED_MERGE_CHECKS_WATCH_MS = 24 * 60 * 60 * 1_000;
-const FAILED_MERGE_CHECKS_SYNC_INTERVAL_MS = 60 * 1_000;
+// and may have cancelled them, so they are reread each sweep, then slowly, until this long. A fix
+// can take days, and checks still pending past the window are read the same way.
+const UNFINISHED_MERGE_CHECKS_WATCH_MS = 7 * 24 * 60 * 60 * 1_000;
+const UNFINISHED_MERGE_CHECKS_SYNC_INTERVAL_MS = 60 * 1_000;
 // A link whose host read failed waits a sweep, then twice as long after each further failure.
 const FAILED_READ_BACKOFF_MS = 60 * 1_000;
 
@@ -413,11 +414,13 @@ function awaitsRunningChecks(
   );
 }
 
-/** How long ago a merged snapshot whose merge checks failed was merged, or null otherwise. */
-function failedMergeChecksAgeMs(snapshot: ThreadPullRequestSnapshot | null, nowMs: number) {
-  if (snapshot?.state !== "merged" || snapshot.mergeCommitChecksState !== "failing") return null;
+/** How long ago a merged snapshot whose merge checks failed or never finished was merged, or null. */
+function unfinishedMergeChecksAgeMs(snapshot: ThreadPullRequestSnapshot | null, nowMs: number) {
+  if (snapshot?.state !== "merged") return null;
+  const checks = snapshot.mergeCommitChecksState;
+  if (checks !== "failing" && checks !== "pending") return null;
   const ageMs = nowMs - Date.parse(snapshot.mergedAt ?? "");
-  return ageMs < FAILED_MERGE_CHECKS_WATCH_MS ? ageMs : null;
+  return ageMs < UNFINISHED_MERGE_CHECKS_WATCH_MS ? ageMs : null;
 }
 
 function isUnsettled(thread: ProjectionStore.ProjectionThreadPullRequests): boolean {
@@ -463,16 +466,16 @@ export const make = Effect.gen(function* () {
     if ((failedReads.get(key)?.retryAtMs ?? 0) > nowMs) return false;
     if (requested.has(key)) return true;
     // Settled threads count: merging often settles the thread before its deploy is known.
-    const failedAges = entries.flatMap(
-      (entry) => failedMergeChecksAgeMs(entry.link.snapshot, nowMs) ?? [],
+    const unfinishedAges = entries.flatMap(
+      (entry) => unfinishedMergeChecksAgeMs(entry.link.snapshot, nowMs) ?? [],
     );
-    if (failedAges.length > 0) {
+    if (unfinishedAges.length > 0) {
       const last = lastSyncedAt.get(key);
       const sinceLastMs = last === undefined ? Number.POSITIVE_INFINITY : nowMs - last;
       return (
         sinceLastMs >=
-        (Math.min(...failedAges) < MERGE_CHECKS_WINDOW_MS
-          ? FAILED_MERGE_CHECKS_SYNC_INTERVAL_MS
+        (Math.min(...unfinishedAges) < MERGE_CHECKS_WINDOW_MS
+          ? UNFINISHED_MERGE_CHECKS_SYNC_INTERVAL_MS
           : SLOW_SYNC_INTERVAL_MS)
       );
     }
