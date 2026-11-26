@@ -3769,6 +3769,12 @@ export default function ChatView(props: ChatViewProps) {
       maximized={rightPanelMaximized}
       onToggleMaximized={toggleRightPanelMaximizedStable}
     >
+      {htmlFullscreenChat.active && !htmlFullscreenChat.narrow ? (
+        <FullscreenChatToggleControl
+          chatHidden={htmlFullscreenChat.chatHidden}
+          onToggle={htmlFullscreenChat.toggleChat}
+        />
+      ) : null}
       {panelToggleControls}
     </WorkspaceTitlebarControls>
   );
@@ -4531,12 +4537,6 @@ export default function ChatView(props: ChatViewProps) {
           layoutControls={
             rightPanelShown ? (
               <div className="mr-px flex items-center gap-1">
-                {htmlFullscreenChat.active && !htmlFullscreenChat.narrow ? (
-                  <FullscreenChatToggleControl
-                    chatHidden={htmlFullscreenChat.chatHidden}
-                    onToggle={htmlFullscreenChat.toggleChat}
-                  />
-                ) : null}
                 <RightPanelMaximizeControl
                   maximized={rightPanelMaximized}
                   onToggle={toggleRightPanelMaximizedStable}

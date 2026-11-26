@@ -19,7 +19,7 @@ import { useDesignSketchOpener } from "../design/DesignSketchTimelineRow";
 import { HtmlRenderFrame } from "./HtmlRenderFrame";
 import { TimelineRowCtx, type TimelineRow } from "./timelineRowContext";
 
-const MIN_CELL_WIDTH = 320;
+const MIN_CELL_WIDTH = 200;
 
 export function HtmlVariantsGrid(props: {
   readonly variants: ReadonlyArray<HtmlVariantReference>;
