@@ -4,7 +4,7 @@ Agents can answer with a page instead of only text: a chart, table, diagram, ima
 
 Pages use your current theme, including custom themes, and follow light and dark mode as you switch. Scripts run inside the page, but it is sandboxed away from T3 Code and your session. Links you click in a page open in your browser. Use the expand button to open a page full screen. On web and desktop, use the zoom controls to see more detail.
 
-Full screen keeps the thread's chat next to the page, so you can keep answering the agent while you look. On narrow windows the chat is a sheet you pull up from the bottom; on wide ones, use the chat button at the top right to hide or show it, and T3 Code remembers your choice. Press Escape to leave full screen. On mobile, the Chat button in a full-screen page opens the thread over it.
+Full screen keeps the thread's chat next to the page, so you can keep answering the agent while you look. On narrow windows the chat is a sheet you pull up from the bottom; on wide ones, use the chat button at the top right to hide or show it, and T3 Code remembers your choice. Press Escape to leave full screen. On mobile, the Chat button in a full-screen page opens the thread in a sheet over the page on iOS, and over the whole screen on Android.
 
 ## Comparing options
 
