@@ -2573,6 +2573,12 @@ const CLAUDE_MCP_ON_DEMAND_INSTRUCTIONS = `
 This thread's other MCP servers are off until the user switches them on. When a task needs one (for example a database, Figma or Gmail), call \`t3_mcp_server_request\` with its name, or without a name to list them, then end your turn: the user's answer arrives as a message. Do not ask the user to switch it on in chat.
 `;
 
+const CLAUDE_MCP_AGENT_SWITCHED_INSTRUCTIONS = `
+### MCP servers start off
+
+This thread's other MCP servers are off, and you may switch them on yourself. When a task needs one (for example a database, Figma or Gmail), call \`t3_mcp_server_request\` with its name, or without a name to list them. It switches the server on without asking the user; its tools load on your next turn, so end your turn and a message wakes you to continue. Switch on only what the task needs.
+`;
+
 // Claude 5.1+ returns text written before a tool call as a progress update, which the API
 // returns only as a summary.
 const CLAUDE_SEND_TO_USER_INSTRUCTIONS = `
@@ -2775,7 +2781,11 @@ export function makeClaudeQueryOptions(input: {
             ? ""
             : T3_CODE_ORCHESTRATION_INSTRUCTIONS +
               CLAUDE_BACKGROUND_WAIT_INSTRUCTIONS +
-              (input.settings?.mcpAtStart === "none" ? CLAUDE_MCP_ON_DEMAND_INSTRUCTIONS : "") +
+              (input.settings?.mcpAtStart === "none"
+                ? CLAUDE_MCP_ON_DEMAND_INSTRUCTIONS
+                : input.settings?.mcpAtStart === "agent"
+                  ? CLAUDE_MCP_AGENT_SWITCHED_INSTRUCTIONS
+                  : "") +
               CLAUDE_SEND_TO_USER_INSTRUCTIONS +
               (deviceInstructions
                 ? `\n${T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH}\n`

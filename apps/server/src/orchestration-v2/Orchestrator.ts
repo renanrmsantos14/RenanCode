@@ -11813,7 +11813,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         threadId: command.threadId,
         messageId: MessageId.make(`message:mcp-server-request:${card.id}`),
         text: command.enable
-          ? `The user switched on the ${card.server} MCP server for this thread; its tools load as this turn starts. Continue the task.`
+          ? `The ${card.server} MCP server is now on for this thread; its tools load as this turn starts. Continue the task.`
           : `The user declined to switch on the ${card.server} MCP server. Continue without it.`,
         notification: {
           source: { kind: "background_task" },

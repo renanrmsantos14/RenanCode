@@ -67,6 +67,7 @@ import {
   ThreadId,
   isOrchestrationV2WorkActive,
   latestProviderTurnForAttempt,
+  resolveClaudeMcpAtStart,
   resolveProjectProviderInstanceEnabled,
   SECRET_REQUEST_UNSAVED_NOTE,
 } from "@t3tools/contracts";
@@ -2776,7 +2777,34 @@ const make = Effect.gen(function* () {
               ),
             ),
           );
-        return { status: "pending", turnItemId } as const;
+        const settings = yield* serverSettings.getSettings.pipe(
+          Effect.mapError(() => failure("orchestration_error", "Unable to read server settings.")),
+        );
+        if (resolveClaudeMcpAtStart(settings, threadScope.thread.providerInstanceId) !== "agent") {
+          return { status: "pending", turnItemId } as const;
+        }
+        // The card still lands, answered, so the user sees what the agent switched on.
+        yield* threadManagement
+          .dispatch({
+            type: "thread.mcp-server-request.answer",
+            commandId: stableCommandId({
+              scope,
+              requestKey: key,
+              operation: "mcp-server-request-auto-enable",
+            }),
+            threadId,
+            turnItemId,
+            enable: true,
+          })
+          .pipe(
+            Effect.mapError((error) =>
+              failure(
+                "orchestration_error",
+                `Could not switch on the MCP server: ${errorMessage(error)}`,
+              ),
+            ),
+          );
+        return { status: "enabled" } as const;
       },
     ),
     requestSecret: Effect.fn("OrchestratorMcpService.requestSecret")(function* (scope, input) {
