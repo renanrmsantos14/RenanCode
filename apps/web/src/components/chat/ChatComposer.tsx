@@ -2,6 +2,7 @@ import { copySnapshot } from "./copySnapshot";
 import { VoiceInputSetup } from "./VoiceInputSetup";
 import { useComposerTypingGuard } from "./useComposerTypingGuard";
 import { insertAttachmentReferencesForDraft } from "./composerAttachmentReferences";
+import { Mascot } from "../mascot/Mascot";
 import type { ComposerAttachmentInsertion } from "../composerAttachmentInsertion";
 import { DESKTOP_PASTE_AS_TEXT_EVENT } from "../../lib/desktopPasteAsText";
 import { BackgroundThreadContext, HiddenThreadContext } from "./backgroundThread";
@@ -31,6 +32,7 @@ import type {
   EnvironmentId,
   ModelSelection,
   ProjectId,
+  QuestionPlacement,
   PreviewAnnotationPayload,
   ThreadContextRecord,
   EnvironmentContextRecord,
@@ -445,6 +447,11 @@ export interface ChatComposerProps {
   pendingApprovals: PendingApproval[];
   onHeldRequestIdsChange: (requestIds: ReadonlySet<string>) => void;
   pendingUserInputs: PendingUserInput[];
+  /** The open question is answered in the side panel; the composer only points to it. */
+  pendingUserInputInSidePanel?: boolean;
+  onOpenQuestionsPanel?: () => void;
+  /** Omitted where there is no side panel to move a question to. */
+  onMovePendingUserInput?: (requestId: RuntimeRequestId, placement: QuestionPlacement) => void;
   activePendingIsResponding: boolean;
   respondingRequestIds: RuntimeRequestId[];
 
@@ -600,6 +607,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     pendingApprovals,
     onHeldRequestIdsChange,
     pendingUserInputs: incomingPendingUserInputs,
+    pendingUserInputInSidePanel = false,
+    onOpenQuestionsPanel,
+    onMovePendingUserInput,
     activePendingIsResponding: incomingPendingIsResponding,
     respondingRequestIds,
     runtimeMode,
@@ -704,8 +714,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     incomingPendingApproval && !heldRequestIds.has(incomingPendingApproval.requestId)
       ? incomingPendingApproval
       : null;
+  const questionInSidePanel = pendingUserInputInSidePanel && incomingPendingUserInputs.length > 0;
   const holdingUserInput = incomingPendingUserInputs[0]
-    ? heldRequestIds.has(incomingPendingUserInputs[0].requestId)
+    ? questionInSidePanel || heldRequestIds.has(incomingPendingUserInputs[0].requestId)
     : false;
   const pendingUserInputs = holdingUserInput ? [] : incomingPendingUserInputs;
   const activePendingProgress = holdingUserInput ? null : incomingPendingProgress;
@@ -1350,7 +1361,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const activePendingUserInput = pendingUserInputs[0] ?? null;
   const isChoiceOnlyPendingQuestion =
     activePendingProgress?.activeQuestion?.allowCustomAnswer === false;
-  const showComposerTopDrawer = pendingUserInputs.length > 0;
+  const showComposerTopDrawer = pendingUserInputs.length > 0 || questionInSidePanel;
   const showCollapsedMobilePromptRow = isComposerCollapsedMobile;
   const showComposerAttachAction =
     fileStagingLimit !== null &&
@@ -3821,7 +3832,29 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     onToggleOption={onSelectActivePendingUserInputOption}
                     onAdvance={onAdvanceActivePendingUserInput}
                     onDismiss={onDismissActivePendingUserInput}
+                    {...(onMovePendingUserInput
+                      ? { moveTo: "side" as const, onMove: onMovePendingUserInput }
+                      : {})}
                   />
+                ) : questionInSidePanel ? (
+                  <ComposerBanner.Row
+                    render={<button type="button" />}
+                    className="px-4 py-1.5"
+                    data-pending-user-input-elsewhere
+                    onClick={onOpenQuestionsPanel}
+                  >
+                    <ComposerBanner.Content>
+                      <Mascot state="needsYou" size={24} />
+                      <span className="min-w-0 truncate text-muted-foreground">
+                        {gt("Question waiting in the side panel")}
+                      </span>
+                    </ComposerBanner.Content>
+                    <ComposerBanner.Actions>
+                      <span className="px-2 font-medium text-foreground">
+                        {gt("Open", { $context: "opens the side panel question" })}
+                      </span>
+                    </ComposerBanner.Actions>
+                  </ComposerBanner.Row>
                 ) : null}
               </ComposerBanner.Root>
             </ComposerBanner.Attachment>

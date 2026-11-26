@@ -31,6 +31,7 @@ const RIGHT_PANEL_KINDS = [
   "pull-requests",
   "checklist",
   "design",
+  "questions",
   "issue",
   "thread",
   "linked-thread",
@@ -92,6 +93,7 @@ export type RightPanelSurface =
   | { id: "pull-requests"; kind: "pull-requests" }
   | { id: "checklist"; kind: "checklist" }
   | { id: "design"; kind: "design" }
+  | { id: "questions"; kind: "questions" }
   /**
    * An issue opened in the issues list's shared panel, or beside a thread. Like `pull-request`,
    * the reference lives in the id so several issues can stay open as peer tabs.
@@ -305,6 +307,8 @@ const singletonSurface = (
       return { id: "checklist", kind };
     case "design":
       return { id: "design", kind };
+    case "questions":
+      return { id: "questions", kind };
     case "device":
       return { id: "device", kind };
   }

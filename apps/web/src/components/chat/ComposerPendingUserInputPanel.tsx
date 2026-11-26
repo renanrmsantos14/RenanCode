@@ -1,5 +1,10 @@
 import { Mascot } from "../mascot/Mascot";
-import { type RuntimeRequestId, type ScopedThreadRef } from "@t3tools/contracts";
+import {
+  type QuestionPlacement,
+  type RuntimeRequestId,
+  type ScopedThreadRef,
+} from "@t3tools/contracts";
+import { PanelBottomIcon, PanelRightIcon } from "lucide-react";
 import { markdownProseDirection, textDirection } from "~/textDirection";
 import { useGT } from "gt-react";
 import { memo, use, useEffect, useEffectEvent, useState } from "react";
@@ -29,6 +34,9 @@ interface PendingUserInputPanelProps {
   onToggleOption: (questionId: string, optionValue: string) => void;
   onAdvance: () => void;
   onDismiss: (requestId: RuntimeRequestId) => void;
+  /** Where the header's move button sends the question; omitted, there is no button. */
+  moveTo?: QuestionPlacement;
+  onMove?: (requestId: RuntimeRequestId, placement: QuestionPlacement) => void;
 }
 
 export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserInputPanel({
@@ -42,6 +50,8 @@ export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserIn
   onToggleOption,
   onAdvance,
   onDismiss,
+  moveTo,
+  onMove,
 }: PendingUserInputPanelProps) {
   if (pendingUserInputs.length === 0) return null;
   const activePrompt = pendingUserInputs[0];
@@ -60,6 +70,7 @@ export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserIn
       onToggleOption={onToggleOption}
       onAdvance={onAdvance}
       onDismiss={onDismiss}
+      {...(moveTo && onMove ? { moveTo, onMove } : {})}
     />
   );
 });
@@ -75,6 +86,8 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   onToggleOption,
   onAdvance,
   onDismiss,
+  moveTo,
+  onMove,
 }: {
   prompt: PendingUserInput;
   cwd: string | undefined;
@@ -86,6 +99,8 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   onToggleOption: (questionId: string, optionValue: string) => void;
   onAdvance: () => void;
   onDismiss: (requestId: RuntimeRequestId) => void;
+  moveTo?: QuestionPlacement;
+  onMove?: (requestId: RuntimeRequestId, placement: QuestionPlacement) => void;
 }) {
   const gt = useGT();
   // Message-mode requests remain answerable after their provider turn ends.
@@ -232,6 +247,39 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
             </ComposerBanner.Count>
           ) : null}
           <ComposerBanner.ToggleIcon expanded={!isCollapsed} />
+          {moveTo && onMove ? (
+            <ComposerBanner.Dismiss
+              render={<span role="button" tabIndex={0} />}
+              aria-label={
+                moveTo === "side"
+                  ? gt("Move question to side panel")
+                  : gt("Move question to composer")
+              }
+              title={
+                moveTo === "side"
+                  ? gt("Move question to side panel")
+                  : gt("Move question to composer")
+              }
+              data-pending-user-input-move={moveTo}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onMove(prompt.requestId, moveTo);
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                event.stopPropagation();
+                onMove(prompt.requestId, moveTo);
+              }}
+            >
+              {moveTo === "side" ? (
+                <PanelRightIcon className="size-3.5" />
+              ) : (
+                <PanelBottomIcon className="size-3.5" />
+              )}
+            </ComposerBanner.Dismiss>
+          ) : null}
           {prompt.dismissible ? (
             <ComposerBanner.Dismiss
               render={<span role="button" tabIndex={0} />}

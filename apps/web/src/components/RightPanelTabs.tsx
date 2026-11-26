@@ -52,6 +52,7 @@ import {
   Globe2,
   Frame,
   ListChecks,
+  MessageCircleQuestion,
   MessagesSquare,
   Plus,
   TerminalSquare,
@@ -659,6 +660,8 @@ function surfaceTitle(
       return resolve(msg("Checklist"));
     case "design":
       return resolve(msg("Design"));
+    case "questions":
+      return resolve(msg("Questions"));
     case "issue":
       // A git host numbers its issues; a tracker with keys of its own, such as Linear, names them.
       return /^\d+$/.test(surface.key) ? `#${surface.key}` : surface.key;
@@ -764,6 +767,8 @@ function SurfaceIcon({
       return <ListChecks className="size-3 shrink-0" />;
     case "design":
       return <Frame className="size-3 shrink-0" />;
+    case "questions":
+      return <MessageCircleQuestion className="size-3 shrink-0" />;
     case "issue":
       return <IssueSurfaceIcon surface={surface} environmentId={environmentId} />;
     case "thread":
