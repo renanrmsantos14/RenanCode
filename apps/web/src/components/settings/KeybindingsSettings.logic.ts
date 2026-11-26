@@ -537,6 +537,10 @@ const LATE_COMMAND_LABELS: Partial<Record<KeybindingCommand, string>> = {
   "view.reopenClosed": msg("Reopen Closed Tab"),
   "preview.focusUrl": msg("Preview: Focus URL"),
   "preview.find": msg("Preview: Find on Page"),
+  "cache.keepWarmToggle": msg("Cache: Toggle Keep Warm"),
+  "cache.compact": msg("Cache: Compact Context"),
+  "cache.handoff": msg("Cache: Hand Off to a New Thread"),
+  "composer.dictate": msg("Composer: Dictate"),
 };
 
 export function commandLabel(command: KeybindingCommand, resolve: MessageResolver = m): string {
