@@ -3807,6 +3807,7 @@
   "c84f818fa86012dc": "Choisir",
   "f47ea846b6b2f9f1": "Choisir {letter}",
   "2418e32afde270c2": "Réduire",
+  "8c8e6bb2ff75fb2d": "Ouvrir dans Design",
   "ed0bf743f6ae71ac": [
     "Vous avez choisi ",
     {
@@ -4160,6 +4161,8 @@
   "8acd97d5e80bddd3": "Afficher/masquer le panneau de droite",
   "fdc7805c136f3f7b": "Afficher/masquer le panneau de droite ({shortcut})",
   "d47ad54e98d33190": "Le panneau de droite est indisponible",
+  "37b84080ae64546b": "Show chat",
+  "0954e04a52635abd": "Hide chat",
   "7e4b0afa9879fd43": "Rétablir la taille du panneau",
   "8381e38420ae57f3": "Agrandir le panneau",
   "7d49da3c635828ce": "L’API Presse-papiers n’est pas disponible pour copier le plan.",
@@ -13325,8 +13328,6 @@
   "f7046b10d49caab6": "Historique du terminal",
   "32aebea75c7d222a": "Loading image...",
   "bf41406a4712f977": "Show image {position} of {total}",
-  "37b84080ae64546b": "Show chat",
-  "0954e04a52635abd": "Hide chat",
   "054b672ee8b1b99a": "Image review",
   "9e0b11439d738151": "Close image review",
   "9684c1071cc5a436": "Previous image",

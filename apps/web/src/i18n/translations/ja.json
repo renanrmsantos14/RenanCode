@@ -3803,6 +3803,7 @@
   "c84f818fa86012dc": "選択",
   "f47ea846b6b2f9f1": "{letter} を選択",
   "2418e32afde270c2": "折りたたむ",
+  "8c8e6bb2ff75fb2d": "デザインで開く",
   "ed0bf743f6ae71ac": [
     "選択: ",
     {
@@ -4151,6 +4152,8 @@
   "8acd97d5e80bddd3": "右パネルの切り替え",
   "fdc7805c136f3f7b": "右パネルの切り替え ({shortcut})",
   "d47ad54e98d33190": "右パネルを利用できません",
+  "37b84080ae64546b": "Show chat",
+  "0954e04a52635abd": "Hide chat",
   "7e4b0afa9879fd43": "パネルのサイズを戻す",
   "8381e38420ae57f3": "パネルを最大化",
   "7d49da3c635828ce": "プランをコピーする際にクリップボード API を利用できませんでした。",
@@ -13261,8 +13264,6 @@
   "f7046b10d49caab6": "ターミナルのスクロールバック",
   "32aebea75c7d222a": "Loading image...",
   "bf41406a4712f977": "Show image {position} of {total}",
-  "37b84080ae64546b": "Show chat",
-  "0954e04a52635abd": "Hide chat",
   "054b672ee8b1b99a": "Image review",
   "9e0b11439d738151": "Close image review",
   "9684c1071cc5a436": "Previous image",

@@ -712,6 +712,8 @@ type MessagesTimelineRowContent =
       htmlVariants: ReadonlyArray<HtmlVariantReference>;
       /** The variant a later user message picked, which collapses the block. */
       choice: { readonly index: number; readonly note: string } | null;
+      /** The Design copy of the same pages, when the canvas took them. */
+      designSketches: ReadonlyArray<DesignSketchReference> | null;
     }
   | {
       kind: "design-sketches";
@@ -2301,6 +2303,7 @@ export function deriveMessagesTimelineRows(
         createdAt: timelineEntry.createdAt,
         htmlVariants: timelineEntry.htmlVariants,
         choice: findHtmlVariantChoice(timelineEntry.htmlVariants, laterUserTexts),
+        designSketches: timelineEntry.designSketches ?? null,
       });
       continue;
     }
@@ -2950,6 +2953,7 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
         a.createdAt === bv.createdAt &&
         a.choice?.index === bv.choice?.index &&
         a.choice?.note === bv.choice?.note &&
+        a.designSketches?.[0]?.sketchId === bv.designSketches?.[0]?.sketchId &&
         a.htmlVariants.length === bv.htmlVariants.length &&
         a.htmlVariants.every((variant, index) => {
           const other = bv.htmlVariants[index];

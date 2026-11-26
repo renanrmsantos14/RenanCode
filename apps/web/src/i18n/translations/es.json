@@ -3807,6 +3807,7 @@
   "c84f818fa86012dc": "Elegir",
   "f47ea846b6b2f9f1": "Elegir {letter}",
   "2418e32afde270c2": "Contraer",
+  "8c8e6bb2ff75fb2d": "Abrir en Design",
   "ed0bf743f6ae71ac": [
     "Elegiste ",
     {
@@ -4159,6 +4160,8 @@
   "8acd97d5e80bddd3": "Mostrar u ocultar el panel derecho",
   "fdc7805c136f3f7b": "Mostrar u ocultar el panel derecho ({shortcut})",
   "d47ad54e98d33190": "El panel derecho no está disponible",
+  "37b84080ae64546b": "Show chat",
+  "0954e04a52635abd": "Hide chat",
   "7e4b0afa9879fd43": "Restaurar el tamaño del panel",
   "8381e38420ae57f3": "Maximizar el panel",
   "7d49da3c635828ce": "La API del portapapeles no está disponible al copiar el plan.",
@@ -13320,8 +13323,6 @@
   "f7046b10d49caab6": "Historial de desplazamiento de la terminal",
   "32aebea75c7d222a": "Loading image...",
   "bf41406a4712f977": "Show image {position} of {total}",
-  "37b84080ae64546b": "Show chat",
-  "0954e04a52635abd": "Hide chat",
   "054b672ee8b1b99a": "Image review",
   "9e0b11439d738151": "Close image review",
   "9684c1071cc5a436": "Previous image",

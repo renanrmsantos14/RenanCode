@@ -3807,6 +3807,7 @@
   "c84f818fa86012dc": "Choose",
   "f47ea846b6b2f9f1": "Choose {letter}",
   "2418e32afde270c2": "Collapse",
+  "8c8e6bb2ff75fb2d": "Open in Design",
   "ed0bf743f6ae71ac": [
     "You chose ",
     {
@@ -4161,6 +4162,8 @@
   "8acd97d5e80bddd3": "Toggle right panel",
   "fdc7805c136f3f7b": "Toggle right panel ({shortcut})",
   "d47ad54e98d33190": "Right panel is unavailable",
+  "37b84080ae64546b": "Show chat",
+  "0954e04a52635abd": "Hide chat",
   "7e4b0afa9879fd43": "Restore panel size",
   "8381e38420ae57f3": "Maximize panel",
   "7d49da3c635828ce": "Clipboard API is unavailable while copying plan.",
@@ -13335,8 +13338,6 @@
   "f7046b10d49caab6": "Terminal scrollback",
   "32aebea75c7d222a": "Loading image...",
   "bf41406a4712f977": "Show image {position} of {total}",
-  "37b84080ae64546b": "Show chat",
-  "0954e04a52635abd": "Hide chat",
   "054b672ee8b1b99a": "Image review",
   "9e0b11439d738151": "Close image review",
   "9684c1071cc5a436": "Previous image",

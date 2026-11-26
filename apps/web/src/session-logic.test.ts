@@ -1466,7 +1466,7 @@ describe("HTML renders in the timeline", () => {
     expect(running.find((entry) => entry.id === "render")?.kind).toBe("work");
   });
 
-  it("shows design_sketch and html_variants sketches as a design-sketches entry ahead of variants", () => {
+  it("shows design_sketch sketches as cards, and html_variants as variants carrying their sketches", () => {
     const sketch = (id: string, label?: string) => ({
       sketchId: id,
       attachmentId: `${id}.html`,
@@ -1499,18 +1499,19 @@ describe("HTML renders in the timeline", () => {
       call("mcp__t3-code__html_variants", "completed", {
         structuredContent: {
           htmlRenders: [
-            { attachmentId: "render-a.html", title: "Home", height: 420 },
-            { attachmentId: "render-b.html", title: "Home", height: 420 },
+            { attachmentId: "render-a.html", title: "Home", height: 420, label: "Dense" },
+            { attachmentId: "render-b.html", title: "Home", height: 420, label: "Airy" },
           ],
           designSketches: variants,
         },
         content: [],
       }),
     );
-    expect(grouped.find((entry) => entry.kind === "design-sketches")).toMatchObject({
+    expect(grouped.find((entry) => entry.kind === "html-variants")).toMatchObject({
+      htmlVariants: [{ label: "Dense" }, { label: "Airy" }],
       designSketches: variants,
     });
-    expect(grouped.some((entry) => entry.kind === "html-variants")).toBe(false);
+    expect(grouped.some((entry) => entry.kind === "design-sketches")).toBe(false);
 
     const running = turn(call("mcp__t3-code__design_sketch", "running"));
     expect(running.some((entry) => entry.kind === "design-sketches")).toBe(false);

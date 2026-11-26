@@ -28,11 +28,12 @@ export function DesignSketchTimelineRow({
   return <EnvironmentDesignSketches sketches={row.designSketches} />;
 }
 
-function EnvironmentDesignSketches(props: {
-  readonly sketches: ReadonlyArray<DesignSketchReference>;
-}) {
-  const ctx = use(TimelineRowCtx);
-  const { activeThreadEnvironmentId: environmentId, threadRef, onFollowHtmlVariant } = ctx;
+/**
+ * Opens a saved sketch: on the desktop canvas when it can place it there, otherwise in a viewer
+ * that `viewer` draws.
+ */
+export function useDesignSketchOpener(sketches: ReadonlyArray<DesignSketchReference>) {
+  const { activeThreadEnvironmentId: environmentId, threadRef } = use(TimelineRowCtx);
   const placeSketch = useAtomCommand(designEnvironment.placeSketch, {
     label: "design place sketch",
   });
@@ -40,7 +41,7 @@ function EnvironmentDesignSketches(props: {
   const [viewing, setViewing] = useState<number | null>(null);
 
   const open = async (index: number) => {
-    const sketch = props.sketches[index];
+    const sketch = sketches[index];
     if (sketch === undefined) return;
     if (!isElectron || threadRef === null || !canWrite) {
       setViewing(index);
@@ -57,6 +58,25 @@ function EnvironmentDesignSketches(props: {
     useDesignFocusStore.getState().request(threadRef, sketch.sketchId);
     useRightPanelStore.getState().open(threadRef, "design");
   };
+  const viewer =
+    viewing === null ? null : (
+      <EnvironmentSketchViewer
+        environmentId={environmentId}
+        threadRef={threadRef ?? undefined}
+        sketches={sketches}
+        initialIndex={viewing}
+        onClose={() => setViewing(null)}
+      />
+    );
+  return { open, viewer };
+}
+
+function EnvironmentDesignSketches(props: {
+  readonly sketches: ReadonlyArray<DesignSketchReference>;
+}) {
+  const ctx = use(TimelineRowCtx);
+  const { activeThreadEnvironmentId: environmentId, onFollowHtmlVariant } = ctx;
+  const { open, viewer } = useDesignSketchOpener(props.sketches);
 
   return (
     <div className="min-w-0 px-1">
@@ -72,15 +92,7 @@ function EnvironmentDesignSketches(props: {
           />
         )}
       />
-      {viewing !== null ? (
-        <EnvironmentSketchViewer
-          environmentId={environmentId}
-          threadRef={threadRef ?? undefined}
-          sketches={props.sketches}
-          initialIndex={viewing}
-          onClose={() => setViewing(null)}
-        />
-      ) : null}
+      {viewer}
     </div>
   );
 }

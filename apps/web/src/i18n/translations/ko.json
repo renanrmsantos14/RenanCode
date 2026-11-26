@@ -3803,6 +3803,7 @@
   "c84f818fa86012dc": "선택",
   "f47ea846b6b2f9f1": "{letter} 선택",
   "2418e32afde270c2": "접기",
+  "8c8e6bb2ff75fb2d": "디자인에서 열기",
   "ed0bf743f6ae71ac": [
     "선택: ",
     {
@@ -4149,6 +4150,8 @@
   "8acd97d5e80bddd3": "오른쪽 패널 전환",
   "fdc7805c136f3f7b": "오른쪽 패널 전환({shortcut})",
   "d47ad54e98d33190": "오른쪽 패널을 사용할 수 없습니다",
+  "37b84080ae64546b": "Show chat",
+  "0954e04a52635abd": "Hide chat",
   "7e4b0afa9879fd43": "패널 크기 복원",
   "8381e38420ae57f3": "패널 최대화",
   "7d49da3c635828ce": "계획을 복사하는 중 클립보드 API를 사용할 수 없습니다.",
@@ -13259,8 +13262,6 @@
   "f7046b10d49caab6": "터미널 스크롤백",
   "32aebea75c7d222a": "Loading image...",
   "bf41406a4712f977": "Show image {position} of {total}",
-  "37b84080ae64546b": "Show chat",
-  "0954e04a52635abd": "Hide chat",
   "054b672ee8b1b99a": "Image review",
   "9e0b11439d738151": "Close image review",
   "9684c1071cc5a436": "Previous image",

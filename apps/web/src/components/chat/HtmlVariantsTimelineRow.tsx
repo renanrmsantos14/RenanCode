@@ -5,6 +5,7 @@ import {
   htmlVariantsFrameHeight,
   type HtmlVariantReference,
 } from "@t3tools/shared/htmlRender";
+import type { DesignSketchReference } from "@t3tools/shared/design";
 import { RadioGroup } from "@base-ui/react/radio-group";
 import { T, useGT, Var } from "gt-react";
 import { type ReactNode, use, useRef, useState } from "react";
@@ -14,6 +15,7 @@ import { cn } from "~/lib/utils";
 
 import { Button } from "../ui/button";
 import { Radio } from "../ui/radio-group";
+import { useDesignSketchOpener } from "../design/DesignSketchTimelineRow";
 import { HtmlRenderFrame } from "./HtmlRenderFrame";
 import { TimelineRowCtx, type TimelineRow } from "./timelineRowContext";
 
@@ -142,6 +144,8 @@ export function HtmlVariantsTimelineRow({
       />
     );
   const chosen = row.choice === null ? undefined : row.htmlVariants[row.choice.index];
+  // The guest page draws its own variants and has no Design section to open.
+  const designSketches = ctx.renderHtmlVariant === undefined ? row.designSketches : null;
   if (row.choice !== null && chosen !== undefined && !showAll) {
     return (
       <div className="min-w-0 px-1">
@@ -162,12 +166,29 @@ export function HtmlVariantsTimelineRow({
         onFollow={ctx.onFollowHtmlVariant}
         renderVariant={renderFrame}
       />
-      {row.choice !== null ? (
-        <Button className="self-start" size="xs" variant="ghost" onClick={() => setShowAll(false)}>
-          <T>Collapse</T>
-        </Button>
+      {row.choice !== null || designSketches !== null ? (
+        <div className="flex gap-1">
+          {row.choice !== null ? (
+            <Button size="xs" variant="ghost" onClick={() => setShowAll(false)}>
+              <T>Collapse</T>
+            </Button>
+          ) : null}
+          {designSketches !== null ? <OpenInDesignButton sketches={designSketches} /> : null}
+        </div>
       ) : null}
     </div>
+  );
+}
+
+function OpenInDesignButton(props: { readonly sketches: ReadonlyArray<DesignSketchReference> }) {
+  const { open, viewer } = useDesignSketchOpener(props.sketches);
+  return (
+    <>
+      <Button size="xs" variant="ghost" onClick={() => void open(0)}>
+        <T>Open in Design</T>
+      </Button>
+      {viewer}
+    </>
   );
 }
 
