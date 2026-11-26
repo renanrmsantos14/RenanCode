@@ -735,6 +735,11 @@ const RootStackConfig = createWorkspaceStackNavigator({
       screen: FullscreenThreadRouteScreen,
       options: modalRoute({ header: "glass", itemStyle: "editor", duoMinimize: "onScrollUp" }),
     }),
+    // The chat beside a full-screen HTML render: the page stays visible above the sheet.
+    ThreadChatSheet: createNativeStackScreen({
+      screen: FullscreenThreadRouteScreen,
+      options: sheetRoute({ detent: 0.6, android: "fullScreen", itemStyle: "editor" }),
+    }),
     ThreadDevicePreview: createNativeStackScreen({
       screen: DevicePreviewRouteScreen,
       linking: `${THREAD_LINKING_PREFIX}/devices`,

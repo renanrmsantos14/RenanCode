@@ -261,7 +261,7 @@ export function AttachmentFileScreen(props: AttachmentFileScreenProps) {
             accessibilityLabel: gt("Chat"),
             icon: "bubble.left",
             onPress: () =>
-              navigation.navigate("ThreadInspectorFullscreen", {
+              navigation.navigate("ThreadChatSheet", {
                 environmentId: chatEnvironmentId,
                 threadId: chatThreadId,
               }),
