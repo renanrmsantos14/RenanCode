@@ -244,6 +244,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --animate-step-in: step-in 180ms ease-out;
   --animate-step-ping: step-ping 520ms ease-out;
   --animate-check-draw: check-draw 200ms ease-out;
+  /* A question waiting elsewhere pings three times on arrival, then the dot holds still. */
+  --animate-attention-ping: step-ping 900ms ease-out 3;
   --color-warning-foreground: var(--warning-foreground);
   --color-warning: var(--warning);
   --color-warning-surface: var(--warning-surface);

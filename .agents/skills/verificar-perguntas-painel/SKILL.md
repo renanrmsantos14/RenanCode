@@ -10,6 +10,7 @@ description: "Verifica as perguntas do agente no painel lateral: a configuraçã
 - `questionPlacement` ("composer" padrão, "side") no `ClientSettingsSchema`; `useQuestionPlacementOverrides` troca o lugar só de um `requestId`.
 - No modo painel, a resposta livre fica no painel: o rascunho do composer, o cursor e `promptRef` não mudam, e o composer envia mensagem normal.
 - A aba `questions` abre sozinha quando chega uma pergunta nova no painel; fechada, a faixa acima do composer reabre.
+- Aviso de pergunta no painel: faixa em `variant="warning"`, `AttentionDot` (âmbar, `animate-attention-ping` 3 vezes e para) no mascote da faixa, na aba Questions e no botão "Toggle right panel" quando o painel está fechado.
 - Visualização embutida (`embedded`) sempre usa o composer. Mobile não tem painel: as perguntas seguem no composer.
 
 ## Testes rápidos
@@ -25,7 +26,8 @@ description: "Verifica as perguntas do agente no painel lateral: a configuraçã
 4. Configurações › Chat › Agent questions → "Side panel". Nova thread com `replay("question")`: a aba abre sozinha.
 5. Fechar a aba (X): a faixa continua; clicar nela reabre a aba.
 6. Botão "Move question to composer" no painel: a pergunta volta ao composer, a faixa some e a aba fica vazia.
-7. Com o chat estreito (~360px) a faixa trunca o texto; o nome acessível do botão tem o texto inteiro.
+7. Com a pergunta no painel: faixa âmbar, ponto na aba Questions; fechar o painel mostra o ponto no botão do painel. `getComputedStyle` do anel interno do ponto: `0.9s ease-out 3 step-ping` (nunca `infinite`).
+8. Com o chat estreito (~360px) a faixa trunca o texto; o nome acessível do botão tem o texto inteiro.
 
 ## Casos de borda
 
