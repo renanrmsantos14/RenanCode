@@ -15,6 +15,7 @@ import { isContextMenuOpen } from "../../../contextMenuFallback";
 import { useStableCallback } from "../../../hooks/useStableCallback";
 import { isEditableFocused } from "../../../lib/editableFocus";
 import { cn } from "../../../lib/utils";
+import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "../../../workspaceTitlebar";
 import { MediaActions } from "../../media/MediaActions";
 import { Button } from "../../ui/button";
 import { reviewImageTarget, type ReviewImage, type ReviewSourceContext } from "./reviewGallery";
@@ -191,7 +192,13 @@ export function ReviewViewer({
       aria-label={gt("Image review")}
       className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-black text-white"
     >
-      <div className="flex shrink-0 items-center gap-2 px-3 py-2">
+      <div
+        className={cn(
+          "drag-region flex h-(--workspace-topbar-height) shrink-0 items-center gap-2 px-3",
+          COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
+          (review.chatHidden || review.narrow) && "wco:pr-(--workspace-native-controls-inset)",
+        )}
+      >
         <Button
           type="button"
           size="sm"
