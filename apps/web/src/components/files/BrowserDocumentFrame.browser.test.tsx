@@ -42,7 +42,7 @@ describe("HtmlRenderDocument", () => {
       <HtmlRenderDocument src={pageUrl.url} title="Report" onContentHeight={onContentHeight} />,
     );
 
-    await vi.waitFor(() => expect(onContentHeight).toHaveBeenCalledWith(321));
+    await vi.waitFor(() => expect(onContentHeight).toHaveBeenCalledWith(321, undefined));
 
     // Listeners run in registration order, so once this one sees the message the frame's has too.
     const delivered = new Promise<void>((resolve) =>

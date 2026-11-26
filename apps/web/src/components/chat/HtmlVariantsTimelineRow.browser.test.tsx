@@ -11,16 +11,19 @@ const variants = [
 ];
 
 describe("HtmlVariantsGrid", () => {
-  it("offers a follow-up per variant only when the composer can take it", async () => {
+  it("picks a variant, then hands the choice to the composer only when it can take it", async () => {
     const onFollow = vi.fn(() => true);
     await using screen = await render(
       <HtmlVariantsGrid variants={variants} renderVariant={() => <div />} onFollow={onFollow} />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Use B" }));
-    expect(onFollow).toHaveBeenCalledWith("Continue with variant B (Airy): ");
+    await expect.element(screen.getByRole("button", { name: "Choose" })).toBeDisabled();
+    await userEvent.click(screen.getByText("B · Airy"));
+    await userEvent.click(screen.getByRole("button", { name: "Choose B" }));
+    expect(onFollow).toHaveBeenCalledWith("I chose B (Airy): ");
 
     await screen.rerender(<HtmlVariantsGrid variants={variants} renderVariant={() => <div />} />);
-    await expect.element(screen.getByRole("button", { name: "Use B" })).not.toBeInTheDocument();
+    await expect.element(screen.getByRole("button", { name: "Choose B" })).not.toBeInTheDocument();
+    await expect.element(screen.getByRole("radio")).not.toBeInTheDocument();
   });
 });
