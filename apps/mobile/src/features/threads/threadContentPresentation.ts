@@ -15,6 +15,10 @@ export type ThreadContentPresentation =
       readonly reconnectable?: true;
     };
 
+// Shared so the thread screen's props keep their identity across renders.
+export const THREAD_CONTENT_READY: ThreadContentPresentation = { kind: "ready" };
+const THREAD_CONTENT_LOADING: ThreadContentPresentation = { kind: "loading" };
+
 export function projectThreadContentPresentation(input: {
   readonly hasDetail: boolean;
   readonly detailError: string | null;
@@ -26,7 +30,7 @@ export function projectThreadContentPresentation(input: {
 }): ThreadContentPresentation {
   const resolve = input.resolve ?? m;
   if (input.hasDetail) {
-    return { kind: "ready" };
+    return THREAD_CONTENT_READY;
   }
   if (input.detailDeleted) {
     return {
@@ -47,7 +51,7 @@ export function projectThreadContentPresentation(input: {
     ((input.connectionState === "connecting" || input.connectionState === "reconnecting") &&
       !input.connectionStalled)
   ) {
-    return { kind: "loading" };
+    return THREAD_CONTENT_LOADING;
   }
   return {
     kind: "unavailable",

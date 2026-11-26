@@ -29,8 +29,7 @@ import { documentChipKindForFileName } from "../../pierre-icons";
 import { ContextChip } from "../ContextChip";
 import { Button } from "../ui/button";
 import { stackedThreadToast, toastManager } from "../ui/toast";
-import { useSharedTooltip, withSharedTooltip } from "../ui/shared-tooltip";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { SharedTooltipTrigger, useSharedTooltip, withSharedTooltip } from "../ui/shared-tooltip";
 import { FileTagChipContent } from "./FileTagChip";
 import {
   hasMarkdownFilePrimaryAction,
@@ -449,12 +448,12 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
   const chipWithTooltip = sharedTooltip ? (
     withSharedTooltip(chip, sharedTooltip)
   ) : (
-    <Tooltip>
-      <TooltipTrigger render={chip} />
-      <TooltipPopup side="top" variant="code" className="pointer-events-auto">
-        {tooltipContent}
-      </TooltipPopup>
-    </Tooltip>
+    <SharedTooltipTrigger
+      render={chip}
+      label={tooltipContent}
+      variant="code"
+      className="pointer-events-auto"
+    />
   );
 
   if (!canDownload) return chipWithTooltip;

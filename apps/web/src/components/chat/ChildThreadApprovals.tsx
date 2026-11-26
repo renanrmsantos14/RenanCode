@@ -17,6 +17,7 @@ import {
 } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { toastManager } from "../ui/toast";
+import { ApprovalText } from "./ApprovalText";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
 import { PushHooksApprovalDetails } from "./PushHooksApprovalDetails";
 
@@ -43,9 +44,7 @@ function ChildApproval({ entry }: { entry: ChildThreadApproval }) {
           <PushHooksApprovalDetails pushHooks={approval.pushHooks} />
         </>
       ) : (
-        <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono">
-          {approval.detail || approval.requestKind}
-        </pre>
+        <ApprovalText text={approval.detail || approval.requestKind} />
       )}
       {approval.appName ? <p className="mt-2 text-muted-foreground">{approval.appName}</p> : null}
       {approval.responseCapability !== "live" ? (
