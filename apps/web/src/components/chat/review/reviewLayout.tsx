@@ -33,6 +33,22 @@ export function reviewChatColumnClassName(
   );
 }
 
+/** The chat column beside an HTML render opened full screen: left of the panel, or a bottom sheet. */
+export function htmlFullscreenChatColumnClassName(
+  chat: Pick<ReviewMode, "narrow" | "sheet"> & { readonly shown: boolean },
+): string | undefined {
+  if (!chat.shown) return undefined;
+  if (chat.narrow) {
+    return reviewChatColumnClassName({
+      active: true,
+      narrow: true,
+      chatHidden: false,
+      sheet: chat.sheet,
+    });
+  }
+  return "w-[min(26rem,40%)] min-w-80 flex-none border-r border-border";
+}
+
 /** The grab area of the bottom sheet: drag or tap to move between its snap points. */
 export function ReviewSheetHandle({
   review,

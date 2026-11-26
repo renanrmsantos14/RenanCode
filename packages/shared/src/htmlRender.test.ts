@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  findHtmlVariantChoice,
   htmlRenderFileName,
+  htmlVariantChoiceTag,
   htmlVariantFollowUpText,
   htmlVariantsFrameHeight,
   injectHtmlRenderBootstrap,
   readHtmlVariantReferences,
   readHtmlRenderImageRequest,
+  readHtmlRenderContentHeight,
+  readHtmlRenderContentWidth,
   readHtmlRenderLinkRequest,
 } from "./htmlRender.ts";
 import { htmlRenderFromToolItem } from "./toolOutput.ts";
@@ -248,4 +252,53 @@ describe("htmlVariantsFrameHeight", () => {
 
 it("labels follow-ups by letter", () => {
   expect(htmlVariantFollowUpText(1, "Dense cards")).toBe("Continue with variant B (Dense cards): ");
+});
+
+describe("findHtmlVariantChoice", () => {
+  const variants = [{ label: "Dense" }, { label: "Airy" }, { label: "Bold (v2)" }];
+  it("reads a localized choice and its note", () => {
+    expect(findHtmlVariantChoice(variants, ["Escolhi B (Airy): mais espaço no topo"])).toEqual({
+      index: 1,
+      note: "mais espaço no topo",
+    });
+    expect(
+      findHtmlVariantChoice(variants, [`I chose ${htmlVariantChoiceTag(2, "Bold (v2)")}`]),
+    ).toEqual({
+      index: 2,
+      note: "",
+    });
+  });
+  it("still reads the old English follow-up", () => {
+    expect(findHtmlVariantChoice(variants, [htmlVariantFollowUpText(0, "Dense") + "ok"])).toEqual({
+      index: 0,
+      note: "ok",
+    });
+  });
+  it("uses the first matching message and ignores unrelated or mid-text mentions", () => {
+    expect(
+      findHtmlVariantChoice(variants, [
+        "looks good",
+        "A long message that only later mentions B (Airy): nope",
+        "line one\nA (Dense): nope",
+        "Escolhi A (Dense): first",
+        "Escolhi B (Airy): second",
+      ]),
+    ).toEqual({ index: 0, note: "first" });
+    expect(findHtmlVariantChoice(variants, ["XB (Airy): glued"])).toBe(null);
+    expect(findHtmlVariantChoice(variants, ["Escolhi B (Other): x"])).toBe(null);
+  });
+});
+
+describe("readHtmlRenderContentWidth", () => {
+  const message = (params: unknown) => ({
+    jsonrpc: "2.0",
+    method: "ui/notifications/size-changed",
+    params,
+  });
+  it("reads the optional width next to the height", () => {
+    expect(readHtmlRenderContentWidth(message({ height: 300, width: 440 }))).toBe(440);
+    expect(readHtmlRenderContentHeight(message({ height: 300, width: 440 }))).toBe(300);
+    expect(readHtmlRenderContentWidth(message({ height: 300 }))).toBe(undefined);
+    expect(readHtmlRenderContentWidth(message({ height: 300, width: "440" }))).toBe(undefined);
+  });
 });

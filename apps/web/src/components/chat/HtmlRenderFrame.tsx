@@ -40,6 +40,8 @@ export function HtmlRenderFrame(props: {
   readonly threadRef: ScopedThreadRef | undefined;
   readonly minHeight?: number;
   readonly onFullscreenChange?: (fullscreen: boolean) => void;
+  /** Opens the render full screen elsewhere (the right panel); unset, it opens in a dialog. */
+  readonly onOpenFullscreen?: ((htmlRender: HtmlRenderReference) => void) | undefined;
 }) {
   const gt = useGT();
   const { attachmentId, title } = props.htmlRender;
@@ -54,9 +56,13 @@ export function HtmlRenderFrame(props: {
   const [contentHeight, setContentHeight] = useState(() =>
     measuredContentHeights.get(attachmentId),
   );
+  // Only a page that overflowed its frame counts as fixed width; a fluid page tracks the frame.
+  const [fixedWidth, setFixedWidth] = useState<number>();
+  const scale = fixedWidth !== undefined && fixedWidth > width + 1 ? width / fixedWidth : 1;
+  const innerWidth = width / scale;
   const height = Math.max(
     props.minHeight ?? 0,
-    htmlRenderFrameHeight(props.htmlRender, width, contentHeight),
+    htmlRenderFrameHeight(props.htmlRender, innerWidth, contentHeight) * scale,
   );
   const fileName = htmlRenderFileName(title);
   const resource = {
@@ -88,21 +94,33 @@ export function HtmlRenderFrame(props: {
   }, [expanded, onFullscreenChange]);
 
   return (
-    <div ref={observeBox} className="group/html-render relative" style={{ height }}>
+    <div ref={observeBox} className="group/html-render relative overflow-hidden" style={{ height }}>
       {src !== null ? (
         <>
-          <HtmlRenderDocument
-            src={src}
-            title={title}
-            threadRef={props.threadRef}
-            className="block size-full"
-            containScroll
-            onContentHeight={(height) => {
-              rememberContentHeight(attachmentId, height);
-              setContentHeight(height);
-            }}
-            onFullscreenChange={onFullscreenChange}
-          />
+          <div
+            className="origin-top-left"
+            style={
+              scale === 1
+                ? { height: "100%" }
+                : { width: innerWidth, height: height / scale, transform: `scale(${scale})` }
+            }
+          >
+            <HtmlRenderDocument
+              src={src}
+              title={title}
+              threadRef={props.threadRef}
+              className="block size-full"
+              containScroll
+              onContentHeight={(height, contentWidth) => {
+                rememberContentHeight(attachmentId, height);
+                setContentHeight(height);
+                if (contentWidth === undefined) return;
+                if (contentWidth > innerWidth + 1) setFixedWidth(contentWidth);
+                else if (Math.abs(contentWidth - (fixedWidth ?? -1)) > 1) setFixedWidth(undefined);
+              }}
+              onFullscreenChange={onFullscreenChange}
+            />
+          </div>
           <div className="absolute end-2 top-2 flex gap-1 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/html-render:opacity-100 pointer-coarse:opacity-100">
             <Tooltip>
               <TooltipTrigger
@@ -112,6 +130,10 @@ export function HtmlRenderFrame(props: {
                     size="icon-xs"
                     variant="glass"
                     onClick={async () => {
+                      if (props.onOpenFullscreen) {
+                        props.onOpenFullscreen(props.htmlRender);
+                        return;
+                      }
                       const url =
                         loaded !== null && loaded.expiresAt - Date.now() > MIN_URL_LIFE_MS
                           ? src
@@ -144,11 +166,26 @@ export function HtmlRenderFrame(props: {
           ) : null}
         </>
       ) : failed ? (
-        <p className="flex size-full items-center justify-center text-muted-foreground text-xs">
-          <T>
-            Unable to load <Var>{title}</Var>
-          </T>
-        </p>
+        <div className="flex size-full flex-col items-center justify-center gap-2 text-muted-foreground text-xs">
+          <p>
+            <T>
+              Unable to load <Var>{title}</Var>
+            </T>
+          </p>
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={() => {
+              void refresh()
+                .then((url) => {
+                  if (url !== null) setLoaded({ src: url, expiresAt: Date.now() });
+                })
+                .catch(() => undefined);
+            }}
+          >
+            <T>Try again</T>
+          </Button>
+        </div>
       ) : null}
     </div>
   );

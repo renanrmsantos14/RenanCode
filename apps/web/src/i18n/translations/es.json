@@ -3807,14 +3807,27 @@
       "v": "v"
     }
   ],
-  "f483c3f170663a6e": [
-    "Usar ",
+  "b6bf231697a34317": "Variantes",
+  "b65db58454f4bcfe": "Elegí {choice}",
+  "c84f818fa86012dc": "Elegir",
+  "f47ea846b6b2f9f1": "Elegir {letter}",
+  "2418e32afde270c2": "Contraer",
+  "8c8e6bb2ff75fb2d": "Abrir en Design",
+  "ed0bf743f6ae71ac": [
+    "Elegiste ",
     {
       "i": 1,
       "k": "_gt_value_1",
       "v": "v"
+    },
+    " · ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
     }
   ],
+  "6bc7d41e095831d3": "Show all",
   "63fd02d55f0e4417": "Vincular una máquina a este entorno",
   "4136b6bb217cc0b8": "Vincular {target} a este entorno",
   "0986757d94229f8f": "Elegir máquina…",
@@ -4152,6 +4165,8 @@
   "8acd97d5e80bddd3": "Mostrar u ocultar el panel derecho",
   "fdc7805c136f3f7b": "Mostrar u ocultar el panel derecho ({shortcut})",
   "d47ad54e98d33190": "El panel derecho no está disponible",
+  "37b84080ae64546b": "Show chat",
+  "0954e04a52635abd": "Hide chat",
   "7e4b0afa9879fd43": "Restaurar el tamaño del panel",
   "8381e38420ae57f3": "Maximizar el panel",
   "7d49da3c635828ce": "La API del portapapeles no está disponible al copiar el plan.",
@@ -5493,6 +5508,14 @@
   "fd5affd1025ff33c": "Cancelar selección",
   "003cfb37bb7454a9": "Seleccionar elemento",
   "16e20108e473df2e": "Boceto sin miniatura",
+  "f483c3f170663a6e": [
+    "Usar ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
   "41610c10231f239c": "Añadir el boceto {title} al lienzo",
   "2fcaf10a5441b69c": "Buscar bocetos",
   "0bd1e258386c3573": "No se pudieron cargar los bocetos del proyecto.",
@@ -13315,8 +13338,6 @@
   "f7046b10d49caab6": "Historial de desplazamiento de la terminal",
   "32aebea75c7d222a": "Loading image...",
   "bf41406a4712f977": "Show image {position} of {total}",
-  "37b84080ae64546b": "Show chat",
-  "0954e04a52635abd": "Hide chat",
   "054b672ee8b1b99a": "Image review",
   "9e0b11439d738151": "Close image review",
   "9684c1071cc5a436": "Previous image",

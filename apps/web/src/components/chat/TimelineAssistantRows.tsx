@@ -374,6 +374,7 @@ export function HtmlRenderTimelineRow({
         htmlRender={row.htmlRender}
         threadRef={ctx.threadRef ?? undefined}
         onFullscreenChange={onFullscreenChange}
+        onOpenFullscreen={ctx.onOpenHtmlRender}
       />
     </div>
   );

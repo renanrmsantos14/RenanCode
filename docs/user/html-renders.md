@@ -4,6 +4,12 @@ Agents can answer with a page instead of only text: a chart, table, diagram, ima
 
 Pages use your current theme, including custom themes, and follow light and dark mode as you switch. Scripts run inside the page, but it is sandboxed away from T3 Code and your session. Links you click in a page open in your browser. Use the expand button to open a page full screen. On web and desktop, use the zoom controls to see more detail.
 
+Full screen keeps the thread's chat next to the page, so you can keep answering the agent while you look. On narrow windows the chat is a sheet you pull up from the bottom; on wide ones, use the chat button at the top right to hide or show it, and T3 Code remembers your choice. Press Escape to leave full screen. On mobile, the Chat button in a full-screen page opens the thread over it.
+
+## Comparing options
+
+When you ask for options ("show me three versions of this screen"), the agent can send them as lettered variants. On wide windows they sit side by side; otherwise swipe or use the A, B, C buttons. Pick one and choose it: T3 Code writes "I chose B (its label):" in your composer, so you can add a note before sending. Once you send it, the options fold into one line showing your pick, which you can expand again to see them all. If the agent also saved the options to the thread's Design section, "Open in Design" opens them there.
+
 Agents can place local images in a page by file path. T3 Code embeds them when the page is published, so the page keeps working after the original files move or are deleted. Deleting the thread deletes its pages.
 
 Before publishing, agents check their work with screenshots from a small headless browser that T3 Code keeps for itself; it never uses a browser you installed. The first preview on a machine downloads it once (about 120 MB) into T3 Code's data folder, so that preview can take a minute. Browser tabs on a remote environment use the same browser, so whichever comes first downloads it. Some Linux hosts need [setup](remote-access.md#browser-host-setup) before it can start. Pages publish without it.

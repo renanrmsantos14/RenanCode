@@ -6,14 +6,13 @@ import {
   htmlRenderFrameHeight,
   htmlRenderThemeFragment,
   htmlRenderThemeMessage,
-  htmlVariantFollowUpText,
   htmlVariantLetter,
   htmlVariantsFrameHeight,
   type HtmlRenderReference,
   type HtmlRenderTheme,
   type HtmlVariantReference,
 } from "@t3tools/shared/htmlRender";
-import { T, useGT, Var } from "gt-react-native";
+import { T, useGT, useMessages, Var } from "gt-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
   Platform,
@@ -29,6 +28,7 @@ import { WebView, type WebViewMessageEvent } from "react-native-webview";
 
 import { SymbolView } from "../../components/ui/AppSymbol";
 import { AppText as Text } from "../../components/ui/AppText";
+import { htmlVariantChoiceText } from "../../lib/htmlVariantChoice";
 import { mobileHtmlRenderTheme } from "../../lib/htmlRenderTheme";
 import { useOpenPullRequest } from "../../native/useOpenPullRequest";
 import { useAssetUrlState, useRefreshAssetUrl } from "../../state/assets";
@@ -39,6 +39,7 @@ const ROW_BOTTOM_MARGIN = 8;
 const ACTION_ROW_HEIGHT = 32;
 const FULL_SCREEN_GUTTER = 16;
 const VARIANTS_HEADER_HEIGHT = 40;
+const VARIANTS_COLLAPSED_HEIGHT = 56;
 
 export function htmlRenderRowHeight(frameHeight: number) {
   return ACTION_ROW_HEIGHT + frameHeight + ROW_BOTTOM_MARGIN;
@@ -46,6 +47,10 @@ export function htmlRenderRowHeight(frameHeight: number) {
 
 export function htmlVariantsRowHeight(frameHeight: number) {
   return htmlRenderRowHeight(frameHeight) + VARIANTS_HEADER_HEIGHT;
+}
+
+export function htmlVariantsCollapsedRowHeight() {
+  return VARIANTS_COLLAPSED_HEIGHT + ROW_BOTTOM_MARGIN;
 }
 
 function useHtmlRenderTheme() {
@@ -304,20 +309,64 @@ export function ThreadHtmlVariants(props: {
   readonly variants: ReadonlyArray<HtmlVariantReference>;
   readonly frameWidth: number;
   readonly iconColor: ColorValue;
+  readonly choice: { readonly index: number; readonly note: string } | null;
+  readonly expanded: boolean;
+  readonly onToggleExpanded: () => void;
   readonly onFollow?: (text: string) => void;
 }) {
   const gt = useGT();
+  const m = useMessages();
   const scroll = useRef<ScrollViewInstance>(null);
   const [active, setActive] = useState(0);
+  const [chosen, setChosen] = useState<number | null>(null);
   const height = htmlVariantsFrameHeight(props.variants, props.frameWidth);
-  const current = props.variants[active] ?? props.variants[0];
+  const chosenVariant = chosen === null ? undefined : props.variants[chosen];
+  const summarized = props.choice === null ? undefined : props.variants[props.choice.index];
   const select = (index: number) => {
     setActive(index);
+    setChosen(index);
     scroll.current?.scrollTo({ x: index * props.frameWidth, animated: true });
   };
   const handleScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     setActive(Math.round(event.nativeEvent.contentOffset.x / props.frameWidth));
   };
+
+  if (props.choice !== null && summarized !== undefined && !props.expanded) {
+    return (
+      <View
+        className="flex-row items-center gap-3 rounded-lg border border-border/60 bg-card px-3"
+        style={{
+          height: VARIANTS_COLLAPSED_HEIGHT,
+          marginBottom: ROW_BOTTOM_MARGIN,
+          width: props.frameWidth,
+        }}
+      >
+        <View className="min-w-0 flex-1">
+          <Text numberOfLines={1} className="text-sm font-medium text-foreground">
+            <T>
+              You chose <Var>{htmlVariantLetter(props.choice.index)}</Var> ·{" "}
+              <Var>{summarized.label}</Var>
+            </T>
+          </Text>
+          {props.choice.note === "" ? null : (
+            <Text numberOfLines={1} className="text-xs text-foreground-muted">
+              {props.choice.note}
+            </Text>
+          )}
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          hitSlop={8}
+          className="rounded-full border border-border/60 px-3 py-1"
+          onPress={props.onToggleExpanded}
+        >
+          <Text className="text-xs font-medium text-foreground">
+            <T>Show all</T>
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
     <View>
@@ -329,35 +378,47 @@ export function ThreadHtmlVariants(props: {
           {props.variants.map((variant, index) => (
             <Pressable
               key={variant.attachmentId}
-              accessibilityRole="button"
-              accessibilityState={{ selected: index === active }}
+              accessibilityRole={props.onFollow ? "radio" : "button"}
+              accessibilityState={{ selected: index === active, checked: index === chosen }}
               accessibilityLabel={gt("Show variant {letter}", { letter: htmlVariantLetter(index) })}
               hitSlop={4}
-              className={`min-w-0 shrink rounded-full border px-2.5 py-1 ${
+              className={`min-w-0 shrink flex-row items-center gap-1.5 rounded-full border px-2.5 py-1 ${
                 index === active ? "border-foreground/40 bg-card" : "border-border/60"
               }`}
               onPress={() => select(index)}
             >
+              {props.onFollow ? (
+                <View className="h-3 w-3 items-center justify-center rounded-full border border-foreground/50">
+                  {index === chosen ? (
+                    <View className="h-1.5 w-1.5 rounded-full bg-foreground" />
+                  ) : null}
+                </View>
+              ) : null}
               <Text
                 numberOfLines={1}
-                className={`text-xs ${index === active ? "text-foreground" : "text-foreground-muted"}`}
+                className={`shrink text-xs ${index === active ? "text-foreground" : "text-foreground-muted"}`}
               >
                 {`${htmlVariantLetter(index)} · ${variant.label}`}
               </Text>
             </Pressable>
           ))}
         </View>
-        {props.onFollow && current ? (
+        {props.onFollow ? (
           <Pressable
             accessibilityRole="button"
+            accessibilityState={{ disabled: chosenVariant === undefined }}
+            disabled={chosenVariant === undefined}
             hitSlop={4}
-            className="rounded-full bg-foreground px-3 py-1"
-            onPress={() => props.onFollow?.(htmlVariantFollowUpText(active, current.label))}
+            className={`rounded-full bg-foreground px-3 py-1 ${chosenVariant === undefined ? "opacity-40" : ""}`}
+            onPress={() => {
+              if (chosen === null || chosenVariant === undefined) return;
+              props.onFollow?.(htmlVariantChoiceText(chosen, chosenVariant.label, m));
+            }}
           >
             <Text className="text-xs font-medium text-background">
-              <T>
-                Use <Var>{htmlVariantLetter(active)}</Var>
-              </T>
+              {chosen === null
+                ? gt("Choose", { $context: "button, picks the selected variant" })
+                : gt("Choose {letter}", { letter: htmlVariantLetter(chosen) })}
             </Text>
           </Pressable>
         ) : null}
@@ -383,6 +444,18 @@ export function ThreadHtmlVariants(props: {
           </View>
         ))}
       </ScrollView>
+      {props.choice === null ? null : (
+        <Pressable
+          accessibilityRole="button"
+          hitSlop={8}
+          className="mb-2 self-end rounded-full border border-border/60 px-3 py-1"
+          onPress={props.onToggleExpanded}
+        >
+          <Text className="text-xs font-medium text-foreground">
+            <T>Collapse</T>
+          </Text>
+        </Pressable>
+      )}
     </View>
   );
 }

@@ -297,6 +297,7 @@ interface MessagesTimelineProps {
   ) => void;
   renderHtmlRender?: TimelineRowSharedState["renderHtmlRender"];
   onFollowHtmlVariant?: TimelineRowSharedState["onFollowHtmlVariant"];
+  onOpenHtmlRender?: TimelineRowSharedState["onOpenHtmlRender"];
   renderHtmlVariant?: TimelineRowSharedState["renderHtmlVariant"];
   renderDesignSketches?: TimelineRowSharedState["renderDesignSketches"];
   turnItemSource?: TimelineRowSharedState["turnItemSource"];
@@ -429,6 +430,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   onOpenThread,
   renderHtmlRender,
   onFollowHtmlVariant,
+  onOpenHtmlRender,
   renderHtmlVariant,
   renderDesignSketches,
   turnItemSource,
@@ -1207,6 +1209,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
     onOpenThread,
     renderHtmlRender,
     onFollowHtmlVariant,
+    onOpenHtmlRender,
     renderHtmlVariant,
     renderDesignSketches,
     turnItemSource,

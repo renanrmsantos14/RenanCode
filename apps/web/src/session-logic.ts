@@ -147,6 +147,8 @@ export type TimelineEntry = (
       readonly createdAt: string;
       readonly runId: RunId | null;
       readonly htmlVariants: ReadonlyArray<HtmlVariantReference>;
+      /** The Design copy of the same pages, when the canvas took them. */
+      readonly designSketches?: ReadonlyArray<DesignSketchReference>;
     }
   | {
       readonly id: string;
@@ -738,18 +740,7 @@ export function deriveTimelineEntriesFromVisibleTurnItems(
       item.type === "dynamic_tool" && item.status === "completed"
         ? designSketchesFromToolItem(item)
         : undefined;
-    if (designSketches !== undefined) {
-      entries.push({
-        id: item.id,
-        kind: "design-sketches",
-        createdAt,
-        runId: item.runId,
-        designSketches,
-        ...attemptMetadata,
-      });
-      continue;
-    }
-
+    // html_variants also saves its pages as Design sketches; the variants block, which picks one, wins.
     const htmlVariants =
       item.type === "dynamic_tool" && item.status === "completed"
         ? htmlVariantsFromToolItem(item)
@@ -761,6 +752,19 @@ export function deriveTimelineEntriesFromVisibleTurnItems(
         createdAt,
         runId: item.runId,
         htmlVariants,
+        ...(designSketches === undefined ? {} : { designSketches }),
+        ...attemptMetadata,
+      });
+      continue;
+    }
+
+    if (designSketches !== undefined) {
+      entries.push({
+        id: item.id,
+        kind: "design-sketches",
+        createdAt,
+        runId: item.runId,
+        designSketches,
         ...attemptMetadata,
       });
       continue;

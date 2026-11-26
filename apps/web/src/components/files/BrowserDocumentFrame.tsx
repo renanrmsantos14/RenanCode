@@ -18,6 +18,7 @@ import {
   htmlRenderThemeMessage,
   htmlRenderResult,
   readHtmlRenderContentHeight,
+  readHtmlRenderContentWidth,
   readHtmlRenderImageRequest,
   readHtmlRenderKeyDown,
   readHtmlRenderLinkRequest,
@@ -305,7 +306,8 @@ export function HtmlRenderDocument(props: {
   readonly title: string;
   readonly className?: string;
   readonly threadRef?: ScopedThreadRef | undefined;
-  readonly onContentHeight?: (height: number) => void;
+  /** `width` is the page's scroll width, when its bootstrap reports one. */
+  readonly onContentHeight?: (height: number, width: number | undefined) => void;
   /** Keeps the page's scrollIntoView calls from scrolling the host, for frames inline in the chat. */
   readonly containScroll?: boolean | undefined;
   /** Reports fullscreen changes so virtualized rows can stay mounted. */
@@ -412,7 +414,7 @@ export function HtmlRenderDocument(props: {
   const onFrameMessage = useEffectEvent((frame: HTMLIFrameElement, event: MessageEvent) => {
     const height = readHtmlRenderContentHeight(event.data);
     if (height !== undefined) {
-      props.onContentHeight?.(height);
+      props.onContentHeight?.(height, readHtmlRenderContentWidth(event.data));
       return;
     }
     if (document.activeElement !== frame || navigator.userActivation?.isActive === false) return;

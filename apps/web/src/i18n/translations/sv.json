@@ -3807,14 +3807,27 @@
       "v": "v"
     }
   ],
-  "f483c3f170663a6e": [
-    "Använd ",
+  "b6bf231697a34317": "Varianter",
+  "b65db58454f4bcfe": "Jag väljer {choice}",
+  "c84f818fa86012dc": "Välj",
+  "f47ea846b6b2f9f1": "Välj {letter}",
+  "2418e32afde270c2": "Fäll ihop",
+  "8c8e6bb2ff75fb2d": "Öppna i Design",
+  "ed0bf743f6ae71ac": [
+    "Du valde ",
     {
       "i": 1,
       "k": "_gt_value_1",
       "v": "v"
+    },
+    " · ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
     }
   ],
+  "6bc7d41e095831d3": "Show all",
   "63fd02d55f0e4417": "Länka en dator till den här miljön",
   "4136b6bb217cc0b8": "Länka {target} till den här miljön",
   "0986757d94229f8f": "Välj dator…",
@@ -4153,6 +4166,8 @@
   "8acd97d5e80bddd3": "Växla högerpanelen",
   "fdc7805c136f3f7b": "Växla högerpanelen ({shortcut})",
   "d47ad54e98d33190": "Högerpanelen är inte tillgänglig",
+  "37b84080ae64546b": "Show chat",
+  "0954e04a52635abd": "Hide chat",
   "7e4b0afa9879fd43": "Återställ panelens storlek",
   "8381e38420ae57f3": "Maximera panelen",
   "7d49da3c635828ce": "Urklipps-API:t är inte tillgängligt vid kopiering av planen.",
@@ -5494,6 +5509,14 @@
   "fd5affd1025ff33c": "Avbryt val",
   "003cfb37bb7454a9": "Välj element",
   "16e20108e473df2e": "Skiss utan miniatyr",
+  "f483c3f170663a6e": [
+    "Använd ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
   "41610c10231f239c": "Lägg till skissen {title} på arbetsytan",
   "2fcaf10a5441b69c": "Sök skisser",
   "0bd1e258386c3573": "Det gick inte att läsa in projektets skisser.",
@@ -13328,8 +13351,6 @@
   "f7046b10d49caab6": "Terminalens rullningshistorik",
   "32aebea75c7d222a": "Loading image...",
   "bf41406a4712f977": "Show image {position} of {total}",
-  "37b84080ae64546b": "Show chat",
-  "0954e04a52635abd": "Hide chat",
   "054b672ee8b1b99a": "Image review",
   "9e0b11439d738151": "Close image review",
   "9684c1071cc5a436": "Previous image",

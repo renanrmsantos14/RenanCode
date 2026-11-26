@@ -3807,14 +3807,27 @@
       "v": "v"
     }
   ],
-  "f483c3f170663a6e": [
-    "Usar ",
+  "b6bf231697a34317": "Variações",
+  "b65db58454f4bcfe": "Escolhi {choice}",
+  "c84f818fa86012dc": "Escolher",
+  "f47ea846b6b2f9f1": "Escolher {letter}",
+  "2418e32afde270c2": "Recolher",
+  "8c8e6bb2ff75fb2d": "Abrir no Design",
+  "ed0bf743f6ae71ac": [
+    "Você escolheu ",
     {
       "i": 1,
       "k": "_gt_value_1",
       "v": "v"
+    },
+    " · ",
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
     }
   ],
+  "6bc7d41e095831d3": "Show all",
   "63fd02d55f0e4417": "Vincular uma máquina a este ambiente",
   "4136b6bb217cc0b8": "Vincular {target} a este ambiente",
   "0986757d94229f8f": "Escolher máquina…",
@@ -4153,6 +4166,8 @@
   "8acd97d5e80bddd3": "Alternar painel direito",
   "fdc7805c136f3f7b": "Alternar painel direito ({shortcut})",
   "d47ad54e98d33190": "O painel direito não está disponível",
+  "37b84080ae64546b": "Mostrar chat",
+  "0954e04a52635abd": "Ocultar chat",
   "7e4b0afa9879fd43": "Restaurar tamanho do painel",
   "8381e38420ae57f3": "Maximizar painel",
   "7d49da3c635828ce": "A API da área de transferência não está disponível ao copiar o plano.",
@@ -5493,6 +5508,14 @@
   "fd5affd1025ff33c": "Cancelar seleção",
   "003cfb37bb7454a9": "Selecionar elemento",
   "16e20108e473df2e": "Esboço sem miniatura",
+  "f483c3f170663a6e": [
+    "Usar ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
   "41610c10231f239c": "Adicionar o esboço {title} ao canvas",
   "2fcaf10a5441b69c": "Buscar esboços",
   "0bd1e258386c3573": "Não foi possível carregar os esboços do projeto.",
@@ -13320,8 +13343,6 @@
   "f7046b10d49caab6": "Histórico de rolagem do terminal",
   "32aebea75c7d222a": "Carregando imagem...",
   "bf41406a4712f977": "Mostrar imagem {position} de {total}",
-  "37b84080ae64546b": "Mostrar chat",
-  "0954e04a52635abd": "Ocultar chat",
   "054b672ee8b1b99a": "Revisão de imagens",
   "9e0b11439d738151": "Fechar revisão de imagens",
   "9684c1071cc5a436": "Imagem anterior",

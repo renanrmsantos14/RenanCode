@@ -25,6 +25,7 @@ import type { WorkflowOpening } from "@t3tools/client-runtime/state/subagentRunt
 import { useEffect, useRef, createContext, type MouseEvent, type ReactNode } from "react";
 import { type LegendListRef } from "@legendapp/list/react";
 import type { CodexArtifactTemplate } from "@t3tools/shared/codexArtifactTemplates";
+import type { HtmlRenderReference } from "@t3tools/shared/htmlRender";
 import type { PendingApproval } from "../../session-logic";
 import { type ChatFileAttachment } from "../../types";
 import { type ExpandedImageItem, ExpandedImagePreview } from "./ExpandedImagePreview";
@@ -82,6 +83,8 @@ export interface TimelineRowSharedState {
    */
   renderHtmlRender: ((row: Extract<TimelineRow, { kind: "html-render" }>) => ReactNode) | undefined;
   onFollowHtmlVariant: ((text: string) => boolean) | undefined;
+  /** Opens a published HTML visual full screen beside the chat; unset, it opens in a dialog. */
+  onOpenHtmlRender: ((htmlRender: HtmlRenderReference) => void) | undefined;
   /** Draws one published variant; unset, the row loads it from the environment. */
   renderHtmlVariant:
     | ((

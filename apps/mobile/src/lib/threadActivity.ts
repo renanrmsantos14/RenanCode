@@ -76,7 +76,11 @@ import { claudeResumeCompactionAge } from "@t3tools/shared/claudeCompaction";
 import { formatDuration } from "@t3tools/shared/orchestrationTimingCopy";
 import { truncate } from "@t3tools/shared/String";
 import type { DesignSketchReference } from "@t3tools/shared/design";
-import type { HtmlRenderReference, HtmlVariantReference } from "@t3tools/shared/htmlRender";
+import {
+  findHtmlVariantChoice,
+  type HtmlRenderReference,
+  type HtmlVariantReference,
+} from "@t3tools/shared/htmlRender";
 import type { McpAppReference } from "@t3tools/shared/mcpApp";
 import {
   compactDynamicToolOutput,
@@ -2513,6 +2517,36 @@ export interface ThreadFeedCache {
   presentation: ThreadFeedPresentationBuild | null;
 }
 
+/** The variant a later user message picked, per `html-variants` entry id. */
+export function htmlVariantChoices(
+  feed: ReadonlyArray<{
+    readonly type: string;
+    readonly id: string;
+    readonly variants?: ReadonlyArray<Pick<HtmlVariantReference, "label">>;
+    readonly message?: { readonly role?: string; readonly text?: string };
+  }>,
+): ReadonlyMap<string, { readonly index: number; readonly note: string }> {
+  const choices = new Map<string, { readonly index: number; readonly note: string }>();
+  if (!feed.some((entry) => entry.type === "html-variants")) return choices;
+  const userTexts: { readonly at: number; readonly text: string }[] = [];
+  for (const [at, entry] of feed.entries()) {
+    if (
+      entry.type === "message" &&
+      entry.message?.role === "user" &&
+      entry.message.text !== undefined
+    ) {
+      userTexts.push({ at, text: entry.message.text });
+    }
+  }
+  for (const [at, entry] of feed.entries()) {
+    if (entry.type !== "html-variants" || !entry.variants) continue;
+    const later = userTexts.filter((message) => message.at > at).map((message) => message.text);
+    const choice = findHtmlVariantChoice(entry.variants, later);
+    if (choice) choices.set(entry.id, choice);
+  }
+  return choices;
+}
+
 export function createThreadFeedCache(): ThreadFeedCache {
   return { feedBuild: null, presentation: null };
 }
@@ -2690,19 +2724,7 @@ export function buildThreadFeed(
       item.type === "dynamic_tool" && item.status === "completed"
         ? designSketchesFromToolItem(item)
         : undefined;
-    if (sketches) {
-      const entry: RawThreadFeedEntry = {
-        type: "design-sketches",
-        id: `design-sketches:${row.visibility}:${row.sourceThreadId}:${row.sourceItemId}`,
-        createdAt,
-        runId: item.runId,
-        sketches,
-      };
-      projectedEntriesCache.set(row, { attemptId, locale, entries: [entry] });
-      entries.push(entry);
-      entryRows.push(index);
-      continue;
-    }
+    // html_variants also saves its pages as Design sketches; the variants block, which picks one, wins.
     const variants =
       item.type === "dynamic_tool" && item.status === "completed"
         ? htmlVariantsFromToolItem(item)
@@ -2714,6 +2736,19 @@ export function buildThreadFeed(
         createdAt,
         runId: item.runId,
         variants,
+      };
+      projectedEntriesCache.set(row, { attemptId, locale, entries: [entry] });
+      entries.push(entry);
+      entryRows.push(index);
+      continue;
+    }
+    if (sketches) {
+      const entry: RawThreadFeedEntry = {
+        type: "design-sketches",
+        id: `design-sketches:${row.visibility}:${row.sourceThreadId}:${row.sourceItemId}`,
+        createdAt,
+        runId: item.runId,
+        sketches,
       };
       projectedEntriesCache.set(row, { attemptId, locale, entries: [entry] });
       entries.push(entry);
