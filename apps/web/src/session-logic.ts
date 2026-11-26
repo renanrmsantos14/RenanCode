@@ -1,12 +1,16 @@
 import type { ThreadStructureRuntime } from "@t3tools/client-runtime/state/shell";
 import { msg } from "gt-react";
-import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
+import {
+  resolveThreadWorkingStartedAt,
+  type ThreadStructureTurnItem,
+} from "@t3tools/client-runtime/state/models";
 import {
   type AssetResource,
   type OrchestrationV2Checkpoint,
   type OrchestrationV2ThreadProjection,
   type OrchestrationV2ExecutionNode,
   type OrchestrationV2PlanArtifact,
+  type OrchestrationV2PlanStep,
   type OrchestrationV2ProjectedTurnItem,
   type OrchestrationV2RunAttempt,
   type OrchestrationV2TurnItem,
@@ -29,6 +33,7 @@ import {
   designSketchesFromToolItem,
   htmlVariantsFromToolItem,
   mcpAppFromToolItem,
+  isUpdatePlanToolItem,
   sentMessageFromToolItem,
 } from "@t3tools/shared/toolOutput";
 import {
@@ -575,6 +580,19 @@ export interface TimelineEntriesProjection {
   readonly entries: TimelineEntry[];
 }
 
+/** The plan pinned to the composer: the latest one, until a later run starts without one. */
+export function deriveComposerTaskPlan(
+  rows: ReadonlyArray<{ readonly item: ThreadStructureTurnItem }>,
+): ReadonlyArray<OrchestrationV2PlanStep> | null {
+  const index = rows.findLastIndex(({ item }) => item.type === "todo_list");
+  const plan = rows[index]?.item;
+  if (plan?.type !== "todo_list") return null;
+  const laterRun = rows.findLastIndex(
+    ({ item }) => item.runId !== null && item.runId !== plan.runId,
+  );
+  return laterRun > index ? null : plan.steps;
+}
+
 export function deriveTimelineEntriesFromVisibleTurnItems(
   input: TimelineEntriesInput,
 ): TimelineEntry[] {
@@ -610,6 +628,10 @@ export function deriveTimelineEntriesFromVisibleTurnItems(
         ? [[`async-answer:${item.questionAnswer.requestId}`, item.runId] as const]
         : [],
     ),
+  );
+  // Providers that do not project update_plan into a plan keep its call as a tool row.
+  const runIdsWithPlan = new Set(
+    input.visibleTurnItems.flatMap(({ item }) => (item.type === "todo_list" ? [item.runId] : [])),
   );
   for (const row of input.visibleTurnItems) {
     const { item } = row;
@@ -757,6 +779,17 @@ export function deriveTimelineEntriesFromVisibleTurnItems(
         htmlRender,
         ...attemptMetadata,
       });
+      continue;
+    }
+
+    // The plan is pinned to the composer (deriveComposerTaskPlan), not placed in the timeline.
+    if (item.type === "todo_list") continue;
+    if (
+      item.type === "dynamic_tool" &&
+      item.status !== "failed" &&
+      runIdsWithPlan.has(item.runId) &&
+      isUpdatePlanToolItem(item)
+    ) {
       continue;
     }
 

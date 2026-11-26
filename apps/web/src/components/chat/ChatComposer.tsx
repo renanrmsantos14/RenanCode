@@ -131,6 +131,7 @@ import { ComposerBanner } from "./ComposerBanner";
 import { ComposerSurface } from "./ComposerSurface";
 import { CollapsedComposerPromptPreview } from "./CollapsedComposerPromptPreview";
 import { ComposerBannerStack, type ComposerBannerStackItem } from "./ComposerBannerStack";
+import { ComposerTaskPlan } from "./ComposerTaskPlan";
 import {
   attachmentsToReleaseOnUploadCapabilityLoss,
   composerOtherFilesForPresentation,
@@ -207,6 +208,7 @@ import { useLinkedEnvironments } from "~/state/peerLinks";
 import { encodeComposerContextFragment } from "@t3tools/shared/composerContextClipboard";
 import type {
   ComposerContextRecord,
+  OrchestrationV2PlanStep,
   OrchestrationV2ProviderMcpServer,
   OrchestrationV2Run,
   ProviderTeamId,
@@ -424,6 +426,7 @@ export interface ChatComposerProps {
   isPreparingWorktree: boolean;
   canSteer: boolean;
   bannerItems: readonly ComposerBannerStackItem[];
+  taskPlan?: ReadonlyArray<OrchestrationV2PlanStep> | null;
   resumeCompactionTokens: number | null;
   keepFullHistory: boolean;
   onToggleKeepFullHistory: () => void;
@@ -3793,6 +3796,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       <ComposerBanner.Dock>
         <ComposerBanner.Column>
           <ComposerBannerStack items={shelfItems} />
+          {props.taskPlan ? (
+            <ComposerTaskPlan
+              steps={props.taskPlan}
+              live={phase === "running" || phase === "connecting"}
+            />
+          ) : null}
           {showComposerTopDrawer ? (
             <ComposerBanner.Attachment>
               <ComposerBanner.Root data-chat-composer-top-drawer="true" variant="info">

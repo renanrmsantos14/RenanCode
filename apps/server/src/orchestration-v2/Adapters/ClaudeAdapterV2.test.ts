@@ -13233,7 +13233,15 @@ describe("ClaudeAdapterV2 background wake turns", () => {
   type TaskToolCall =
     | { name: "TaskCreate"; input: TaskCreateInput; output: TaskCreateOutput }
     | { name: "TaskUpdate"; input: TaskUpdateInput; output: TaskUpdateOutput }
-    | { name: "TaskList"; input: Record<string, never>; output: TaskListOutput };
+    | { name: "TaskList"; input: Record<string, never>; output: TaskListOutput }
+    | {
+        name: "mcp__t3-code__update_plan";
+        input: Record<string, unknown>;
+        output: {
+          plan: ReadonlyArray<{ content: string; status: string }>;
+          message: string;
+        };
+      };
 
   function taskToolFrames(
     tool: TaskToolCall,
@@ -13505,6 +13513,53 @@ describe("ClaudeAdapterV2 background wake turns", () => {
           ),
         ),
       ),
+  );
+
+  it.effect("projects update_plan results into one plan per turn without settling it", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeTaskToolHarness;
+      const updatePlan = (
+        plan: ReadonlyArray<{ content: string; status: string }>,
+      ): TaskToolCall => ({
+        name: "mcp__t3-code__update_plan",
+        input: {},
+        output: { plan, message: "Plan updated." },
+      });
+      yield* harness.startTurn();
+      yield* harness.call(
+        updatePlan([
+          { content: "Read the code", status: "in_progress" },
+          { content: "Write tests", status: "pending" },
+        ]),
+      );
+      yield* harness.call(
+        updatePlan([
+          { content: "Read the code", status: "completed" },
+          { content: "Write tests", status: "in_progress" },
+        ]),
+      );
+      yield* harness.finishTurn();
+
+      const plans = harness.plans();
+      assert.lengthOf(plans, 2);
+      assert.equal(new Set(plans.map((plan) => plan.id)).size, 1);
+      // The turn ended mid-step; the plan keeps saying so.
+      assert.equal(plans.at(-1)?.status, "active");
+      assert.deepEqual(plans.at(-1)?.steps, [
+        { id: "step-0", text: "Read the code", status: "completed" },
+        { id: "step-1", text: "Write tests", status: "running" },
+      ]);
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.mergeAll(
+          IdAllocator.layer,
+          McpProviderSessions.layer,
+          NodeServices.layer,
+          NodeCrypto.layer,
+        ),
+      ),
+    ),
   );
 
   it.effect("removes deleted tasks without resurrecting them on later updates or turns", () =>

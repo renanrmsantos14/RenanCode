@@ -178,6 +178,7 @@ import { composerRequiresModifier } from "../composer-logic";
 import {
   derivePhase,
   deriveActiveWorkStartedAt,
+  deriveComposerTaskPlan,
   deriveCanInterruptRunningThread,
   findRevertCheckpoint,
   isLatestRunSettled,
@@ -1813,6 +1814,7 @@ export default function ChatView(props: ChatViewProps) {
       }) as const,
   );
   const timelineEntries = isServerThread ? serverTimelineEntries : draftTimelineEntries;
+  const composerTaskPlan = isServerThread ? deriveComposerTaskPlan(serverVisibleTurnItems) : null;
   const timelineMessages = timelineEntries.flatMap((entry) =>
     entry.kind === "message" ? [entry.message] : [],
   );
@@ -4149,6 +4151,7 @@ export default function ChatView(props: ChatViewProps) {
                                     ? EMPTY_COMPOSER_BANNER_ITEMS
                                     : composerBannerItems
                                 }
+                                taskPlan={isDraftHeroState ? null : composerTaskPlan}
                                 resumeCompactionTokens={inlineCompactionTokens}
                                 keepFullHistory={keepFullHistory}
                                 onToggleKeepFullHistory={toggleKeepFullHistoryStable}

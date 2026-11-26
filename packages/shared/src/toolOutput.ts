@@ -25,6 +25,7 @@ import {
   type McpAppReference,
 } from "./mcpApp.ts";
 import { resolveT3McpToolId } from "./t3McpToolPresentation.ts";
+import { taskPlanItemsFromValue, UPDATE_PLAN_TOOL_NAME, type TaskPlanItem } from "./taskPlan.ts";
 
 export const SEND_TO_USER_TOOL_NAME = "send_to_user";
 // 4,000 UTF-16 units stay inside MAX_PARSED_BYTES even as 3-byte characters.
@@ -278,6 +279,24 @@ export function sentMessageFromToolItem(item: {
   }
   const output = compactDynamicToolOutput(item.output);
   return output?.isError ? undefined : output?.sentMessage;
+}
+
+/** `update_plan` calls render as the plan card, not as tool rows. */
+export function isUpdatePlanToolItem(item: {
+  readonly toolName: string | null | undefined;
+}): boolean {
+  return resolveT3McpToolId(item.toolName) === UPDATE_PLAN_TOOL_NAME;
+}
+
+/** The plan an `update_plan` call left, read from its result. */
+export function taskPlanFromToolOutput(value: unknown): ReadonlyArray<TaskPlanItem> | undefined {
+  const budget: ResultReadBudget = {
+    remainingBytes: MAX_PARSED_BYTES,
+    remainingNodes: MAX_ENVELOPE_NODES,
+    exceeded: false,
+  };
+  const result = readResult(value, budget);
+  return result.failed || budget.exceeded ? undefined : taskPlanItemsFromValue(result.data?.plan);
 }
 
 /** The thread-owned file `preview_recording_stop` stored for the agent. */

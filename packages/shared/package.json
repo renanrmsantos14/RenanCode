@@ -163,6 +163,10 @@
       "types": "./src/terminalOutput.ts",
       "import": "./src/terminalOutput.ts"
     },
+    "./taskPlan": {
+      "types": "./src/taskPlan.ts",
+      "import": "./src/taskPlan.ts"
+    },
     "./toolOutput": {
       "types": "./src/toolOutput.ts",
       "import": "./src/toolOutput.ts"
