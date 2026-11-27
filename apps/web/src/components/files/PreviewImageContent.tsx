@@ -1,7 +1,7 @@
 import { useGT } from "gt-react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { use, useLayoutEffect, useRef, useState } from "react";
 import { MaximizeIcon, MinusIcon, PlusIcon, ScanIcon } from "lucide-react";
-import { ExpandedImageDialog } from "~/components/chat/ExpandedImageDialog";
+import { MediaReviewContext } from "~/components/chat/review/useReviewMode";
 import { observeResize } from "~/lib/observeResize";
 import { AttachmentImage } from "../media/AttachmentImage";
 import { FileSurfaceAction, FileSurfaceFailure } from "./fileSurfaceChrome";
@@ -14,7 +14,7 @@ export default function PreviewImageContent(props: {
 }) {
   const gt = useGT();
   const [failed, setFailed] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const openMedia = use(MediaReviewContext);
   const [natural, setNatural] = useState({ width: 0, height: 0 });
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const [zoom, setZoom] = useState<number | null>(null);
@@ -97,7 +97,18 @@ export default function PreviewImageContent(props: {
             type="button"
             aria-label={gt("Zoom {name}", { name: props.name })}
             className="shrink-0 cursor-zoom-in"
-            onClick={() => setExpanded(true)}
+            onClick={() =>
+              openMedia({
+                images: [
+                  {
+                    src: props.src,
+                    name: props.name,
+                    ...(props.mimeType ? { mimeType: props.mimeType } : {}),
+                  },
+                ],
+                index: 0,
+              })
+            }
           >
             <AttachmentImage
               name={props.name}
@@ -126,21 +137,6 @@ export default function PreviewImageContent(props: {
           </button>
         </div>
       </div>
-      {expanded ? (
-        <ExpandedImageDialog
-          preview={{
-            images: [
-              {
-                src: props.src,
-                name: props.name,
-                ...(props.mimeType ? { mimeType: props.mimeType } : {}),
-              },
-            ],
-            index: 0,
-          }}
-          onClose={() => setExpanded(false)}
-        />
-      ) : null}
     </>
   );
 }

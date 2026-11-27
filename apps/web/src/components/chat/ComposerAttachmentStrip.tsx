@@ -8,7 +8,7 @@ import type {
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
 import { T, useGT, useMessages } from "gt-react";
 import { CircleAlertIcon, ImageIcon, PaperclipIcon, PlayIcon, XIcon } from "lucide-react";
-import { type ComponentProps, type Ref, useLayoutEffect, useRef } from "react";
+import { type ComponentProps, type Ref, use, useLayoutEffect, useRef } from "react";
 
 import {
   type ComposerFileAttachment,
@@ -36,6 +36,7 @@ import { AttachmentFilePreview } from "../files/AttachmentFilePreview";
 import { AttachmentImage } from "../media/AttachmentImage";
 import { Button } from "../ui/button";
 import { Dialog, DialogPopup, DialogTitle } from "../ui/dialog";
+import { MediaReviewContext } from "./review/useReviewMode";
 import { ComposerImageThumbnail } from "./ComposerImageThumbnail";
 import { composerFloatingLayerProps } from "./composerEventScope";
 import type { PreparingComposerImage } from "./preparingComposerImages";
@@ -552,6 +553,7 @@ export function ComposerFilePreviewDialog({
 }) {
   const gt = useGT();
   const onClose = () => onPreviewFileIdChange(null);
+  const openMedia = use(MediaReviewContext);
   return (
     <Dialog
       open
@@ -565,27 +567,34 @@ export function ComposerFilePreviewDialog({
         showCloseButton={false}
       >
         <DialogTitle className="sr-only">{file.name}</DialogTitle>
-        <AttachmentFilePreview
-          key={file.id}
-          name={file.name}
-          mimeType={file.mimeType}
-          sizeBytes={file.sizeBytes}
-          file={file.file}
-          origin={gt("Draft", { $context: "where an attachment comes from: the unsent message" })}
-          {...(file.uploadedAttachmentId && file.uploadEnvironmentId
-            ? {
-                asset: {
-                  environmentId: file.uploadEnvironmentId,
-                  attachmentId: file.uploadedAttachmentId,
-                },
-              }
-            : {})}
-          onRemove={() => {
-            onRemove(file.id);
+        <MediaReviewContext
+          value={(preview, options) => {
             onClose();
+            openMedia(preview, options);
           }}
-          onClose={onClose}
-        />
+        >
+          <AttachmentFilePreview
+            key={file.id}
+            name={file.name}
+            mimeType={file.mimeType}
+            sizeBytes={file.sizeBytes}
+            file={file.file}
+            origin={gt("Draft", { $context: "where an attachment comes from: the unsent message" })}
+            {...(file.uploadedAttachmentId && file.uploadEnvironmentId
+              ? {
+                  asset: {
+                    environmentId: file.uploadEnvironmentId,
+                    attachmentId: file.uploadedAttachmentId,
+                  },
+                }
+              : {})}
+            onRemove={() => {
+              onRemove(file.id);
+              onClose();
+            }}
+            onClose={onClose}
+          />
+        </MediaReviewContext>
       </DialogPopup>
     </Dialog>
   );

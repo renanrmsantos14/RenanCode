@@ -75,6 +75,13 @@ vi.mock(import("./office/WordDocument"), async () => {
 import { __setClientSettingsForTests, getClientSettings } from "~/hooks/useSettings";
 import { refreshTheme, setAppearanceMode } from "~/hooks/useTheme";
 import { THEME_APPEARANCE_MODE_STORAGE_KEY } from "~/themePalette";
+import { AppAtomRegistryProvider } from "~/rpc/atomRegistry";
+import { ReviewViewer } from "../chat/review/ReviewViewer";
+import {
+  MediaReviewContext,
+  useReviewMode,
+  useThreadOpenMedia,
+} from "../chat/review/useReviewMode";
 import { AttachmentFilePreview } from "./AttachmentFilePreview";
 import LargeTextViewer from "./LargeTextViewer";
 import VirtualTablePreview from "./VirtualTablePreview";
@@ -1775,28 +1782,89 @@ it("loads a font attachment through the lazy preview", async () => {
   expect(screen.container.querySelector('[role="alert"]')).toBeNull();
 });
 
+const REVIEW_SCOPE = "environment:thread";
+const REVIEW_SOURCE = { cwd: undefined, hostImageUrl: null };
+const REVIEW_ENTRIES: never[] = [];
+
+function ReviewHarness({ children }: { readonly children: ReactElement }) {
+  const review = useReviewMode(REVIEW_SCOPE);
+  const openMedia = useThreadOpenMedia({
+    scope: REVIEW_SCOPE,
+    entries: REVIEW_ENTRIES,
+    source: REVIEW_SOURCE,
+  });
+  return (
+    <MediaReviewContext value={openMedia}>
+      <div className="flex h-[600px] w-[900px]">
+        {children}
+        {review.active ? (
+          <ReviewViewer
+            review={review}
+            scope={REVIEW_SCOPE}
+            entries={REVIEW_ENTRIES}
+            source={{ ...REVIEW_SOURCE, threadRef: null }}
+          />
+        ) : null}
+      </div>
+    </MediaReviewContext>
+  );
+}
+
+function WithReview({ children }: { readonly children: ReactElement }) {
+  return (
+    <AppAtomRegistryProvider>
+      <ReviewHarness>{children}</ReviewHarness>
+    </AppAtomRegistryProvider>
+  );
+}
+
+it("opens the media review from an image attachment preview", async () => {
+  const image =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+  refresh.mockReset().mockResolvedValue(image);
+  await using screen = await render(
+    <WithReview>
+      <AttachmentFilePreview
+        name="photo.png"
+        mimeType="image/png"
+        sizeBytes={100}
+        asset={{ environmentId: EnvironmentId.make("test-environment"), attachmentId: "image" }}
+      />
+    </WithReview>,
+    { router: false },
+  );
+  await vi.waitFor(() => expect(screen.container.querySelector("img")).not.toBeNull());
+  await page.getByRole("button", { name: "Zoom photo.png" }).click();
+  await expect.element(page.getByRole("region", { name: "Media review" })).toBeVisible();
+});
+
 it("toggles a Mermaid attachment between diagram and source through the lazy preview", async () => {
   const text = "flowchart LR\nA --> B";
   const file = new Blob([text], { type: "text/vnd.mermaid" });
   await using screen = await render(
-    <AttachmentFilePreview
-      name="diagram.mmd"
-      mimeType={file.type}
-      sizeBytes={file.size}
-      file={file}
-    />,
+    <WithReview>
+      <AttachmentFilePreview
+        name="diagram.mmd"
+        mimeType={file.type}
+        sizeBytes={file.size}
+        file={file}
+      />
+    </WithReview>,
+    { router: false },
   );
   await vi.waitFor(() =>
     expect(screen.container.querySelector("[data-markdown-mermaid] svg path")).not.toBeNull(),
   );
   await screen.getByRole("button", { name: "Expand diagram" }).click();
+  const review = page.getByRole("region", { name: "Media review" });
+  await expect.element(review).toBeVisible();
   await vi.waitFor(() => {
-    const image = document.querySelector<HTMLImageElement>('[role="dialog"] img');
+    const image = document.querySelector<HTMLImageElement>('[aria-label="Media review"] img');
     expect(image?.alt).toBe("Mermaid diagram");
     expect(image?.naturalWidth).toBeGreaterThan(0);
   });
-  await page.getByRole("button", { name: "Close image preview" }).click();
-  await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+  await page.getByRole("button", { name: "Close media review" }).click();
+  await expect.element(review).not.toBeInTheDocument();
   await screen.getByRole("button", { name: "Show Mermaid source" }).click();
   await vi.waitFor(() => expect(screen.container.querySelector("pre")?.textContent).toBe(text));
   await screen.getByRole("button", { name: "Show rendered diagram" }).click();
