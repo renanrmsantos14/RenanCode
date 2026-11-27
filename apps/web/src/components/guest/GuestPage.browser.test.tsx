@@ -591,7 +591,7 @@ describe("GuestPage", () => {
 
     await waitForImages(screen.container);
     await userEvent.click(screen.getByRole("button", { name: "Preview beta" }));
-    await expect.element(screen.getByRole("region", { name: "Image review" })).toBeVisible();
+    await expect.element(screen.getByRole("region", { name: "Media review" })).toBeVisible();
     await expect.element(screen.getByText("2 / 3")).toBeVisible();
     await userEvent.keyboard("{ArrowRight}");
     await expect.element(screen.getByText("3 / 3")).toBeVisible();
@@ -609,7 +609,7 @@ describe("GuestPage", () => {
 
     await userEvent.keyboard("{Escape}");
     await expect
-      .element(screen.getByRole("region", { name: "Image review" }))
+      .element(screen.getByRole("region", { name: "Media review" }))
       .not.toBeInTheDocument();
   });
 
@@ -622,7 +622,7 @@ describe("GuestPage", () => {
     await waitForImages(screen.container);
     await userEvent.click(screen.getByRole("button", { name: "Preview beta" }));
     await userEvent.click(screen.getByRole("button", { name: "How much should I change?" }));
-    await expect.element(screen.getByRole("region", { name: "Image review" })).toBeVisible();
+    await expect.element(screen.getByRole("region", { name: "Media review" })).toBeVisible();
 
     await expect.element(screen.getByRole("button", { name: /Everything/ })).toBeVisible();
   });

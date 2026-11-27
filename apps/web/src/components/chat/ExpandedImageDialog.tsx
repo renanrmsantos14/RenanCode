@@ -1,15 +1,14 @@
-import { memo, useRef, useState, type ReactNode, type KeyboardEvent } from "react";
+import { memo, useRef, useState, type KeyboardEvent } from "react";
 import { flushSync } from "react-dom";
 import { useGT } from "gt-react";
 import { ChevronLeftIcon, ChevronRightIcon, ImageIcon, TextIcon, XIcon } from "lucide-react";
 import { Button } from "../ui/button";
 import { Dialog, DialogPopup, DialogTitle } from "../ui/dialog";
-import type { ExpandedImageItem, ExpandedImagePreview } from "./ExpandedImagePreview";
+import type { ExpandedImagePreview } from "./ExpandedImagePreview";
 import { resolveExternalWebLinkHost } from "./externalLinkContextMenu";
-import { useAssetUrlRefresh, useAssetUrlState } from "../../assets/assetUrls";
 import { OpenMediaLink } from "../media/OpenMediaLink";
 import { MediaActions, type MediaActionSource } from "../media/MediaActions";
-import { MediaVideoPlayer } from "../media/MediaVideoPlayer";
+import { ExpandedMediaFailure, ExpandedVideo, expandedMediaMimeType } from "./ExpandedMedia";
 import { isContextMenuOpen } from "../../contextMenuFallback";
 import {
   SnapShotAccessibilityData,
@@ -24,59 +23,11 @@ import { Atom } from "effect/reactivity";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { expandedImageKey } from "./ExpandedImagePreview";
 import { registerThreadOverlay } from "./threadOverlayRetention";
-import { mediaReferenceFileName } from "@t3tools/client-runtime/media-reference";
-import { mediaMimeType, mediaMimeTypeFromExtension } from "@t3tools/shared/mediaPreview";
 import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 interface ExpandedImageDialogProps {
   preview: ExpandedImagePreview;
   onClose: () => void;
-}
-
-const EXPANDED_MEDIA_STATE_CLASS_NAME =
-  "flex aspect-auto h-48 min-h-0 w-[min(var(--media-width),32rem)] flex-col items-center justify-center gap-3 rounded-lg border border-border/70 bg-black p-6 text-center text-sm text-white shadow-2xl";
-
-function ExpandedMediaFailure({ children }: { children: ReactNode }) {
-  return (
-    <div role="alert" className={EXPANDED_MEDIA_STATE_CLASS_NAME}>
-      {children}
-    </div>
-  );
-}
-
-function itemMimeType(item: ExpandedImageItem): string | undefined {
-  if (item.mimeType) return item.mimeType;
-  const reference = item.actionsSource?.reference;
-  const fileName = reference && mediaReferenceFileName(reference);
-  if (fileName) {
-    return mediaMimeTypeFromExtension(fileName.slice(fileName.lastIndexOf("."))) ?? undefined;
-  }
-  return mediaMimeType(item.src ?? "") ?? undefined;
-}
-
-function ExpandedVideo({ item }: { readonly item: ExpandedImageItem }) {
-  const asset = item.actionsSource?.asset;
-  const assetUrl = useAssetUrlState(asset?.environmentId ?? null, asset?.resource ?? null);
-  const refreshAssetUrl = useAssetUrlRefresh(asset?.environmentId ?? null, asset?.resource ?? null);
-  const src = asset
-    ? assetUrl._tag === "Success"
-      ? assetUrl.url + (item.srcFragment ?? "")
-      : null
-    : item.src;
-  return (
-    <MediaVideoPlayer
-      src={src}
-      label={item.name}
-      sourceFailed={assetUrl._tag === "Failure"}
-      originalUrl={item.originalUrl}
-      preload="metadata"
-      autoPlay={item.autoPlay ?? true}
-      className="block max-h-[var(--media-height)] max-w-[var(--media-width)] text-center"
-      videoClassName="aspect-auto max-h-[var(--media-height)] w-auto max-w-[var(--media-width)] rounded-lg border border-border/70 shadow-2xl"
-      stateClassName={EXPANDED_MEDIA_STATE_CLASS_NAME}
-      onRetry={asset ? refreshAssetUrl : undefined}
-    />
-  );
 }
 
 export const ExpandedImageDialog = memo(function ExpandedImageDialog({
@@ -217,7 +168,15 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
         <MediaActions source={actionsSource} showTooltip={false}>
           <div className="relative isolate z-10 flex max-h-full max-w-[var(--media-width)] flex-col items-center">
             {item.type === "video" ? (
-              <ExpandedVideo key={index} item={item} />
+              <ExpandedVideo
+                key={index}
+                name={item.name}
+                src={item.src}
+                asset={item.actionsSource?.asset}
+                srcFragment={item.srcFragment}
+                originalUrl={item.originalUrl}
+                autoPlay={item.autoPlay}
+              />
             ) : showingAccessibilityDetails ? (
               accessibilityDetails ? (
                 <SnapShotAccessibilityData
@@ -240,7 +199,7 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
                 key={`${index}:${item.src}`}
                 src={item.src}
                 name={item.name}
-                mimeType={itemMimeType(item)}
+                mimeType={expandedMediaMimeType(item)}
                 onError={() => setFailedImageSrc(item.src)}
               />
             )}
