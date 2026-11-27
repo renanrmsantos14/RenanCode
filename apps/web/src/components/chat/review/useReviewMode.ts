@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { useState } from "react";
+import { type Dispatch, type SetStateAction, useState } from "react";
 
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
@@ -17,7 +17,7 @@ export type ReviewSheetSnap = "peek" | "half" | "full";
 
 export const CHAT_HIDDEN_STORAGE_KEY = "t3code:review-chat-hidden";
 
-interface ReviewState {
+export interface ReviewState {
   /** The thread the review was opened in; leaving it ends the review. */
   readonly scope: string | null;
   readonly key: string;
@@ -63,8 +63,11 @@ export function useReviewMode(input: {
   readonly scope: string | null;
   readonly entries: ReadonlyArray<ReviewGalleryEntry>;
   readonly source: ReviewSourceContext;
+  /** State held by a caller that must know whether review is open before it has the entries. */
+  readonly state?: [ReviewState | null, Dispatch<SetStateAction<ReviewState | null>>];
 }): ReviewMode {
-  const [stored, setState] = useState<ReviewState | null>(null);
+  const ownState = useState<ReviewState | null>(null);
+  const [stored, setState] = input.state ?? ownState;
   const [chatHidden, setChatHidden] = useLocalStorage(
     CHAT_HIDDEN_STORAGE_KEY,
     false,

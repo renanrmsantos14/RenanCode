@@ -194,7 +194,6 @@ import { PresentationSource } from "../../components/ui/NativePresentation";
 import { NativeScrollViewMarker } from "../../native/NativeScrollViewMarker";
 import Animated, { FadeIn, FadeInDown, type SharedValue } from "react-native-reanimated";
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
-import { FONT_FAMILIES } from "../../lib/fontFamilies";
 import { scopedThreadKey } from "../../lib/scopedEntities";
 import { ThreadFeedSkeleton } from "./ThreadFeedSkeleton";
 import { traceThreadOpenStage } from "./threadOpenTrace";
@@ -1562,7 +1561,7 @@ function MarkdownDetailsFold(props: {
 }
 
 function useMarkdownStyles(): MarkdownStyleSets {
-  const { appearance } = useAppearancePreferences();
+  const { appearance, fontFamilies, monoFontFamily } = useAppearancePreferences();
   const nativeMarkdownTypography = resolveNativeMarkdownTypography(appearance.baseFontSize);
   const theme = useUniwindTheme();
   const markdownBodyColor = theme["--color-md-body"];
@@ -1583,8 +1582,8 @@ function useMarkdownStyles(): MarkdownStyleSets {
   const markdownUserCodeText = theme["--color-md-user-code-text"];
   const markdownUserInlineCodeText = theme["--color-user-bubble-foreground-muted"];
   const markdownUserFenceBg = theme["--color-md-user-fence-bg"];
-  const regularFontFamily = FONT_FAMILIES.regular;
-  const boldFontFamily = FONT_FAMILIES.bold;
+  const regularFontFamily = fontFamilies.regular;
+  const boldFontFamily = fontFamilies.bold;
 
   return {
     user: {
@@ -1607,6 +1606,7 @@ function useMarkdownStyles(): MarkdownStyleSets {
         fontFamily: regularFontFamily,
         headingFontFamily: boldFontFamily,
         boldFontFamily,
+        monoFontFamily,
       },
     },
     assistant: {
@@ -1629,6 +1629,7 @@ function useMarkdownStyles(): MarkdownStyleSets {
         fontFamily: regularFontFamily,
         headingFontFamily: boldFontFamily,
         boldFontFamily,
+        monoFontFamily,
       },
     },
   };

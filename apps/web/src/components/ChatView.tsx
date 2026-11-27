@@ -336,7 +336,7 @@ import {
 } from "./chat/review/reviewLayout";
 import { useHtmlFullscreenChat } from "./chat/review/useHtmlFullscreenChat";
 import { useMockupViewer } from "./chat/review/useMockupViewer";
-import { useReviewMode } from "./chat/review/useReviewMode";
+import { type ReviewState, useReviewMode } from "./chat/review/useReviewMode";
 import { ExpandedImageDialogHost, openExpandedImagePreview } from "./chat/ExpandedImageDialog";
 import {
   BranchRestoreConfirmHost,
@@ -439,6 +439,7 @@ import { observeResize } from "~/lib/observeResize";
 import { ThreadVisitWatermark } from "./chat/ThreadVisitWatermark";
 import { ChatTerminalDrawers } from "./chat/ChatTerminalDrawers";
 import { ChatRightPanel } from "./chat/ChatRightPanel";
+import type { RightPanelTabsHandle } from "./RightPanelTabs";
 import { useDraftEnvironmentRouting } from "./chat/useDraftEnvironmentRouting";
 import { branchMismatchBannerItem, extensionStatusBannerItem } from "./chat/ThreadActivityBanners";
 import { ThreadNow } from "./chat/ThreadNow";
@@ -1610,6 +1611,8 @@ export default function ChatView(props: ChatViewProps) {
     setLocalServerErrorsByThreadKey,
     setLocalDraftErrorsByDraftId,
   });
+  const reviewState = useState<ReviewState | null>(null);
+  const reviewOpen = reviewState[0]?.scope === routeThreadKey;
   const {
     pendingApprovals,
     pendingUserInputs,
@@ -1635,8 +1638,9 @@ export default function ChatView(props: ChatViewProps) {
     promptRef,
     composerRef,
     setThreadError,
-    // A side chat lives in the right panel already, so its questions stay in its composer.
-    questionPlacement: embedded ? "composer" : settings.questionPlacement,
+    // A side chat lives in the right panel already, and review mode hides that panel, so
+    // their questions stay in the composer.
+    questionPlacement: embedded || reviewOpen ? "composer" : settings.questionPlacement,
   });
   const openQuestionsPanel = useStableCallback(() => {
     if (activeThreadRef) useRightPanelStore.getState().open(activeThreadRef, "questions");
@@ -1649,24 +1653,54 @@ export default function ChatView(props: ChatViewProps) {
   const sidePanelQuestionRequestId = activeQuestionInSidePanel
     ? (activePendingUserInput?.requestId ?? null)
     : null;
-  const shownQuestionRef = useRef<{ threadKey: string | null; requestId: string | null }>({
+  const rightPanelUserActionRevision = useRightPanelStore((state) =>
+    activeThreadKey === null ? 0 : (state.userActionRevisionByThreadKey[activeThreadKey] ?? 0),
+  );
+  const questionsTabPresent = rightPanelState.surfaces.some(
+    (surface) => surface.kind === "questions",
+  );
+  const shownQuestionRef = useRef<{
+    threadKey: string | null;
+    requestId: string | null;
+    userActionRevision: number;
+  }>({
     threadKey: null,
     requestId: null,
+    userActionRevision: 0,
   });
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a server question takes the panel over and hands it back once answered
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a server question takes the panel over, hands it back once answered, and yields to the composer when the user picks another panel tab
   useEffect(() => {
     const shown = shownQuestionRef.current;
     shownQuestionRef.current = {
       threadKey: activeThreadKey,
       requestId: sidePanelQuestionRequestId,
+      userActionRevision: rightPanelUserActionRevision,
     };
     if (!activeThreadRef) return;
     if (sidePanelQuestionRequestId !== null) {
-      useRightPanelStore.getState().showQuestions(activeThreadRef);
+      if (shown.threadKey !== activeThreadKey || shown.requestId !== sidePanelQuestionRequestId) {
+        useRightPanelStore.getState().showQuestions(activeThreadRef);
+      } else if (
+        activeRightPanelKind !== null &&
+        activeRightPanelKind !== "questions" &&
+        questionsTabPresent &&
+        rightPanelUserActionRevision !== shown.userActionRevision
+      ) {
+        // Only a user's tab switch hands the question back; closing its tab or an automatic reveal keeps it.
+        movePendingUserInput(sidePanelQuestionRequestId, "composer");
+      }
     } else if (shown.threadKey === activeThreadKey && shown.requestId !== null) {
       useRightPanelStore.getState().settleQuestions(activeThreadRef);
     }
-  }, [activeThreadKey, activeThreadRef, sidePanelQuestionRequestId]);
+  }, [
+    activeRightPanelKind,
+    activeThreadKey,
+    activeThreadRef,
+    movePendingUserInput,
+    questionsTabPresent,
+    rightPanelUserActionRevision,
+    sidePanelQuestionRequestId,
+  ]);
   const [heldApprovalRequestIds, setHeldApprovalRequestIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -2380,6 +2414,7 @@ export default function ChatView(props: ChatViewProps) {
   }, [canMaximizeRightPanel, routeThreadRef]);
   const {
     closeSurface: closeRightPanelSurface,
+    closeSelectedSurfaces: closeSelectedRightPanelSurfaces,
     closeOtherSurfaces: closeOtherRightPanelSurfacesStable,
     closeSurfacesToRight: closeRightPanelSurfacesToRightStable,
     closeAllSurfaces: closeAllRightPanelSurfacesStable,
@@ -2761,7 +2796,7 @@ export default function ChatView(props: ChatViewProps) {
     createBrowserSurface,
     createBrowserSurfaceStable,
     duplicateBrowserSurfaceStable,
-    moveRightPanelSurfaceStable,
+    moveRightPanelSurfacesStable,
     onOpenToolDiffStable,
     openChangesFromThreadPanelStable,
     openFileSurfaceStable,
@@ -2793,7 +2828,6 @@ export default function ChatView(props: ChatViewProps) {
     gitCwd,
     activeProjectCwd,
     onDiffPanelOpen,
-    closeRightPanelSurface,
   });
   const onDesignModeChange = async (enabled: boolean) => {
     if (!activeThread) return;
@@ -3182,6 +3216,12 @@ export default function ChatView(props: ChatViewProps) {
     }
   });
 
+  const rightPanelTabsRef = useRef<RightPanelTabsHandle>(null);
+  const closeActiveRightPanelSurfaceStable = useStableCallback(() => {
+    if (rightPanelTabsRef.current?.closeSelectedTabs()) return;
+    if (activeRightPanelSurface) closeRightPanelSurface(activeRightPanelSurface);
+  });
+
   useChatShortcuts({
     enabled: activeThreadId !== null && !backgroundThread,
     embedded,
@@ -3200,6 +3240,10 @@ export default function ChatView(props: ChatViewProps) {
       ...terminalShortcuts,
       ...rightPanelShortcuts,
       ...threadLifecycleShortcuts,
+      "rightPanel.close": ({ event }) => {
+        if (!activeRightPanelSurface) return false;
+        if (!event.repeat) closeActiveRightPanelSurfaceStable();
+      },
       "thread.copyReference": ({ event }) => {
         if (!event.repeat) copyActiveThreadReference();
       },
@@ -3234,10 +3278,6 @@ export default function ChatView(props: ChatViewProps) {
       const script = activeProjectScripts.find((entry) => entry.id === scriptId);
       return script ? () => void runProjectScriptStable(script) : undefined;
     },
-  });
-
-  const closeActiveRightPanelSurfaceStable = useStableCallback(() => {
-    if (activeRightPanelSurface) closeRightPanelSurface(activeRightPanelSurface);
   });
 
   // A focused desktop browser page forwards these chords as menu actions.
@@ -3525,6 +3565,7 @@ export default function ChatView(props: ChatViewProps) {
     scope: routeThreadKey,
     entries: timelineEntries,
     source: reviewSource,
+    state: reviewState,
   });
   const mockupViewer = useMockupViewer({ scope: routeThreadKey });
   const openHtmlVariantsStable = useStableCallback(mockupViewer.open);
@@ -4150,7 +4191,7 @@ export default function ChatView(props: ChatViewProps) {
               data-chat-composer-overlay="true"
               className={
                 isDraftHeroState
-                  ? "pointer-events-none absolute inset-0 z-20 flex items-center [@media(max-height:34rem)]:items-end"
+                  ? "pointer-events-none absolute inset-0 z-20 flex flex-col before:basis-[max(0px,calc(50%-5rem))] *:shrink-0 [@media(max-height:34rem)]:before:basis-[max(0px,calc(100%-12rem))]"
                   : "pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 sm:pt-2"
               }
             >
@@ -4494,8 +4535,7 @@ export default function ChatView(props: ChatViewProps) {
                       </ComposerSurface.Shell>
                       {isDraftHeroState && composerBannerItems.length > 0 ? (
                         // Out of flow, like the headline, so a notice never moves the centered composer.
-                        // Short windows pin the composer to the bottom, where an out-of-flow notice
-                        // would fall off-screen, so there it takes space and lifts the composer.
+                        // Short windows keep the notice in flow so it can use the space above.
                         <div className="absolute inset-x-0 top-full flex flex-col gap-1 pt-4 [@media(max-height:34rem)]:static">
                           <ComposerBannerStack items={composerBannerItems} detached />
                         </div>
@@ -4588,9 +4628,7 @@ export default function ChatView(props: ChatViewProps) {
                     ? { onCheckoutPullRequestRequest: openPullRequestDialogStable }
                     : {})}
                   onComposerFocusRequest={scheduleComposerFocusStable}
-                  {...(isServerThread && isGitRepo
-                    ? { onOpenChanges: openChangesFromThreadPanelStable }
-                    : {})}
+                  {...(isGitRepo ? { onOpenChanges: openChangesFromThreadPanelStable } : {})}
                   onRunProjectScript={runProjectScriptStable}
                   onAddProjectScript={saveProjectScriptStable}
                   onUpdateProjectScript={updateProjectScriptStable}
@@ -4628,6 +4666,7 @@ export default function ChatView(props: ChatViewProps) {
 
       {rightPanelPresent && activeThreadRef && !embedded ? (
         <ChatRightPanel
+          ref={rightPanelTabsRef}
           sheet={shouldUsePlanSidebarSheet}
           workspaceLayoutElement={workspaceLayoutElement}
           widthStorageKey={`t3code:preview-panel-width:${activeThreadKey}`}
@@ -4649,6 +4688,7 @@ export default function ChatView(props: ChatViewProps) {
             ) : null
           }
           surfaces={renderedRightPanelSurfaces}
+          selectionScope={activeThreadKey}
           environmentId={activeThreadRef.environmentId}
           activeSurfaceId={renderedRightPanelSurface?.id ?? null}
           pendingSurfaceIds={pendingFileSurfaceIds}
@@ -4659,6 +4699,7 @@ export default function ChatView(props: ChatViewProps) {
           terminalLabelsById={activeTerminalLabelsById}
           onActivate={activateRightPanelSurfaceStable}
           onCloseSurface={closeRightPanelSurfaceStable}
+          onCloseSelectedSurfaces={closeSelectedRightPanelSurfaces}
           onOpenInMainView={openSurfaceInMainView}
           onRenameDevice={(surfaceId, title) => {
             if (activeThreadRef)
@@ -4667,7 +4708,7 @@ export default function ChatView(props: ChatViewProps) {
           onCloseOtherSurfaces={closeOtherRightPanelSurfacesStable}
           onCloseSurfacesToRight={closeRightPanelSurfacesToRightStable}
           onCloseAllSurfaces={closeAllRightPanelSurfacesStable}
-          onMoveSurface={moveRightPanelSurfaceStable}
+          onMoveSurfaces={moveRightPanelSurfacesStable}
           onCopyFilePath={copyRightPanelFilePathStable}
           onAddBrowser={() => createBrowserSurface()}
           onAddBrowserInProfile={createBrowserSurfaceStable}
@@ -4683,7 +4724,7 @@ export default function ChatView(props: ChatViewProps) {
           onAddSideChat={sideChatsOffered ? openSideChatStable : undefined}
           browserAvailable={canOperatePreview && browserAvailable}
           terminalAvailable={activeProject !== null && canOperateTerminal}
-          diffAvailable={isServerThread && diffAvailable}
+          diffAvailable={diffAvailable}
           filesAvailable={activeProject !== null}
           pullRequestAvailable={pullRequestSurfaceAvailable}
           pullRequestsAvailable={linkedItemsSurfaceAvailable}
