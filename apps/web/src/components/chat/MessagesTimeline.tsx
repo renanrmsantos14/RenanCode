@@ -72,7 +72,7 @@ import {
 } from "lucide-react";
 import { Skeleton } from "../ui/skeleton";
 import { ExpandedImagePreview } from "./ExpandedImagePreview";
-import type { ReviewReveal } from "./review/useReviewMode";
+import { useReviewReveal, type ReviewReveal } from "./review/useReviewMode";
 import {
   CHAT_TIMELINE_ANCHOR_OFFSET,
   readTimelinePosition,
@@ -245,7 +245,6 @@ interface MessagesTimelineProps {
   canOperateThread?: boolean;
   onRespondToApproval?: TimelineRowSharedState["onRespondToApproval"];
   citationRequest?: AssistantCitationRequest | null;
-  revealRow?: ReviewReveal | null;
   citationHistory?: CitedHistory;
   onCiteAssistantText?: (
     citation: AssistantCitation,
@@ -389,7 +388,6 @@ const ConversationTimeline = memo(function ConversationTimeline({
   canOperateThread = false,
   onRespondToApproval,
   citationRequest = null,
-  revealRow = null,
   citationHistory = CITED_HISTORY_LOADING,
   onCiteAssistantText,
   onReplyToResponse,
@@ -829,10 +827,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
         });
       });
   });
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- scrolls the virtualized list, an external system, when review mode moves to another image
-  useEffect(() => {
-    if (revealRow) scrollToRevealedRow(revealRow);
-  }, [revealRow, scrollToRevealedRow]);
+  useReviewReveal(routeThreadKey, scrollToRevealedRow);
   const matchedApprovalRequestIds = new Set<string>();
   for (const row of pendingApprovalRequestIds.size > 0 ? rows : []) {
     const entries =

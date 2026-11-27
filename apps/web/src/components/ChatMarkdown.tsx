@@ -108,7 +108,7 @@ import {
   resolveMarkdownMediaPreview,
   type ExpandedImagePreview,
 } from "./chat/ExpandedImagePreview";
-import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
+import { MediaReviewContext } from "./chat/review/useReviewMode";
 import { markdownImageGallery } from "./chat/markdownImageGallery";
 import { type MediaActionSource } from "./media/MediaActions";
 import { useFileDownload } from "./files/useFileDownload";
@@ -617,21 +617,8 @@ function useChatMarkdownState(
     cwd,
     imageBaseDir,
   ].join("\u0000");
-  // Hide requests from an old scope even if they resolve before effect cleanup.
-  const [localMedia, setLocalMedia] = useState<{
-    scope: string;
-    preview: ExpandedImagePreview;
-  } | null>(null);
-  const localMediaPreview = localMedia?.scope === mediaScopeKey ? localMedia.preview : null;
-  const closeLocalMediaPreview = () => setLocalMedia(null);
-  const expandMedia =
-    onImageExpand ??
-    ((preview: ExpandedImagePreview) => setLocalMedia({ scope: mediaScopeKey, preview }));
-  const [mediaScope, setMediaScope] = useState(mediaScopeKey);
-  if (mediaScope !== mediaScopeKey) {
-    setMediaScope(mediaScopeKey);
-    setLocalMedia(null);
-  }
+  const openMedia = use(MediaReviewContext);
+  const expandMedia = onImageExpand ?? openMedia;
   // Layout cleanup blocks stale requests from reaching onImageExpand before paint.
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- layout cleanup invalidates media requests still loading for the old scope before paint
   useLayoutEffect(
@@ -1176,8 +1163,6 @@ function useChatMarkdownState(
     componentState,
     handleCopy,
     markdownRef,
-    localMediaPreview,
-    closeLocalMediaPreview,
   };
 }
 
@@ -2153,8 +2138,10 @@ function ChatMarkdown({
     props.isStreaming === true && !inline && extensions === NO_EXTENSIONS && !props.onTaskListChange
       ? (splitMarkdownBlocks(text) ?? [text])
       : null;
-  const { componentState, handleCopy, markdownRef, localMediaPreview, closeLocalMediaPreview } =
-    useChatMarkdownState({ text, inline, ...props }, streamingBlocks);
+  const { componentState, handleCopy, markdownRef } = useChatMarkdownState(
+    { text, inline, ...props },
+    streamingBlocks,
+  );
   const Root = inline ? "span" : "div";
   const bindMarkdownRef = (node: HTMLElement | null) => {
     markdownRef.current = node;
@@ -2193,9 +2180,6 @@ function ChatMarkdown({
           />
         ))}
       </ChatMarkdownRendererContext>
-      {localMediaPreview ? (
-        <ExpandedImageDialog preview={localMediaPreview} onClose={closeLocalMediaPreview} />
-      ) : null}
     </Root>
   );
 }

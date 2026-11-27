@@ -2,7 +2,16 @@ import { chatMarkdownImageSources } from "@t3tools/shared/markdownPipeline";
 import { classifyMarkdownImageSource } from "@t3tools/shared/markdownLinks";
 import { mediaKindFromPath } from "@t3tools/shared/mediaPreview";
 
-import { isImageAttachment, type ChatAttachment } from "../../../types";
+import type { SnapShotSource } from "@t3tools/contracts";
+
+import {
+  isFileAttachment,
+  isImageAttachment,
+  isVideoAttachment,
+  type ChatAttachment,
+  type ChatFileAttachment,
+} from "../../../types";
+import type { MediaActionSource } from "../../media/MediaActions";
 import { resolveProtocolRelativeMediaUrl } from "../../media/mediaContent";
 import type { ExpandedImageItem, ExpandedImagePreview } from "../ExpandedImagePreview";
 
@@ -20,20 +29,32 @@ export interface ReviewGalleryEntry {
   readonly text?: string | undefined;
 }
 
-export interface ReviewImage {
+export interface ReviewItem {
   readonly key: string;
-  /** The timeline row the image came from; the chat scrolls there. */
-  readonly rowId: string;
-  /** Position among this row's gallery images, to find the rendered image inside the row. */
+  readonly kind: "image" | "video";
+  /** The timeline row the item came from; the chat scrolls there. Null outside the gallery. */
+  readonly rowId: string | null;
+  /** Position among this row's gallery items, to find the rendered media inside the row. */
   readonly ordinal: number;
   readonly name: string;
-  /** A markdown image source, resolved lazily because workspace files need an asset URL. */
+  /** A markdown media source, resolved lazily because workspace files need an asset URL. */
   readonly markdownSource: string | null;
   /** A source that is already usable, such as an attachment's preview URL. */
   readonly src: string | null;
+  /** A user's video, served by its environment while it has no usable `src`. */
+  readonly videoAttachment?: Pick<ChatFileAttachment, "id" | "name" | "mimeType"> | undefined;
+  readonly mimeType?: string | undefined;
+  /** Revoke this owned object URL when the review lets go of it. */
+  readonly ownsSrc?: boolean | undefined;
+  readonly source?: SnapShotSource | undefined;
+  readonly onCopySnapshot?: (() => Promise<void>) | undefined;
+  readonly autoPlay?: boolean | undefined;
+  readonly originalUrl?: string | undefined;
+  readonly srcFragment?: string | undefined;
+  readonly actionsSource?: MediaActionSource | undefined;
 }
 
-export type ReviewImageTarget =
+export type ReviewItemTarget =
   | { readonly _tag: "direct"; readonly src: string }
   | { readonly _tag: "workspace"; readonly path: string; readonly relative: boolean };
 
@@ -51,50 +72,59 @@ export interface ReviewGalleryContext {
 }
 
 const SOURCES_CACHE_LIMIT = 200;
-const sourcesCache = new Map<string, ReadonlyArray<string>>();
+const sourcesCache = new Map<string, ReadonlyArray<MarkdownMedia>>();
 
-// The chat shows a workspace file without an image extension as a file chip, and blocks some.
-function rendersAsImage(source: string, cwd: string | undefined): boolean {
+type MarkdownMedia = { readonly source: string; readonly kind: ReviewItem["kind"] };
+
+// The chat shows a workspace file without a media extension as a file chip, and blocks some.
+function renderedMediaKind(source: string, cwd: string | undefined): ReviewItem["kind"] | null {
   const kind = mediaKindFromPath(source);
   const classified = classifyMarkdownImageSource(source, cwd);
-  if (classified._tag === "Direct") return (kind ?? "image") === "image";
-  return classified._tag === "WorkspaceFile" && kind === "image";
+  const shown =
+    classified._tag === "Direct"
+      ? (kind ?? "image")
+      : classified._tag === "WorkspaceFile"
+        ? kind
+        : null;
+  return shown === "image" || shown === "video" ? shown : null;
 }
 
 // Streaming re-derives the gallery per token; only the streaming message's text is new.
-function markdownImages(text: string, context: ReviewGalleryContext): ReadonlyArray<string> {
+function markdownMedia(text: string, context: ReviewGalleryContext): ReadonlyArray<MarkdownMedia> {
   if (!text.includes("![") && !text.includes("<img")) return [];
   const cacheKey = `${context.theme ?? ""}\u0000${context.cwd ?? ""}\u0000${text}`;
   const cached = sourcesCache.get(cacheKey);
   if (cached) return cached;
-  const sources = chatMarkdownImageSources(text, context.theme).filter((source) =>
-    rendersAsImage(source, context.cwd),
-  );
+  const sources = chatMarkdownImageSources(text, context.theme).flatMap((source) => {
+    const kind = renderedMediaKind(source, context.cwd);
+    return kind === null ? [] : [{ source, kind }];
+  });
   if (sourcesCache.size >= SOURCES_CACHE_LIMIT) sourcesCache.clear();
   sourcesCache.set(cacheKey, sources);
   return sources;
 }
 
-function markdownSourceName(source: string): string {
-  if (source.startsWith("data:")) return "image";
+function markdownSourceName(source: string, kind: ReviewItem["kind"]): string {
+  if (source.startsWith("data:")) return kind;
   const path = source.split(/[?#]/, 1)[0] ?? "";
   const name = path.split(/[\\/]/).at(-1);
   try {
-    return (name && decodeURIComponent(name)) || "image";
+    return (name && decodeURIComponent(name)) || kind;
   } catch {
-    return name || "image";
+    return name || kind;
   }
 }
 
 /**
- * Every image of the thread in timeline order: assistant and `send_to_user` markdown, then the
- * image attachments of user messages. Built from entries, not the DOM, which is virtualized.
+ * Every image and video of the thread in timeline order: assistant and `send_to_user` markdown,
+ * then the attachments of user messages, which show images before videos. Built from entries, not
+ * the DOM, which is virtualized.
  */
 export function deriveReviewGallery(
   entries: ReadonlyArray<ReviewGalleryEntry>,
   context: ReviewGalleryContext = {},
-): ReadonlyArray<ReviewImage> {
-  const images: ReviewImage[] = [];
+): ReadonlyArray<ReviewItem> {
+  const images: ReviewItem[] = [];
   for (const entry of entries) {
     const text =
       entry.kind === "sent-message"
@@ -103,12 +133,13 @@ export function deriveReviewGallery(
           ? entry.message.text
           : undefined;
     if (text !== undefined) {
-      markdownImages(text, context).forEach((source, ordinal) => {
+      markdownMedia(text, context).forEach(({ source, kind }, ordinal) => {
         images.push({
           key: `${entry.id}:${ordinal}`,
+          kind,
           rowId: entry.id,
           ordinal,
-          name: markdownSourceName(source),
+          name: markdownSourceName(source, kind),
           markdownSource: source,
           src: null,
         });
@@ -117,25 +148,71 @@ export function deriveReviewGallery(
     }
     if (entry.kind !== "message" || entry.message?.role !== "user") continue;
     let shown = 0;
-    entry.message.attachments?.forEach((attachment, ordinal) => {
+    const attachments = entry.message.attachments ?? [];
+    attachments.forEach((attachment, ordinal) => {
       if (!isImageAttachment(attachment) || !attachment.previewUrl) return;
       images.push({
         key: `${entry.id}:a${ordinal}`,
+        kind: "image",
         rowId: entry.id,
         ordinal: shown++,
         name: attachment.name,
         markdownSource: null,
         src: attachment.previewUrl,
+        ...(attachment.source ? { source: attachment.source } : {}),
+      });
+    });
+    attachments.forEach((attachment, ordinal) => {
+      if (!isFileAttachment(attachment) || !isVideoAttachment(attachment)) return;
+      if (!attachment.previewUrl && attachment.downloadable === false) return;
+      images.push({
+        key: `${entry.id}:a${ordinal}`,
+        kind: "video",
+        rowId: entry.id,
+        ordinal: shown++,
+        name: attachment.name,
+        markdownSource: null,
+        src: attachment.previewUrl ?? null,
+        ...(attachment.downloadable === false
+          ? {}
+          : {
+              videoAttachment: {
+                id: attachment.id,
+                name: attachment.name,
+                mimeType: attachment.mimeType,
+              },
+            }),
       });
     });
   }
   return images;
 }
 
-export function reviewImageTarget(
-  image: ReviewImage,
+/** The items a click outside the thread's gallery opens, in the order the caller gave them. */
+export function reviewItemsFromPreview(preview: ExpandedImagePreview): ReadonlyArray<ReviewItem> {
+  return preview.images.map((image, index) => ({
+    key: `preview:${index}`,
+    kind: image.type === "video" ? "video" : "image",
+    rowId: null,
+    ordinal: index,
+    name: image.name,
+    markdownSource: null,
+    src: image.src,
+    mimeType: image.mimeType,
+    ownsSrc: image.ownsSrc,
+    source: image.source,
+    onCopySnapshot: image.onCopySnapshot,
+    autoPlay: image.autoPlay,
+    originalUrl: image.originalUrl,
+    srcFragment: image.srcFragment,
+    actionsSource: image.actionsSource,
+  }));
+}
+
+export function reviewItemTarget(
+  image: ReviewItem,
   context: ReviewSourceContext,
-): ReviewImageTarget | null {
+): ReviewItemTarget | null {
   if (image.src !== null) return { _tag: "direct", src: image.src };
   if (image.markdownSource === null) return null;
   const source = classifyMarkdownImageSource(image.markdownSource, context.cwd);
@@ -148,29 +225,33 @@ export function reviewImageTarget(
     : { _tag: "workspace", path: source.path, relative: source.relative === true };
 }
 
-const targetIdentity = (target: ReviewImageTarget | null) =>
-  target === null ? null : target._tag === "direct" ? `s:${target.src}` : `f:${target.path}`;
+function itemIdentity(item: ReviewItem, context: ReviewSourceContext) {
+  const target = reviewItemTarget(item, context);
+  if (target !== null) return target._tag === "direct" ? `s:${target.src}` : `f:${target.path}`;
+  return item.videoAttachment ? `a:${item.videoAttachment.id}` : null;
+}
 
 function previewItemIdentity(item: ExpandedImageItem | undefined) {
   if (!item) return null;
   const resource = item.actionsSource?.asset?.resource;
   if (resource?._tag === "media-file") return `f:${resource.path}`;
-  return item.src === null ? null : `s:${item.src}`;
+  if (item.src !== null) return `s:${item.src}`;
+  return resource?._tag === "attachment" ? `a:${resource.attachmentId}` : null;
 }
 
 /**
- * Where a clicked image sits in the thread gallery, or -1. The click only knows its own message's
- * images, so a repeated image resolves to the occurrence whose neighbors match those too.
+ * Where a clicked item sits in the thread gallery, or -1. The click only knows its own message's
+ * media, so a repeated item resolves to the occurrence whose neighbors match those too.
  */
 export function findReviewIndex(
-  images: ReadonlyArray<ReviewImage>,
+  images: ReadonlyArray<ReviewItem>,
   preview: ExpandedImagePreview,
   context: ReviewSourceContext,
 ): number {
   const wanted = preview.images.map(previewItemIdentity);
   const selected = wanted[preview.index];
   if (selected === null || selected === undefined) return -1;
-  const identities = images.map((image) => targetIdentity(reviewImageTarget(image, context)));
+  const identities = images.map((image) => itemIdentity(image, context));
   let best = -1;
   let bestScore = 0;
   identities.forEach((identity, candidate) => {

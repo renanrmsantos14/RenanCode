@@ -1,39 +1,10 @@
 import { useGT } from "gt-react";
-import { useImperativeHandle, useRef, useState, useSyncExternalStore, type Ref } from "react";
+import { useImperativeHandle, useRef, useState, type Ref } from "react";
 import { flushSync } from "react-dom";
-
-import {
-  onWindowControlsOverlayGeometryChange,
-  windowControlsOverlayHeight,
-} from "../../lib/windowControlsOverlay";
 
 import { AttachmentImage } from "../media/AttachmentImage";
 
 const MAX_ZOOM = 8;
-
-// Subtract the caption strip, matching dialog CSS's --native-titlebar-height.
-function readViewerSize() {
-  return { width: window.innerWidth, height: window.innerHeight - windowControlsOverlayHeight() };
-}
-
-let viewerSize: ReturnType<typeof readViewerSize> | null = null;
-
-// Cached so an unchanged size keeps its identity: a new one resets the zoom.
-function getViewerSize() {
-  const next = readViewerSize();
-  if (next.width !== viewerSize?.width || next.height !== viewerSize.height) viewerSize = next;
-  return viewerSize;
-}
-
-function subscribeViewerSize(onChange: () => void) {
-  window.addEventListener("resize", onChange);
-  // Fullscreen caption-strip changes may not emit resize.
-  const stopOverlayListener = onWindowControlsOverlayGeometryChange(onChange);
-  return () => {
-    window.removeEventListener("resize", onChange);
-    stopOverlayListener();
-  };
-}
 
 export interface ZoomableImageHandle {
   pan: (key: string) => boolean;
@@ -44,23 +15,26 @@ export function ZoomableImage({
   name,
   mimeType,
   onError,
+  bounds,
   ref,
 }: {
   src: string;
   name: string;
   mimeType?: string | undefined;
   onError: () => void;
+  /** The box the image fits at zoom 1. */
+  bounds: { readonly width: number; readonly height: number };
   ref?: Ref<ZoomableImageHandle>;
 }) {
   const gt = useGT();
   const viewportRef = useRef<HTMLDivElement>(null);
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
-  const viewerSize = useSyncExternalStore(subscribeViewerSize, getViewerSize);
+  const fitKey = `${bounds.width}x${bounds.height}`;
   const [zoom, setZoom] = useState(1);
   // A resized viewer refits the image.
-  const [zoomViewerSize, setZoomViewerSize] = useState(viewerSize);
-  if (zoomViewerSize !== viewerSize) {
-    setZoomViewerSize(viewerSize);
+  const [zoomFitKey, setZoomFitKey] = useState(fitKey);
+  if (zoomFitKey !== fitKey) {
+    setZoomFitKey(fitKey);
     setZoom(1);
   }
   const dragRef = useRef<{
@@ -72,11 +46,11 @@ export function ZoomableImage({
   } | null>(null);
   const suppressClickRef = useRef(false);
   const [dragging, setDragging] = useState(false);
-  const maxHeight = Math.max(1, Math.min(viewerSize.height * 0.86, viewerSize.height - 160));
+  const maxHeight = bounds.height;
   // A vector scales without loss, and an SVG without width and height reports a tiny default size.
   const fit = Math.min(
     mimeType === "image/svg+xml" ? Infinity : 1,
-    (viewerSize.width * 0.92 - (viewerSize.width >= 640 ? 96 : 0)) / (naturalSize.width || 1),
+    bounds.width / (naturalSize.width || 1),
     maxHeight / (naturalSize.height || 1),
   );
   const width = naturalSize.width * fit * zoom;

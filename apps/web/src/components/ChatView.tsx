@@ -336,8 +336,7 @@ import {
 } from "./chat/review/reviewLayout";
 import { useHtmlFullscreenChat } from "./chat/review/useHtmlFullscreenChat";
 import { useMockupViewer } from "./chat/review/useMockupViewer";
-import { type ReviewState, useReviewMode } from "./chat/review/useReviewMode";
-import { ExpandedImageDialogHost, openExpandedImagePreview } from "./chat/ExpandedImageDialog";
+import { MediaReviewContext, useReviewMode, useThreadOpenMedia } from "./chat/review/useReviewMode";
 import {
   BranchRestoreConfirmHost,
   DeviceSetupDialogHost,
@@ -1611,8 +1610,7 @@ export default function ChatView(props: ChatViewProps) {
     setLocalServerErrorsByThreadKey,
     setLocalDraftErrorsByDraftId,
   });
-  const reviewState = useState<ReviewState | null>(null);
-  const reviewOpen = reviewState[0]?.scope === routeThreadKey;
+  const review = useReviewMode(routeThreadKey);
   const {
     pendingApprovals,
     pendingUserInputs,
@@ -1640,7 +1638,7 @@ export default function ChatView(props: ChatViewProps) {
     setThreadError,
     // A side chat lives in the right panel already, and review mode hides that panel, so
     // their questions stay in the composer.
-    questionPlacement: embedded || reviewOpen ? "composer" : settings.questionPlacement,
+    questionPlacement: embedded || review.active ? "composer" : settings.questionPlacement,
   });
   const openQuestionsPanel = useStableCallback(() => {
     if (activeThreadRef) useRightPanelStore.getState().open(activeThreadRef, "questions");
@@ -3561,13 +3559,19 @@ export default function ChatView(props: ChatViewProps) {
     if (hasNewMessage && timelineLiveFollowEnabled) scrollToEnd(true);
   }, [routeThreadKey, pendingGuestMessageKey, timelineLiveFollowEnabled, scrollToEnd]);
   const reviewSource = { cwd: gitCwd ?? undefined, hostImageUrl: null };
-  const review = useReviewMode({
+  const mockupViewer = useMockupViewer({ scope: routeThreadKey });
+  const openMedia = useThreadOpenMedia({
     scope: routeThreadKey,
     entries: timelineEntries,
     source: reviewSource,
-    state: reviewState,
+    onBeforeOpen: mockupViewer.close,
   });
-  const mockupViewer = useMockupViewer({ scope: routeThreadKey });
+  // A mockup page's media opens over the viewer, which stays mounted so its page keeps its state.
+  const openMediaOverMockup = useThreadOpenMedia({
+    scope: routeThreadKey,
+    entries: timelineEntries,
+    source: reviewSource,
+  });
   const openHtmlVariantsStable = useStableCallback(mockupViewer.open);
   // Image review and the mockup viewer share one layout: a viewer on the left, the chat beside it.
   const viewerActive = review.active || mockupViewer.active;
@@ -3589,10 +3593,7 @@ export default function ChatView(props: ChatViewProps) {
     preview: ExpandedImagePreview,
     entries?: ReadonlyArray<TimelineEntry>,
   ) => {
-    mockupViewer.close();
-    if (!review.open(preview, entries)) {
-      openExpandedImagePreview(routeThreadKey, preview);
-    }
+    openMedia(preview, entries ? { entries } : undefined);
   };
   const onExpandTimelineImageStable = useStableCallback(onExpandTimelineImage);
   const queuedRunsControl =
@@ -3911,19 +3912,29 @@ export default function ChatView(props: ChatViewProps) {
         />
       )}
       {review.active ? (
-        <ReviewViewer review={review} source={{ ...reviewSource, threadRef: activeThreadRef }} />
-      ) : mockupViewer.active ? (
-        <MockupViewer
-          viewer={mockupViewer}
-          onChoose={followHtmlVariantStable}
-          renderPage={(variant) => (
-            <HtmlVariantStage
-              environmentId={environmentId}
-              htmlRender={variant}
-              threadRef={activeThreadRef ?? undefined}
-            />
-          )}
+        <ReviewViewer
+          review={review}
+          scope={routeThreadKey}
+          entries={timelineEntries}
+          source={{ ...reviewSource, threadRef: activeThreadRef }}
+          onFocusLost={focusComposerStable}
         />
+      ) : null}
+      {mockupViewer.active ? (
+        <MediaReviewContext value={openMediaOverMockup}>
+          <MockupViewer
+            viewer={mockupViewer}
+            covered={review.active}
+            onChoose={followHtmlVariantStable}
+            renderPage={(variant) => (
+              <HtmlVariantStage
+                environmentId={environmentId}
+                htmlRender={variant}
+                threadRef={activeThreadRef ?? undefined}
+              />
+            )}
+          />
+        </MediaReviewContext>
       ) : null}
       {rightPanelControlsAtRoot && !embedded && !viewerActive ? panelLayoutControls : null}
       <div
@@ -4112,7 +4123,6 @@ export default function ChatView(props: ChatViewProps) {
                   isPreparingWorktree={isPreparingWorktree}
                   footer={timelineFooter}
                   listRef={legendListRef}
-                  revealRow={review.reveal}
                   runs={serverProjection?.runs ?? []}
                   latestRun={activeActivityRun}
                   usageLimitRunId={usageLimitRunId}
@@ -4746,7 +4756,6 @@ export default function ChatView(props: ChatViewProps) {
       />
       {embedded ? null : <LinkPullRequestDialogHost />}
       <ThreadVisitWatermark threadRef={routeThreadRef} />
-      <ExpandedImageDialogHost threadKey={routeThreadKey} />
     </div>
   );
   return (
@@ -4756,7 +4765,7 @@ export default function ChatView(props: ChatViewProps) {
       checkpoints={serverProjection?.checkpoints}
       checkpointScopes={serverProjection?.checkpointScopes}
     >
-      {content}
+      <MediaReviewContext value={openMedia}>{content}</MediaReviewContext>
       {coldCache.dialog}
     </FileMetadataThreadProvider>
   );

@@ -29,7 +29,7 @@ import { MockupViewer } from "./review/MockupViewer";
 import { ReviewViewer } from "./review/ReviewViewer";
 import { ReviewSheetHandle, reviewChatColumnClassName } from "./review/reviewLayout";
 import { useMockupViewer } from "./review/useMockupViewer";
-import { useReviewMode } from "./review/useReviewMode";
+import { MediaReviewContext, useReviewMode, useThreadOpenMedia } from "./review/useReviewMode";
 import { cn } from "~/lib/utils";
 
 // The timeline needs an environment id to key its rows. No environment answers to this one, so a
@@ -56,8 +56,8 @@ export function ReadOnlyThreadTimeline(props: {
   readonly attachmentUrls: (
     items: ReadonlyArray<OrchestrationV2ProjectedTurnItem>,
   ) => ReadonlyMap<string, string>;
-  /** Where a clicked image goes when the thread's gallery has no such image. */
-  readonly onImageExpand: (preview: ExpandedImagePreview) => void;
+  /** Where a click goes when the timeline has no review of its own. */
+  readonly onImageExpand?: (preview: ExpandedImagePreview) => void;
   /** Opts into review mode for the thread's images; without it a click goes to `onImageExpand`. */
   readonly review?: {
     /** Serves the host's workspace files, for images the markdown names by path. */
@@ -121,33 +121,35 @@ export function ReadOnlyThreadTimeline(props: {
     timelineAnchorMessageId: null,
     setTimelineAnchor: ignore,
   });
-  const review = useReviewMode({
-    scope: null,
-    entries,
-    source: { cwd: undefined, hostImageUrl: props.review?.hostImageUrl ?? null },
-  });
+  const reviewSource = { cwd: undefined, hostImageUrl: props.review?.hostImageUrl ?? null };
+  const reviewMode = useReviewMode(threadKey);
+  const review = props.review ? reviewMode : { ...reviewMode, active: false };
   const mockupViewer = useMockupViewer({ scope: null });
   const openHtmlVariants = useStableCallback(mockupViewer.open);
   const viewerChat = review.active ? review : mockupViewer;
-  const openImage = useStableCallback((preview: ExpandedImagePreview) => {
-    if (!props.review) return props.onImageExpand(preview);
-    mockupViewer.close();
-    if (!review.open(preview)) props.onImageExpand(preview);
+  const openMedia = useThreadOpenMedia({
+    scope: threadKey,
+    entries,
+    source: reviewSource,
   });
-  return (
+  const openImage = useStableCallback((preview: ExpandedImagePreview) => {
+    if (!props.review) return props.onImageExpand?.(preview);
+    openMedia(preview);
+  });
+  const content = (
     <div className="flex min-h-0 flex-1">
       {review.active ? (
         <ReviewViewer
           review={review}
-          source={{
-            cwd: undefined,
-            hostImageUrl: props.review?.hostImageUrl ?? null,
-            threadRef: null,
-          }}
+          scope={threadKey}
+          entries={entries}
+          source={{ ...reviewSource, threadRef: null }}
         />
-      ) : mockupViewer.active && props.renderHtmlVariantStage ? (
+      ) : null}
+      {mockupViewer.active && props.renderHtmlVariantStage ? (
         <MockupViewer
           viewer={mockupViewer}
+          covered={review.active}
           renderPage={(variant, index) =>
             props.renderHtmlVariantStage?.(mockupViewer.rowId ?? "", variant, index)
           }
@@ -177,7 +179,6 @@ export function ReadOnlyThreadTimeline(props: {
               onRevertToTurnCount={ignore}
               isRevertingCheckpoint={false}
               onImageExpand={openImage}
-              revealRow={review.reveal}
               onFileOpen={props.onFileOpen}
               onFileDownload={props.onFileOpen}
               renderHtmlRender={props.renderHtmlRender}
@@ -216,5 +217,10 @@ export function ReadOnlyThreadTimeline(props: {
         {props.children({ scrollToEnd: () => follow.scrollToEnd(true) })}
       </div>
     </div>
+  );
+  return props.review ? (
+    <MediaReviewContext value={openMedia}>{content}</MediaReviewContext>
+  ) : (
+    content
   );
 }
