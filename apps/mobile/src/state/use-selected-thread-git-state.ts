@@ -46,6 +46,5 @@ export function useSelectedThreadGitState(repository?: GitRepositoryTarget) {
   return {
     gitOperationLabel,
     selectedThreadBranches,
-    selectedThreadBranchesLoading: selectedThreadBranchState.isPending,
   };
 }
