@@ -1682,6 +1682,10 @@ export const ServerSettings = Schema.Struct({
   ),
   /** Beta: new Claude drafts go to a cloud session when the task does not need this machine. */
   claudeCloudAutoRouting: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  /** GitHub repositories ("owner/name") cloned next to the project in every new cloud session. */
+  claudeCloudExtraRepositories: Schema.Array(TrimmedNonEmptyString).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   /** Beta: durable workflows from the workflows folder of the T3 home. Off runs none of them. */
   workflowsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   /** Skipped top-level runs kept per workflow; older ones are deleted. */
@@ -2157,6 +2161,7 @@ export const ServerSettingsPatch = Schema.Struct({
   linkedEnvironmentsEnabled: Schema.optionalKey(Schema.Boolean),
   claudeCloudSessionsEnabled: Schema.optionalKey(Schema.Boolean),
   claudeCloudAutoRouting: Schema.optionalKey(Schema.Boolean),
+  claudeCloudExtraRepositories: Schema.optionalKey(Schema.Array(TrimmedNonEmptyString)),
   workflowsEnabled: Schema.optionalKey(Schema.Boolean),
   workflowSkippedRunsKept: Schema.optionalKey(WorkflowSkippedRunsKept),
   promptSuggestionsEnabled: Schema.optionalKey(Schema.Boolean),

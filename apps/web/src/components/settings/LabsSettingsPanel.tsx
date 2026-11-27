@@ -12,6 +12,7 @@ import { T, useGT, useMessages } from "gt-react";
 import { hasCloudPublicConfig } from "~/cloud/publicConfig";
 import { useT3ConnectAuthPrompt } from "../clerk/useT3ConnectAuthPrompt";
 import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 import { NumberField, NumberFieldGroup, NumberFieldInput } from "../ui/number-field";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { commitNumberFieldOnEnter } from "./commitNumberFieldOnEnter";
@@ -43,6 +44,7 @@ export function LabsSettingsPanel() {
         <LinkedEnvironmentsRow />
         <ClaudeCloudSessionsRow />
         <ClaudeCloudAutoRoutingRow />
+        <ClaudeCloudExtraRepositoriesRow />
         <WorkflowsRow />
         <WorkflowSkippedRunsRow />
         <PromptSuggestionsRow />
@@ -171,6 +173,47 @@ function ClaudeCloudAutoRoutingRow() {
             updateSettings({ claudeCloudAutoRouting: Boolean(checked) })
           }
           aria-label={gt("Send tasks to the cloud automatically")}
+        />
+      }
+    />
+  );
+}
+
+function ClaudeCloudExtraRepositoriesRow() {
+  const searchableSetting = useSearchableSetting();
+  const settings = useScopedSettings();
+  const updateSettings = useUpdateScopedSettings();
+  const gt = useGT();
+  if (!settings.claudeCloudSessionsEnabled) return null;
+  const saved = settings.claudeCloudExtraRepositories.join(", ");
+  const commit = (value: string) => {
+    const next = value
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+    if (next.join(", ") !== saved) updateSettings({ claudeCloudExtraRepositories: next });
+  };
+  return (
+    <SettingsRow
+      serverScoped
+      {...searchableSetting("claude-cloud-extra-repositories-beta")}
+      settingKeys={["claudeCloudExtraRepositories"]}
+      description={gt(
+        "GitHub repositories cloned next to the project in every new cloud session, separated by commas (owner/name). Use it for shared instructions or skills the session should load.",
+      )}
+      control={
+        <Input
+          key={saved}
+          size="sm"
+          className="w-full sm:w-72"
+          defaultValue={saved}
+          placeholder="owner/name, owner/other"
+          aria-label={gt("Extra repositories for cloud sessions")}
+          onBlur={(event) => commit(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing) return;
+            if (event.key === "Enter") commit(event.currentTarget.value);
+          }}
         />
       }
     />
