@@ -358,6 +358,7 @@ export function ReviewViewer({
   entries,
   source,
   standalone = false,
+  onFocusLost,
 }: {
   readonly review: ReviewMode;
   readonly scope: string | null;
@@ -365,6 +366,8 @@ export function ReviewViewer({
   readonly source: ReviewImageSource;
   /** No chat beside the viewer, so no button to show or hide it. */
   readonly standalone?: boolean;
+  /** Takes focus back when whatever opened review has left the page. */
+  readonly onFocusLost?: () => void;
 }) {
   const gt = useGT();
   const gallery = useReviewGallery({ scope, entries, source });
@@ -383,14 +386,14 @@ export function ReviewViewer({
     }
     if (event.target instanceof HTMLVideoElement) return;
     if (document.activeElement instanceof HTMLIFrameElement) return;
+    if (isEditableFocused()) return;
+    if (event.target instanceof Element && event.target.closest(ARROW_OWNER_SELECTOR)) return;
     if (zoomRef.current?.pan(event.key)) {
       event.preventDefault();
       return;
     }
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-    if (isEditableFocused()) return;
-    if (event.target instanceof Element && event.target.closest(ARROW_OWNER_SELECTOR)) return;
     event.preventDefault();
     gallery.step(event.key === "ArrowLeft" ? -1 : 1);
   });
@@ -399,13 +402,21 @@ export function ReviewViewer({
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onKeyDown]);
+  const missing = image === undefined;
+  const closeReview = review.close;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- ends the shared review store once its item is gone, instead of an empty viewer with no Close
+  useEffect(() => {
+    if (missing) closeReview();
+  }, [missing, closeReview]);
   const attachSection = (section: HTMLElement) => {
     const opener = document.activeElement;
     section.querySelector<HTMLButtonElement>("[data-review-close]")?.focus();
     return () => {
       const focused = document.activeElement;
       const lost = focused === null || focused === document.body || section.contains(focused);
-      if (lost && opener instanceof HTMLElement && opener.isConnected) opener.focus();
+      if (!lost) return;
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+      else onFocusLost?.();
     };
   };
 

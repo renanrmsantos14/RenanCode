@@ -569,8 +569,17 @@ export function ComposerFilePreviewDialog({
         <DialogTitle className="sr-only">{file.name}</DialogTitle>
         <MediaReviewContext
           value={(preview, options) => {
+            const source = file.file;
+            // Closing the dialog revokes the preview's blob URL, so review gets its own.
+            const images = source
+              ? preview.images.map((image) =>
+                  image.src?.startsWith("blob:")
+                    ? { ...image, src: URL.createObjectURL(source), ownsSrc: true }
+                    : image,
+                )
+              : preview.images;
             onClose();
-            openMedia(preview, options);
+            openMedia({ ...preview, images }, options);
           }}
         >
           <AttachmentFilePreview

@@ -131,7 +131,6 @@ export function ReadOnlyThreadTimeline(props: {
     scope: threadKey,
     entries,
     source: reviewSource,
-    onBeforeOpen: mockupViewer.close,
   });
   const openImage = useStableCallback((preview: ExpandedImagePreview) => {
     if (!props.review) return props.onImageExpand?.(preview);
@@ -150,9 +149,11 @@ export function ReadOnlyThreadTimeline(props: {
             threadRef: null,
           }}
         />
-      ) : mockupViewer.active && props.renderHtmlVariantStage ? (
+      ) : null}
+      {mockupViewer.active && props.renderHtmlVariantStage ? (
         <MockupViewer
           viewer={mockupViewer}
+          covered={review.active}
           renderPage={(variant, index) =>
             props.renderHtmlVariantStage?.(mockupViewer.rowId ?? "", variant, index)
           }

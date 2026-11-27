@@ -51,6 +51,7 @@ function Harness({ preview }: { readonly preview: ExpandedImagePreview }) {
           />
         ) : null}
         <Opener preview={preview} />
+        <textarea aria-label="Composer" />
       </div>
     </MediaReviewContext>
   );
@@ -179,6 +180,32 @@ describe("ReviewViewer", () => {
       );
     },
   );
+
+  it("leaves the arrow keys to the composer while the image is zoomed", async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1600;
+    canvas.height = 1200;
+    await using screen = await openReview({
+      images: [{ src: canvas.toDataURL(), name: "large.png" }],
+      index: 0,
+    });
+    const viewportLocator = screen.getByRole("region", { name: "large.png, zoomable image" });
+    const image = screen.getByRole("img", { name: "large.png" }).element() as HTMLElement;
+    await vi.waitFor(() => expect(image.style.width).not.toBe(""));
+    await userEvent.keyboard("{Control>}");
+    await userEvent.wheel(viewportLocator, { delta: { y: -100 } });
+    await userEvent.keyboard("{/Control}");
+    const keys: boolean[] = [];
+    const recordKey = (event: KeyboardEvent) => keys.push(event.defaultPrevented);
+    window.addEventListener("keydown", recordKey);
+    using _keyListener = {
+      [Symbol.dispose]: () => window.removeEventListener("keydown", recordKey),
+    };
+
+    await userEvent.click(screen.getByRole("textbox", { name: "Composer" }));
+    await userEvent.keyboard("{ArrowRight}{ArrowDown}");
+    expect(keys).toEqual([false, false]);
+  });
 
   it("scrolling pans the image while Ctrl+wheel zooms around the pointer", async () => {
     const canvas = document.createElement("canvas");

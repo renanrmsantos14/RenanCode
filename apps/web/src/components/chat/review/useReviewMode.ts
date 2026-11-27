@@ -67,6 +67,11 @@ function closeReview(): void {
   setReviewState(null);
 }
 
+/** Ends review only when it belongs to `scope`. */
+export function closeReviewIn(scope: string | null): void {
+  if (appAtomRegistry.get(reviewStateAtom)?.scope === scope) closeReview();
+}
+
 registerThreadOverlay((threadKey) => {
   const current = appAtomRegistry.get(reviewStateAtom);
   if (current !== null && current.scope !== threadKey) closeReview();
@@ -182,10 +187,8 @@ export function useReviewGallery(input: {
       ? NO_IMAGES
       : (state.items ??
         deriveReviewGallery(input.entries, { cwd: input.source.cwd, theme: resolvedTheme }));
-  const index = Math.max(
-    0,
-    images.findIndex((image) => image.key === state?.key),
-  );
+  // -1 once the item leaves the thread's gallery (a reverted turn, for one).
+  const index = images.findIndex((image) => image.key === state?.key);
   const goTo = (next: number) => {
     const image = images[next];
     if (!image || state === null) return;
@@ -234,6 +237,8 @@ export function useReviewMode(scope: string | null): ReviewMode {
   const [sheet, setSheet] = useState<ReviewSheetSnap>("peek");
   const [wasActive, setWasActive] = useState(active);
   const narrow = useMediaQuery("max-md");
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- the store outlives the view, so a side chat closed mid-review must not reopen it later
+  useEffect(() => () => closeReviewIn(scope), [scope]);
   if (wasActive !== active) {
     setWasActive(active);
     if (active) setSheet("peek");

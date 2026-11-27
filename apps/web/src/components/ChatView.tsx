@@ -3918,6 +3918,7 @@ export default function ChatView(props: ChatViewProps) {
           scope={routeThreadKey}
           entries={timelineEntries}
           source={{ ...reviewSource, threadRef: activeThreadRef }}
+          onFocusLost={focusComposerStable}
         />
       ) : null}
       {mockupViewer.active ? (
