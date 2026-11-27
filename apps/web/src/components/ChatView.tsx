@@ -1650,24 +1650,54 @@ export default function ChatView(props: ChatViewProps) {
   const sidePanelQuestionRequestId = activeQuestionInSidePanel
     ? (activePendingUserInput?.requestId ?? null)
     : null;
-  const shownQuestionRef = useRef<{ threadKey: string | null; requestId: string | null }>({
+  const rightPanelUserActionRevision = useRightPanelStore((state) =>
+    activeThreadKey === null ? 0 : (state.userActionRevisionByThreadKey[activeThreadKey] ?? 0),
+  );
+  const questionsTabPresent = rightPanelState.surfaces.some(
+    (surface) => surface.kind === "questions",
+  );
+  const shownQuestionRef = useRef<{
+    threadKey: string | null;
+    requestId: string | null;
+    userActionRevision: number;
+  }>({
     threadKey: null,
     requestId: null,
+    userActionRevision: 0,
   });
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a server question takes the panel over and hands it back once answered
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a server question takes the panel over, hands it back once answered, and yields to the composer when the user picks another panel tab
   useEffect(() => {
     const shown = shownQuestionRef.current;
     shownQuestionRef.current = {
       threadKey: activeThreadKey,
       requestId: sidePanelQuestionRequestId,
+      userActionRevision: rightPanelUserActionRevision,
     };
     if (!activeThreadRef) return;
     if (sidePanelQuestionRequestId !== null) {
-      useRightPanelStore.getState().showQuestions(activeThreadRef);
+      if (shown.threadKey !== activeThreadKey || shown.requestId !== sidePanelQuestionRequestId) {
+        useRightPanelStore.getState().showQuestions(activeThreadRef);
+      } else if (
+        activeRightPanelKind !== null &&
+        activeRightPanelKind !== "questions" &&
+        questionsTabPresent &&
+        rightPanelUserActionRevision !== shown.userActionRevision
+      ) {
+        // Only a user's tab switch hands the question back; closing its tab or an automatic reveal keeps it.
+        movePendingUserInput(sidePanelQuestionRequestId, "composer");
+      }
     } else if (shown.threadKey === activeThreadKey && shown.requestId !== null) {
       useRightPanelStore.getState().settleQuestions(activeThreadRef);
     }
-  }, [activeThreadKey, activeThreadRef, sidePanelQuestionRequestId]);
+  }, [
+    activeRightPanelKind,
+    activeThreadKey,
+    activeThreadRef,
+    movePendingUserInput,
+    questionsTabPresent,
+    rightPanelUserActionRevision,
+    sidePanelQuestionRequestId,
+  ]);
   const [heldApprovalRequestIds, setHeldApprovalRequestIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );

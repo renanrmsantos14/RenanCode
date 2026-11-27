@@ -27,6 +27,7 @@ description: "Verifica as perguntas do agente no painel lateral: a configuraçã
 5. Fechar a aba (X): a faixa continua; clicar nela reabre a aba.
 6. Botão "Move question to composer" no painel: a pergunta volta ao composer, a faixa some e a aba Questions fecha.
    6b. Painel aberto na aba Design, mandar outra mensagem na mesma thread Replay: a pergunta assume a aba Questions; respondida, volta à Design.
+   6c. Com a pergunta na aba Questions, trocar para outra aba (existente ou nova pelo "Add panel surface"): a pergunta volta ao composer, a faixa some e a aba Questions criada por ela fecha. Fechar o painel, fechar a aba Questions no X ou uma troca automática (reveal do agente, diff proativo) mantêm a pergunta no painel e a faixa.
 7. Com a pergunta no painel: faixa âmbar, ponto na aba Questions; fechar o painel mostra o ponto no botão do painel. `getComputedStyle` do anel interno do ponto: `0.9s ease-out 3 step-ping` (nunca `infinite`).
 8. Com o chat estreito (~360px) a faixa trunca o texto; o nome acessível do botão tem o texto inteiro.
 9. Modo revisão (abrir imagem da conversa, viewport ≥ 1600px): a pergunta aparece no composer do chat lateral, sem a faixa "Question waiting in the side panel"; o `padding-left` de `.chat-composer-lane` é 4px. Fechar a revisão devolve a pergunta ao painel.
