@@ -29,7 +29,7 @@ import { MockupViewer } from "./review/MockupViewer";
 import { ReviewViewer } from "./review/ReviewViewer";
 import { ReviewSheetHandle, reviewChatColumnClassName } from "./review/reviewLayout";
 import { useMockupViewer } from "./review/useMockupViewer";
-import { useReviewMode } from "./review/useReviewMode";
+import { MediaReviewContext, useReviewMode, useThreadOpenMedia } from "./review/useReviewMode";
 import { cn } from "~/lib/utils";
 
 // The timeline needs an environment id to key its rows. No environment answers to this one, so a
@@ -121,24 +121,30 @@ export function ReadOnlyThreadTimeline(props: {
     timelineAnchorMessageId: null,
     setTimelineAnchor: ignore,
   });
-  const review = useReviewMode({
-    scope: null,
-    entries,
-    source: { cwd: undefined, hostImageUrl: props.review?.hostImageUrl ?? null },
-  });
+  const reviewSource = { cwd: undefined, hostImageUrl: props.review?.hostImageUrl ?? null };
+  const reviewMode = useReviewMode(threadKey);
+  const review = props.review ? reviewMode : { ...reviewMode, active: false };
   const mockupViewer = useMockupViewer({ scope: null });
   const openHtmlVariants = useStableCallback(mockupViewer.open);
   const viewerChat = review.active ? review : mockupViewer;
+  const openMedia = useThreadOpenMedia({
+    scope: threadKey,
+    entries,
+    source: reviewSource,
+    onBeforeOpen: mockupViewer.close,
+    onMissing: props.onImageExpand,
+  });
   const openImage = useStableCallback((preview: ExpandedImagePreview) => {
     if (!props.review) return props.onImageExpand(preview);
-    mockupViewer.close();
-    if (!review.open(preview)) props.onImageExpand(preview);
+    openMedia(preview);
   });
-  return (
+  const content = (
     <div className="flex min-h-0 flex-1">
       {review.active ? (
         <ReviewViewer
           review={review}
+          scope={threadKey}
+          entries={entries}
           source={{
             cwd: undefined,
             hostImageUrl: props.review?.hostImageUrl ?? null,
@@ -177,7 +183,6 @@ export function ReadOnlyThreadTimeline(props: {
               onRevertToTurnCount={ignore}
               isRevertingCheckpoint={false}
               onImageExpand={openImage}
-              revealRow={review.reveal}
               onFileOpen={props.onFileOpen}
               onFileDownload={props.onFileOpen}
               renderHtmlRender={props.renderHtmlRender}
@@ -216,5 +221,10 @@ export function ReadOnlyThreadTimeline(props: {
         {props.children({ scrollToEnd: () => follow.scrollToEnd(true) })}
       </div>
     </div>
+  );
+  return props.review ? (
+    <MediaReviewContext value={openMedia}>{content}</MediaReviewContext>
+  ) : (
+    content
   );
 }

@@ -24,6 +24,7 @@ import { page, userEvent } from "vite-plus/test/browser";
 import "~/index.css";
 
 import { render } from "../../../test/render";
+import { AppAtomRegistryProvider } from "../../rpc/atomRegistry";
 import { makeThreadProjectionFixture } from "../../test-fixtures";
 import { GuestPage } from "./GuestPage";
 
@@ -587,7 +588,11 @@ describe("GuestPage", () => {
       .mockImplementation(async () => new Response(null, { status: 204 }));
     using _stream = vi.spyOn(window, "EventSource").mockImplementation(reviewStream());
     await page.viewport(1200, 900);
-    await using screen = await render(<GuestPage />);
+    await using screen = await render(
+      <AppAtomRegistryProvider>
+        <GuestPage />
+      </AppAtomRegistryProvider>,
+    );
 
     await waitForImages(screen.container);
     await userEvent.click(screen.getByRole("button", { name: "Preview beta" }));
@@ -617,7 +622,11 @@ describe("GuestPage", () => {
     using _page = visit(`/guest?share=${SHARE_ID}`);
     using _stream = vi.spyOn(window, "EventSource").mockImplementation(reviewStream());
     await page.viewport(500, 900);
-    await using screen = await render(<GuestPage />);
+    await using screen = await render(
+      <AppAtomRegistryProvider>
+        <GuestPage />
+      </AppAtomRegistryProvider>,
+    );
 
     await waitForImages(screen.container);
     await userEvent.click(screen.getByRole("button", { name: "Preview beta" }));

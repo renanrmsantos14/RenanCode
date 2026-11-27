@@ -39,8 +39,13 @@ import {
   snapShotAccessibilityDetails,
 } from "../SnapShotAttachmentDetails";
 import { ZoomableImage, type ZoomableImageHandle } from "../ZoomableImage";
-import { reviewItemTarget, type ReviewItem, type ReviewSourceContext } from "./reviewGallery";
-import type { ReviewMode } from "./useReviewMode";
+import {
+  reviewItemTarget,
+  type ReviewGalleryEntry,
+  type ReviewItem,
+  type ReviewSourceContext,
+} from "./reviewGallery";
+import { useReviewGallery, type ReviewMode } from "./useReviewMode";
 import { ARROW_OWNER_SELECTOR, DIALOG_SELECTOR } from "./viewerKeys";
 
 export interface ReviewImageSource extends ReviewSourceContext {
@@ -349,13 +354,18 @@ function ReviewThumbnail({
 /** The image side of review mode: it fills the area the chat column leaves free. */
 export function ReviewViewer({
   review,
+  scope,
+  entries,
   source,
 }: {
   readonly review: ReviewMode;
+  readonly scope: string | null;
+  readonly entries: ReadonlyArray<ReviewGalleryEntry>;
   readonly source: ReviewImageSource;
 }) {
   const gt = useGT();
-  const { images, index } = review;
+  const gallery = useReviewGallery({ scope, entries, source });
+  const { images, index } = gallery;
   const image = images[index];
   const total = images.length;
   const zoomRef = useRef<ZoomableImageHandle>(null);
@@ -379,7 +389,7 @@ export function ReviewViewer({
     if (isEditableFocused()) return;
     if (event.target instanceof Element && event.target.closest(ARROW_OWNER_SELECTOR)) return;
     event.preventDefault();
-    review.step(event.key === "ArrowLeft" ? -1 : 1);
+    gallery.step(event.key === "ArrowLeft" ? -1 : 1);
   });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- document key listener for Esc and the arrow keys while review mode is open
   useEffect(() => {
@@ -462,7 +472,7 @@ export function ReviewViewer({
               variant="media-navigation"
               className="left-1"
               aria-label={gt("Previous media")}
-              onClick={() => review.step(-1)}
+              onClick={() => gallery.step(-1)}
             >
               <ChevronLeftIcon className="size-5" />
             </Button>
@@ -472,7 +482,7 @@ export function ReviewViewer({
               variant="media-navigation"
               className="right-1"
               aria-label={gt("Next media")}
-              onClick={() => review.step(1)}
+              onClick={() => gallery.step(1)}
             >
               <ChevronRightIcon className="size-5" />
             </Button>
@@ -496,7 +506,7 @@ export function ReviewViewer({
               current={thumbStart + offset === index}
               position={thumbStart + offset + 1}
               total={total}
-              onSelect={() => review.goTo(thumbStart + offset)}
+              onSelect={() => gallery.goTo(thumbStart + offset)}
             />
           ))}
         </div>

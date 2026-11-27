@@ -18,11 +18,6 @@ import {
 } from "./SnapShotAttachmentDetails";
 import { ZoomableImage, type ZoomableImageHandle } from "./ZoomableImage";
 import { composerFloatingLayerProps } from "./composerEventScope";
-import { useAtomValue } from "@effect/atom-react";
-import { Atom } from "effect/reactivity";
-import { appAtomRegistry } from "~/rpc/atomRegistry";
-import { expandedImageKey } from "./ExpandedImagePreview";
-import { registerThreadOverlay } from "./threadOverlayRetention";
 import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 interface ExpandedImageDialogProps {
@@ -256,53 +251,3 @@ export const ExpandedImageDialog = memo(function ExpandedImageDialog({
     </Dialog>
   );
 });
-
-// Keep preview state outside ChatView to isolate dialog renders.
-type ExpandedImagePreviewState = {
-  readonly threadKey: string;
-  readonly preview: ExpandedImagePreview;
-} | null;
-
-const expandedImagePreviewAtom = Atom.make<ExpandedImagePreviewState>(null).pipe(
-  Atom.keepAlive,
-  Atom.withLabel("chat:expanded-image-preview"),
-);
-
-function ownedSrc(state: ExpandedImagePreviewState): string | null {
-  const item = state?.preview.images[state.preview.index];
-  return item?.ownsSrc === true ? item.src : null;
-}
-
-// The preview owns a blob URL made for it, so whatever replaces it releases that URL.
-function setExpandedImagePreview(next: ExpandedImagePreviewState): void {
-  const previous = ownedSrc(appAtomRegistry.get(expandedImagePreviewAtom));
-  appAtomRegistry.set(expandedImagePreviewAtom, next);
-  if (previous !== null && previous !== ownedSrc(next)) URL.revokeObjectURL(previous);
-}
-
-export function openExpandedImagePreview(threadKey: string, preview: ExpandedImagePreview): void {
-  setExpandedImagePreview({ threadKey, preview });
-}
-
-function closeExpandedImagePreview(): void {
-  setExpandedImagePreview(null);
-}
-
-// Leaving the thread's route (or the chat view) drops its preview.
-registerThreadOverlay((threadKey) => {
-  const current = appAtomRegistry.get(expandedImagePreviewAtom);
-  if (current !== null && current.threadKey !== threadKey) closeExpandedImagePreview();
-});
-
-export function ExpandedImageDialogHost({ threadKey }: { readonly threadKey: string }) {
-  const state = useAtomValue(expandedImagePreviewAtom);
-  const preview = state?.threadKey === threadKey ? state.preview : null;
-  if (preview === null) return null;
-  return (
-    <ExpandedImageDialog
-      key={expandedImageKey(preview)}
-      preview={preview}
-      onClose={closeExpandedImagePreview}
-    />
-  );
-}
