@@ -2763,7 +2763,7 @@ export function AboutSettingsPanel() {
           description={
             telemetryOff === undefined
               ? gt(
-                  "How we handle your data, including the anonymous usage data RenanCode collects.",
+                  "How we handle your data, including the pseudonymous product usage data RenanCode collects.",
                 )
               : gt("How we handle your data. {telemetryOff}", { telemetryOff })
           }
