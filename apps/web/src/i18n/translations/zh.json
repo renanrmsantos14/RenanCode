@@ -3840,6 +3840,7 @@
     }
   ],
   "b6bf231697a34317": "变体",
+  "ca9051bf46ce4ae3": "Open {variant}",
   "b65db58454f4bcfe": "选择 {choice}",
   "c84f818fa86012dc": "选择",
   "f47ea846b6b2f9f1": "选择 {letter}",
@@ -13394,6 +13395,9 @@
   "5d18537f82794deb": "本地环境已停用。",
   "d5ef094f40aedece": "终端输入",
   "f7046b10d49caab6": "终端回滚缓冲",
+  "d613fc3c22bffeff": "Mockup viewer",
+  "36ea30e29c2cf1cc": "Close mockup viewer",
+  "f5fc9e19feb00dfb": "Option thumbnails",
   "32aebea75c7d222a": "Loading image...",
   "bf41406a4712f977": "Show image {position} of {total}",
   "054b672ee8b1b99a": "Image review",

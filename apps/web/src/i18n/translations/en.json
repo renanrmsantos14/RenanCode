@@ -3835,6 +3835,7 @@
     }
   ],
   "b6bf231697a34317": "Variants",
+  "ca9051bf46ce4ae3": "Open {variant}",
   "b65db58454f4bcfe": "I chose {choice}",
   "c84f818fa86012dc": "Choose",
   "f47ea846b6b2f9f1": "Choose {letter}",
@@ -13391,6 +13392,9 @@
   "5d18537f82794deb": "The local environment is disabled.",
   "d5ef094f40aedece": "Terminal input",
   "f7046b10d49caab6": "Terminal scrollback",
+  "d613fc3c22bffeff": "Mockup viewer",
+  "36ea30e29c2cf1cc": "Close mockup viewer",
+  "f5fc9e19feb00dfb": "Option thumbnails",
   "32aebea75c7d222a": "Loading image...",
   "bf41406a4712f977": "Show image {position} of {total}",
   "054b672ee8b1b99a": "Image review",

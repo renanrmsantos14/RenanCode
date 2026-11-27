@@ -326,6 +326,8 @@ import {
 import { useEnvironmentShellHasSnapshot } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
+import { HtmlVariantStage } from "./chat/review/HtmlVariantStage";
+import { MockupViewer } from "./chat/review/MockupViewer";
 import { ReviewViewer } from "./chat/review/ReviewViewer";
 import {
   htmlFullscreenChatColumnClassName,
@@ -333,6 +335,7 @@ import {
   reviewChatColumnClassName,
 } from "./chat/review/reviewLayout";
 import { useHtmlFullscreenChat } from "./chat/review/useHtmlFullscreenChat";
+import { useMockupViewer } from "./chat/review/useMockupViewer";
 import { useReviewMode } from "./chat/review/useReviewMode";
 import { ExpandedImageDialogHost, openExpandedImagePreview } from "./chat/ExpandedImageDialog";
 import {
@@ -3523,24 +3526,29 @@ export default function ChatView(props: ChatViewProps) {
     entries: timelineEntries,
     source: reviewSource,
   });
-  // Review mode takes the right panel's place without changing what the panel store remembers.
-  const rightPanelShown = rightPanelOpen && !review.active;
+  const mockupViewer = useMockupViewer({ scope: routeThreadKey });
+  const openHtmlVariantsStable = useStableCallback(mockupViewer.open);
+  // Image review and the mockup viewer share one layout: a viewer on the left, the chat beside it.
+  const viewerActive = review.active || mockupViewer.active;
+  const viewerChat = review.active ? review : mockupViewer;
+  // Both viewers take the right panel's place without changing what the panel store remembers.
+  const rightPanelShown = rightPanelOpen && !viewerActive;
   const htmlFullscreenChat = useHtmlFullscreenChat(
     rightPanelMaximized &&
-      !review.active &&
+      !viewerActive &&
       renderedRightPanelSurface?.kind === "file" &&
       renderedRightPanelSurface.attachment?.htmlRender === true,
     () => {
       if (activeThreadRef) useRightPanelStore.getState().setMaximized(activeThreadRef, false);
     },
   );
-  const chatColumnMaximizedAway =
-    rightPanelMaximized && !review.active && !htmlFullscreenChat.shown;
+  const chatColumnMaximizedAway = rightPanelMaximized && !viewerActive && !htmlFullscreenChat.shown;
   const htmlFullscreenSheet = htmlFullscreenChat.shown && htmlFullscreenChat.narrow;
   const onExpandTimelineImage = (
     preview: ExpandedImagePreview,
     entries?: ReadonlyArray<TimelineEntry>,
   ) => {
+    mockupViewer.close();
     if (!review.open(preview, entries)) {
       openExpandedImagePreview(routeThreadKey, preview);
     }
@@ -3863,13 +3871,25 @@ export default function ChatView(props: ChatViewProps) {
       )}
       {review.active ? (
         <ReviewViewer review={review} source={{ ...reviewSource, threadRef: activeThreadRef }} />
+      ) : mockupViewer.active ? (
+        <MockupViewer
+          viewer={mockupViewer}
+          onChoose={followHtmlVariantStable}
+          renderPage={(variant) => (
+            <HtmlVariantStage
+              environmentId={environmentId}
+              htmlRender={variant}
+              threadRef={activeThreadRef ?? undefined}
+            />
+          )}
+        />
       ) : null}
-      {rightPanelControlsAtRoot && !embedded && !review.active ? panelLayoutControls : null}
+      {rightPanelControlsAtRoot && !embedded && !viewerActive ? panelLayoutControls : null}
       <div
         className={cn(
           "flex min-h-0 min-w-0 flex-col overflow-x-hidden",
           chatColumnMaximizedAway ? "w-0 flex-none" : "flex-1",
-          reviewChatColumnClassName(review) ??
+          reviewChatColumnClassName(viewerChat) ??
             htmlFullscreenChatColumnClassName(htmlFullscreenChat),
         )}
         data-chat-column-maximized-away={chatColumnMaximizedAway ? "true" : "false"}
@@ -3883,10 +3903,12 @@ export default function ChatView(props: ChatViewProps) {
         onMouseUp={preventMiddleClickPasteOutsideEditable}
       >
         <ReviewSheetHandle
-          review={review.active ? review : { ...htmlFullscreenChat, active: htmlFullscreenSheet }}
+          review={
+            viewerActive ? viewerChat : { ...htmlFullscreenChat, active: htmlFullscreenSheet }
+          }
           peekLabel={activePendingUserInput?.questions[0]?.question ?? null}
         />
-        {embedded || review.active || htmlFullscreenSheet ? null : (
+        {embedded || viewerActive || htmlFullscreenSheet ? null : (
           <header
             ref={threadPanelPopoverAnchorRef}
             data-chat-header
@@ -4001,9 +4023,12 @@ export default function ChatView(props: ChatViewProps) {
                   citationHistory={citationHistory}
                   onCiteAssistantText={citeAssistantTextStable}
                   onFollowHtmlVariant={followHtmlVariantStable}
-                  {...(embedded || review.active
+                  {...(embedded || viewerActive
                     ? {}
                     : { onOpenHtmlRender: openHtmlRenderFullscreenStable })}
+                  {...(embedded || review.active
+                    ? {}
+                    : { onOpenHtmlVariants: openHtmlVariantsStable })}
                   onReplyToResponse={replyToResponseStable}
                   {...(activeProject && !runsOutsideHostCheckout
                     ? { onRunShellCommand: parentPanel?.runShellCommand ?? runShellCommandStable }
