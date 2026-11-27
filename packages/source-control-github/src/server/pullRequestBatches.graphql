@@ -46,8 +46,10 @@ query PullRequestSummary($owner: String!, $name: String!, $number: Int!, $stacks
         }
       }
       # Checks that run on the base branch after the merge, such as a deploy workflow. A later
-      # push's run carries this merge too, and often cancels this one, so the head counts as well.
+      # push's run carries this merge too, and often cancels this one, so the newest base commit
+      # with checks counts as well (path filters leave some pushes without any).
       mergeCommit {
+        oid
         statusCheckRollup {
           state
         }
@@ -55,8 +57,13 @@ query PullRequestSummary($owner: String!, $name: String!, $number: Int!, $stacks
       baseRef {
         target {
           ... on Commit {
-            statusCheckRollup {
-              state
+            history(first: 10) {
+              nodes {
+                oid
+                statusCheckRollup {
+                  state
+                }
+              }
             }
           }
         }

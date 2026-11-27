@@ -80,10 +80,26 @@ export const PullRequestSummaryRepositoryPullRequestCommitsPullRequestCommitConn
 export interface PullRequestSummaryRepositoryPullRequestCommitsPullRequestCommitConnection extends Schema.Struct.Type<typeof PullRequestSummaryRepositoryPullRequestCommitsPullRequestCommitConnection.fields> {}
 
 /** Represents a Git commit. */
-export const TargetCommit = Schema.Struct({
-  __typename: Schema.Literal("Commit"),
+export const MergeCommitCommit = Schema.Struct({
+  /** The Git object ID */
+  oid: Shared.GitObjectID,
   /** Check and Status rollup information for this commit. */
   statusCheckRollup: Schema.NullOr(PullRequestSummaryRepositoryPullRequestCommitsNodesCommitStatusCheckRollupStatusCheckRollup)
+})
+export interface MergeCommitCommit extends Schema.Struct.Type<typeof MergeCommitCommit.fields> {}
+
+/** The connection type for Commit. */
+export const CommitHistoryConnection = Schema.Struct({
+  /** A list of nodes. */
+  nodes: Schema.NullOr(Schema.Array(Schema.NullOr(MergeCommitCommit)))
+})
+export interface CommitHistoryConnection extends Schema.Struct.Type<typeof CommitHistoryConnection.fields> {}
+
+/** Represents a Git commit. */
+export const TargetCommit = Schema.Struct({
+  __typename: Schema.Literal("Commit"),
+  /** The linear commit history starting from (and including) this commit, in the same order as `git log`. */
+  history: CommitHistoryConnection
 })
 export interface TargetCommit extends Schema.Struct.Type<typeof TargetCommit.fields> {}
 
@@ -163,7 +179,7 @@ export const PullRequestSummaryRepositoryPullRequestPullRequest = Schema.Struct(
   /** A list of commits present in this pull request's head branch not present in the base branch. */
   commits: PullRequestSummaryRepositoryPullRequestCommitsPullRequestCommitConnection,
   /** The commit that was created when this pull request was merged. */
-  mergeCommit: Schema.NullOr(PullRequestSummaryRepositoryPullRequestCommitsNodesCommitCommit),
+  mergeCommit: Schema.NullOr(MergeCommitCommit),
   /** Identifies the base Ref associated with the pull request. */
   baseRef: Schema.NullOr(Ref),
   /** The stack this Pull Request belongs to, or null if it is not part of a stack */
@@ -190,7 +206,7 @@ export const PullRequestSummary = GraphQL.query("PullRequestSummary", {
       { name: "stacks", body: "Boolean!" }
     ],
     selections: [
-      { name: "repository", body: ["(owner:$", "owner", " name:$", "name", "){pullRequest(number:$", "number", "){number title url state isDraft mergeable reviewDecision additions deletions changedFiles updatedAt mergedAt closedAt headRefName baseRefName author{__typename login avatarUrl...on User{name}}latestReviews(first:20){nodes{state isMinimized author{__typename login}}}commits(last:1){nodes{commit{statusCheckRollup{state}}}}mergeCommit{statusCheckRollup{state}}baseRef{target{__typename...on Commit{statusCheckRollup{state}}}}stack@include(if:$", "stacks", "){number size baseRefName}stackEntry@include(if:$", "stacks", "){position}}}"] }
+      { name: "repository", body: ["(owner:$", "owner", " name:$", "name", "){pullRequest(number:$", "number", "){number title url state isDraft mergeable reviewDecision additions deletions changedFiles updatedAt mergedAt closedAt headRefName baseRefName author{__typename login avatarUrl...on User{name}}latestReviews(first:20){nodes{state isMinimized author{__typename login}}}commits(last:1){nodes{commit{statusCheckRollup{state}}}}mergeCommit{oid statusCheckRollup{state}}baseRef{target{__typename...on Commit{history(first:10){nodes{oid statusCheckRollup{state}}}}}}stack@include(if:$", "stacks", "){number size baseRefName}stackEntry@include(if:$", "stacks", "){position}}}"] }
     ],
     fragments: []
   },

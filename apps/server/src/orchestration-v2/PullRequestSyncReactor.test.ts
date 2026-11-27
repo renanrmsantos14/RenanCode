@@ -1201,6 +1201,39 @@ describe("PullRequestSyncReactor", () => {
       ),
   );
 
+  it.effect("keeps rereading, slowly, a merge whose base branch checks never finished", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        // Merged three hours before now, past the window where running checks are read quickly.
+        const mergedAt = NOW;
+        yield* TestClock.setTime(Date.parse(NOW) + 3 * 60 * 60 * 1_000);
+        const stuck = { state: "merged", mergedAt, mergeCommitChecksState: "pending" } as const;
+        const host = yield* Ref.make<Partial<PullRequestSummary>>(stuck);
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([makeThread("deploy", { pullRequests: [makeLink(1, stuck)] })]),
+          summary: (input) =>
+            Ref.get(host).pipe(Effect.map((fields) => makeSummary(input, fields))),
+        });
+        const reads = Ref.get(fixture.summaryCalls).pipe(Effect.map((calls) => calls.length));
+
+        yield* Effect.gen(function* () {
+          const reactor = yield* startAndSweep(fixture);
+          assert.strictEqual(yield* reads, 1);
+          yield* sweepFor(fixture, reactor, 14);
+          assert.strictEqual(yield* reads, 1);
+
+          yield* Ref.set(host, { ...stuck, mergeCommitChecksState: "passing" });
+          yield* sweepAgain(fixture, reactor);
+          yield* applyRecordedSyncs(fixture);
+          assert.strictEqual(yield* reads, 2);
+
+          yield* sweepFor(fixture, reactor, 30);
+          assert.strictEqual(yield* reads, 2);
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
+
   it.effect("syncs a pull request a reader saw merge without waiting for the sweep", () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(Date.parse(NOW));

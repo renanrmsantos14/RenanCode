@@ -1005,15 +1005,22 @@ export interface GitHubPullRequestSummary {
 }
 
 /**
- * The merge commit's checks, or the base branch head's once those did not pass: a later push's
- * run carries this merge too, and a deploy workflow often cancels the earlier run for it.
+ * The merge commit's checks, or those of the newest base branch commit after it that has any,
+ * once its own did not pass: a later push's run carries this merge too, and a deploy workflow
+ * often cancels the earlier run. Path filters leave some pushes without checks.
  */
 function mergedChecksState(pr: SummarizedPullRequest): PullRequestChecksState | null {
   if (pr.mergeCommit === null) return null;
   const merged = rollupChecksState(rollupStates({ nodes: [{ commit: pr.mergeCommit }] }));
   const target = pr.baseRef?.target;
   if (merged === "passing" || target?.__typename !== "Commit") return merged;
-  return rollupChecksState(rollupStates({ nodes: [{ commit: target }] })) ?? merged;
+  // Newest first; commits older than the merge do not carry it.
+  for (const commit of nodesOf(target.history)) {
+    if (commit.oid === pr.mergeCommit.oid) return merged;
+    const latest = rollupChecksState(rollupStates({ nodes: [{ commit }] }));
+    if (latest !== null) return latest;
+  }
+  return merged;
 }
 
 export function toPullRequestSummary(pr: SummarizedPullRequest): GitHubPullRequestSummary {
