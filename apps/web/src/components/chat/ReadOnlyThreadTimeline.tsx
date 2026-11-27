@@ -182,7 +182,9 @@ export function ReadOnlyThreadTimeline(props: {
               onFileDownload={props.onFileOpen}
               renderHtmlRender={props.renderHtmlRender}
               renderHtmlVariant={props.renderHtmlVariant}
-              onOpenHtmlVariants={props.renderHtmlVariantStage ? openHtmlVariants : undefined}
+              onOpenHtmlVariants={
+                props.renderHtmlVariantStage && !review.active ? openHtmlVariants : undefined
+              }
               renderDesignSketches={props.renderDesignSketches}
               turnItemSource={props.turnItemSource}
               historyControls={props.historyControls}

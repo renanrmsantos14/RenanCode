@@ -146,6 +146,8 @@ export function MockupViewer({
             onClick={() => {
               const tag = htmlVariantChoiceTag(index, variant.label).trimEnd();
               const inserted = onChoose(`${gt("I chose {choice}", { choice: tag })} `);
+              // A hidden chat column keeps the composer unfocusable, so the choice would land unseen.
+              if (inserted && viewer.chatHidden) viewer.toggleChat();
               if (inserted && viewer.narrow) viewer.setSheet("half");
             }}
           >
