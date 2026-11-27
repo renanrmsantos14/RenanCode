@@ -25,7 +25,7 @@ import type { WorkflowOpening } from "@t3tools/client-runtime/state/subagentRunt
 import { useEffect, useRef, createContext, type MouseEvent, type ReactNode } from "react";
 import { type LegendListRef } from "@legendapp/list/react";
 import type { CodexArtifactTemplate } from "@t3tools/shared/codexArtifactTemplates";
-import type { HtmlRenderReference } from "@t3tools/shared/htmlRender";
+import type { HtmlRenderReference, HtmlVariantReference } from "@t3tools/shared/htmlRender";
 import type { PendingApproval } from "../../session-logic";
 import { type ChatFileAttachment } from "../../types";
 import { type ExpandedImageItem, ExpandedImagePreview } from "./ExpandedImagePreview";
@@ -85,6 +85,10 @@ export interface TimelineRowSharedState {
   onFollowHtmlVariant: ((text: string) => boolean) | undefined;
   /** Opens a published HTML visual full screen beside the chat; unset, it opens in a dialog. */
   onOpenHtmlRender: ((htmlRender: HtmlRenderReference) => void) | undefined;
+  /** Opens the live mockup viewer on one option of an html_variants block; unset, a cell opens full screen on its own. */
+  onOpenHtmlVariants:
+    | ((rowId: string, variants: ReadonlyArray<HtmlVariantReference>, index: number) => void)
+    | undefined;
   /** Draws one published variant; unset, the row loads it from the environment. */
   renderHtmlVariant:
     | ((

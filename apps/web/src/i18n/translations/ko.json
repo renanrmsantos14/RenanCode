@@ -3835,6 +3835,7 @@
     "을(를) 불러올 수 없습니다"
   ],
   "b6bf231697a34317": "변형",
+  "ca9051bf46ce4ae3": "Open {variant}",
   "b65db58454f4bcfe": "선택: {choice}",
   "c84f818fa86012dc": "선택",
   "f47ea846b6b2f9f1": "{letter} 선택",
@@ -13323,6 +13324,9 @@
   "5d18537f82794deb": "로컬 환경이 꺼져 있습니다.",
   "d5ef094f40aedece": "터미널 입력",
   "f7046b10d49caab6": "터미널 스크롤백",
+  "d613fc3c22bffeff": "Mockup viewer",
+  "36ea30e29c2cf1cc": "Close mockup viewer",
+  "f5fc9e19feb00dfb": "Option thumbnails",
   "32aebea75c7d222a": "Loading image...",
   "bf41406a4712f977": "Show image {position} of {total}",
   "054b672ee8b1b99a": "Image review",

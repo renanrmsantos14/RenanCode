@@ -20,6 +20,7 @@ import { MediaActions } from "../../media/MediaActions";
 import { Button } from "../../ui/button";
 import { reviewImageTarget, type ReviewImage, type ReviewSourceContext } from "./reviewGallery";
 import type { ReviewMode } from "./useReviewMode";
+import { ARROW_OWNER_SELECTOR, DIALOG_SELECTOR } from "./viewerKeys";
 
 export interface ReviewImageSource extends ReviewSourceContext {
   readonly threadRef: {
@@ -29,10 +30,6 @@ export interface ReviewImageSource extends ReviewSourceContext {
 }
 
 const THUMBNAIL_WINDOW = 4;
-// Arrow keys belong to widgets that use them to move between options.
-const ARROW_OWNER_SELECTOR =
-  '[role="radiogroup"], [role="listbox"], [role="menu"], [role="tablist"]';
-const DIALOG_SELECTOR = '[role="dialog"], [role="alertdialog"], [aria-modal="true"]';
 
 function useReviewImageUrl(
   image: ReviewImage,
@@ -228,7 +225,12 @@ export function ReviewViewer({
           </Button>
         )}
       </div>
-      <div className="relative flex min-h-0 flex-1 items-center justify-center px-12 pb-2 max-md:px-2">
+      <div
+        className="relative flex min-h-0 flex-1 items-center justify-center px-12 pb-2 max-md:px-2"
+        onClick={(event) => {
+          if (event.target === event.currentTarget) review.close();
+        }}
+      >
         <ReviewStageImage key={image.key} image={image} source={source} />
         {total > 1 ? (
           <>
@@ -258,7 +260,12 @@ export function ReviewViewer({
       {before ? <ReviewPreload image={before} source={source} /> : null}
       {after ? <ReviewPreload image={after} source={source} /> : null}
       {total > 1 ? (
-        <div className="flex shrink-0 justify-center gap-1.5 overflow-x-auto px-3 pb-3 max-md:pb-20">
+        <div
+          className="flex shrink-0 justify-center gap-1.5 overflow-x-auto px-3 pb-3 max-md:pb-20"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) review.close();
+          }}
+        >
           {thumbnails.map((thumbnail, offset) => (
             <ReviewThumbnail
               key={thumbnail.key}

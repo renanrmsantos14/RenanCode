@@ -20,3 +20,10 @@ it("builds the choice in the app language and history still recognizes it", () =
     note: "",
   });
 });
+
+it("names the last of 26 options and history recognizes it", () => {
+  const labels = Array.from({ length: 26 }, (_, index) => ({ label: `Option ${index}` }));
+  const text = htmlVariantChoiceText(25, "Option 25");
+  expect(text).toBe("I chose Z (Option 25): ");
+  expect(findHtmlVariantChoice(labels, [text])).toEqual({ index: 25, note: "" });
+});

@@ -63,6 +63,7 @@ import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { getDisplayModelName, getTriggerDisplayModelName } from "../chat/providerIconUtils";
 import type { TimelineRow } from "../chat/timelineRowContext";
 import { GuestDesignSketches } from "../design/GuestDesignSketches";
+import type { HtmlVariantReference } from "@t3tools/shared/htmlRender";
 import { GuestHtmlRender } from "./GuestHtmlRender";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -452,6 +453,11 @@ function GuestThread({
       />
     ),
   );
+  const renderHtmlVariantStage = useStableCallback(
+    (itemId: string, variant: HtmlVariantReference, index: number) => (
+      <GuestHtmlRender itemId={itemId} reference={variant} variant={index} shareId={shareId} fill />
+    ),
+  );
   const renderDesignSketches = useStableCallback(
     (row: Extract<TimelineRow, { kind: "design-sketches" }>) => (
       <GuestDesignSketches shareId={shareId} itemId={row.id} sketches={row.designSketches} />
@@ -482,6 +488,7 @@ function GuestThread({
           onFileOpen={openFile}
           renderHtmlRender={renderHtmlRender}
           renderHtmlVariant={renderHtmlVariant}
+          renderHtmlVariantStage={renderHtmlVariantStage}
           renderDesignSketches={renderDesignSketches}
           renderFooter={(items) => {
             const unplaced = unplacedGuestMessages(messages, items, awaitingRowIds);

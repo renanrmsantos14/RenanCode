@@ -3839,6 +3839,7 @@
     }
   ],
   "b6bf231697a34317": "Variações",
+  "ca9051bf46ce4ae3": "Abrir {variant}",
   "b65db58454f4bcfe": "Escolhi {choice}",
   "c84f818fa86012dc": "Escolher",
   "f47ea846b6b2f9f1": "Escolher {letter}",
@@ -13389,6 +13390,9 @@
   "5d18537f82794deb": "O ambiente local está desativado.",
   "d5ef094f40aedece": "Entrada do terminal",
   "f7046b10d49caab6": "Histórico de rolagem do terminal",
+  "d613fc3c22bffeff": "Visualizador de mockups",
+  "36ea30e29c2cf1cc": "Fechar visualizador de mockups",
+  "f5fc9e19feb00dfb": "Miniaturas das opções",
   "32aebea75c7d222a": "Carregando imagem...",
   "bf41406a4712f977": "Mostrar imagem {position} de {total}",
   "054b672ee8b1b99a": "Revisão de imagens",

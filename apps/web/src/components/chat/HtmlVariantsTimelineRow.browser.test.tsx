@@ -27,3 +27,26 @@ describe("HtmlVariantsGrid", () => {
     await expect.element(screen.getByRole("radio")).not.toBeInTheDocument();
   });
 });
+
+describe("HtmlVariantsGrid open button", () => {
+  it("opens the viewer on the option whose button was clicked", async () => {
+    const onOpen = vi.fn();
+    await using screen = await render(
+      <HtmlVariantsGrid variants={variants} renderVariant={() => <div />} onOpen={onOpen} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Open Airy" }));
+    expect(onOpen).toHaveBeenCalledWith(1);
+  });
+  it("keeps five options reachable from the scrolling strip", async () => {
+    const many = Array.from({ length: 6 }, (_, index) => ({
+      attachmentId: `t-${index}-html`,
+      title: "Home",
+      height: 300,
+      label: `Option ${index}`,
+    }));
+    await using screen = await render(
+      <HtmlVariantsGrid variants={many} renderVariant={() => <div />} onFollow={() => true} />,
+    );
+    await expect.element(screen.getByText("F · Option 5")).toBeInTheDocument();
+  });
+});
