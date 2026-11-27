@@ -24,6 +24,7 @@ const state = vi.hoisted(() => ({
   threadState: null as unknown as Atom.Writable<AsyncResult.AsyncResult<EnvironmentThreadState>>,
   workflow: null as unknown,
   commandResult: undefined as unknown,
+  commandCalls: [] as Array<{ command: unknown; value: unknown }>,
 }));
 
 vi.mock(import("@t3tools/client-runtime/state/thread-workflows"), async (importOriginal) => ({
@@ -74,7 +75,10 @@ vi.mock(import("../../state/threads"), async (importOriginal) => {
 
 vi.mock(import("../../state/use-atom-command"), async (importOriginal) => ({
   ...(await importOriginal()),
-  useAtomCommand: (() => async () => state.commandResult) as never,
+  useAtomCommand: ((command: unknown) => async (value: unknown) => {
+    state.commandCalls.push({ command, value });
+    return state.commandResult;
+  }) as never,
 }));
 
 vi.mock(import("../../assets/assetUrls"), async (importOriginal) => ({
@@ -84,6 +88,7 @@ vi.mock(import("../../assets/assetUrls"), async (importOriginal) => ({
 }));
 
 import "~/index.css";
+import { threadEnvironment } from "../../state/threads";
 import { EMPTY_ENVIRONMENT_THREAD_STATE } from "@t3tools/client-runtime/state/threads";
 
 import { act, render as renderUi } from "../../../test/render";
@@ -96,6 +101,7 @@ import type { ExpandedImagePreview } from "./ExpandedImagePreview";
 function setup() {
   state.workflow = null;
   state.commandResult = undefined;
+  state.commandCalls = [];
 }
 
 const baseProps = {
@@ -442,4 +448,87 @@ it("tells the user why Send now was rejected", async () => {
 
   await page.getByRole("button", { name: "Send now" }).click();
   await vi.waitFor(() => expect(page.getByText(reason).element()).toBeVisible());
+});
+
+it("keeps a row moved below a collapsed queue's fold in view", async () => {
+  setup();
+  state.workflow = {
+    activeRun: { id: "run:active" },
+    canPromoteToSteer: true,
+    queuedRuns: ["first", "second", "third", "fourth"].map((name) => ({
+      run: { id: `run:${name}`, userMessageId: `message:${name}` },
+      text: `The ${name} message`,
+      attachments: [],
+    })),
+  };
+  state.commandResult = AsyncResult.success(undefined);
+  await using _screen = await renderQueue();
+  await page.getByRole("button", { name: "Move queued message down" }).nth(1).click();
+  await expect.element(page.getByText("The second message")).toBeVisible();
+});
+
+it("moves a queued message up and shows the new order before the server confirms", async () => {
+  setup();
+  state.workflow = {
+    activeRun: { id: "run:active" },
+    canPromoteToSteer: true,
+    queuedRuns: ["first", "second", "third"].map((name) => ({
+      run: { id: `run:${name}`, userMessageId: `message:${name}` },
+      text: `The ${name} message`,
+      attachments: [],
+    })),
+  };
+  state.commandResult = AsyncResult.success(undefined);
+  await using _screen = await renderQueue();
+  const shownOrder = () =>
+    page
+      .getByRole("listitem")
+      .elements()
+      .map((row) => row.querySelector("p")?.textContent);
+
+  await page.getByRole("button", { name: "Move queued message up" }).nth(2).click();
+
+  await vi.waitFor(() =>
+    expect(shownOrder()).toEqual(["The first message", "The third message", "The second message"]),
+  );
+  expect(state.commandCalls).toEqual([
+    {
+      command: threadEnvironment.reorderQueuedRun,
+      value: {
+        environmentId: "environment:test",
+        input: { threadId: "thread:test", runId: "run:third", beforeRunId: "run:second" },
+      },
+    },
+  ]);
+});
+
+it("shows the server's order when it settles on one the move did not predict", async () => {
+  setup();
+  const entry = (name: string) => ({
+    run: { id: `run:${name}`, userMessageId: `message:${name}` },
+    text: `The ${name} message`,
+    attachments: [],
+  });
+  const workflow = (names: ReadonlyArray<string>) => ({
+    activeRun: { id: "run:active" },
+    canPromoteToSteer: true,
+    queuedRuns: names.map(entry),
+  });
+  state.workflow = workflow(["first", "second", "third"]);
+  state.commandResult = AsyncResult.success(undefined);
+  await using screen = await renderQueue();
+  await page.getByRole("button", { name: "Move queued message up" }).nth(2).click();
+
+  // Another client moved the first message to the end before this move applied.
+  state.workflow = workflow(["third", "second", "first"]);
+  await screen.rerender(<QueuedRunsControl {...baseProps} />);
+
+  await vi.waitFor(() =>
+    expect(
+      page
+        .getByRole("listitem")
+        .elements()
+        .map((row) => row.querySelector("p")?.textContent),
+    ).toEqual(["The third message", "The second message", "The first message"]),
+  );
 });

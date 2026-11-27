@@ -131,6 +131,7 @@ Queued messages appear at the end of the thread (web/desktop) or above the compo
 - **Send now**: Injects it immediately into a running turn (or moves a slash command to the front of the queue).
 - **Edit**: Opens the message and its attachments in the composer without losing your existing draft.
 - **Remove**: Cancels the queued message.
+- **Move up / Move down**: Changes the order messages are sent in. On web and desktop you can also drag a message by its handle; on mobile the actions are in the message menu.
 
 If you stop the agent or the server restarts, queued messages pause in order. Click **Resume** in an empty composer (or send a new message) to continue. When the provider supports native continuation, **Resume** continues without sending a new prompt.
 

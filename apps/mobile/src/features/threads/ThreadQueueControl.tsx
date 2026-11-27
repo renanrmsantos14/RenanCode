@@ -204,29 +204,24 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
       navigation.goBack();
       return;
     }
-    if (action === "move-up" || action === "move-down") {
-      const moved = moveQueuedRun(
-        queuedRuns.map((entry) => entry.run.id),
-        runId,
-        action === "move-up" ? index - 1 : index + 1,
-      );
-      if (moved === null) return;
-      busyRef.current = true;
-      setBusyRunId(runId);
-      void Haptics.selectionAsync();
-      await reorder({
-        ...target,
-        input: { threadId: target.threadId, runId, beforeRunId: moved.beforeRunId },
-      });
-      busyRef.current = false;
-      setBusyRunId(null);
-      return;
-    }
+    const moved =
+      action === "move-up" || action === "move-down"
+        ? moveQueuedRun(
+            queuedRuns.map((entry) => entry.run.id),
+            runId,
+            action === "move-up" ? index - 1 : index + 1,
+          )
+        : null;
+    if (moved === null && action !== "steer" && action !== "remove") return;
     busyRef.current = true;
     setBusyRunId(runId);
     void Haptics.selectionAsync();
-    const result =
-      action === "remove"
+    const result = moved
+      ? await reorder({
+          ...target,
+          input: { threadId: target.threadId, runId, beforeRunId: moved.beforeRunId },
+        })
+      : action === "remove"
         ? await cancel(buildCancelQueuedRunCommand({ ...target, runId }))
         : workflow?.canSendNow
           ? await resume({ ...target, input: { threadId: target.threadId, runId } })
@@ -242,10 +237,10 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
             : null;
     busyRef.current = false;
     setBusyRunId(null);
-    if (action === "steer" && result?._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+    if (action !== "remove" && result?._tag === "Failure" && !isAtomCommandInterrupted(result)) {
       const error = squashAtomCommandFailure(result);
       Dialog.alert(
-        m(msg("Could not send queued message")),
+        m(moved ? msg("Could not reorder queued message") : msg("Could not send queued message")),
         errorDisplayMessage(error, m) ?? m(msg("Try again.")),
       );
     }
@@ -344,14 +339,19 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
                           {
                             id: "move-up",
                             title: gt("Move up"),
-                            attributes: { disabled: busyRunId !== null || index === 0 },
+                            attributes: {
+                              disabled: busyRunId !== null || controls.isEditing || index === 0,
+                            },
                             image: "chevron.up",
                           },
                           {
                             id: "move-down",
                             title: gt("Move down"),
                             attributes: {
-                              disabled: busyRunId !== null || index === queuedRuns.length - 1,
+                              disabled:
+                                busyRunId !== null ||
+                                controls.isEditing ||
+                                index === queuedRuns.length - 1,
                             },
                             image: "chevron.down",
                           },
