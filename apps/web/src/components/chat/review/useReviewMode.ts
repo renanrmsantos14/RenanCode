@@ -15,7 +15,7 @@ import {
 
 export type ReviewSheetSnap = "peek" | "half" | "full";
 
-const CHAT_HIDDEN_STORAGE_KEY = "t3code:review-chat-hidden";
+export const CHAT_HIDDEN_STORAGE_KEY = "t3code:review-chat-hidden";
 
 interface ReviewState {
   /** The thread the review was opened in; leaving it ends the review. */

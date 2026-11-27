@@ -34,6 +34,7 @@ export function HtmlVariantsGrid(props: {
   readonly onOpen?: ((index: number) => void) | undefined;
 }) {
   const gt = useGT();
+  const { onOpen } = props;
   const [width, setWidth] = useState(HTML_RENDER_COLUMN_WIDTH);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const observeBox = (box: HTMLDivElement) => {
@@ -103,12 +104,12 @@ export function HtmlVariantsGrid(props: {
                   {htmlVariantLetter(index)} · {variant.label}
                 </span>
               </label>
-              {props.onOpen ? (
+              {onOpen ? (
                 <Button
                   aria-label={gt("Open {variant}", { variant: variant.label })}
                   size="icon-xs"
                   variant="ghost"
-                  onClick={() => props.onOpen?.(index)}
+                  onClick={() => onOpen(index)}
                 >
                   <Maximize2Icon className="size-3.5" />
                 </Button>
@@ -147,6 +148,8 @@ export function HtmlVariantsTimelineRow({
   const ctx = use(TimelineRowCtx);
   const { onAppFullscreenChange, onOpenHtmlVariants } = ctx;
   const [showAll, setShowAll] = useState(false);
+  const openVariant =
+    onOpenHtmlVariants && ((index: number) => onOpenHtmlVariants(row.id, row.htmlVariants, index));
   const renderFrame = (variant: HtmlVariantReference, index: number, minHeight: number) =>
     ctx.renderHtmlVariant?.(row, index, minHeight) ?? (
       <HtmlRenderFrame
@@ -156,11 +159,7 @@ export function HtmlVariantsTimelineRow({
         minHeight={minHeight}
         threadRef={ctx.threadRef ?? undefined}
         onFullscreenChange={(fullscreen) => onAppFullscreenChange(row.id, fullscreen)}
-        onOpenFullscreen={
-          onOpenHtmlVariants
-            ? () => onOpenHtmlVariants(row.id, row.htmlVariants, index)
-            : ctx.onOpenHtmlRender
-        }
+        onOpenFullscreen={openVariant ? () => openVariant(index) : ctx.onOpenHtmlRender}
       />
     );
   const chosen = row.choice === null ? undefined : row.htmlVariants[row.choice.index];
@@ -184,11 +183,7 @@ export function HtmlVariantsTimelineRow({
       <HtmlVariantsGrid
         variants={row.htmlVariants}
         onFollow={ctx.onFollowHtmlVariant}
-        onOpen={
-          onOpenHtmlVariants
-            ? (index) => onOpenHtmlVariants(row.id, row.htmlVariants, index)
-            : undefined
-        }
+        onOpen={openVariant}
         renderVariant={renderFrame}
       />
       {row.choice !== null || designSketches !== null ? (

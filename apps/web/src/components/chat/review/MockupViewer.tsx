@@ -1,5 +1,8 @@
-import { htmlVariantChoiceTag, htmlVariantLetter } from "@t3tools/shared/htmlRender";
-import type { HtmlVariantReference } from "@t3tools/shared/htmlRender";
+import {
+  type HtmlVariantReference,
+  htmlVariantChoiceTag,
+  htmlVariantLetter,
+} from "@t3tools/shared/htmlRender";
 import { T, useGT } from "gt-react";
 import { PanelRightCloseIcon, PanelRightOpenIcon, XIcon } from "lucide-react";
 import { type ReactNode, useEffect } from "react";
@@ -11,12 +14,8 @@ import { isEditableFocused } from "../../../lib/editableFocus";
 import { cn } from "../../../lib/utils";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "../../../workspaceTitlebar";
 import { Button } from "../../ui/button";
-import type { MockupViewer as MockupViewerState } from "./useMockupViewer";
-
-// Arrow keys belong to widgets that use them to move between options.
-const ARROW_OWNER_SELECTOR =
-  '[role="radiogroup"], [role="listbox"], [role="menu"], [role="tablist"]';
-const DIALOG_SELECTOR = '[role="dialog"], [role="alertdialog"], [aria-modal="true"]';
+import type { MockupViewerControls } from "./useMockupViewer";
+import { ARROW_OWNER_SELECTOR, DIALOG_SELECTOR } from "./viewerKeys";
 
 /** Keeps the current option's letter and thumbnail in view in their scrolling strips. */
 function keepInView(element: HTMLElement | null) {
@@ -40,7 +39,7 @@ export function MockupViewer({
   renderPage,
   onChoose,
 }: {
-  readonly viewer: MockupViewerState;
+  readonly viewer: MockupViewerControls;
   /** Draws the open option as a live page that fills its box. */
   readonly renderPage: (variant: HtmlVariantReference, index: number) => ReactNode;
   /** Puts the choice in the composer without sending it; unset, the viewer has no choose button. */

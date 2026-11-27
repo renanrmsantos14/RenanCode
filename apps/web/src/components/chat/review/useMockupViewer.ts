@@ -4,12 +4,9 @@ import { useState } from "react";
 
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
-import type { ReviewSheetSnap } from "./useReviewMode";
+import { CHAT_HIDDEN_STORAGE_KEY, type ReviewSheetSnap } from "./useReviewMode";
 
-// The same preference as image review: both viewers lay out the chat the same way.
-const CHAT_HIDDEN_STORAGE_KEY = "t3code:review-chat-hidden";
-
-interface MockupViewerState {
+interface OpenedMockups {
   /** The thread the viewer was opened in; leaving it ends the viewer. */
   readonly scope: string | null;
   readonly rowId: string;
@@ -18,7 +15,7 @@ interface MockupViewerState {
   readonly index: number;
 }
 
-export interface MockupViewer {
+export interface MockupViewerControls {
   readonly active: boolean;
   readonly rowId: string | null;
   readonly variants: ReadonlyArray<HtmlVariantReference>;
@@ -44,8 +41,8 @@ const NO_VARIANTS: ReadonlyArray<HtmlVariantReference> = [];
  * The live viewer of an html_variants block: one option at a time, large and interactive, with the
  * chat kept beside it. Shaped like image review so both share the chat column layout.
  */
-export function useMockupViewer(input: { readonly scope: string | null }): MockupViewer {
-  const [stored, setState] = useState<MockupViewerState | null>(null);
+export function useMockupViewer(input: { readonly scope: string | null }): MockupViewerControls {
+  const [stored, setState] = useState<OpenedMockups | null>(null);
   const [chatHidden, setChatHidden] = useLocalStorage(
     CHAT_HIDDEN_STORAGE_KEY,
     false,
@@ -55,7 +52,7 @@ export function useMockupViewer(input: { readonly scope: string | null }): Mocku
   const narrow = useMediaQuery("max-md");
   // Leaving the thread ends its viewer, so coming back does not reopen it.
   if (stored !== null && stored.scope !== input.scope) setState(null);
-  const state = stored?.scope === input.scope ? stored : null;
+  const state = stored;
   const variants = state?.variants ?? NO_VARIANTS;
   const index = state === null ? 0 : Math.min(state.index, Math.max(0, variants.length - 1));
   const goTo = (next: number) =>
@@ -66,7 +63,7 @@ export function useMockupViewer(input: { readonly scope: string | null }): Mocku
     );
 
   return {
-    active: state !== null && variants.length > 0,
+    active: state !== null,
     rowId: state?.rowId ?? null,
     variants,
     index,

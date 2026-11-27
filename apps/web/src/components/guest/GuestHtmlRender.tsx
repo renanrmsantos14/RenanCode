@@ -50,12 +50,12 @@ export function GuestHtmlRender({
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- measures the frame box and follows its width with a ResizeObserver before paint
   useLayoutEffect(() => {
     const box = boxRef.current;
-    if (!box) return;
+    if (!box || fill) return;
     setWidth(box.clientWidth);
     return observeResize(box, ([entry]) => {
       if (entry) setWidth(entry.contentRect.width);
     });
-  }, []);
+  }, [fill]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- posts theme changes to the iframe's window
   useEffect(() => {
     frameRef.current?.contentWindow?.postMessage(htmlRenderThemeMessage(theme), "*");
@@ -67,7 +67,7 @@ export function GuestHtmlRender({
       if (frame === null || event.source !== frame.contentWindow) return;
       const height = readHtmlRenderContentHeight(event.data);
       if (height !== undefined) {
-        setContentHeight(height);
+        if (!fill) setContentHeight(height);
         return;
       }
       // Only while the reader is using this frame, so a page cannot open links on its own.
@@ -84,7 +84,7 @@ export function GuestHtmlRender({
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, []);
+  }, [fill]);
 
   return (
     <div
