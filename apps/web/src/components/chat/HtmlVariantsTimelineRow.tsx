@@ -8,6 +8,7 @@ import {
 import type { DesignSketchReference } from "@t3tools/shared/design";
 import { RadioGroup } from "@base-ui/react/radio-group";
 import { T, useGT, Var } from "gt-react";
+import { Maximize2Icon } from "lucide-react";
 import { type ReactNode, use, useRef, useState } from "react";
 
 import { observeResize } from "~/lib/observeResize";
@@ -29,8 +30,11 @@ export function HtmlVariantsGrid(props: {
     minHeight: number,
   ) => ReactNode;
   readonly onFollow?: ((text: string) => boolean) | undefined;
+  /** Opens one option in the live viewer; unset, the cell has no open button. */
+  readonly onOpen?: ((index: number) => void) | undefined;
 }) {
   const gt = useGT();
+  const { onOpen } = props;
   const [width, setWidth] = useState(HTML_RENDER_COLUMN_WIDTH);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const observeBox = (box: HTMLDivElement) => {
@@ -48,11 +52,12 @@ export function HtmlVariantsGrid(props: {
   return (
     <div ref={observeBox} className="flex min-w-0 flex-col gap-2">
       {sideBySide ? null : (
-        <div className="flex gap-1">
+        <div className="flex gap-1 overflow-x-auto">
           {props.variants.map((variant, index) => (
             <Button
               key={variant.attachmentId}
               aria-label={gt("Show {variant}", { variant: variant.label })}
+              className="shrink-0"
               size="xs"
               variant="outline"
               onClick={() => {
@@ -92,12 +97,24 @@ export function HtmlVariantsGrid(props: {
               !sideBySide && "w-full shrink-0 snap-start",
             )}
           >
-            <label className="flex min-w-0 cursor-pointer items-center gap-2 px-1 font-medium text-muted-foreground text-xs">
-              {props.onFollow ? <Radio value={String(index)} /> : null}
-              <span className="min-w-0 truncate">
-                {htmlVariantLetter(index)} · {variant.label}
-              </span>
-            </label>
+            <div className="flex min-w-0 items-center gap-1">
+              <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 px-1 font-medium text-muted-foreground text-xs">
+                {props.onFollow ? <Radio value={String(index)} /> : null}
+                <span className="min-w-0 truncate">
+                  {htmlVariantLetter(index)} · {variant.label}
+                </span>
+              </label>
+              {onOpen ? (
+                <Button
+                  aria-label={gt("Open {variant}", { variant: variant.label })}
+                  size="icon-xs"
+                  variant="ghost"
+                  onClick={() => onOpen(index)}
+                >
+                  <Maximize2Icon className="size-3.5" />
+                </Button>
+              ) : null}
+            </div>
             {props.renderVariant(variant, index, minHeight)}
           </div>
         ))}
@@ -129,8 +146,10 @@ export function HtmlVariantsTimelineRow({
   row: Extract<TimelineRow, { kind: "html-variants" }>;
 }) {
   const ctx = use(TimelineRowCtx);
-  const { onAppFullscreenChange } = ctx;
+  const { onAppFullscreenChange, onOpenHtmlVariants } = ctx;
   const [showAll, setShowAll] = useState(false);
+  const openVariant =
+    onOpenHtmlVariants && ((index: number) => onOpenHtmlVariants(row.id, row.htmlVariants, index));
   const renderFrame = (variant: HtmlVariantReference, index: number, minHeight: number) =>
     ctx.renderHtmlVariant?.(row, index, minHeight) ?? (
       <HtmlRenderFrame
@@ -140,7 +159,7 @@ export function HtmlVariantsTimelineRow({
         minHeight={minHeight}
         threadRef={ctx.threadRef ?? undefined}
         onFullscreenChange={(fullscreen) => onAppFullscreenChange(row.id, fullscreen)}
-        onOpenFullscreen={ctx.onOpenHtmlRender}
+        onOpenFullscreen={openVariant ? () => openVariant(index) : ctx.onOpenHtmlRender}
       />
     );
   const chosen = row.choice === null ? undefined : row.htmlVariants[row.choice.index];
@@ -164,6 +183,7 @@ export function HtmlVariantsTimelineRow({
       <HtmlVariantsGrid
         variants={row.htmlVariants}
         onFollow={ctx.onFollowHtmlVariant}
+        onOpen={openVariant}
         renderVariant={renderFrame}
       />
       {row.choice !== null || designSketches !== null ? (

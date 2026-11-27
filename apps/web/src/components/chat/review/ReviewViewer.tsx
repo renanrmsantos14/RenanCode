@@ -20,6 +20,7 @@ import { MediaActions } from "../../media/MediaActions";
 import { Button } from "../../ui/button";
 import { reviewImageTarget, type ReviewImage, type ReviewSourceContext } from "./reviewGallery";
 import type { ReviewMode } from "./useReviewMode";
+import { ARROW_OWNER_SELECTOR, DIALOG_SELECTOR } from "./viewerKeys";
 
 export interface ReviewImageSource extends ReviewSourceContext {
   readonly threadRef: {
@@ -29,10 +30,6 @@ export interface ReviewImageSource extends ReviewSourceContext {
 }
 
 const THUMBNAIL_WINDOW = 4;
-// Arrow keys belong to widgets that use them to move between options.
-const ARROW_OWNER_SELECTOR =
-  '[role="radiogroup"], [role="listbox"], [role="menu"], [role="tablist"]';
-const DIALOG_SELECTOR = '[role="dialog"], [role="alertdialog"], [aria-modal="true"]';
 
 function useReviewImageUrl(
   image: ReviewImage,

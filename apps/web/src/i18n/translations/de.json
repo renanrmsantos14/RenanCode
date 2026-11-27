@@ -3840,6 +3840,7 @@
     " kann nicht geladen werden"
   ],
   "b6bf231697a34317": "Varianten",
+  "ca9051bf46ce4ae3": "Open {variant}",
   "b65db58454f4bcfe": "Ich wähle {choice}",
   "c84f818fa86012dc": "Wählen",
   "f47ea846b6b2f9f1": "{letter} wählen",
@@ -13384,6 +13385,9 @@
   "5d18537f82794deb": "Die lokale Umgebung ist deaktiviert.",
   "d5ef094f40aedece": "Terminal-Eingabe",
   "f7046b10d49caab6": "Terminal-Verlauf",
+  "d613fc3c22bffeff": "Mockup viewer",
+  "36ea30e29c2cf1cc": "Close mockup viewer",
+  "f5fc9e19feb00dfb": "Option thumbnails",
   "32aebea75c7d222a": "Loading image...",
   "bf41406a4712f977": "Show image {position} of {total}",
   "054b672ee8b1b99a": "Image review",

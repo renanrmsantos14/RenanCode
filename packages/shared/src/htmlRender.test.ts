@@ -224,17 +224,23 @@ describe("readHtmlVariantReferences", () => {
     height: 400,
     label,
   });
-  it("accepts two to four labeled pages and trims labels", () => {
+  it("accepts two to twenty-six labeled pages and trims labels", () => {
     expect(readHtmlVariantReferences([page("a", " Dense "), page("b", "Airy")])).toMatchObject([
       { attachmentId: "a", label: "Dense" },
       { attachmentId: "b", label: "Airy" },
     ]);
   });
-  it("rejects one page, five pages, a bad page, or an empty label", () => {
+  it("accepts five and twenty-six pages", () => {
+    const pages = (count: number) =>
+      Array.from({ length: count }, (_, index) => page(`id${index}`, `Option ${index}`));
+    expect(readHtmlVariantReferences(pages(5))).toHaveLength(5);
+    expect(readHtmlVariantReferences(pages(26))).toHaveLength(26);
+  });
+  it("rejects one page, twenty-seven pages, a bad page, or an empty label", () => {
     expect(readHtmlVariantReferences([page("a", "A")])).toBe(undefined);
-    expect(readHtmlVariantReferences(["a", "b", "c", "d", "e"].map((id) => page(id, id)))).toBe(
-      undefined,
-    );
+    expect(
+      readHtmlVariantReferences(Array.from({ length: 27 }, (_, i) => page(`id${i}`, `L${i}`))),
+    ).toBe(undefined);
     expect(readHtmlVariantReferences([page("a", "A"), { title: "x" }])).toBe(undefined);
     expect(readHtmlVariantReferences([page("a", "A"), page("b", "  ")])).toBe(undefined);
   });

@@ -374,7 +374,12 @@ export function ThreadHtmlVariants(props: {
         className="flex-row items-center gap-2"
         style={{ height: VARIANTS_HEADER_HEIGHT, width: props.frameWidth }}
       >
-        <View className="min-w-0 flex-1 flex-row gap-1.5">
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          className="min-w-0 flex-1"
+          contentContainerClassName="gap-1.5"
+        >
           {props.variants.map((variant, index) => (
             <Pressable
               key={variant.attachmentId}
@@ -382,7 +387,7 @@ export function ThreadHtmlVariants(props: {
               accessibilityState={{ selected: index === active, checked: index === chosen }}
               accessibilityLabel={gt("Show variant {letter}", { letter: htmlVariantLetter(index) })}
               hitSlop={4}
-              className={`min-w-0 shrink flex-row items-center gap-1.5 rounded-full border px-2.5 py-1 ${
+              className={`shrink-0 flex-row items-center gap-1.5 rounded-full border px-2.5 py-1 ${
                 index === active ? "border-foreground/40 bg-card" : "border-border/60"
               }`}
               onPress={() => select(index)}
@@ -402,7 +407,7 @@ export function ThreadHtmlVariants(props: {
               </Text>
             </Pressable>
           ))}
-        </View>
+        </ScrollView>
         {props.onFollow ? (
           <Pressable
             accessibilityRole="button"
