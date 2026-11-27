@@ -8,12 +8,15 @@ import {
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Deferred from "effect/Deferred";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
+import * as TestClock from "effect/testing/TestClock";
 import {
   providerAuth,
   type SourceControlProviderDiscoverySpec,
@@ -248,6 +251,33 @@ it.effect("shares a scan already running and starts a fresh one after it finishe
     assert.strictEqual(gitProbes, 2);
   }).pipe(
     Effect.provide(SourceControlDiscovery.layer.pipe(Layer.provide(layerDiscovery(runProcess)))),
+  );
+});
+
+it.effect("answers once the slowest probe does instead of after every probe in turn", () => {
+  const delays: Record<string, Duration.Input> = {
+    "git --version": "1 second",
+    "slow-version-cli --version": "3 seconds",
+    "slow-version-cli auth": "1 second",
+  };
+  const timedRun: typeof run = (input) =>
+    run(input).pipe(Effect.delay(delays[`${input.command} ${input.args[0]}`] ?? Duration.zero));
+  return Effect.gen(function* () {
+    const discovery = yield* SourceControlDiscovery.SourceControlDiscovery;
+    const fiber = yield* Effect.forkChild(discovery.discover);
+    yield* TestClock.adjust("3 seconds");
+    assert.isDefined(fiber.pollUnsafe(), "discovery waited on probes in series");
+    const item = (yield* Fiber.join(fiber)).sourceControlProviders[0];
+    assert.deepStrictEqual([item?.status, item?.auth.status], ["available", "authenticated"]);
+  }).pipe(
+    Effect.provide(
+      SourceControlDiscovery.layer.pipe(
+        Layer.provide(layerDiscovery(timedRun, [cliDiscovery("slow", "slow-version-cli")])),
+      ),
+    ),
+    Effect.provideService(SpawnExecutableResolution, onPath),
+    // Skips the login-shell PATH refresh, which spawns a real shell on wall-clock time.
+    Effect.provideService(HostProcess.Platform, "win32"),
   );
 });
 
