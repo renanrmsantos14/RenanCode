@@ -77,27 +77,6 @@ registerThreadOverlay((threadKey) => {
   if (current !== null && current.scope !== threadKey) closeReview();
 });
 
-/**
- * Opens `preview` in review inside `gallery`; false when it is not there. `frozen` keeps that
- * gallery as it was at the click instead of following the thread.
- */
-function openReview(input: {
-  readonly scope: string | null;
-  readonly preview: ExpandedImagePreview;
-  readonly gallery: ReadonlyArray<ReviewItem>;
-  readonly frozen: boolean;
-  readonly source: ReviewSourceContext;
-}): boolean {
-  const found = input.gallery[findReviewIndex(input.gallery, input.preview, input.source)];
-  if (!found) return false;
-  setReviewState({
-    scope: input.scope,
-    key: found.key,
-    items: input.frozen ? input.gallery : null,
-  });
-  return true;
-}
-
 /** Opens `preview` in review as its own list. */
 function openLooseReview(scope: string | null, preview: ExpandedImagePreview): void {
   const items = reviewItemsFromPreview(preview);
@@ -124,29 +103,26 @@ export function useThreadOpenMedia(input: {
   readonly entries: ReadonlyArray<ReviewGalleryEntry>;
   readonly source: ReviewSourceContext;
   readonly onBeforeOpen?: () => void;
-  /** Takes media outside the thread's gallery; by default it opens alone. */
-  readonly onMissing?: (preview: ExpandedImagePreview) => void;
 }): OpenMedia {
   const { resolvedTheme } = useTheme();
   return useStableCallback((preview, options) => {
     input.onBeforeOpen?.();
-    const context = { cwd: input.source.cwd, theme: resolvedTheme };
-    const opened = openReview({
-      scope: input.scope,
-      preview,
-      gallery: deriveReviewGallery(options?.entries ?? input.entries, context),
-      frozen: options?.entries !== undefined,
-      source: input.source,
+    const gallery = deriveReviewGallery(options?.entries ?? input.entries, {
+      cwd: input.source.cwd,
+      theme: resolvedTheme,
     });
-    if (opened) return;
-    if (input.onMissing) input.onMissing(preview);
-    else openLooseReview(input.scope, preview);
+    const found = gallery[findReviewIndex(gallery, preview, input.source)];
+    // Media outside the thread's gallery opens alone; entries from the click freeze their gallery.
+    if (found) {
+      setReviewState({
+        scope: input.scope,
+        key: found.key,
+        items: options?.entries ? gallery : null,
+      });
+    } else {
+      openLooseReview(input.scope, preview);
+    }
   });
-}
-
-/** Whether review is open for `scope`; it changes only when review opens or closes. */
-function useReviewOpen(scope: string | null): boolean {
-  return useAtomValue(reviewScopeAtom) === scope;
 }
 
 /** Calls `onReveal` each time review moves to an item of `scope`'s chat. */
@@ -228,7 +204,7 @@ export interface ReviewMode {
  * guest page and the owner's chat use it; the caller lays out the viewer and the chat column.
  */
 export function useReviewMode(scope: string | null): ReviewMode {
-  const active = useReviewOpen(scope);
+  const active = useAtomValue(reviewScopeAtom) === scope;
   const [chatHidden, setChatHidden] = useLocalStorage(
     CHAT_HIDDEN_STORAGE_KEY,
     false,

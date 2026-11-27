@@ -114,22 +114,22 @@ function ReviewStageImage({
   source,
   size,
   zoomRef,
-  showContents,
+  contents,
 }: {
   readonly item: ReviewItem;
   readonly source: ReviewImageSource;
   readonly size: StageSize;
   readonly zoomRef: RefObject<ZoomableImageHandle | null>;
-  readonly showContents: boolean;
+  /** The screenshot's text, shown in place of the image. */
+  readonly contents: ReturnType<typeof snapShotAccessibilityDetails>;
 }) {
   const gt = useGT();
   const { url, failed } = useReviewImageUrl(item, source);
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
-  const details = item.source ? snapShotAccessibilityDetails(item.source) : undefined;
-  if (showContents && details) {
+  if (contents) {
     return (
       <SnapShotAccessibilityData
-        details={details}
+        details={contents}
         className="h-[min(var(--media-height),40rem)] w-[min(var(--media-width),42rem)] rounded-lg border border-border/70 bg-background p-4 text-xs leading-5 text-foreground shadow-2xl"
       />
     );
@@ -241,7 +241,7 @@ function ReviewStage({
                   source={source}
                   size={size}
                   zoomRef={zoomRef}
-                  showContents={showContents}
+                  contents={showContents ? details : undefined}
                 />
               )}
             </div>

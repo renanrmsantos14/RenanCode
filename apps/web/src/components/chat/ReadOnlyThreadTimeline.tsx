@@ -143,11 +143,7 @@ export function ReadOnlyThreadTimeline(props: {
           review={review}
           scope={threadKey}
           entries={entries}
-          source={{
-            cwd: undefined,
-            hostImageUrl: props.review?.hostImageUrl ?? null,
-            threadRef: null,
-          }}
+          source={{ ...reviewSource, threadRef: null }}
         />
       ) : null}
       {mockupViewer.active && props.renderHtmlVariantStage ? (

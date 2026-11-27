@@ -1611,7 +1611,6 @@ export default function ChatView(props: ChatViewProps) {
     setLocalDraftErrorsByDraftId,
   });
   const review = useReviewMode(routeThreadKey);
-  const reviewOpen = review.active;
   const {
     pendingApprovals,
     pendingUserInputs,
@@ -1639,7 +1638,7 @@ export default function ChatView(props: ChatViewProps) {
     setThreadError,
     // A side chat lives in the right panel already, and review mode hides that panel, so
     // their questions stay in the composer.
-    questionPlacement: embedded || reviewOpen ? "composer" : settings.questionPlacement,
+    questionPlacement: embedded || review.active ? "composer" : settings.questionPlacement,
   });
   const openQuestionsPanel = useStableCallback(() => {
     if (activeThreadRef) useRightPanelStore.getState().open(activeThreadRef, "questions");
