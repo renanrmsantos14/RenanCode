@@ -10,6 +10,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
+import { moveQueuedRun } from "@t3tools/client-runtime/state/thread-workflows";
 import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
 import type { ChatAttachment, EnvironmentId, RunId, ThreadId } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
@@ -56,7 +57,7 @@ const EMPTY_QUEUED_COUNT_ATOM = Atom.make(0).pipe(
 );
 
 type QueueTarget = { readonly environmentId: EnvironmentId; readonly threadId: ThreadId };
-type QueueAction = "steer" | "edit" | "remove";
+type QueueAction = "steer" | "edit" | "remove" | "move-up" | "move-down";
 
 function useThreadQueueWorkflow(target: QueueTarget) {
   return useAtomValue(environmentThreadDetails.queueWorkflowAtom(target));
@@ -147,6 +148,7 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
   );
   const promote = useAtomCommand(threadEnvironment.promoteQueuedRun, "promote queued message");
   const cancel = useAtomCommand(threadEnvironment.cancelQueuedRun, "remove queued message");
+  const reorder = useAtomCommand(threadEnvironment.reorderQueuedRun, "reorder queued message");
   const resume = useAtomCommand(threadEnvironment.resumeThreadQueue, "resume queue");
   const resumeHeldQueue = useAtomCommand(threadEnvironment.resumeThreadQueue, {
     label: "resume queue",
@@ -202,7 +204,24 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
       navigation.goBack();
       return;
     }
-    if (action !== "steer" && action !== "remove") return;
+    if (action === "move-up" || action === "move-down") {
+      const moved = moveQueuedRun(
+        queuedRuns.map((entry) => entry.run.id),
+        runId,
+        action === "move-up" ? index - 1 : index + 1,
+      );
+      if (moved === null) return;
+      busyRef.current = true;
+      setBusyRunId(runId);
+      void Haptics.selectionAsync();
+      await reorder({
+        ...target,
+        input: { threadId: target.threadId, runId, beforeRunId: moved.beforeRunId },
+      });
+      busyRef.current = false;
+      setBusyRunId(null);
+      return;
+    }
     busyRef.current = true;
     setBusyRunId(runId);
     void Haptics.selectionAsync();
@@ -317,6 +336,24 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
                             title: gt("Send now"),
                             attributes: { disabled: !controls.canSend },
                             image: "arrow.up",
+                          },
+                        ]
+                      : []),
+                    ...(queuedRuns.length > 1
+                      ? [
+                          {
+                            id: "move-up",
+                            title: gt("Move up"),
+                            attributes: { disabled: busyRunId !== null || index === 0 },
+                            image: "chevron.up",
+                          },
+                          {
+                            id: "move-down",
+                            title: gt("Move down"),
+                            attributes: {
+                              disabled: busyRunId !== null || index === queuedRuns.length - 1,
+                            },
+                            image: "chevron.down",
                           },
                         ]
                       : []),

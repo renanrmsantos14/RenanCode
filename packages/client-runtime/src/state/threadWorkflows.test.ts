@@ -5,6 +5,7 @@ import {
   canForkProjectedAssistantItem,
   deriveThreadQueueWorkflowState,
   getUserQueuedThreadRuns,
+  moveQueuedRun,
   resolveLatestMergeBackRun,
   threadCanSteer,
   threadSupportsProviderHandoff,
@@ -456,4 +457,14 @@ describe("thread workflows", () => {
       expect(resolveLatestMergeBackRun(projection)).toBeNull();
     },
   );
+
+  it("names the run a moved queued message lands before", () => {
+    const order = ["a", "b", "c"];
+    expect(moveQueuedRun(order, "c", 0)).toEqual({ order: ["c", "a", "b"], beforeRunId: "a" });
+    expect(moveQueuedRun(order, "a", 1)).toEqual({ order: ["b", "a", "c"], beforeRunId: "c" });
+    expect(moveQueuedRun(order, "a", 2)).toEqual({ order: ["b", "c", "a"], beforeRunId: null });
+    expect(moveQueuedRun(order, "b", 1)).toBeNull();
+    expect(moveQueuedRun(order, "a", 3)).toBeNull();
+    expect(moveQueuedRun(order, "z", 0)).toBeNull();
+  });
 });
