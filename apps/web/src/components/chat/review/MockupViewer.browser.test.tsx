@@ -77,6 +77,12 @@ describe("MockupViewer", () => {
       .toHaveValue("I chose B (Airy): ");
   });
 
+  it("takes focus from the control that opened it so the arrows work", async () => {
+    await using screen = await render(<Harness />);
+    await userEvent.click(screen.getByRole("button", { name: "open" }));
+    await expect.element(screen.getByRole("region", { name: "Mockup viewer" })).toHaveFocus();
+  });
+
   it("closes on Escape", async () => {
     await using screen = await render(<Harness />);
     await userEvent.click(screen.getByRole("button", { name: "open" }));

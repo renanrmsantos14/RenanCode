@@ -23,6 +23,11 @@ function keepInView(element: HTMLElement | null) {
   element?.scrollIntoView({ inline: "nearest", block: "nearest" });
 }
 
+// Focus leaves the control that opened the viewer, which may sit in a widget that owns the arrows.
+function focusOnMount(element: HTMLElement | null) {
+  element?.focus({ preventScroll: true });
+}
+
 /** The widest a page is written for; the stage stops growing there and centers. */
 const STAGE_MAX_WIDTH_PX = 1176;
 
@@ -45,7 +50,19 @@ export function MockupViewer({
   const { variants, index } = viewer;
   const variant = variants[index];
   const onKeyDown = useStableCallback((event: KeyboardEvent) => {
-    if (event.defaultPrevented || isContextMenuOpen() || isCommandPaletteOpen()) return;
+    // The composer swallows Escape; it still closes the viewer unless a menu in it is open.
+    const composerEscape =
+      event.key === "Escape" &&
+      event.target instanceof Element &&
+      event.target.closest(".composer-tiptap") !== null &&
+      document.querySelector('[role="listbox"], [role="menu"]') === null;
+    if (
+      (event.defaultPrevented && !composerEscape) ||
+      isContextMenuOpen() ||
+      isCommandPaletteOpen()
+    ) {
+      return;
+    }
     // A dialog over the viewer owns Escape and the arrow keys.
     if (event.target instanceof Element && event.target.closest(DIALOG_SELECTOR)) return;
     if (event.key === "Escape") {
@@ -73,8 +90,10 @@ export function MockupViewer({
 
   return (
     <section
+      ref={focusOnMount}
+      tabIndex={-1}
       aria-label={gt("Mockup viewer")}
-      className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-muted/40 text-foreground"
+      className="relative flex outline-none min-h-0 min-w-0 flex-1 flex-col bg-muted/40 text-foreground"
     >
       <div
         className={cn(
