@@ -260,3 +260,18 @@ export function canDetachThreadProviderSession(projection: Projection): boolean 
   const session = resolveThreadProviderSession(projection);
   return session !== null && session.status !== "stopped" && session.status !== "error";
 }
+
+/** Moves a queued run to `toIndex`, naming the run it then sits before, as `queued-run.reorder` takes it. */
+export function moveQueuedRun<Id extends string>(
+  order: ReadonlyArray<Id>,
+  runId: Id,
+  toIndex: number,
+): { readonly order: ReadonlyArray<Id>; readonly beforeRunId: Id | null } | null {
+  const fromIndex = order.indexOf(runId);
+  if (fromIndex === -1 || toIndex < 0 || toIndex >= order.length || toIndex === fromIndex) {
+    return null;
+  }
+  const next = order.filter((id) => id !== runId);
+  next.splice(toIndex, 0, runId);
+  return { order: next, beforeRunId: next[toIndex + 1] ?? null };
+}

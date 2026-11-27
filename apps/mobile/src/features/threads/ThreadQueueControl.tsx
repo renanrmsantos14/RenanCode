@@ -10,6 +10,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
+import { moveQueuedRun } from "@t3tools/client-runtime/state/thread-workflows";
 import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
 import type { ChatAttachment, EnvironmentId, RunId, ThreadId } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
@@ -56,7 +57,7 @@ const EMPTY_QUEUED_COUNT_ATOM = Atom.make(0).pipe(
 );
 
 type QueueTarget = { readonly environmentId: EnvironmentId; readonly threadId: ThreadId };
-type QueueAction = "steer" | "edit" | "remove";
+type QueueAction = "steer" | "edit" | "remove" | "move-up" | "move-down";
 
 function useThreadQueueWorkflow(target: QueueTarget) {
   return useAtomValue(environmentThreadDetails.queueWorkflowAtom(target));
@@ -147,6 +148,7 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
   );
   const promote = useAtomCommand(threadEnvironment.promoteQueuedRun, "promote queued message");
   const cancel = useAtomCommand(threadEnvironment.cancelQueuedRun, "remove queued message");
+  const reorder = useAtomCommand(threadEnvironment.reorderQueuedRun, "reorder queued message");
   const resume = useAtomCommand(threadEnvironment.resumeThreadQueue, "resume queue");
   const resumeHeldQueue = useAtomCommand(threadEnvironment.resumeThreadQueue, {
     label: "resume queue",
@@ -202,12 +204,24 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
       navigation.goBack();
       return;
     }
-    if (action !== "steer" && action !== "remove") return;
+    const moved =
+      action === "move-up" || action === "move-down"
+        ? moveQueuedRun(
+            queuedRuns.map((entry) => entry.run.id),
+            runId,
+            action === "move-up" ? index - 1 : index + 1,
+          )
+        : null;
+    if (moved === null && action !== "steer" && action !== "remove") return;
     busyRef.current = true;
     setBusyRunId(runId);
     void Haptics.selectionAsync();
-    const result =
-      action === "remove"
+    const result = moved
+      ? await reorder({
+          ...target,
+          input: { threadId: target.threadId, runId, beforeRunId: moved.beforeRunId },
+        })
+      : action === "remove"
         ? await cancel(buildCancelQueuedRunCommand({ ...target, runId }))
         : workflow?.canSendNow
           ? await resume({ ...target, input: { threadId: target.threadId, runId } })
@@ -223,10 +237,10 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
             : null;
     busyRef.current = false;
     setBusyRunId(null);
-    if (action === "steer" && result?._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+    if (action !== "remove" && result?._tag === "Failure" && !isAtomCommandInterrupted(result)) {
       const error = squashAtomCommandFailure(result);
       Dialog.alert(
-        m(msg("Could not send queued message")),
+        m(moved ? msg("Could not reorder queued message") : msg("Could not send queued message")),
         errorDisplayMessage(error, m) ?? m(msg("Try again.")),
       );
     }
@@ -317,6 +331,29 @@ export function ThreadQueueSheet({ route }: StaticScreenProps<QueueTarget>) {
                             title: gt("Send now"),
                             attributes: { disabled: !controls.canSend },
                             image: "arrow.up",
+                          },
+                        ]
+                      : []),
+                    ...(queuedRuns.length > 1
+                      ? [
+                          {
+                            id: "move-up",
+                            title: gt("Move up"),
+                            attributes: {
+                              disabled: busyRunId !== null || controls.isEditing || index === 0,
+                            },
+                            image: "chevron.up",
+                          },
+                          {
+                            id: "move-down",
+                            title: gt("Move down"),
+                            attributes: {
+                              disabled:
+                                busyRunId !== null ||
+                                controls.isEditing ||
+                                index === queuedRuns.length - 1,
+                            },
+                            image: "chevron.down",
                           },
                         ]
                       : []),
