@@ -225,7 +225,12 @@ export function ReviewViewer({
           </Button>
         )}
       </div>
-      <div className="relative flex min-h-0 flex-1 items-center justify-center px-12 pb-2 max-md:px-2">
+      <div
+        className="relative flex min-h-0 flex-1 items-center justify-center px-12 pb-2 max-md:px-2"
+        onClick={(event) => {
+          if (event.target === event.currentTarget) review.close();
+        }}
+      >
         <ReviewStageImage key={image.key} image={image} source={source} />
         {total > 1 ? (
           <>
@@ -255,7 +260,12 @@ export function ReviewViewer({
       {before ? <ReviewPreload image={before} source={source} /> : null}
       {after ? <ReviewPreload image={after} source={source} /> : null}
       {total > 1 ? (
-        <div className="flex shrink-0 justify-center gap-1.5 overflow-x-auto px-3 pb-3 max-md:pb-20">
+        <div
+          className="flex shrink-0 justify-center gap-1.5 overflow-x-auto px-3 pb-3 max-md:pb-20"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) review.close();
+          }}
+        >
           {thumbnails.map((thumbnail, offset) => (
             <ReviewThumbnail
               key={thumbnail.key}
