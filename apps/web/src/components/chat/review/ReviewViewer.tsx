@@ -357,11 +357,14 @@ export function ReviewViewer({
   scope,
   entries,
   source,
+  standalone = false,
 }: {
   readonly review: ReviewMode;
   readonly scope: string | null;
   readonly entries: ReadonlyArray<ReviewGalleryEntry>;
   readonly source: ReviewImageSource;
+  /** No chat beside the viewer, so no button to show or hide it. */
+  readonly standalone?: boolean;
 }) {
   const gt = useGT();
   const gallery = useReviewGallery({ scope, entries, source });
@@ -424,7 +427,8 @@ export function ReviewViewer({
         className={cn(
           "drag-region flex h-(--workspace-topbar-height) shrink-0 items-center gap-2 px-3",
           COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
-          (review.chatHidden || review.narrow) && "wco:pr-(--workspace-native-controls-inset)",
+          (standalone || review.chatHidden || review.narrow) &&
+            "wco:pr-(--workspace-native-controls-inset)",
         )}
       >
         <Button
@@ -444,7 +448,7 @@ export function ReviewViewer({
           </span>
           <span className="ml-2 tabular-nums text-white/60">{`${index + 1} / ${total}`}</span>
         </p>
-        {review.narrow ? null : (
+        {review.narrow || standalone ? null : (
           <Button
             type="button"
             size="icon-sm"

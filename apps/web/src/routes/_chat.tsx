@@ -1,7 +1,8 @@
-import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
+import { Outlet, createFileRoute, redirect, useRouterState } from "@tanstack/react-router";
 
 import { ThreadRouteView } from "../components/ThreadRouteView";
 import { GlobalVoiceInputIndicator } from "../components/chat/GlobalVoiceInputIndicator";
+import { ReviewRootHost } from "../components/chat/review/ReviewRootHost";
 import { isAppModalPage } from "../components/sidebar/mainAppLocation";
 import { SidebarInset } from "../components/ui/sidebar";
 import { resolveThreadRouteTarget } from "../threadRoutes";
@@ -12,6 +13,7 @@ import { useShownThreadRouteTarget } from "../hooks/useShownThreadRouteTarget";
 function ChatRouteLayout() {
   // Render both routes here so draft promotion keeps the same ChatView mounted.
   const { shownTarget, modalOpen } = useShownThreadRouteTarget();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   return (
     <>
       {shownTarget?.kind === "server" && !modalOpen ? (
@@ -25,6 +27,7 @@ function ChatRouteLayout() {
         <Outlet />
       )}
       {modalOpen ? <Outlet /> : null}
+      <ReviewRootHost pathname={pathname} />
       <GlobalVoiceInputIndicator hidden={modalOpen} />
     </>
   );

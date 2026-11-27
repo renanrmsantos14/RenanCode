@@ -618,6 +618,46 @@ describe("GuestPage", () => {
       .not.toBeInTheDocument();
   });
 
+  it("reviews media outside the thread's gallery by its own URL, not in a new tab", async () => {
+    using _page = visit(`/guest?share=${SHARE_ID}`);
+    using _fetch = vi
+      .spyOn(window, "fetch")
+      .mockImplementation(async () => new Response(null, { status: 204 }));
+    using open = vi.spyOn(window, "open").mockImplementation(() => null);
+    const thought = {
+      ...itemBase("thought", 1),
+      type: "reasoning",
+      text: "![delta](/work/delta.png)",
+      streaming: false,
+    } satisfies OrchestrationV2TurnItem;
+    using _stream = vi
+      .spyOn(window, "EventSource")
+      .mockImplementation(
+        fakeEventSource(
+          opening([run("run-1", 1, "completed")], [items[0]!, thought, reply("done", 2, "Done.")]),
+        ) as never,
+      );
+    await page.viewport(1200, 900);
+    await using screen = await render(
+      <AppAtomRegistryProvider>
+        <GuestPage />
+      </AppAtomRegistryProvider>,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: /Worked for/ }));
+    const row = '[data-work-entry-id="thought"] [aria-expanded="false"]';
+    await vi.waitFor(() => expect(screen.container.querySelector(row)).not.toBeNull());
+    screen.container.querySelector<HTMLElement>(row)?.click();
+    await vi.waitFor(() =>
+      expect(screen.container.querySelectorAll("img[role=button]")).toHaveLength(1),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Preview delta" }));
+    await expect.element(screen.getByRole("region", { name: "Media review" })).toBeVisible();
+    await expect.element(screen.getByText("1 / 1")).toBeVisible();
+    expect(open).not.toHaveBeenCalled();
+    await userEvent.keyboard("{Escape}");
+  });
+
   it("peeks the pending question in a bottom sheet on a narrow screen", async () => {
     using _page = visit(`/guest?share=${SHARE_ID}`);
     using _stream = vi.spyOn(window, "EventSource").mockImplementation(reviewStream());

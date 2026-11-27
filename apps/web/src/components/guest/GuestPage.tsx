@@ -30,6 +30,7 @@ import {
 } from "@t3tools/client-runtime/state/pending-user-input";
 import { ArrowUpIcon, BellIcon, PaperclipIcon, XIcon } from "lucide-react";
 import {
+  use,
   useEffect,
   useReducer,
   useRef,
@@ -52,7 +53,7 @@ import { derivePendingUserInputs, type PendingUserInput } from "~/session-logic"
 import { ComposerBanner } from "../chat/ComposerBanner";
 import { ComposerControl, ComposerControlIcon } from "../chat/ComposerControl";
 import { ComposerPendingUserInputPanel } from "../chat/ComposerPendingUserInputPanel";
-import type { ExpandedImagePreview } from "../chat/ExpandedImagePreview";
+import { MediaReviewContext } from "../chat/review/useReviewMode";
 import { GuestMessageAttachments } from "../chat/GuestMessageAttachments";
 import { HostImageUrlContext } from "../chat/hostImageUrl";
 import { PierreEntryIcon } from "../chat/PierreEntryIcon";
@@ -480,7 +481,6 @@ function GuestThread({
           historyControls={historyControls}
           turnItemSource={turnItemSource}
           attachmentUrls={attachmentUrls}
-          onImageExpand={openExpandedImage}
           review={{
             hostImageUrl,
             peekLabel: question.pending?.questions[question.index]?.question ?? null,
@@ -723,11 +723,6 @@ const BUBBLE =
   "flex min-w-0 max-w-[80%] flex-col gap-2 rounded-2xl p-3 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]";
 
 const openInNewTab = (url: string) => window.open(url, "_blank", "noopener,noreferrer");
-/** Images the thread cannot place in review mode open in the browser's own tab. */
-const openExpandedImage = (preview: ExpandedImagePreview) => {
-  const src = preview.images[preview.index]?.src;
-  if (src) openInNewTab(src);
-};
 
 /** A guest message the owner has not sent yet, or chose not to send. */
 function UnplacedGuestMessage({
@@ -741,6 +736,7 @@ function UnplacedGuestMessage({
   const served = message.status !== "dismissed";
   const gt = useGT();
   const m = useMessages();
+  const openMedia = use(MediaReviewContext);
   const url = (attachment: { readonly id: string }) => guestAttachmentUrl(shareId, attachment.id);
   return (
     <div className="flex flex-col items-end gap-1">
@@ -755,7 +751,14 @@ function UnplacedGuestMessage({
         <GuestMessageAttachments
           attachments={message.attachments ?? []}
           imageUrl={(attachment) => (served ? url(attachment) : undefined)}
-          onOpenImage={(attachment) => openInNewTab(url(attachment))}
+          onOpenImage={(attachment) =>
+            openMedia({
+              images: [
+                { src: url(attachment), name: attachment.name, mimeType: attachment.mimeType },
+              ],
+              index: 0,
+            })
+          }
           {...(served ? { fileHref: url } : {})}
         />
         {message.text ? <span>{message.text}</span> : null}

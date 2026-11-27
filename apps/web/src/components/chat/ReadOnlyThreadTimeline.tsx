@@ -56,8 +56,8 @@ export function ReadOnlyThreadTimeline(props: {
   readonly attachmentUrls: (
     items: ReadonlyArray<OrchestrationV2ProjectedTurnItem>,
   ) => ReadonlyMap<string, string>;
-  /** Where a clicked image goes when the thread's gallery has no such image. */
-  readonly onImageExpand: (preview: ExpandedImagePreview) => void;
+  /** Where a click goes when the timeline has no review of its own. */
+  readonly onImageExpand?: (preview: ExpandedImagePreview) => void;
   /** Opts into review mode for the thread's images; without it a click goes to `onImageExpand`. */
   readonly review?: {
     /** Serves the host's workspace files, for images the markdown names by path. */
@@ -132,10 +132,9 @@ export function ReadOnlyThreadTimeline(props: {
     entries,
     source: reviewSource,
     onBeforeOpen: mockupViewer.close,
-    onMissing: props.onImageExpand,
   });
   const openImage = useStableCallback((preview: ExpandedImagePreview) => {
-    if (!props.review) return props.onImageExpand(preview);
+    if (!props.review) return props.onImageExpand?.(preview);
     openMedia(preview);
   });
   const content = (
