@@ -9,7 +9,7 @@ import {
   deriveReviewGallery,
   findReviewIndex,
   type ReviewGalleryEntry,
-  type ReviewImage,
+  type ReviewItem,
   type ReviewSourceContext,
 } from "./reviewGallery";
 
@@ -22,7 +22,7 @@ export interface ReviewState {
   readonly scope: string | null;
   readonly key: string;
   /** The gallery of the clicked timeline, frozen at the click; null follows `entries`. */
-  readonly snapshot: ReadonlyArray<ReviewImage> | null;
+  readonly snapshot: ReadonlyArray<ReviewItem> | null;
 }
 
 export interface ReviewReveal {
@@ -33,7 +33,7 @@ export interface ReviewReveal {
 
 export interface ReviewMode {
   readonly active: boolean;
-  readonly images: ReadonlyArray<ReviewImage>;
+  readonly images: ReadonlyArray<ReviewItem>;
   readonly index: number;
   readonly narrow: boolean;
   readonly chatHidden: boolean;
@@ -53,7 +53,7 @@ export interface ReviewMode {
   readonly setSheet: (snap: ReviewSheetSnap) => void;
 }
 
-const NO_IMAGES: ReadonlyArray<ReviewImage> = [];
+const NO_IMAGES: ReadonlyArray<ReviewItem> = [];
 
 /**
  * Review mode: the thread's images in a viewer, with the chat kept beside it. Both the guest page
@@ -93,12 +93,14 @@ export function useReviewMode(input: {
   const index = Math.max(0, found);
   const active = state !== null && images.length > 0;
 
-  const select = (next: number, shown: ReadonlyArray<ReviewImage>) => {
+  const select = (next: number, shown: ReadonlyArray<ReviewItem>) => {
     const image = shown[next];
     if (!image) return;
     setState((current) => (current ? { ...current, key: image.key } : current));
+    const { rowId } = image;
+    if (rowId === null) return;
     setReveal((current) => ({
-      rowId: image.rowId,
+      rowId,
       ordinal: image.ordinal,
       nonce: (current?.nonce ?? 0) + 1,
     }));

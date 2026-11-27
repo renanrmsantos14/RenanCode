@@ -18,7 +18,7 @@ import { cn } from "../../../lib/utils";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "../../../workspaceTitlebar";
 import { MediaActions } from "../../media/MediaActions";
 import { Button } from "../../ui/button";
-import { reviewImageTarget, type ReviewImage, type ReviewSourceContext } from "./reviewGallery";
+import { reviewItemTarget, type ReviewItem, type ReviewSourceContext } from "./reviewGallery";
 import type { ReviewMode } from "./useReviewMode";
 import { ARROW_OWNER_SELECTOR, DIALOG_SELECTOR } from "./viewerKeys";
 
@@ -32,10 +32,10 @@ export interface ReviewImageSource extends ReviewSourceContext {
 const THUMBNAIL_WINDOW = 4;
 
 function useReviewImageUrl(
-  image: ReviewImage,
+  image: ReviewItem,
   source: ReviewImageSource,
 ): { readonly url: string | null; readonly failed: boolean } {
-  const target = reviewImageTarget(image, source);
+  const target = reviewItemTarget(image, source);
   const asset =
     target?._tag === "workspace" && source.threadRef
       ? {
@@ -60,7 +60,7 @@ function ReviewStageImage({
   image,
   source,
 }: {
-  readonly image: ReviewImage;
+  readonly image: ReviewItem;
   readonly source: ReviewImageSource;
 }) {
   const gt = useGT();
@@ -93,7 +93,7 @@ function ReviewPreload({
   image,
   source,
 }: {
-  readonly image: ReviewImage;
+  readonly image: ReviewItem;
   readonly source: ReviewImageSource;
 }) {
   const { url } = useReviewImageUrl(image, source);
@@ -108,7 +108,7 @@ function ReviewThumbnail({
   total,
   onSelect,
 }: {
-  readonly image: ReviewImage;
+  readonly image: ReviewItem;
   readonly source: ReviewImageSource;
   readonly current: boolean;
   readonly position: number;

@@ -160,7 +160,7 @@ export function ChatMarkdownImageFallback(props: {
   const content = (
     <span
       data-markdown-copy={props.copyMarkdown}
-      data-review-image={(props.kind ?? "image") === "image" ? "" : undefined}
+      data-review-image={props.kind === "audio" ? undefined : ""}
       className={cn(
         CHAT_MARKDOWN_MEDIA_LAYOUT_CLASS_NAME,
         "rounded-md border border-border/40 bg-muted/40 px-2 py-1 text-xs text-muted-foreground",

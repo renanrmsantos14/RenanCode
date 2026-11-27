@@ -131,6 +131,7 @@ export function MediaVideoPlayer({
       className={cn("relative inline-block align-middle", className)}
       style={style}
       data-markdown-copy={copyMarkdown}
+      data-review-image=""
     >
       {failed && !onOpen ? (
         <span
