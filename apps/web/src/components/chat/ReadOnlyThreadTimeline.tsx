@@ -10,6 +10,7 @@ import {
   type OrchestrationV2ProjectedTurnItem,
   type OrchestrationV2ThreadProjection,
 } from "@t3tools/contracts";
+import type { HtmlVariantReference } from "@t3tools/shared/htmlRender";
 import { useRef, useState, type ReactNode } from "react";
 
 import { useIncrementalTimelineEntries } from "~/hooks/useIncrementalTimelineEntries";
@@ -24,8 +25,10 @@ import { MessagesTimeline, type MessagesTimelineHistoryControls } from "./Messag
 import { ScrollToEndButton } from "./TimelineOverlays";
 import type { TimelineRow, TurnItemSource } from "./timelineRowContext";
 import { useTimelineFollow } from "./useTimelineFollow";
+import { MockupViewer } from "./review/MockupViewer";
 import { ReviewViewer } from "./review/ReviewViewer";
 import { ReviewSheetHandle, reviewChatColumnClassName } from "./review/reviewLayout";
+import { useMockupViewer } from "./review/useMockupViewer";
 import { useReviewMode } from "./review/useReviewMode";
 import { cn } from "~/lib/utils";
 
@@ -68,6 +71,12 @@ export function ReadOnlyThreadTimeline(props: {
     row: Extract<TimelineRow, { kind: "html-variants" }>,
     index: number,
     minHeight: number,
+  ) => ReactNode;
+  /** Opts into the live mockup viewer: draws one option of a block as a page filling its box. */
+  readonly renderHtmlVariantStage?: (
+    itemId: string,
+    variant: HtmlVariantReference,
+    index: number,
   ) => ReactNode;
   readonly renderDesignSketches?: (
     row: Extract<TimelineRow, { kind: "design-sketches" }>,
@@ -117,8 +126,13 @@ export function ReadOnlyThreadTimeline(props: {
     entries,
     source: { cwd: undefined, hostImageUrl: props.review?.hostImageUrl ?? null },
   });
+  const mockupViewer = useMockupViewer({ scope: null });
+  const openHtmlVariants = useStableCallback(mockupViewer.open);
+  const viewerChat = review.active ? review : mockupViewer;
   const openImage = useStableCallback((preview: ExpandedImagePreview) => {
-    if (!props.review || !review.open(preview)) props.onImageExpand(preview);
+    if (!props.review) return props.onImageExpand(preview);
+    mockupViewer.close();
+    if (!review.open(preview)) props.onImageExpand(preview);
   });
   return (
     <div className="flex min-h-0 flex-1">
@@ -131,14 +145,21 @@ export function ReadOnlyThreadTimeline(props: {
             threadRef: null,
           }}
         />
+      ) : mockupViewer.active && props.renderHtmlVariantStage ? (
+        <MockupViewer
+          viewer={mockupViewer}
+          renderPage={(variant, index) =>
+            props.renderHtmlVariantStage?.(mockupViewer.rowId ?? "", variant, index)
+          }
+        />
       ) : null}
       <div
         className={cn(
           "relative flex min-h-0 min-w-0 flex-1 flex-col",
-          reviewChatColumnClassName(review),
+          reviewChatColumnClassName(viewerChat),
         )}
       >
-        <ReviewSheetHandle review={review} peekLabel={props.review?.peekLabel ?? null} />
+        <ReviewSheetHandle review={viewerChat} peekLabel={props.review?.peekLabel ?? null} />
         <div className="relative min-h-0 flex-1">
           <SideThreadsOpenContext value={false}>
             <MessagesTimeline
@@ -161,6 +182,7 @@ export function ReadOnlyThreadTimeline(props: {
               onFileDownload={props.onFileOpen}
               renderHtmlRender={props.renderHtmlRender}
               renderHtmlVariant={props.renderHtmlVariant}
+              onOpenHtmlVariants={props.renderHtmlVariantStage ? openHtmlVariants : undefined}
               renderDesignSketches={props.renderDesignSketches}
               turnItemSource={props.turnItemSource}
               historyControls={props.historyControls}

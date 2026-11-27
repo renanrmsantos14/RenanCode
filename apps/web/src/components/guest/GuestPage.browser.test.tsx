@@ -115,6 +115,26 @@ const items: ReadonlyArray<OrchestrationV2TurnItem> = [
   reply("reply", 3, "All checks pass."),
 ];
 
+const variantLabels = ["Dense", "Airy", "Bold", "Calm", "Loud", "Quiet"];
+const variantItems: ReadonlyArray<OrchestrationV2TurnItem> = [
+  items[0]!,
+  {
+    ...itemBase("mockups", 1),
+    type: "dynamic_tool",
+    toolName: "mcp__t3-code__html_variants",
+    input: null,
+    output: {
+      htmlRenders: variantLabels.map((label, index) => ({
+        attachmentId: `thread-a-v${index}`,
+        title: "Home",
+        height: 300,
+        label,
+      })),
+    },
+  },
+  reply("reply", 2, "Pick one."),
+];
+
 const view: GuestShareView = {
   shareId: GuestShareId.make(SHARE_ID),
   title: "Fix login",
@@ -315,6 +335,33 @@ describe("GuestPage", () => {
     expect(socket).not.toHaveBeenCalled();
     // The composer names the thread's model, as the owner's does, with nothing to pick.
     await expect.element(screen.getByLabelText("Model: GPT-5.4")).toBeVisible();
+  });
+
+  it("opens the live mockup viewer for the guest, without a choose button", async () => {
+    using _page = visit(`/guest?share=${SHARE_ID}`);
+    using _session = vi
+      .spyOn(window, "fetch")
+      .mockImplementation(async () => new Response(null, { status: 204 }));
+    using _stream = vi
+      .spyOn(window, "EventSource")
+      .mockImplementation(
+        fakeEventSource(opening([run("run-1", 1, "completed")], variantItems)) as never,
+      );
+    await page.viewport(1200, 900);
+    await using screen = await render(<GuestPage />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Open Calm" }));
+    const viewer = screen.getByRole("region", { name: "Mockup viewer" });
+    await expect.element(viewer.getByText("D · Calm")).toBeVisible();
+    await expect
+      .element(viewer.getByTitle("Home"))
+      .toHaveAttribute("src", expect.stringContaining("variant=3"));
+    expect(viewer.getByRole("button", { name: /^Choose/ }).elements().length).toBe(0);
+
+    await userEvent.click(viewer.getByRole("button", { name: "Show Quiet" }));
+    await expect.element(viewer.getByText("F · Quiet")).toBeVisible();
+    await userEvent.keyboard("{Escape}");
+    await expect.element(viewer).not.toBeInTheDocument();
   });
 
   it("lets the guest answer the agent's question on a link without approval", async () => {

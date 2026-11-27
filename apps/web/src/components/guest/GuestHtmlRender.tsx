@@ -26,12 +26,15 @@ export function GuestHtmlRender({
   shareId,
   variant,
   minHeight,
+  fill,
 }: {
   readonly itemId: string;
   readonly reference: HtmlRenderReference;
   readonly shareId: string;
   readonly variant?: number;
   readonly minHeight?: number;
+  /** Fills the box it is in instead of sizing itself to the page. */
+  readonly fill?: boolean;
 }) {
   const theme = useHtmlRenderTheme();
   const boxRef = useRef<HTMLDivElement>(null);
@@ -86,16 +89,24 @@ export function GuestHtmlRender({
   return (
     <div
       ref={boxRef}
-      style={{
-        height: Math.max(minHeight ?? 0, htmlRenderFrameHeight(reference, width, contentHeight)),
-      }}
+      className={fill ? "size-full" : undefined}
+      style={
+        fill
+          ? undefined
+          : {
+              height: Math.max(
+                minHeight ?? 0,
+                htmlRenderFrameHeight(reference, width, contentHeight),
+              ),
+            }
+      }
     >
       <iframe
         ref={frameRef}
         src={src}
         title={reference.title}
         sandbox="allow-scripts allow-forms allow-popups allow-downloads"
-        className="block size-full rounded-lg border border-border"
+        className={fill ? "block size-full" : "block size-full rounded-lg border border-border"}
       />
     </div>
   );
