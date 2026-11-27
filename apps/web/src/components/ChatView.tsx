@@ -3567,6 +3567,12 @@ export default function ChatView(props: ChatViewProps) {
     source: reviewSource,
     onBeforeOpen: mockupViewer.close,
   });
+  // A mockup page's media opens over the viewer, which stays mounted so its page keeps its state.
+  const openMediaOverMockup = useThreadOpenMedia({
+    scope: routeThreadKey,
+    entries: timelineEntries,
+    source: reviewSource,
+  });
   const openHtmlVariantsStable = useStableCallback(mockupViewer.open);
   // Image review and the mockup viewer share one layout: a viewer on the left, the chat beside it.
   const viewerActive = review.active || mockupViewer.active;
@@ -3913,18 +3919,22 @@ export default function ChatView(props: ChatViewProps) {
           entries={timelineEntries}
           source={{ ...reviewSource, threadRef: activeThreadRef }}
         />
-      ) : mockupViewer.active ? (
-        <MockupViewer
-          viewer={mockupViewer}
-          onChoose={followHtmlVariantStable}
-          renderPage={(variant) => (
-            <HtmlVariantStage
-              environmentId={environmentId}
-              htmlRender={variant}
-              threadRef={activeThreadRef ?? undefined}
-            />
-          )}
-        />
+      ) : null}
+      {mockupViewer.active ? (
+        <MediaReviewContext value={openMediaOverMockup}>
+          <MockupViewer
+            viewer={mockupViewer}
+            covered={review.active}
+            onChoose={followHtmlVariantStable}
+            renderPage={(variant) => (
+              <HtmlVariantStage
+                environmentId={environmentId}
+                htmlRender={variant}
+                threadRef={activeThreadRef ?? undefined}
+              />
+            )}
+          />
+        </MediaReviewContext>
       ) : null}
       {rightPanelControlsAtRoot && !embedded && !viewerActive ? panelLayoutControls : null}
       <div

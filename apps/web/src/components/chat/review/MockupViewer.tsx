@@ -38,8 +38,11 @@ export function MockupViewer({
   viewer,
   renderPage,
   onChoose,
+  covered = false,
 }: {
   readonly viewer: MockupViewerControls;
+  /** Media review is open in the viewer's place; it stays mounted so its page keeps its state. */
+  readonly covered?: boolean;
   /** Draws the open option as a live page that fills its box. */
   readonly renderPage: (variant: HtmlVariantReference, index: number) => ReactNode;
   /** Puts the choice in the composer without sending it; unset, the viewer has no choose button. */
@@ -78,9 +81,10 @@ export function MockupViewer({
   });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- document key listener for Esc and the arrow keys while the viewer is open
   useEffect(() => {
+    if (covered) return;
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onKeyDown]);
+  }, [covered, onKeyDown]);
 
   if (!variant) return null;
   const letter = htmlVariantLetter(index);
@@ -92,7 +96,10 @@ export function MockupViewer({
       ref={focusOnMount}
       tabIndex={-1}
       aria-label={gt("Mockup viewer")}
-      className="relative flex outline-none min-h-0 min-w-0 flex-1 flex-col bg-muted/40 text-foreground"
+      className={cn(
+        "relative flex outline-none min-h-0 min-w-0 flex-1 flex-col bg-muted/40 text-foreground",
+        covered && "hidden",
+      )}
     >
       <div
         className={cn(

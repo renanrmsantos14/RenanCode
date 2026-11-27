@@ -32,6 +32,7 @@ import {
   lazy,
   type ReactNode,
   Suspense,
+  use,
   useEffect,
   useEffectEvent,
   useLayoutEffect,
@@ -43,8 +44,7 @@ import { FileSurfaceLoading } from "./fileSurfaceChrome";
 import type { PdfViewState } from "./PdfViewer";
 
 import { useOpenLink } from "~/browser/useOpenLink";
-import { ExpandedImageDialog } from "~/components/chat/ExpandedImageDialog";
-import type { ExpandedImagePreview } from "~/components/chat/ExpandedImagePreview";
+import { MediaReviewContext } from "~/components/chat/review/useReviewMode";
 import { useHtmlRenderTheme } from "~/hooks/useHtmlRenderTheme";
 import { shortcutConflictKey } from "~/keybindings";
 import { useOpenIssueLink } from "~/lib/openIssueLink";
@@ -310,8 +310,6 @@ export function HtmlRenderDocument(props: {
   readonly onContentHeight?: (height: number, width: number | undefined) => void;
   /** Keeps the page's scrollIntoView calls from scrolling the host, for frames inline in the chat. */
   readonly containScroll?: boolean | undefined;
-  /** Reports fullscreen changes so virtualized rows can stay mounted. */
-  readonly onFullscreenChange?: ((fullscreen: boolean) => void) | undefined;
 }) {
   const theme = useHtmlRenderTheme();
   const frameRef = useRef<HTMLIFrameElement>(null);
@@ -320,7 +318,7 @@ export function HtmlRenderDocument(props: {
       `${props.src.split("#", 1)[0]}${htmlRenderThemeFragment(theme)}${props.containScroll ? HTML_RENDER_CONTAIN_SCROLL_FRAGMENT : ""}`,
   );
   const [loaded, setLoaded] = useState(false);
-  const [expandedImage, setExpandedImage] = useState<ExpandedImagePreview | null>(null);
+  const openMedia = use(MediaReviewContext);
   const postTheme = () => {
     frameRef.current?.contentWindow?.postMessage(htmlRenderThemeMessage(theme), "*");
   };
@@ -401,13 +399,6 @@ export function HtmlRenderDocument(props: {
     }
     void openLink(url, { event: modifiers }).catch((cause: unknown) => console.error(cause));
   });
-  const { onFullscreenChange } = props;
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reports fullscreen to the parent while the image viewer is open, and clears it on unmount
-  useEffect(() => {
-    if (expandedImage === null) return;
-    onFullscreenChange?.(true);
-    return () => onFullscreenChange?.(false);
-  }, [expandedImage, onFullscreenChange]);
   // Links, keys and images require frame focus and recent reader activity: a page can take
   // focus by script, so this blocks opens on load, though not a page that waits for the
   // reader's next input.
@@ -435,7 +426,7 @@ export function HtmlRenderDocument(props: {
     }
     const imageRequest = readHtmlRenderImageRequest(event.data);
     if (imageRequest !== undefined) {
-      setExpandedImage({ images: [...imageRequest.images], index: imageRequest.index });
+      openMedia({ images: [...imageRequest.images], index: imageRequest.index });
     }
   });
   // Attach at commit because a fast page may post its initial height before passive effects run.
@@ -450,29 +441,24 @@ export function HtmlRenderDocument(props: {
     return () => window.removeEventListener("message", onMessage);
   }, []);
   return (
-    <>
-      <iframe
-        ref={frameRef}
-        src={src}
-        title={props.title}
-        // Never allow-same-origin: the opaque origin keeps the page out of the app's session.
-        sandbox="allow-scripts allow-forms"
-        // Lets a page's video or image viewer take the screen.
-        allow="fullscreen"
-        loading="lazy"
-        onLoad={() => {
-          setLoaded(true);
-          // Covers a theme change that landed while the page was loading.
-          postTheme();
-          postShortcuts();
-        }}
-        // Match the blank document's scheme to avoid dark-mode white flashes, then follow the app after load.
-        className={cn("border-0 scheme-light", props.className)}
-        style={loaded ? { colorScheme: theme.appearance } : undefined}
-      />
-      {expandedImage !== null ? (
-        <ExpandedImageDialog preview={expandedImage} onClose={() => setExpandedImage(null)} />
-      ) : null}
-    </>
+    <iframe
+      ref={frameRef}
+      src={src}
+      title={props.title}
+      // Never allow-same-origin: the opaque origin keeps the page out of the app's session.
+      sandbox="allow-scripts allow-forms"
+      // Lets a page's video or image viewer take the screen.
+      allow="fullscreen"
+      loading="lazy"
+      onLoad={() => {
+        setLoaded(true);
+        // Covers a theme change that landed while the page was loading.
+        postTheme();
+        postShortcuts();
+      }}
+      // Match the blank document's scheme to avoid dark-mode white flashes, then follow the app after load.
+      className={cn("border-0 scheme-light", props.className)}
+      style={loaded ? { colorScheme: theme.appearance } : undefined}
+    />
   );
 }

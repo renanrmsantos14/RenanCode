@@ -118,7 +118,6 @@ export function HtmlRenderFrame(props: {
                 if (contentWidth > innerWidth + 1) setFixedWidth(contentWidth);
                 else if (Math.abs(contentWidth - (fixedWidth ?? -1)) > 1) setFixedWidth(undefined);
               }}
-              onFullscreenChange={onFullscreenChange}
             />
           </div>
           <div className="absolute end-2 top-2 flex gap-1 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/html-render:opacity-100 pointer-coarse:opacity-100">

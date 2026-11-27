@@ -6,13 +6,14 @@ import {
 } from "@t3tools/shared/htmlRender";
 import { useGT } from "gt-react";
 import { MinusIcon, PlusIcon, XIcon } from "lucide-react";
-import { useRef, useState } from "react";
+import { use, useRef, useState } from "react";
 
 import { observeResize } from "~/lib/observeResize";
 
 import { HtmlRenderDocument } from "../files/BrowserDocumentFrame";
 import { Button } from "../ui/button";
 import { Dialog, DialogPopup, DialogTitle } from "../ui/dialog";
+import { MediaReviewContext } from "./review/useReviewMode";
 
 export function HtmlRenderDialog(props: {
   readonly src: string;
@@ -42,6 +43,7 @@ export function HtmlRenderDialog(props: {
     });
   };
   const [contentHeight, setContentHeight] = useState<number>();
+  const openMedia = use(MediaReviewContext);
   // Zoom divides the page's layout width, so the page reflows to fill the card
   // at every level, and the frame is as tall as the page so only the card scrolls.
   const height = htmlRenderFrameHeight(props.htmlRender, width / zoom, contentHeight);
@@ -70,13 +72,20 @@ export function HtmlRenderDialog(props: {
           <div className="max-h-[min(86vh,calc(100vh-160px))] overflow-y-auto overscroll-contain rounded-lg bg-background p-4 shadow-2xl ring-1 ring-border/70">
             <div ref={measureBox}>
               <div style={{ zoom, height }}>
-                <HtmlRenderDocument
-                  src={props.src}
-                  title={title}
-                  threadRef={props.threadRef}
-                  className="block size-full"
-                  onContentHeight={setContentHeight}
-                />
+                <MediaReviewContext
+                  value={(preview, options) => {
+                    props.onClose();
+                    openMedia(preview, options);
+                  }}
+                >
+                  <HtmlRenderDocument
+                    src={props.src}
+                    title={title}
+                    threadRef={props.threadRef}
+                    className="block size-full"
+                    onContentHeight={setContentHeight}
+                  />
+                </MediaReviewContext>
               </div>
             </div>
           </div>

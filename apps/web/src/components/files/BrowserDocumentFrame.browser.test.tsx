@@ -11,6 +11,7 @@ import { page } from "vite-plus/test/browser";
 import "~/index.css";
 import { render } from "../../../test/render";
 
+import { MediaReviewContext, type OpenMedia } from "../chat/review/useReviewMode";
 import { BrowserDocumentFrame, HtmlRenderDocument } from "./BrowserDocumentFrame";
 
 const links = vi.hoisted(() => ({
@@ -53,7 +54,7 @@ describe("HtmlRenderDocument", () => {
     expect(onContentHeight).toHaveBeenCalledTimes(1);
   });
 
-  it("opens a clicked image with the other images of its block in the viewer", async () => {
+  it("opens a clicked image with the other images of its block in review", async () => {
     const swatch = (color: string) =>
       `data:image/svg+xml,${encodeURIComponent(
         `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="50"><rect width="80" height="50" fill="${color}"/></svg>`,
@@ -65,14 +66,19 @@ describe("HtmlRenderDocument", () => {
     );
     const src = URL.createObjectURL(new Blob([html], { type: "text/html" }));
     using _url = { [Symbol.dispose]: () => URL.revokeObjectURL(src) };
-    await using screen = await render(<HtmlRenderDocument src={src} title="Swatches" />);
+    const openMedia = vi.fn<OpenMedia>();
+    await using screen = await render(
+      <MediaReviewContext value={openMedia}>
+        <HtmlRenderDocument src={src} title="Swatches" />
+      </MediaReviewContext>,
+    );
 
     await page.frameLocator(screen.getByTitle("Swatches")).getByAltText("Green").click();
 
-    const viewer = page.getByRole("dialog", { name: "Expanded image preview" });
-    await expect.element(viewer.getByAltText("Green")).toBeVisible();
-    await expect.element(viewer.getByRole("button", { name: "Next media" })).toBeVisible();
-    await expect.element(viewer.getByRole("button", { name: "Previous media" })).toBeVisible();
+    await vi.waitFor(() => expect(openMedia).toHaveBeenCalledTimes(1));
+    const [preview] = openMedia.mock.calls[0]!;
+    expect(preview.index).toBe(1);
+    expect(preview.images.map((image) => image.name)).toEqual(["Red", "Green", "Blue"]);
   });
 
   it("opens a clicked issue link beside the thread, as chat Markdown does", async () => {

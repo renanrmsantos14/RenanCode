@@ -1,11 +1,19 @@
-import { useState } from "react";
+import { use, useState } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { userEvent } from "vite-plus/test/browser";
+import { page, userEvent } from "vite-plus/test/browser";
 
 import "~/index.css";
 import { render } from "../../../../test/render";
+import { AppAtomRegistryProvider } from "../../../rpc/atomRegistry";
 import { MockupViewer } from "./MockupViewer";
+import { ReviewViewer } from "./ReviewViewer";
 import { useMockupViewer } from "./useMockupViewer";
+import { MediaReviewContext, useReviewMode, useThreadOpenMedia } from "./useReviewMode";
+
+const PIXEL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+const SCOPE = "thread-a";
+const SOURCE = { cwd: undefined, hostImageUrl: null };
 
 const variants = ["Dense", "Airy", "Bold", "Calm", "Loud", "Quiet"].map((label, index) => ({
   attachmentId: `t-${index}-html`,
@@ -42,7 +50,76 @@ function Harness(props: { readonly onChoose?: (text: string) => boolean }) {
   );
 }
 
+function PageWithImage(props: { readonly label: string }) {
+  const openMedia = use(MediaReviewContext);
+  return (
+    <>
+      <iframe title={props.label} sandbox="" />
+      <button
+        type="button"
+        onClick={() => openMedia({ images: [{ src: PIXEL, name: "shot.png" }], index: 0 })}
+      >
+        Open page image
+      </button>
+    </>
+  );
+}
+
+// Mirrors ChatView: the page's media opens review in the viewer's place, without closing it.
+function ReviewHarness() {
+  const viewer = useMockupViewer({ scope: SCOPE });
+  const review = useReviewMode(SCOPE);
+  const openMedia = useThreadOpenMedia({ scope: SCOPE, entries: [], source: SOURCE });
+  return (
+    <div className="flex h-[600px] w-[900px]">
+      <button type="button" onClick={() => viewer.open("row-1", variants, 0)}>
+        open
+      </button>
+      {review.active ? (
+        <ReviewViewer
+          review={review}
+          scope={SCOPE}
+          entries={[]}
+          source={{ ...SOURCE, threadRef: null }}
+        />
+      ) : null}
+      {viewer.active ? (
+        <MediaReviewContext value={openMedia}>
+          <MockupViewer
+            viewer={viewer}
+            covered={review.active}
+            renderPage={(variant) => <PageWithImage label={variant.label} />}
+          />
+        </MediaReviewContext>
+      ) : null}
+    </div>
+  );
+}
+
 describe("MockupViewer", () => {
+  it("opens a page's image in review over the viewer and shows the same page again on close", async () => {
+    await using screen = await render(
+      <AppAtomRegistryProvider>
+        <ReviewHarness />
+      </AppAtomRegistryProvider>,
+      { router: false },
+    );
+    await userEvent.click(screen.getByRole("button", { name: "open" }));
+    const frame = document.querySelector("iframe");
+    await userEvent.click(screen.getByRole("button", { name: "Open page image" }));
+
+    await expect.element(page.getByRole("region", { name: "Media review" })).toBeVisible();
+    expect(frame?.checkVisibility()).toBe(false);
+    await userEvent.keyboard("{ArrowRight}");
+    await userEvent.click(page.getByRole("button", { name: "Close media review" }));
+
+    await expect
+      .element(page.getByRole("region", { name: "Media review" }))
+      .not.toBeInTheDocument();
+    await expect.element(screen.getByText("A · Dense")).toBeVisible();
+    expect(document.querySelector("iframe")).toBe(frame);
+  });
+
   it("opens, switches by selector and arrows, and mounts one page at a time", async () => {
     await using screen = await render(<Harness />);
     await userEvent.click(screen.getByRole("button", { name: "open" }));
