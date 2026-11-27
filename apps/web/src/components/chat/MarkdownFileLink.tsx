@@ -1,4 +1,5 @@
 import { useNativeFileDrag } from "../../useNativeFileDrag";
+import { useFileMetadata } from "../../hooks/useFileMetadata";
 import { useAssetUrlState } from "../../assets/assetUrls";
 import { formatFilePathForClipboard } from "@t3tools/client-runtime/media-actions";
 import {
@@ -63,6 +64,7 @@ interface MarkdownFileLinkProps {
   onReveal?: (() => Promise<AtomCommandResult<unknown, unknown>>) | undefined;
   revealLabel?: string | undefined;
   downloadPath?: string | undefined;
+  onDownload?: (() => void) | undefined;
 }
 
 const MARKDOWN_FILE_LINK_CLASS_NAME = "chat-markdown-file-link";
@@ -87,6 +89,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
   onOpenMedia,
   onReveal,
   revealLabel,
+  onDownload,
   resolveCopyPaths,
   readContents,
   downloadPath,
@@ -108,6 +111,7 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
   const canDownload = downloadResource !== null && environmentId !== null;
   const handleDownload = () => void downloadCitedFile(prepareDownload, downloadName);
   const nativeDrag = useNativeFileDrag(environmentId, resolveDragPath);
+  const isDirectory = useFileMetadata(environmentId, iconPath)?.kind === "directory";
   const handleOpenInEditor = () => {
     if (!onOpen) {
       return;
@@ -294,8 +298,10 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
             ? ([{ id: "open-in-browser", label: gt("Open in integrated browser") }] as const)
             : []),
           ...(onReveal && revealLabel ? ([{ id: "reveal", label: revealLabel }] as const) : []),
-          ...(canDownload
-            ? ([{ id: "download", label: gt("Download", { $context: "verb" }) }] as const)
+          ...((canDownload || onDownload) && !isDirectory
+            ? ([
+                { id: "download", label: gt("Download", { $context: "verb, saves a file" }) },
+              ] as const)
             : []),
           ...copyItems.map(({ id, label }) => ({ id, label })),
           ...(readContents
@@ -323,7 +329,8 @@ export const MarkdownFileLink = memo(function MarkdownFileLink({
         return;
       }
       if (clicked === "download") {
-        handleDownload();
+        if (onDownload) onDownload();
+        else handleDownload();
         return;
       }
       if (clicked === "copy-contents" && readContents) {
@@ -506,7 +513,8 @@ function areMarkdownFileLinkPropsEqual(
     previous.resolveCopyPaths === next.resolveCopyPaths &&
     previous.readContents === next.readContents &&
     previous.resolveDragPath === next.resolveDragPath &&
-    previous.revealLabel === next.revealLabel
+    previous.revealLabel === next.revealLabel &&
+    previous.onDownload === next.onDownload
   );
 }
 
