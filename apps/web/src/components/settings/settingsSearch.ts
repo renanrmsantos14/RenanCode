@@ -620,6 +620,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("beta claude cloud auto route task local machine resources push")],
   },
   {
+    id: "claude-cloud-extra-repositories-beta",
+    title: msg("Extra repositories for cloud sessions"),
+    to: "/settings/labs",
+    scope: "environment",
+    searchTerms: [msg("beta claude cloud repositories skills instructions clone sources")],
+  },
+  {
     id: "workflows-beta",
     title: msg("Workflows"),
     to: "/settings/labs",

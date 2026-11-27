@@ -7,6 +7,7 @@ import {
   cloudMessages,
   cloudSessionBranch,
   cloudSessionRepository,
+  cloudSessionSources,
   cloudToolCallNeedsWrite,
   cloudToolCalls,
   cloudToolItemSequence,
@@ -37,6 +38,25 @@ describe("Claude cloud session mirroring", () => {
       "y",
     );
     expect(chooseCloudEnvironment([env("b", "bridge")])).toBeUndefined();
+  });
+
+  it("clones extra repositories after the project, which stays first for mirroring", () => {
+    const sources = cloudSessionSources("owner/app", "feature", [
+      " me/kit ",
+      "Owner/App",
+      "me/kit",
+      "not a repo",
+      "me/skills",
+    ]);
+    expect(sources).toEqual([
+      { type: "git_repository", url: "https://github.com/owner/app", revision: "feature" },
+      { type: "git_repository", url: "https://github.com/me/kit" },
+      { type: "git_repository", url: "https://github.com/me/skills" },
+    ]);
+    expect(cloudSessionRepository(session({ config: { sources } }))).toEqual({
+      owner: "owner",
+      name: "app",
+    });
   });
 
   it("keeps tasks local when GitHub cannot hold the work, pushing only feature branches", () => {

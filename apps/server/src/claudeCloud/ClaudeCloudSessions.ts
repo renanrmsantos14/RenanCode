@@ -253,6 +253,26 @@ function gitHubRepository(url: string | undefined): CloudRepository | null {
     : null;
 }
 
+/** The project comes first: mirroring maps a session to its project by the first source. */
+export function cloudSessionSources(
+  repo: string,
+  branch: string,
+  extraRepositories: ReadonlyArray<string>,
+) {
+  const seen = new Set([repo.toLowerCase()]);
+  const extras = extraRepositories.flatMap((entry) => {
+    const repository = gitHubRepository(`https://github.com/${entry.trim()}`);
+    const key = repository && `${repository.owner}/${repository.name}`;
+    if (key === null || seen.has(key)) return [];
+    seen.add(key);
+    return [{ type: "git_repository" as const, url: `https://github.com/${entry.trim()}` }];
+  });
+  return [
+    { type: "git_repository" as const, url: `https://github.com/${repo}`, revision: branch },
+    ...extras,
+  ];
+}
+
 export function cloudSessionRepository(session: CloudSession): CloudRepository | null {
   for (const source of session.config?.sources ?? []) {
     if (source.type !== "git_repository") continue;
@@ -1140,9 +1160,11 @@ const make = Effect.gen(function* () {
         // The first prompt goes through message.dispatch below, so it gets a run like any reply.
         events: [],
         config: {
-          sources: [
-            { type: "git_repository", url: `https://github.com/${repo}`, revision: branch },
-          ],
+          sources: cloudSessionSources(
+            repo,
+            branch,
+            (yield* settings.getSettings.pipe(Effect.orDie)).claudeCloudExtraRepositories,
+          ),
           outcomes: [
             {
               type: "git_repository",
