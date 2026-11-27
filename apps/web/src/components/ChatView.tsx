@@ -333,7 +333,7 @@ import {
   reviewChatColumnClassName,
 } from "./chat/review/reviewLayout";
 import { useHtmlFullscreenChat } from "./chat/review/useHtmlFullscreenChat";
-import { useReviewMode } from "./chat/review/useReviewMode";
+import { type ReviewState, useReviewMode } from "./chat/review/useReviewMode";
 import { ExpandedImageDialogHost, openExpandedImagePreview } from "./chat/ExpandedImageDialog";
 import {
   BranchRestoreConfirmHost,
@@ -1608,6 +1608,8 @@ export default function ChatView(props: ChatViewProps) {
     setLocalServerErrorsByThreadKey,
     setLocalDraftErrorsByDraftId,
   });
+  const reviewState = useState<ReviewState | null>(null);
+  const reviewOpen = reviewState[0]?.scope === routeThreadKey;
   const {
     pendingApprovals,
     pendingUserInputs,
@@ -1633,8 +1635,9 @@ export default function ChatView(props: ChatViewProps) {
     promptRef,
     composerRef,
     setThreadError,
-    // A side chat lives in the right panel already, so its questions stay in its composer.
-    questionPlacement: embedded ? "composer" : settings.questionPlacement,
+    // A side chat lives in the right panel already, and review mode hides that panel, so
+    // their questions stay in the composer.
+    questionPlacement: embedded || reviewOpen ? "composer" : settings.questionPlacement,
   });
   const openQuestionsPanel = useStableCallback(() => {
     if (activeThreadRef) useRightPanelStore.getState().open(activeThreadRef, "questions");
@@ -3529,6 +3532,7 @@ export default function ChatView(props: ChatViewProps) {
     scope: routeThreadKey,
     entries: timelineEntries,
     source: reviewSource,
+    state: reviewState,
   });
   // Review mode takes the right panel's place without changing what the panel store remembers.
   const rightPanelShown = rightPanelOpen && !review.active;

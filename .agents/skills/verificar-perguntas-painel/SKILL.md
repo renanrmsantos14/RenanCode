@@ -29,6 +29,7 @@ description: "Verifica as perguntas do agente no painel lateral: a configuraçã
    6b. Painel aberto na aba Design, mandar outra mensagem na mesma thread Replay: a pergunta assume a aba Questions; respondida, volta à Design.
 7. Com a pergunta no painel: faixa âmbar, ponto na aba Questions; fechar o painel mostra o ponto no botão do painel. `getComputedStyle` do anel interno do ponto: `0.9s ease-out 3 step-ping` (nunca `infinite`).
 8. Com o chat estreito (~360px) a faixa trunca o texto; o nome acessível do botão tem o texto inteiro.
+9. Modo revisão (abrir imagem da conversa, viewport ≥ 1600px): a pergunta aparece no composer do chat lateral, sem a faixa "Question waiting in the side panel"; o `padding-left` de `.chat-composer-lane` é 4px. Fechar a revisão devolve a pergunta ao painel.
 
 ## Casos de borda
 
