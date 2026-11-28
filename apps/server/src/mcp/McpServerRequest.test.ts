@@ -102,7 +102,7 @@ const makeHere = Effect.fnUntraced(function* (
   const layerDatabase = Layer.succeedContext(database);
   const layerOrchestrator = Layer.mergeAll(
     layerDatabase,
-    ProjectionStore.layer.pipe(Layer.provide(layerDatabase)),
+    ProjectionStore.layer.pipe(Layer.provide(NodeCrypto.layerDigest), Layer.provide(layerDatabase)),
     ProviderReplayHarness.layerWithRegistry(
       { name: "mcp-server-request" },
       ProviderAdapterRegistry.layerFromAdapters([adapter]),

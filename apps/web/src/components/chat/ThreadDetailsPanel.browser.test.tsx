@@ -235,6 +235,7 @@ function Panel({
         onUpdateProjectScript={scriptResult}
         onDeleteProjectScript={scriptResult}
         contextWindow={null}
+        taskList={null}
       />
     </ChatCanvasContext>
   );
