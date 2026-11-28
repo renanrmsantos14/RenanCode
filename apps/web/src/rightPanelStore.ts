@@ -793,6 +793,9 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
   return { byThreadKey, threadPanelVisibilityByThreadKey };
 }
 
+// One counter for every file tab, so a reopened tab never reuses a request a viewer already handled.
+let lastFileRevealRequestId = 0;
+
 export const useRightPanelStore = create<RightPanelStoreState>()(
   persist(
     (set, get) => ({
@@ -1077,7 +1080,7 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
             const surface = fileSurface(
               relativePath,
               normalizeRevealLine(line),
-              (existing?.revealRequestId ?? 0) + 1,
+              ++lastFileRevealRequestId,
             );
             return {
               ...current,
@@ -1485,6 +1488,15 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
         ),
       }),
       migrate: migratePersistedRightPanelState,
+      onRehydrateStorage: () => (state) => {
+        for (const thread of Object.values(state?.byThreadKey ?? {})) {
+          for (const surface of thread.surfaces) {
+            if (surface.kind === "file") {
+              lastFileRevealRequestId = Math.max(lastFileRevealRequestId, surface.revealRequestId);
+            }
+          }
+        }
+      },
     },
   ),
 );

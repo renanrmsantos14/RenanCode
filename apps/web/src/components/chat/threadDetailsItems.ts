@@ -25,6 +25,7 @@ export const THREAD_DETAILS_ITEMS = [
     defaultVisible: true,
   },
   { id: "sideChats", label: msg("Side chats"), defaultVisible: true },
+  { id: "tasks", label: msg("Agent tasks"), defaultVisible: false },
   { id: "context", label: msg("Context window"), defaultVisible: false },
   { id: "checklist", label: msg("Checklist"), defaultVisible: true },
   { id: "design", label: msg("Design"), defaultVisible: false },

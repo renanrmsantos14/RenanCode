@@ -10,6 +10,7 @@ import {
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -33,13 +34,17 @@ import * as ServerSettings from "../serverSettings.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 import * as ProjectEnrichmentService from "./ProjectEnrichmentService.ts";
 import * as ProjectFaviconResolver from "./ProjectFaviconResolver.ts";
-import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as ProjectChecklistService from "../projectChecklist/ProjectChecklistService.ts";
 import * as ProjectService from "./ProjectService.ts";
 import * as RepositoryIdentityResolver from "./RepositoryIdentityResolver.ts";
 
 const layerEventPersistence = EventSink.layer.pipe(
-  Layer.provideMerge(Layer.merge(EventStore.layer, ProjectionStore.layer)),
+  Layer.provideMerge(
+    Layer.merge(
+      EventStore.layer,
+      ProjectionStore.layer.pipe(Layer.provide(NodeCrypto.layerDigest)),
+    ),
+  ),
 );
 const layerServices = Layer.mergeAll(
   ProjectChecklistService.layer,

@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { expect, it } from "@effect/vitest";
 import {
   EnvironmentId,
@@ -26,9 +27,10 @@ const source = {
   threadId: ThreadId.make("original-thread"),
 };
 const timestamp = "2026-11-01T10:00:00.000Z";
-const stores = Layer.mergeAll(EventStore.layer, ProjectionStore.layer).pipe(
-  Layer.provideMerge(SqlitePersistence.layerMemory),
-);
+const stores = Layer.mergeAll(
+  EventStore.layer,
+  ProjectionStore.layer.pipe(Layer.provide(NodeCrypto.layerDigest)),
+).pipe(Layer.provideMerge(SqlitePersistence.layerMemory));
 
 const input = {
   threadId,
