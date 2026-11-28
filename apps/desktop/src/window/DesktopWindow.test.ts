@@ -78,6 +78,9 @@ function makeFakeBrowserWindow() {
     id: 1,
     session: {
       setPermissionRequestHandler: vi.fn(),
+      availableSpellCheckerLanguages: ["en-GB", "en-US"],
+      getSpellCheckerLanguages: vi.fn(() => ["en-US"]),
+      setSpellCheckerLanguages: vi.fn(),
       webRequest: {
         onBeforeSendHeaders: vi.fn(),
       },
@@ -178,6 +181,7 @@ const layerDesktopClientSettings = Layer.mock(DesktopClientSettings.DesktopClien
 
 const layerElectronApp = Layer.mock(ElectronApp.ElectronApp)({
   quit: Effect.void,
+  preferredSystemLanguages: Effect.succeed([]),
 });
 
 const layerDesktopAssets = Layer.succeed(DesktopAssets.DesktopAssets, {
