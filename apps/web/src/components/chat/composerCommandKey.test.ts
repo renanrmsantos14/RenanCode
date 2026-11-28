@@ -1,3 +1,4 @@
+import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { DraftId } from "../../composerDraftStore";
@@ -5,13 +6,18 @@ import { composerCommandKeyHandler } from "./composerCommandKey";
 
 type HandlerInput = Parameters<typeof composerCommandKeyHandler>[0];
 
-function setup(input: { readonly prompt: string; readonly suggestion: string | null }) {
+function setup(input: {
+  readonly prompt: string;
+  readonly suggestion?: string | null;
+  readonly composerRichTextEnabled?: boolean;
+}) {
   const promptRef = { current: input.prompt };
   const setComposerDraftPrompt = vi.fn<HandlerInput["setComposerDraftPrompt"]>();
   const dismissPromptSuggestion = vi.fn();
   const applyPromptReplacement = vi.fn<HandlerInput["applyPromptReplacement"]>(() => true);
+  const submitComposer = vi.fn();
   const handler = composerCommandKeyHandler({
-    keybindings: [],
+    keybindings: DEFAULT_RESOLVED_KEYBINDINGS,
     getShortcutContext: () => ({
       terminalFocus: false,
       terminalOpen: false,
@@ -21,9 +27,10 @@ function setup(input: { readonly prompt: string; readonly suggestion: string | n
       isDesktop: false,
     }),
     sendShortcut: "enter",
-    routeKind: "server",
+    composerRichTextEnabled: input.composerRichTextEnabled ?? true,
+    routeKind: "draft",
     phase: "ready",
-    canSteer: false,
+    canSteer: true,
     followUpBehavior: "queue",
     isSoftwareKeyboardOpen: false,
     isLiteralPendingAnswer: false,
@@ -39,8 +46,21 @@ function setup(input: { readonly prompt: string; readonly suggestion: string | n
     composerReviewComments: [],
     composerEditorRef: {
       current: {
+        focus: vi.fn(),
+        focusAt: vi.fn(),
+        focusAtEnd: vi.fn(),
+        pasteAtCodeBlockEnd: () => false,
         readSelectionRange: () => ({ start: input.prompt.length, end: input.prompt.length }),
-      } as never,
+        captureAttachmentInsertion: () => undefined,
+        requestCitationComment: vi.fn(),
+        readSnapshot: () => ({
+          value: input.prompt,
+          cursor: input.prompt.length,
+          expandedCursor: input.prompt.length,
+          contextIds: [],
+        }),
+        isCaretOnVisualEdge: () => false,
+      },
     },
     composerMenuItemsRef: { current: [] },
     activeComposerMenuItemRef: { current: null },
@@ -56,12 +76,12 @@ function setup(input: { readonly prompt: string; readonly suggestion: string | n
     resolveActiveComposerTrigger: () => ({ trigger: null }),
     readComposerSnapshot: () => ({ value: promptRef.current }),
     applyPromptReplacement,
-    submitComposer: vi.fn(),
-    promptSuggestion: input.suggestion,
+    submitComposer,
+    promptSuggestion: input.suggestion ?? null,
     dismissPromptSuggestion,
     steerQueuedMessage: () => false,
   });
-  return { handler, promptRef, applyPromptReplacement, dismissPromptSuggestion };
+  return { handler, promptRef, applyPromptReplacement, dismissPromptSuggestion, submitComposer };
 }
 
 const key = (name: string, init: KeyboardEventInit = {}) =>
@@ -96,5 +116,18 @@ describe("composerCommandKeyHandler prompt suggestion", () => {
     expect(harness.handler("Tab", key("Tab"))).toBe(false);
     expect(harness.promptRef.current).toBe(prompt);
     expect(harness.dismissPromptSuggestion).not.toHaveBeenCalled();
+  });
+});
+
+describe.each([false, true])("composer list keys (rich text: %s)", (richText) => {
+  it.each([
+    { prompt: "1. item", key: "Enter", shift: true },
+    { prompt: "1. item", key: "Tab", shift: false },
+    { prompt: "  1. item", key: "Tab", shift: true },
+  ])("edits lists only in rich text for $key on $prompt", ({ prompt, key: name, shift }) => {
+    const harness = setup({ prompt, composerRichTextEnabled: richText });
+    harness.handler(name, key(name, { shiftKey: shift }));
+    expect(harness.applyPromptReplacement).toHaveBeenCalledTimes(richText ? 1 : 0);
+    expect(harness.submitComposer).not.toHaveBeenCalled();
   });
 });

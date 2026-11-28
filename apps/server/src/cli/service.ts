@@ -311,7 +311,9 @@ const serviceRestartCommand = Command.make("restart", projectLocationFlags).pipe
               ? `Queued a restart of the RenanCode service${onVersion}. This session runs inside the service and disconnects when it goes down.\nLogs: ${status.logPath}`
               : status.otherBaseDir !== undefined
                 ? `The RenanCode service serves ${status.otherBaseDir}, so it was not restarted. Pass \`${BootService.formatBootServiceBaseDirOption(status.otherBaseDir)}\` to restart it.`
-                : "RenanCode service is not installed.",
+                : status.installed
+                  ? `A RenanCode service definition was found, but its T3 home could not be determined, so it was not restarted. Check ${status.unitPath}.`
+                  : "RenanCode service is not installed.",
         );
       }),
     ),
