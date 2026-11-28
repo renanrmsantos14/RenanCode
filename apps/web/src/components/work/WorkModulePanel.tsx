@@ -46,6 +46,9 @@ import { WorkStatusPicker } from "./WorkStatusMenu";
 
 /** `msg()` strings; render them through `useMessages()`. */
 const THREAD_STATUS_LABEL: Record<SidebarThreadStatus, string> = {
+  connecting: msg("Connecting"),
+  reconnecting: msg("Reconnecting"),
+  offline: msg("Offline"),
   approval: msg("Approval", { $context: "thread status" }),
   input: msg("Input", { $context: "thread status" }),
   request: msg("Request", { $context: "thread status" }),
@@ -70,6 +73,9 @@ const INLINE_FIELD_CLASS =
   "-mx-2 w-[calc(100%+(--spacing(4)))] rounded-md bg-transparent px-2 py-1 outline-none transition-colors duration-150 placeholder:text-muted-foreground/70 enabled:hover:bg-accent/50 focus:bg-accent/50 focus:ring-1 focus:ring-inset focus:ring-ring disabled:cursor-default";
 
 const THREAD_STATUS_DOT: Record<SidebarThreadStatus, string> = {
+  connecting: "bg-muted-foreground/40",
+  reconnecting: "bg-muted-foreground/40",
+  offline: "bg-muted-foreground/40",
   approval: "bg-warning",
   input: "bg-yellow-500",
   request: "bg-guest",
