@@ -176,6 +176,7 @@ export function SidebarRowPreview() {
                 onUnsettle={NOOP}
                 onUnsnooze={NOOP}
                 onSnooze={NOOP}
+                onPin={NOOP}
                 onUnpin={NOOP}
                 onAcknowledgeWoke={NOOP}
               />

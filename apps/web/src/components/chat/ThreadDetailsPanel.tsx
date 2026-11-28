@@ -21,6 +21,7 @@ import { T, useGT } from "gt-react";
 import { useState, type ComponentProps } from "react";
 import { ThreadDetailsCard } from "./ThreadDetailsCard";
 import { OpenInPicker } from "./OpenInPicker";
+import { ThreadDetailsMachineLoad } from "./ThreadDetailsMachineLoad";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { ThreadAutomationsPanel } from "./ThreadAutomationsPanel";
 import { ThreadRelationshipsPanel } from "./ThreadRelationshipsControl";
@@ -370,6 +371,10 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                     />
                   </div>
                 </ThreadDetailsSection>
+              ) : null}
+
+              {visible.machineLoad ? (
+                <ThreadDetailsMachineLoad environmentId={props.environmentId} />
               ) : null}
 
               {/* Shown only when no section above has content, so an emptied card can be refilled. */}

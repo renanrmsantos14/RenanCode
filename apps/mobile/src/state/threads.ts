@@ -26,6 +26,7 @@ import {
 import { connectedEnvironmentIdsAtom } from "./presentation";
 import { serverEnvironment } from "./server";
 import { environmentShell } from "./shell";
+import { environmentPresentations } from "./presentation";
 import { threadOutboxManager } from "./thread-outbox";
 
 export const threadFamilies = createThreadFamilyAtoms(
@@ -48,6 +49,7 @@ export const environmentThreadDetails = createEnvironmentThreadDetailAtoms(
 );
 export const environmentThreadShells = createEnvironmentThreadShellAtoms({
   catalogValueAtom: environmentCatalog.catalogValueAtom,
+  connectionPhaseAtom: environmentPresentations.connectionPhaseAtom,
   snapshotAtom: threadEnvironment.snapshotAtom,
   hiddenThreadTagsAtom: serverEnvironment.hiddenThreadTagsAtom,
 });
@@ -65,6 +67,7 @@ const steadyShells = createSteadyShellAtoms({
 export const steadyShellsHoldingAtom = steadyShells.holdingAtom;
 const steadyNavigationThreadShellsPerEnvironmentAtom = createEnvironmentThreadShellAtoms({
   catalogValueAtom: environmentCatalog.catalogValueAtom,
+  connectionPhaseAtom: environmentPresentations.connectionPhaseAtom,
   snapshotAtom: steadyShells.snapshotAtom,
   hiddenThreadTagsAtom: serverEnvironment.hiddenThreadTagsAtom,
 }).navigationThreadShellsAtom;

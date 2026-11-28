@@ -1,4 +1,5 @@
 import {
+  isClaudeCloudThreadId,
   isListedThreadLineage,
   type EnvironmentId,
   type EnvironmentMachineKind,
@@ -58,7 +59,11 @@ export function matchComposerThreadItems(
       (shell) =>
         (shell.environmentId === input.environmentId ||
           input.linkedEnvironments.has(shell.environmentId)) &&
-        shell.id !== input.excludeThreadId &&
+        // A cloud session's copies share one id on every machine; other ids differ per environment.
+        !(
+          shell.id === input.excludeThreadId &&
+          (shell.environmentId === input.environmentId || isClaudeCloudThreadId(shell.id))
+        ) &&
         shell.archivedAt === null &&
         (isListedThreadLineage(shell.lineage) || isOwnSideChat(shell)),
     ),

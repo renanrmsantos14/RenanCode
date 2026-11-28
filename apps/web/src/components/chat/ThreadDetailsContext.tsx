@@ -8,7 +8,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { formatContextWindowCompactionMessage } from "./compaction.logic";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 
-type UsageTone = "error" | "warning" | null;
+export type UsageTone = "error" | "warning" | null;
 
 /** The thread's context window. The bar fills as context is used; the tick marks auto-compaction. */
 export function ThreadDetailsContext({ usage }: { readonly usage: ContextWindowSnapshot }) {
@@ -78,7 +78,7 @@ export function ThreadDetailsContext({ usage }: { readonly usage: ContextWindowS
 }
 
 /** One label, hairline, and value row; the whole row opens the details tooltip. */
-function UsageRow({
+export function UsageRow({
   label,
   fill,
   tone,

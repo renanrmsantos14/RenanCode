@@ -5103,7 +5103,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         queuedMessages
           .filter(
             (message) =>
-              message.notification !== undefined || message.delegatedCompletion !== undefined,
+              message.notification !== undefined ||
+              message.delegatedCompletion !== undefined ||
+              message.scheduledTaskId !== undefined,
           )
           .map((message) => message.id),
       );
